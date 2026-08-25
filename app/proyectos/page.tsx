@@ -16,6 +16,8 @@ import {
   Wallet,
   AlertCircle,
   X,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
@@ -30,6 +32,8 @@ export default function ProyectosPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
+  const [projectToDelete, setProjectToDelete] = useState<Proyecto | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Formulario nuevo proyecto
   const [nombre, setNombre] = useState('');
@@ -108,6 +112,15 @@ export default function ProyectosPage() {
     setDescripcion('');
     setMontoCotizado('');
     loadData();
+  };
+
+  const confirmDelete = () => {
+    if (!projectToDelete) return;
+    dataService.deleteProyecto(projectToDelete.id);
+    setToastMessage(`Obra "${projectToDelete.nombre}" eliminada exitosamente.`);
+    setProjectToDelete(null);
+    loadData();
+    setTimeout(() => setToastMessage(null), 3000);
   };
 
   return (
@@ -283,17 +296,27 @@ export default function ProyectosPage() {
                           <span>{proj.cliente?.nombre || 'Cliente Particular'}</span>
                         </p>
                       </div>
-                      <span
-                        className={`text-[10px] font-bold font-mono uppercase px-2 py-0.5 rounded ${
-                          proj.estado === 'activo'
-                            ? 'bg-obra-green-light text-obra-green'
-                            : proj.estado === 'terminado'
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {proj.estado}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className={`text-[10px] font-bold font-mono uppercase px-2 py-0.5 rounded ${
+                            proj.estado === 'activo'
+                              ? 'bg-obra-green-light text-obra-green'
+                              : proj.estado === 'terminado'
+                              ? 'bg-blue-50 text-blue-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {proj.estado}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setProjectToDelete(proj)}
+                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Eliminar obra"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Descripción breve */}
@@ -509,6 +532,55 @@ export default function ProyectosPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmación: Eliminar Proyecto */}
+      {projectToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="font-heading font-black text-xl text-[#1E1E1E]">
+                ¿Eliminar esta obra?
+              </h3>
+              <p className="text-sm font-bold text-[#FF6A00]">
+                "{projectToDelete.nombre}"
+              </p>
+              <p className="text-xs text-gray-500 font-sans mt-2 leading-relaxed">
+                Esta acción eliminará de forma permanente el proyecto, su Carta Gantt asociada, sus estados de pago y sus registros de imprevistos.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setProjectToDelete(null)}
+                className="flex-1 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-heading font-semibold transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-heading font-bold transition-colors shadow-md flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Sí, Eliminar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#1E1E1E] text-white px-4 py-3 rounded-2xl shadow-xl border border-gray-700 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3">
+          <CheckCircle2 className="w-5 h-5 text-[#6B8F72] shrink-0" />
+          <span className="text-xs font-heading font-medium">{toastMessage}</span>
         </div>
       )}
     </div>

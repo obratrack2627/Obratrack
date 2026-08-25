@@ -207,6 +207,33 @@ class DataService {
     return newProyecto;
   }
 
+  deleteProyecto(id: string): boolean {
+    const proyectos = this.getItem<Proyecto[]>(KEYS.PROYECTOS, INITIAL_PROYECTOS);
+    const filtered = proyectos.filter((p) => p.id !== id);
+    this.setItem(KEYS.PROYECTOS, filtered);
+
+    // Limpiar actividades, pagos e imprevistos asociados al proyecto
+    const actividades = this.getItem<Actividad[]>(KEYS.ACTIVIDADES, INITIAL_ACTIVIDADES);
+    this.setItem(
+      KEYS.ACTIVIDADES,
+      actividades.filter((a) => a.proyecto_id !== id)
+    );
+
+    const pagos = this.getItem<Pago[]>(KEYS.PAGOS, INITIAL_PAGOS);
+    this.setItem(
+      KEYS.PAGOS,
+      pagos.filter((pay) => pay.proyecto_id !== id)
+    );
+
+    const imprevistos = this.getItem<Imprevisto[]>(KEYS.IMPREVISTOS, INITIAL_IMPREVISTOS);
+    this.setItem(
+      KEYS.IMPREVISTOS,
+      imprevistos.filter((imp) => imp.proyecto_id !== id)
+    );
+
+    return true;
+  }
+
   // --- ACTIVIDADES (CARTA GANTT) ---
   getActividades(proyectoId: string): Actividad[] {
     const all = this.getItem<Actividad[]>(KEYS.ACTIVIDADES, INITIAL_ACTIVIDADES);
