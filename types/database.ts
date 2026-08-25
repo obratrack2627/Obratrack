@@ -9,6 +9,27 @@ export type ActivityStatus = 'pendiente' | 'en_curso' | 'terminada';
 export type PaymentMethod = 'transferencia' | 'efectivo' | 'debito';
 export type ImprevistoOrigin = 'manual' | 'whatsapp_ia';
 export type ReportStatus = 'pendiente' | 'aprobado' | 'rechazado';
+export type SubscriptionPlanId = 'gratis' | 'pro' | 'pro_ia';
+
+export interface PlanSuscripcion {
+  id: SubscriptionPlanId;
+  nombre: string;
+  badge: string;
+  precioMensualCLP: number;
+  precioRangoTexto: string;
+  periodo: string;
+  usuarioObjetivo: string;
+  descripcion: string;
+  limiteObrasActivas: number | 'ilimitadas';
+  soportaCotizadorIA: boolean;
+  soportaWhatsAppIA: boolean;
+  soportaRentabilidadAvanzada: boolean;
+  soportaAgentesYAutomatizacion: boolean;
+  soportaExportacionBoletas: boolean;
+  caracteristicas: string[];
+  colorAcento: string;
+  popular?: boolean;
+}
 
 export interface Empresa {
   id: string;

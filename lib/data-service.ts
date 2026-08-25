@@ -8,6 +8,7 @@ import {
   Cliente,
   UserRole,
   CotizacionEstimacion,
+  SubscriptionPlanId,
 } from '@/types/database';
 import {
   INITIAL_PROYECTOS,
@@ -32,6 +33,7 @@ const KEYS = {
   CLIENTES: 'obratrack_clientes_v1',
   ACTIVE_USER: 'obratrack_active_user_v1',
   COTIZACIONES: 'obratrack_cotizaciones_v1',
+  PLAN: 'obratrack_active_plan_v1',
 };
 
 class DataService {
@@ -86,6 +88,19 @@ class DataService {
     const user = usuarios.find((u) => u.rol === rol) || usuarios[0];
     this.setItem(KEYS.ACTIVE_USER, user);
     return user;
+  }
+
+  // --- PLANES DE SUSCRIPCIÓN (MODO DEMO / PROFESORES) ---
+  getActivePlan(): SubscriptionPlanId {
+    return this.getItem<SubscriptionPlanId>(KEYS.PLAN, 'pro_ia');
+  }
+
+  setActivePlan(plan: SubscriptionPlanId): SubscriptionPlanId {
+    this.setItem(KEYS.PLAN, plan);
+    if (this.isBrowser()) {
+      window.dispatchEvent(new CustomEvent('obratrack_plan_changed', { detail: plan }));
+    }
+    return plan;
   }
 
   // --- CLIENTES ---

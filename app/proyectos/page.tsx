@@ -19,13 +19,17 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
-import { Proyecto, Cliente } from '@/types/database';
+import { Proyecto, Cliente, SubscriptionPlanId } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
+import { getPlanDetails } from '@/lib/plans';
+import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 
 export default function ProyectosPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
 
   // Formulario nuevo proyecto
   const [nombre, setNombre] = useState('');
@@ -43,8 +47,10 @@ export default function ProyectosPage() {
   const loadData = () => {
     const projs = dataService.getProyectos();
     const cls = dataService.getClientes();
+    const plan = dataService.getActivePlan();
     setProyectos(projs);
     setClientes(cls);
+    setActivePlan(plan);
     if (cls.length > 0 && !clienteId) {
       setClienteId(cls[0].id);
     }
@@ -52,6 +58,11 @@ export default function ProyectosPage() {
 
   useEffect(() => {
     loadData();
+    const handler = (e: any) => {
+      if (e.detail) setActivePlan(e.detail);
+    };
+    window.addEventListener('obratrack_plan_changed', handler);
+    return () => window.removeEventListener('obratrack_plan_changed', handler);
   }, []);
 
   // Métricas globales
@@ -101,21 +112,64 @@ export default function ProyectosPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
+      <PlanSwitcherModal
+        isOpen={isPlanModalOpen}
+        onClose={() => setIsPlanModalOpen(false)}
+      />
+
       <Navbar
         title="Obras & Proyectos"
         subtitle="Panel central de control, avance ponderado y estado financiero"
         action={
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-4 py-2.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-sm font-semibold rounded-lg shadow-sm flex items-center gap-2 transition-all font-heading"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nuevo Proyecto</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsPlanModalOpen(true)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E5DFC9] text-xs font-mono text-gray-700 hover:border-[#FF6A00] transition-colors shadow-sm"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#FF6A00]"></span>
+              <span>{getPlanDetails(activePlan).nombre}</span>
+            </button>
+            <button
+              onClick={() => {
+                if (activePlan === 'gratis' && proyectosActivos.length >= 1) {
+                  setIsPlanModalOpen(true);
+                } else {
+                  setIsModalOpen(true);
+                }
+              }}
+              className="px-4 py-2.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-sm font-semibold rounded-xl shadow-sm flex items-center gap-2 transition-all font-heading"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nuevo Proyecto</span>
+            </button>
+          </div>
         }
       />
 
       <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
+        
+        {/* Banner Informativo si está en Plan Gratis */}
+        {activePlan === 'gratis' && (
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <p className="text-xs font-bold font-heading">
+                  Límite del Plan Gratis alcanzado ({proyectosActivos.length}/1 Obra Activa)
+                </p>
+                <p className="text-[11px] text-amber-800 font-sans">
+                  Para gestionar obras ilimitadas, desbloquear el Cotizador con IA y el comparador de precios, activa el <strong>Plan Pro</strong>.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsPlanModalOpen(true)}
+              className="px-3.5 py-1.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl shadow-sm transition-colors whitespace-nowrap"
+            >
+              ⚡ Simular Plan Pro en Demo
+            </button>
+          </div>
+        )}
         
         {/* Tarjetas de Resumen KPI */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

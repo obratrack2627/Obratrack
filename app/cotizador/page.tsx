@@ -36,8 +36,10 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
-import { CotizacionEstimacion, MensajeChatCotizador, Cliente } from '@/types/database';
+import { CotizacionEstimacion, MensajeChatCotizador, Cliente, SubscriptionPlanId } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
+import { getPlanDetails } from '@/lib/plans';
+import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 
 export default function CotizadorPage() {
   const router = useRouter();
@@ -85,6 +87,10 @@ export default function CotizadorPage() {
   const [busquedaMaterial, setBusquedaMaterial] = useState('');
   const catalogoMateriales = dataService.getCatalogoMateriales();
 
+  // Estado de suscripción
+  const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+
   useEffect(() => {
     const list = dataService.getCotizaciones();
     setCotizaciones(list);
@@ -96,6 +102,14 @@ export default function CotizadorPage() {
     if (cls.length > 0) {
       setSelectedClienteId(cls[0].id);
     }
+    const plan = dataService.getActivePlan();
+    setActivePlan(plan);
+
+    const handler = (e: any) => {
+      if (e.detail) setActivePlan(e.detail);
+    };
+    window.addEventListener('obratrack_plan_changed', handler);
+    return () => window.removeEventListener('obratrack_plan_changed', handler);
   }, []);
 
   // Prompts rápidos para probar en 1 clic
@@ -270,14 +284,26 @@ export default function CotizadorPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-kraft-50/40">
+      <PlanSwitcherModal
+        isOpen={isPlanModalOpen}
+        onClose={() => setIsPlanModalOpen(false)}
+      />
+
       <Navbar
         title="Cotizador Inteligente & Radar de Precios IA"
         subtitle="Cálculo de cobro al cliente, cubicación y radar de insumos más baratos en Chile con OpenAI (GPT-4o)"
         action={
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setIsPlanModalOpen(true)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E5DFC9] text-xs font-mono text-gray-700 hover:border-[#FF6A00] transition-colors shadow-sm"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#FF6A00]"></span>
+              <span>{getPlanDetails(activePlan).nombre}</span>
+            </button>
+            <button
               onClick={() => setActiveTab('chat')}
-              className="px-3 py-1.5 bg-navy-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:bg-navy-700"
+              className="px-3 py-1.5 bg-[#1E1E1E] text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:bg-[#2A2A2A]"
             >
               <Bot className="w-3.5 h-3.5 text-obra-orange" />
               <span>Consultar al Agente IA</span>
@@ -287,6 +313,29 @@ export default function CotizadorPage() {
       />
 
       <div className="p-4 md:p-6 max-w-7xl w-full mx-auto space-y-6">
+        
+        {/* Banner si el usuario está en Plan Gratis */}
+        {activePlan === 'gratis' && (
+          <div className="p-4 rounded-2xl bg-[#FF6A00]/10 border border-[#FF6A00]/30 text-[#1E1E1E] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-5 h-5 text-[#FF6A00] shrink-0" />
+              <div>
+                <p className="text-xs font-bold font-heading">
+                  Módulo de Cotización con IA & Radar de Ferreterías (Exclusivo Plan Pro y Pro IA)
+                </p>
+                <p className="text-[11px] text-gray-600 font-sans">
+                  El <strong>Plan Pro ($9.990 - $14.990)</strong> incluye cubicación automática con OpenAI GPT-4o, estimación de jornales y comparador de precios en Sodimac, Construmart e Imperial.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsPlanModalOpen(true)}
+              className="px-3.5 py-1.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl shadow-sm transition-colors whitespace-nowrap"
+            >
+              ⚡ Simular Plan Pro en Demo
+            </button>
+          </div>
+        )}
         {/* Selector de Pestañas */}
         <div className="flex items-center gap-2 border-b border-kraft-200 pb-2">
           <button

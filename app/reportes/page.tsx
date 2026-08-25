@@ -19,8 +19,10 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
-import { ReporteWhatsApp, ReportStatus } from '@/types/database';
+import { ReporteWhatsApp, ReportStatus, SubscriptionPlanId } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
+import { getPlanDetails } from '@/lib/plans';
+import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 
 export default function ReportesWhatsAppPage() {
   const [reportes, setReportes] = useState<ReporteWhatsApp[]>([]);
@@ -36,13 +38,24 @@ export default function ReportesWhatsAppPage() {
   const [simulatedText, setSimulatedText] = useState('');
   const [isSimulating, setIsSimulating] = useState(false);
 
+  // Estado de suscripción
+  const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+
   const loadData = () => {
     const reps = dataService.getReportes();
+    const plan = dataService.getActivePlan();
     setReportes(reps);
+    setActivePlan(plan);
   };
 
   useEffect(() => {
     loadData();
+    const handler = (e: any) => {
+      if (e.detail) setActivePlan(e.detail);
+    };
+    window.addEventListener('obratrack_plan_changed', handler);
+    return () => window.removeEventListener('obratrack_plan_changed', handler);
   }, []);
 
   const filteredReportes = reportes.filter((r) => {
@@ -136,19 +149,54 @@ export default function ReportesWhatsAppPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
+      <PlanSwitcherModal
+        isOpen={isPlanModalOpen}
+        onClose={() => setIsPlanModalOpen(false)}
+      />
+
       <Navbar
         title="Bandeja de Reportes WhatsApp (IA)"
         subtitle="Transcripción con OpenAI Whisper y extracción estructurada con GPT-4o-mini"
         action={
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-gray-500 bg-white border border-kraft-200 px-3 py-1.5 rounded-lg shadow-sm">
-              Pendientes de Aprobación: <strong className="text-obra-orange">{pendingCount}</strong>
+            <button
+              onClick={() => setIsPlanModalOpen(true)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E5DFC9] text-xs font-mono text-gray-700 hover:border-[#FF6A00] transition-colors shadow-sm"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#6B8F72]"></span>
+              <span>{getPlanDetails(activePlan).nombre}</span>
+            </button>
+            <span className="text-xs font-mono text-gray-500 bg-white border border-kraft-200 px-3 py-1.5 rounded-xl shadow-sm">
+              Pendientes: <strong className="text-obra-orange">{pendingCount}</strong>
             </span>
           </div>
         }
       />
 
       <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
+        
+        {/* Banner si el usuario NO está en Plan Pro IA */}
+        {activePlan !== 'pro_ia' && (
+          <div className="p-4 rounded-2xl bg-[#6B8F72]/15 border border-[#6B8F72]/40 text-[#1E1E1E] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <Sparkles className="w-5 h-5 text-[#6B8F72] shrink-0" />
+              <div>
+                <p className="text-xs font-bold font-heading">
+                  Módulo de Automatización WhatsApp & Whisper (Exclusivo Plan Pro IA)
+                </p>
+                <p className="text-[11px] text-gray-600 font-sans">
+                  El <strong>Plan Pro IA ($19.990 - $29.990)</strong> incluye recepción de audios de voz de maestros, transcripción automática con OpenAI Whisper y extracción de avances e imprevistos en tiempo real.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsPlanModalOpen(true)}
+              className="px-3.5 py-1.5 bg-[#6B8F72] hover:bg-[#55735B] text-white text-xs font-bold rounded-xl shadow-sm transition-colors whitespace-nowrap"
+            >
+              ⚡ Simular Plan Pro IA en Demo
+            </button>
+          </div>
+        )}
         
         {/* Simulador rápido de mensaje WhatsApp para testing */}
         <div className="bg-white border border-kraft-200 rounded-xl p-4 shadow-sm">
