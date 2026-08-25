@@ -6,9 +6,13 @@ const STORAGE_KEYS = {
   ANON_KEY: 'obratrack_custom_supabase_anon_key',
 };
 
+const DEFAULT_SUPABASE_URL = 'https://tpszbretbtxcmnrqvlxm.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwc3picmV0YnR4Y21ucnF2bHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2ODMwNzcsImV4cCI6MjEwMzI1OTA3N30.TSdTvzFZ_pe25vACZOnFrrD8_nwY1rcq8kf0xyvqEQI';
+
 export function getSupabaseCredentials(): { url: string; anonKey: string } {
-  let url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  let anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  let url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  let anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
   if (typeof window !== 'undefined') {
     const savedUrl = localStorage.getItem(STORAGE_KEYS.URL);
