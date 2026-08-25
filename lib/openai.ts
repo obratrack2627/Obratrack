@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
 
 let openaiClientInstance: OpenAI | null = null;
 
@@ -27,7 +27,7 @@ export async function transcribirAudioWhisper(
     throw new Error('OPENAI_API_KEY no configurada');
   }
 
-  const file = new File([audioBuffer], filename, { type: 'audio/ogg' });
+  const file = await toFile(audioBuffer, filename, { type: 'audio/ogg' });
   const transcription = await openai.audio.transcriptions.create({
     file: file,
     model: 'whisper-1',
