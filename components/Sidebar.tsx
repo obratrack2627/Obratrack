@@ -15,12 +15,15 @@ import {
   Sparkles,
   CreditCard,
   Zap,
+  Database,
 } from 'lucide-react';
 import { dataService } from '@/lib/data-service';
 import { Usuario, UserRole, SubscriptionPlanId } from '@/types/database';
 import { getPlanDetails } from '@/lib/plans';
 import Logo from '@/components/Logo';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
+import SupabaseConnectModal from '@/components/SupabaseConnectModal';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -29,6 +32,8 @@ export default function Sidebar() {
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [isDbConnected, setIsDbConnected] = useState(false);
 
   const loadSidebarData = () => {
     const user = dataService.getActiveUser();
@@ -40,6 +45,7 @@ export default function Sidebar() {
 
     const plan = dataService.getActivePlan();
     setActivePlan(plan);
+    setIsDbConnected(isSupabaseConfigured());
   };
 
   useEffect(() => {
@@ -101,6 +107,15 @@ export default function Sidebar() {
       <PlanSwitcherModal
         isOpen={isPlanModalOpen}
         onClose={() => setIsPlanModalOpen(false)}
+      />
+
+      {/* Supabase Connection Modal */}
+      <SupabaseConnectModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => {
+          setIsSupabaseModalOpen(false);
+          loadSidebarData();
+        }}
       />
 
       {/* Mobile Top Header */}
@@ -229,6 +244,22 @@ export default function Sidebar() {
               <span>Simular / Cambiar Plan</span>
             </button>
           </div>
+
+          {/* Supabase Database Connection Status */}
+          <button
+            type="button"
+            onClick={() => setIsSupabaseModalOpen(true)}
+            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#2A2A2A]/80 hover:bg-[#383838] border border-[#383838] text-[11px] font-mono text-gray-300 transition-colors"
+          >
+            <div className="flex items-center gap-1.5">
+              <Database className="w-3.5 h-3.5 text-[#3ECF8E]" />
+              <span>Supabase DB</span>
+            </div>
+            <span className="flex items-center gap-1 text-[10px]">
+              <span className={`w-2 h-2 rounded-full ${isDbConnected ? 'bg-[#3ECF8E]' : 'bg-amber-400'}`}></span>
+              <span className="text-gray-400">{isDbConnected ? 'Online' : 'Conectar'}</span>
+            </span>
+          </button>
 
           {/* WhatsApp Webhook Active Badge */}
           <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#2A2A2A]/80 border border-[#383838] text-[11px] font-mono text-gray-300">

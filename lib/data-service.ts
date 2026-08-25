@@ -559,7 +559,7 @@ class DataService {
 
     const nuevoProyecto = this.createProyecto(
       {
-        empresa_id: 'e1111111-1111-1111-1111-111111111111',
+        empresa_id: '11111111-1111-1111-1111-111111111111',
         cliente_id: targetClienteId,
         nombre: cotizacion.titulo_proyecto,
         descripcion: `${cotizacion.resumen_ejecutivo}\n(Creado automáticamente desde Cotizador IA ObraTrack)`,
@@ -572,6 +572,34 @@ class DataService {
     );
 
     return nuevoProyecto;
+  }
+
+  // --- SINCRONIZACIÓN CON SUPABASE POSTGRESQL ---
+  async syncWithSupabase(): Promise<{ success: boolean; message: string }> {
+    const { getSupabaseClient, isSupabaseConfigured } = await import('@/lib/supabase/client');
+    if (!isSupabaseConfigured()) {
+      return { success: false, message: 'Supabase no está configurado aún.' };
+    }
+    const client = getSupabaseClient();
+    if (!client) return { success: false, message: 'Cliente de Supabase no disponible.' };
+
+    try {
+      const [projsRes, clientsRes] = await Promise.all([
+        client.from('proyectos').select('*'),
+        client.from('clientes').select('*'),
+      ]);
+
+      if (projsRes.data && projsRes.data.length > 0) {
+        this.setItem(KEYS.PROYECTOS, projsRes.data);
+      }
+      if (clientsRes.data && clientsRes.data.length > 0) {
+        this.setItem(KEYS.CLIENTES, clientsRes.data);
+      }
+
+      return { success: true, message: 'Sincronización completada con Supabase PostgreSQL.' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Error de sincronización con Supabase.' };
+    }
   }
 }
 
