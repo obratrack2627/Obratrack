@@ -259,91 +259,14 @@ CREATE POLICY "Lectura pública del catálogo de materiales" ON catalogo_materia
 -- 8. DATOS SEMILLA (SEED DATA DE PRUEBA PARA CHILE)
 -- ==============================================================================
 
--- Empresa Demo
+-- Empresa Inicial
 INSERT INTO empresas (id, nombre, rut) VALUES
-('e1111111-1111-1111-1111-111111111111', 'Construcciones & Reformas Andinas SpA', '77.890.123-K')
+('e1111111-1111-1111-1111-111111111111', 'ObraTrack SpA', '76.123.456-7')
 ON CONFLICT (id) DO NOTHING;
 
--- Usuarios Demo
+-- Usuario Administrador Inicial
 INSERT INTO usuarios (id, empresa_id, nombre, email, rol, telefono_whatsapp) VALUES
-('u1111111-1111-1111-1111-111111111111', 'e1111111-1111-1111-1111-111111111111', 'Benjamín Achávar (Dueño)', 'benja105.achavar@gmail.com', 'admin', '+56987654321'),
-('u2222222-2222-2222-2222-222222222222', 'e1111111-1111-1111-1111-111111111111', 'Rodrigo Valenzuela (Supervisor)', 'supervisor@andinas.cl', 'supervisor', '+56976543210'),
-('u3333333-3333-3333-3333-333333333333', 'e1111111-1111-1111-1111-111111111111', 'Carlos Pinto (Capataz)', 'carlos.terreno@andinas.cl', 'terreno', '+56965432109'),
-('u4444444-4444-4444-4444-444444444444', 'e1111111-1111-1111-1111-111111111111', 'Manuel Soto (Maestro Mayor)', 'manuel.terreno@andinas.cl', 'terreno', '+56954321098')
-ON CONFLICT (id) DO NOTHING;
-
--- Clientes Demo
-INSERT INTO clientes (id, empresa_id, nombre, telefono, email, rut, direccion) VALUES
-('c1111111-1111-1111-1111-111111111111', 'e1111111-1111-1111-1111-111111111111', 'Inmobiliaria Los Encinos Ltda.', '+56991122334', 'contacto@losencinos.cl', '76.452.980-3', 'Av. El Golf 40, Las Condes, Santiago'),
-('c2222222-2222-2222-2222-222222222222', 'e1111111-1111-1111-1111-111111111111', 'Dra. Marcela Ugarte', '+56988776655', 'marcela.ugarte@gmail.com', '14.890.345-2', 'Camino El Alba 1420, Lo Barnechea, Santiago'),
-('c3333333-3333-3333-3333-333333333333', 'e1111111-1111-1111-1111-111111111111', 'Café & Panadería Pan Nuestro', '+56977665544', 'admin@pannuestro.cl', '77.102.394-1', 'Manuel Montt 890, Providencia, Santiago')
-ON CONFLICT (id) DO NOTHING;
-
--- Proyectos Demo
-INSERT INTO proyectos (id, empresa_id, cliente_id, nombre, descripcion, fecha_inicio, fecha_termino_estimada, estado, monto_cotizado) VALUES
-('p1111111-1111-1111-1111-111111111111', 'e1111111-1111-1111-1111-111111111111', 'c2222222-2222-2222-2222-222222222222', 'Ampliación Quincho & Terraza Ugarte', 'Construcción de quincho de 45m2 con vigas a la vista de pino oregón, piso de porcelanato y parrilla de acero inoxidable.', '2026-08-01', '2026-10-15', 'activo', 18500000),
-('p2222222-2222-2222-2222-222222222222', 'e1111111-1111-1111-1111-111111111111', 'c3333333-3333-3333-3333-333333333333', 'Remodelación Local Comercial Pan Nuestro', 'Renovación de fachada, instalación eléctrica trifásica comercial y pavimentos vinílicos de alto tráfico.', '2026-08-10', '2026-09-25', 'activo', 9800000),
-('p3333333-3333-3333-3333-333333333333', 'e1111111-1111-1111-1111-111111111111', 'c1111111-1111-1111-1111-111111111111', 'Casa Piloto Condominio Los Encinos', 'Obra gruesa y terminaciones de vivienda unifamiliar de 160m2 en dos plantas.', '2026-07-01', '2026-11-30', 'activo', 45000000)
-ON CONFLICT (id) DO NOTHING;
-
--- Actividades Demo (Carta Gantt)
-INSERT INTO actividades (id, proyecto_id, nombre, responsable_id, fecha_inicio, fecha_termino, porcentaje_avance, estado, orden) VALUES
-('a101', 'p1111111-1111-1111-1111-111111111111', 'Excavación y Radier de Hormigón', 'u3333333-3333-3333-3333-333333333333', '2026-08-01', '2026-08-12', 100, 'terminada', 1),
-('a102', 'p1111111-1111-1111-1111-111111111111', 'Montaje Estructura de Madera y Techumbre', 'u4444444-4444-4444-4444-444444444444', '2026-08-13', '2026-08-28', 75, 'en_curso', 2),
-('a103', 'p1111111-1111-1111-1111-111111111111', 'Instalación Eléctrica, Agua y Gas', 'u3333333-3333-3333-3333-333333333333', '2026-08-29', '2026-09-15', 0, 'pendiente', 3),
-('a104', 'p1111111-1111-1111-1111-111111111111', 'Revestimiento Cerámico y Parrilla', 'u4444444-4444-4444-4444-444444444444', '2026-09-16', '2026-10-05', 0, 'pendiente', 4),
-('a105', 'p1111111-1111-1111-1111-111111111111', 'Pintura, Barniz y Entrega Final', 'u2222222-2222-2222-2222-222222222222', '2026-10-06', '2026-10-15', 0, 'pendiente', 5),
-('a201', 'p2222222-2222-2222-2222-222222222222', 'Demolición tabiquería y retiro escombros', 'u3333333-3333-3333-3333-333333333333', '2026-08-10', '2026-08-16', 100, 'terminada', 1),
-('a202', 'p2222222-2222-2222-2222-222222222222', 'Instalación circuito trifásico y tableros', 'u3333333-3333-3333-3333-333333333333', '2026-08-17', '2026-08-30', 60, 'en_curso', 2),
-('a203', 'p2222222-2222-2222-2222-222222222222', 'Instalación de piso vinílico y pintura', 'u4444444-4444-4444-4444-444444444444', '2026-08-31', '2026-09-25', 0, 'pendiente', 3)
-ON CONFLICT (id) DO NOTHING;
-
--- Pagos Demo
-INSERT INTO pagos (id, proyecto_id, monto, metodo, fecha, nota) VALUES
-('pay1', 'p1111111-1111-1111-1111-111111111111', 7500000, 'transferencia', '2026-08-01', 'Anticipo 40% firma de contrato'),
-('pay2', 'p1111111-1111-1111-1111-111111111111', 4000000, 'transferencia', '2026-08-18', 'Segundo estado de pago contra avance de techumbre'),
-('pay3', 'p2222222-2222-2222-2222-222222222222', 5000000, 'transferencia', '2026-08-10', 'Anticipo 50% inicio remodelación'),
-('pay4', 'p3333333-3333-3333-3333-333333333333', 15000000, 'transferencia', '2026-07-05', 'Anticipo obra gruesa')
-ON CONFLICT (id) DO NOTHING;
-
--- Imprevistos Demo
-INSERT INTO imprevistos (id, proyecto_id, actividad_id, descripcion, monto, foto_url, fecha, origen) VALUES
-('imp1', 'p1111111-1111-1111-1111-111111111111', 'a102', 'Refuerzo imprevisto de viga maestra por desnivel del muro antiguo', 320000, 'https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=600', '2026-08-16', 'whatsapp_ia'),
-('imp2', 'p2222222-2222-2222-2222-222222222222', 'a202', 'Reemplazo de alimentador principal por cableado quemado', 210000, NULL, '2026-08-20', 'manual')
-ON CONFLICT (id) DO NOTHING;
-
--- Reportes WhatsApp Demo (Procesados por OpenAI Whisper + GPT-4o-mini)
-INSERT INTO reportes_whatsapp (id, proyecto_id, usuario_id, mensaje_original, transcripcion, extraccion_ia, estado, fecha) VALUES
-(
-    'rep1',
-    'p1111111-1111-1111-1111-111111111111',
-    'u3333333-3333-3333-3333-333333333333',
-    'Don Gonzalo, terminamos la estructura de madera del quincho, ya tenemos como un 80% de esa parte. Pero tuvimos que comprar 4 pernos de anclaje extra que costaron 45 mil pesos.',
-    NULL,
-    '{"actividad_detectada": "Montaje Estructura de Madera y Techumbre", "avance_porcentaje": 80, "tiene_imprevisto": true, "imprevisto_descripcion": "Compra de 4 pernos de anclaje extra", "imprevisto_monto_estimado": 45000}'::jsonb,
-    'pendiente',
-    '2026-08-25 08:45:00-04'
-),
-(
-    'rep2',
-    'p2222222-2222-2222-2222-222222222222',
-    'u4444444-4444-4444-4444-444444444444',
-    '[Audio de 24 segundos vía WhatsApp]',
-    'Hola don Gonzalo, le hablo de Pan Nuestro. El tablero trifásico ya quedó conectado y probado, la instalación eléctrica está en 90%. Mañana arrancamos con los pisos.',
-    '{"actividad_detectada": "Instalación circuito trifásico y tableros", "avance_porcentaje": 90, "tiene_imprevisto": false, "imprevisto_descripcion": null, "imprevisto_monto_estimado": 0}'::jsonb,
-    'pendiente',
-    '2026-08-25 09:10:00-04'
-),
-(
-    'rep3',
-    'p1111111-1111-1111-1111-111111111111',
-    'u3333333-3333-3333-3333-333333333333',
-    'Listo el radier de hormigón en la terraza, fraguando sin novedades.',
-    NULL,
-    '{"actividad_detectada": "Excavación y Radier de Hormigón", "avance_porcentaje": 100, "tiene_imprevisto": false, "imprevisto_descripcion": null, "imprevisto_monto_estimado": 0}'::jsonb,
-    'aprobado',
-    '2026-08-12 17:30:00-04'
-)
+('u1111111-1111-1111-1111-111111111111', 'e1111111-1111-1111-1111-111111111111', 'Benjamín Achávar', 'benja105.achavar@gmail.com', 'admin', '+56987654321')
 ON CONFLICT (id) DO NOTHING;
 
 -- Catálogo de Insumos Base de Construcción en Chile

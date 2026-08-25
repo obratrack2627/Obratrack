@@ -11,6 +11,8 @@ import {
   DollarSign,
   FolderOpen,
   X,
+  Trash2,
+  Users,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
@@ -64,11 +66,16 @@ export default function ClientesPage() {
     loadData();
   };
 
+  const handleDeleteCliente = (id: string) => {
+    dataService.deleteCliente(id);
+    loadData();
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-screen">
       <Navbar
         title="Directorio de Clientes"
-        subtitle="Historial de obras cotizadas y facturación acumulada por cliente"
+        subtitle="Registro de contactos, RUT y obras asociadas por mandante"
         action={
           <button
             onClick={() => setIsModalOpen(true)}
@@ -82,90 +89,123 @@ export default function ClientesPage() {
 
       <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {clientes.map((cliente) => {
-            const clientProjects = proyectos.filter((p) => p.cliente_id === cliente.id);
-            const totalFacturado = clientProjects.reduce(
-              (sum, p) => sum + (Number(p.monto_cotizado) || 0),
-              0
-            );
+        {/* Banner */}
+        <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold font-heading text-navy-900">
+              Gestión de Mandantes & Contactos
+            </h3>
+            <p className="text-xs text-gray-500 font-sans mt-0.5">
+              Asocia clientes a tus obras para emitir cotizaciones automáticas y enviar cobros por WhatsApp.
+            </p>
+          </div>
+          <span className="text-xs font-mono font-bold bg-kraft-100 text-navy-900 px-3 py-1.5 rounded-lg border border-kraft-200">
+            {clientes.length} Clientes
+          </span>
+        </div>
 
-            return (
-              <div
-                key={cliente.id}
-                className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div>
-                      <h3 className="font-heading font-bold text-base text-navy-900 leading-snug">
-                        {cliente.nombre}
-                      </h3>
-                      {cliente.rut && (
-                        <span className="text-[11px] font-mono text-gray-500 block mt-0.5">
-                          RUT: {formatRUT(cliente.rut)}
-                        </span>
+        {clientes.length === 0 ? (
+          <div className="bg-white border-2 border-dashed border-[#E5DFC9] rounded-3xl p-10 text-center max-w-xl mx-auto space-y-4">
+            <div className="w-16 h-16 rounded-3xl bg-[#FAF8F5] border border-[#E5DFC9] flex items-center justify-center mx-auto text-[#FF6A00]">
+              <Building className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="font-heading font-black text-xl text-[#1E1E1E]">
+                No tienes clientes registrados aún
+              </h3>
+              <p className="text-xs text-gray-500 font-sans mt-1.5 max-w-md mx-auto leading-relaxed">
+                Agrega mandantes o personas para asociarlos a tus cotizaciones y obras.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="px-5 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl shadow-md transition-all inline-flex items-center gap-2 font-heading"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Registrar Primer Cliente</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {clientes.map((c) => {
+              const obrasCliente = proyectos.filter((p) => p.cliente_id === c.id);
+              const totalCotizadoCliente = obrasCliente.reduce(
+                (sum, p) => sum + (Number(p.monto_cotizado) || 0),
+                0
+              );
+
+              return (
+                <div
+                  key={c.id}
+                  className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div>
+                        <h3 className="font-heading font-bold text-base text-navy-900">
+                          {c.nombre}
+                        </h3>
+                        {c.rut && (
+                          <span className="text-[11px] font-mono text-gray-500">
+                            RUT: {formatRUT(c.rut)}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCliente(c.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Eliminar cliente"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 text-xs text-gray-600 font-sans border-t border-kraft-200/80 pt-3">
+                      {c.telefono && (
+                        <div className="flex items-center gap-2 font-mono">
+                          <Phone className="w-3.5 h-3.5 text-obra-green" />
+                          <a href={`tel:${c.telefono}`} className="hover:text-navy-900">
+                            {c.telefono}
+                          </a>
+                        </div>
+                      )}
+                      {c.email && (
+                        <div className="flex items-center gap-2 font-mono">
+                          <Mail className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="truncate">{c.email}</span>
+                        </div>
+                      )}
+                      {c.direccion && (
+                        <div className="flex items-start gap-2">
+                          <MapPin className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
+                          <span className="line-clamp-1">{c.direccion}</span>
+                        </div>
                       )}
                     </div>
-                    <div className="w-9 h-9 rounded-lg bg-kraft-100 text-navy-800 flex items-center justify-center">
-                      <Building className="w-5 h-5" />
+                  </div>
+
+                  <div className="pt-4 mt-4 border-t border-kraft-200/80 space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500 font-mono flex items-center gap-1">
+                        <FolderOpen className="w-3.5 h-3.5 text-obra-orange" />
+                        <span>Obras asociadas:</span>
+                      </span>
+                      <span className="font-bold font-mono text-navy-900">{obrasCliente.length}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500 font-mono">Total Contratado:</span>
+                      <span className="font-bold font-mono text-obra-green">
+                        {formatCLP(totalCotizadoCliente)}
+                      </span>
                     </div>
                   </div>
-
-                  <div className="space-y-1.5 text-xs text-gray-600 font-mono pt-2 border-t border-kraft-200/80 mb-4">
-                    {cliente.telefono && (
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-3.5 h-3.5 text-obra-green" />
-                        <a href={`tel:${cliente.telefono}`} className="hover:text-navy-900">
-                          {cliente.telefono}
-                        </a>
-                      </div>
-                    )}
-                    {cliente.email && (
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-3.5 h-3.5 text-gray-400" />
-                        <span className="truncate">{cliente.email}</span>
-                      </div>
-                    )}
-                    {cliente.direccion && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-obra-red" />
-                        <span className="truncate font-sans">{cliente.direccion}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Historial de Proyectos del Cliente */}
-                  <div className="bg-kraft-50 border border-kraft-200/60 rounded-lg p-3 space-y-1.5">
-                    <span className="text-[10px] font-mono uppercase text-gray-500 font-bold block flex items-center gap-1">
-                      <FolderOpen className="w-3.5 h-3.5 text-obra-orange" />
-                      <span>Obras Vinculadas ({clientProjects.length}):</span>
-                    </span>
-                    {clientProjects.length === 0 ? (
-                      <p className="text-[11px] text-gray-400 font-sans">Sin obras activas</p>
-                    ) : (
-                      clientProjects.map((p) => (
-                        <div key={p.id} className="flex justify-between text-xs font-sans">
-                          <span className="truncate max-w-[170px] text-navy-900 font-medium">
-                            {p.nombre}
-                          </span>
-                          <span className="font-mono text-gray-600">{formatCLP(p.monto_cotizado)}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
                 </div>
-
-                <div className="pt-4 mt-4 border-t border-kraft-200/80 flex items-center justify-between">
-                  <span className="text-xs text-gray-500 font-mono">Facturación Total:</span>
-                  <span className="font-mono font-bold text-sm text-navy-900">
-                    {formatCLP(totalFacturado)}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
       </div>
 
@@ -176,7 +216,7 @@ export default function ClientesPage() {
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
                 <Plus className="w-4 h-4 text-obra-orange" />
-                <span>Registrar Nuevo Cliente</span>
+                <span>Registrar Nuevo Mandante / Cliente</span>
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-700">
                 <X className="w-5 h-5" />
@@ -191,33 +231,34 @@ export default function ClientesPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ej: Inmobiliaria San Cristóbal SpA"
+                  placeholder="Ej: Inmobiliaria Los Andes / Juan Pérez"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs focus:outline-none focus:border-obra-orange"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                    Teléfono Contacto
+                    Teléfono
                   </label>
                   <input
                     type="tel"
-                    placeholder="+56988776655"
+                    placeholder="+56912345678"
                     value={telefono}
                     onChange={(e) => setTelefono(e.target.value)}
                     className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono focus:outline-none focus:border-obra-orange"
                   />
                 </div>
+
                 <div>
                   <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                    RUT Cliente
+                    RUT (Opcional)
                   </label>
                   <input
                     type="text"
-                    placeholder="76.123.456-7"
+                    placeholder="76.123.456-K"
                     value={rut}
                     onChange={(e) => setRut(e.target.value)}
                     className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono focus:outline-none focus:border-obra-orange"
@@ -227,11 +268,11 @@ export default function ClientesPage() {
 
               <div>
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  Email
+                  Correo Electrónico
                 </label>
                 <input
                   type="email"
-                  placeholder="contacto@cliente.cl"
+                  placeholder="contacto@empresa.cl"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs focus:outline-none focus:border-obra-orange"
@@ -251,19 +292,19 @@ export default function ClientesPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-kraft-200">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900"
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-obra-orange text-white text-xs font-semibold rounded-lg font-heading shadow-sm"
+                  className="px-4 py-2 bg-obra-orange hover:bg-obra-orange-hover text-white text-xs font-bold rounded-lg shadow-sm font-heading"
                 >
-                  Guardar Cliente
+                  Crear Cliente
                 </button>
               </div>
             </form>

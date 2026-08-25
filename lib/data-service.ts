@@ -24,16 +24,16 @@ import {
 
 // Claves de almacenamiento local para persistencia en modo prototipo/demostración
 const KEYS = {
-  PROYECTOS: 'obratrack_proyectos_v1',
-  ACTIVIDADES: 'obratrack_actividades_v1',
-  PAGOS: 'obratrack_pagos_v1',
-  IMPREVISTOS: 'obratrack_imprevistos_v1',
-  REPORTES: 'obratrack_reportes_v1',
-  USUARIOS: 'obratrack_usuarios_v1',
-  CLIENTES: 'obratrack_clientes_v1',
-  ACTIVE_USER: 'obratrack_active_user_v1',
-  COTIZACIONES: 'obratrack_cotizaciones_v1',
-  PLAN: 'obratrack_active_plan_v1',
+  PROYECTOS: 'obratrack_proyectos_v2',
+  ACTIVIDADES: 'obratrack_actividades_v2',
+  PAGOS: 'obratrack_pagos_v2',
+  IMPREVISTOS: 'obratrack_imprevistos_v2',
+  REPORTES: 'obratrack_reportes_v2',
+  USUARIOS: 'obratrack_usuarios_v2',
+  CLIENTES: 'obratrack_clientes_v2',
+  ACTIVE_USER: 'obratrack_active_user_v2',
+  COTIZACIONES: 'obratrack_cotizaciones_v2',
+  PLAN: 'obratrack_active_plan_v2',
 };
 
 class DataService {
@@ -77,6 +77,13 @@ class DataService {
     return newUsuario;
   }
 
+  deleteUsuario(id: string): boolean {
+    const usuarios = this.getUsuarios();
+    const filtered = usuarios.filter((u) => u.id !== id);
+    this.setItem(KEYS.USUARIOS, filtered);
+    return true;
+  }
+
   getActiveUser(): Usuario {
     const usuarios = this.getUsuarios();
     const defaultUser = usuarios.find((u) => u.rol === 'admin') || usuarios[0];
@@ -118,6 +125,13 @@ class DataService {
     clientes.push(newCliente);
     this.setItem(KEYS.CLIENTES, clientes);
     return newCliente;
+  }
+
+  deleteCliente(id: string): boolean {
+    const clientes = this.getClientes();
+    const filtered = clientes.filter((c) => c.id !== id);
+    this.setItem(KEYS.CLIENTES, filtered);
+    return true;
   }
 
   // --- PROYECTOS ---
@@ -232,6 +246,19 @@ class DataService {
     );
 
     return true;
+  }
+
+  updateProyecto(id: string, data: Partial<Proyecto>): Proyecto | null {
+    const proyectos = this.getItem<Proyecto[]>(KEYS.PROYECTOS, INITIAL_PROYECTOS);
+    const index = proyectos.findIndex((p) => p.id === id);
+    if (index === -1) return null;
+
+    proyectos[index] = {
+      ...proyectos[index],
+      ...data,
+    };
+    this.setItem(KEYS.PROYECTOS, proyectos);
+    return proyectos[index];
   }
 
   // --- ACTIVIDADES (CARTA GANTT) ---

@@ -220,6 +220,22 @@ export interface CotizacionEstimacion {
   fecha_creacion: string;
 }
 
+export interface MaterialChile {
+  sku: string;
+  nombre: string;
+  categoria: string;
+  unidad: string;
+  precios: {
+    construmart?: number;
+    imperial?: number;
+    sodimac?: number;
+    mts?: number;
+    barraca?: number;
+  };
+  mejor_tienda: string;
+  precio_minimo: number;
+}
+
 export interface MensajeChatCotizador {
   id: string;
   remitente: 'usuario' | 'agente';
