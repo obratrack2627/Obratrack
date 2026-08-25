@@ -302,12 +302,12 @@ CREATE POLICY "Lectura pública del catálogo de materiales" ON catalogo_materia
 
 -- Empresa Inicial
 INSERT INTO empresas (id, nombre, rut) VALUES
-('e1111111-1111-1111-1111-111111111111', 'ObraTrack SpA', '76.123.456-7')
+('11111111-1111-1111-1111-111111111111', 'ObraTrack SpA', '76.123.456-7')
 ON CONFLICT (id) DO NOTHING;
 
 -- Usuario Administrador Inicial
 INSERT INTO usuarios (id, empresa_id, nombre, email, rol, telefono_whatsapp) VALUES
-('u1111111-1111-1111-1111-111111111111', 'e1111111-1111-1111-1111-111111111111', 'Benjamín Achávar', 'benja105.achavar@gmail.com', 'admin', '+56987654321')
+('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111', 'Benjamín Achávar', 'benja105.achavar@gmail.com', 'admin', '+56987654321')
 ON CONFLICT (id) DO NOTHING;
 
 -- Catálogo de Insumos Base de Construcción en Chile

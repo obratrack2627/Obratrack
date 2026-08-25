@@ -12,14 +12,14 @@ import {
 } from '@/types/database';
 
 export const INITIAL_EMPRESA: Empresa = {
-  id: 'e1111111-1111-1111-1111-111111111111',
+  id: '11111111-1111-1111-1111-111111111111',
   nombre: 'Mi Constructora SpA',
   rut: '76.123.456-7',
 };
 
 export const INITIAL_USUARIOS: Usuario[] = [
   {
-    id: 'u1111111-1111-1111-1111-111111111111',
+    id: '22222222-2222-2222-2222-222222222222',
     empresa_id: INITIAL_EMPRESA.id,
     nombre: 'Benjamín Achávar',
     email: 'benja105.achavar@gmail.com',
