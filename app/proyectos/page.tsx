@@ -22,17 +22,20 @@ import {
   HardHat,
   FolderPlus,
   Sparkles,
+  Users,
+  ShieldCheck,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
-import { Proyecto, Cliente, SubscriptionPlanId, ProjectStatus } from '@/types/database';
-import { formatCLP, formatDate } from '@/lib/utils';
+import { Proyecto, Cliente, Usuario, SubscriptionPlanId, ProjectStatus } from '@/types/database';
+import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 import { getPlanDetails } from '@/lib/plans';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 
 export default function ProyectosPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
@@ -48,6 +51,7 @@ export default function ProyectosPage() {
     new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
   const [descripcion, setDescripcion] = useState('');
+  const [selectedTrabajadores, setSelectedTrabajadores] = useState<string[]>([]);
   const [actividadesTexto, setActividadesTexto] = useState(
     'Cimientos y Radier (10 días)\nMontaje de Estructura y Muros (15 días)\nInstalaciones y Terminaciones (15 días)'
   );
@@ -61,13 +65,16 @@ export default function ProyectosPage() {
   const [editFechaTermino, setEditFechaTermino] = useState('');
   const [editDescripcion, setEditDescripcion] = useState('');
   const [editEstado, setEditEstado] = useState<ProjectStatus>('activo');
+  const [editTrabajadores, setEditTrabajadores] = useState<string[]>([]);
 
   const loadData = () => {
     const projs = dataService.getProyectos();
     const cls = dataService.getClientes();
+    const usrs = dataService.getUsuarios();
     const plan = dataService.getActivePlan();
     setProyectos(projs);
     setClientes(cls);
+    setUsuarios(usrs);
     setActivePlan(plan);
     if (cls.length > 0 && !clienteId) {
       setClienteId(cls[0].id);
@@ -116,7 +123,8 @@ export default function ProyectosPage() {
         fecha_inicio: fechaInicio,
         fecha_termino_estimada: fechaTermino,
         estado: 'activo',
-        monto_cotizado: Number(montoCotizado) || 0,
+        monto_cotizado: parseThousands(montoCotizado),
+        trabajadores_ids: selectedTrabajadores,
       },
       initialActivities
     );
@@ -125,6 +133,7 @@ export default function ProyectosPage() {
     setNombre('');
     setDescripcion('');
     setMontoCotizado('');
+    setSelectedTrabajadores([]);
     setToastMessage(`Obra "${nombre.trim()}" creada exitosamente.`);
     loadData();
     setTimeout(() => setToastMessage(null), 3000);
@@ -134,11 +143,12 @@ export default function ProyectosPage() {
     setEditingProject(proj);
     setEditNombre(proj.nombre);
     setEditClienteId(proj.cliente_id || (clientes.length > 0 ? clientes[0].id : ''));
-    setEditMontoCotizado(String(proj.monto_cotizado || ''));
+    setEditMontoCotizado(formatThousands(proj.monto_cotizado || ''));
     setEditFechaInicio(proj.fecha_inicio);
     setEditFechaTermino(proj.fecha_termino_estimada);
     setEditDescripcion(proj.descripcion || '');
     setEditEstado(proj.estado);
+    setEditTrabajadores(proj.trabajadores_ids || []);
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -148,11 +158,12 @@ export default function ProyectosPage() {
     dataService.updateProyecto(editingProject.id, {
       nombre: editNombre.trim(),
       cliente_id: editClienteId || undefined,
-      monto_cotizado: Number(editMontoCotizado) || 0,
+      monto_cotizado: parseThousands(editMontoCotizado),
       fecha_inicio: editFechaInicio,
       fecha_termino_estimada: editFechaTermino,
       descripcion: editDescripcion.trim(),
       estado: editEstado,
+      trabajadores_ids: editTrabajadores,
     });
 
     setEditingProject(null);
@@ -170,6 +181,18 @@ export default function ProyectosPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const toggleTrabajadorSelection = (userId: string, isEditing: boolean = false) => {
+    if (isEditing) {
+      setEditTrabajadores((prev) =>
+        prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+      );
+    } else {
+      setSelectedTrabajadores((prev) =>
+        prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+      );
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-screen">
       <PlanSwitcherModal
@@ -179,7 +202,7 @@ export default function ProyectosPage() {
 
       <Navbar
         title="Obras & Proyectos"
-        subtitle="Panel central de control, avance ponderado y estado financiero"
+        subtitle="Panel central de control, avance ponderado, trabajadores y estado financiero"
         action={
           <div className="flex items-center gap-2">
             <button
@@ -329,7 +352,7 @@ export default function ProyectosPage() {
                   Aún no has registrado ninguna obra
                 </h3>
                 <p className="text-xs text-gray-500 font-sans mt-1.5 max-w-md mx-auto leading-relaxed">
-                  Comienza agregando tu primer proyecto simulado con su fecha, cliente y actividades para la Carta Gantt.
+                  Comienza agregando tu primer proyecto con su monto en CLP (con separador de miles automático), cliente y trabajadores asignados.
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
@@ -356,6 +379,7 @@ export default function ProyectosPage() {
                 const cotizado = proj.monto_cotizado || 0;
                 const percentPago = cotizado > 0 ? Math.min(100, Math.round((pagado / cotizado) * 100)) : 0;
                 const avance = proj.porcentaje_avance_ponderado || 0;
+                const workers = proj.trabajadores || [];
 
                 return (
                   <div
@@ -412,9 +436,35 @@ export default function ProyectosPage() {
 
                       {/* Descripción breve */}
                       {proj.descripcion && (
-                        <p className="text-xs text-gray-600 line-clamp-2 mb-4 font-sans leading-relaxed">
+                        <p className="text-xs text-gray-600 line-clamp-2 mb-3 font-sans leading-relaxed">
                           {proj.descripcion}
                         </p>
+                      )}
+
+                      {/* Trabajadores asignados */}
+                      {workers.length > 0 && (
+                        <div className="mb-3 flex items-center gap-1.5 overflow-hidden">
+                          <span className="text-[11px] font-mono text-gray-400 flex items-center gap-1">
+                            <Users className="w-3 h-3 text-[#FF6A00]" />
+                            <span>Equipo:</span>
+                          </span>
+                          <div className="flex items-center -space-x-1.5 overflow-hidden">
+                            {workers.slice(0, 4).map((w) => (
+                              <div
+                                key={w.id}
+                                title={`${w.nombre} (${w.rol})`}
+                                className="w-6 h-6 rounded-full bg-[#1E1E1E] text-white border-2 border-white flex items-center justify-center text-[9px] font-bold uppercase shrink-0"
+                              >
+                                {w.nombre.charAt(0)}
+                              </div>
+                            ))}
+                            {workers.length > 4 && (
+                              <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-700 border-2 border-white flex items-center justify-center text-[9px] font-bold shrink-0">
+                                +{workers.length - 4}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       )}
 
                       {/* Barra de Avance Ponderado */}
@@ -542,17 +592,56 @@ export default function ProyectosPage() {
 
                 <div>
                   <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                    Monto Cotizado (CLP)
+                    Monto Cotizado (CLP) *
                   </label>
-                  <input
-                    type="number"
-                    placeholder="15000000"
-                    value={montoCotizado}
-                    onChange={(e) => setMontoCotizado(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-sm font-mono focus:outline-none focus:border-obra-orange"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-sm">
+                      $
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="8.000.000"
+                      value={montoCotizado}
+                      onChange={(e) => setMontoCotizado(formatThousands(e.target.value))}
+                      className="w-full pl-8 pr-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-sm font-mono focus:outline-none focus:border-obra-orange font-bold text-navy-900"
+                    />
+                  </div>
                 </div>
               </div>
+
+              {/* Asignar Trabajadores */}
+              {usuarios.length > 0 && (
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1.5">
+                    Asignar Trabajadores / Responsables de Obra
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 bg-kraft-50 rounded-xl border border-kraft-200 max-h-36 overflow-y-auto">
+                    {usuarios.map((u) => {
+                      const isChecked = selectedTrabajadores.includes(u.id);
+                      return (
+                        <label
+                          key={u.id}
+                          onClick={() => toggleTrabajadorSelection(u.id, false)}
+                          className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer text-xs transition-colors select-none ${
+                            isChecked ? 'bg-white border border-[#FF6A00] shadow-sm' : 'hover:bg-white/70'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}}
+                            className="rounded text-[#FF6A00] focus:ring-0"
+                          />
+                          <div className="overflow-hidden">
+                            <p className="font-bold text-navy-900 truncate">{u.nombre}</p>
+                            <p className="text-[10px] text-gray-400 font-mono capitalize">{u.rol}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -698,15 +787,54 @@ export default function ProyectosPage() {
 
               <div>
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  Monto Cotizado (CLP)
+                  Monto Cotizado (CLP) *
                 </label>
-                <input
-                  type="number"
-                  value={editMontoCotizado}
-                  onChange={(e) => setEditMontoCotizado(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-sm font-mono focus:outline-none focus:border-obra-orange"
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-sm">
+                    $
+                  </span>
+                  <input
+                    type="text"
+                    value={editMontoCotizado}
+                    onChange={(e) => setEditMontoCotizado(formatThousands(e.target.value))}
+                    className="w-full pl-8 pr-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-sm font-mono focus:outline-none focus:border-obra-orange font-bold text-navy-900"
+                  />
+                </div>
               </div>
+
+              {/* Asignar Trabajadores en Edición */}
+              {usuarios.length > 0 && (
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1.5">
+                    Trabajadores Asignados a la Obra
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 bg-kraft-50 rounded-xl border border-kraft-200 max-h-36 overflow-y-auto">
+                    {usuarios.map((u) => {
+                      const isChecked = editTrabajadores.includes(u.id);
+                      return (
+                        <label
+                          key={u.id}
+                          onClick={() => toggleTrabajadorSelection(u.id, true)}
+                          className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer text-xs transition-colors select-none ${
+                            isChecked ? 'bg-white border border-[#FF6A00] shadow-sm' : 'hover:bg-white/70'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}}
+                            className="rounded text-[#FF6A00] focus:ring-0"
+                          />
+                          <div className="overflow-hidden">
+                            <p className="font-bold text-navy-900 truncate">{u.nombre}</p>
+                            <p className="text-[10px] text-gray-400 font-mono capitalize">{u.rol}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -784,7 +912,7 @@ export default function ProyectosPage() {
                 "{projectToDelete.nombre}"
               </p>
               <p className="text-xs text-gray-500 font-sans mt-2 leading-relaxed">
-                Esta acción eliminará de forma permanente el proyecto, su Carta Gantt asociada, sus estados de pago y sus registros de imprevistos.
+                Esta acción eliminará de forma permanente el proyecto, sus trabajadores asignados, su Carta Gantt, sus materiales, estados de pago e imprevistos.
               </p>
             </div>
 

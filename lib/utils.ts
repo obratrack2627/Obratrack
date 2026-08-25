@@ -43,3 +43,18 @@ export function formatRUT(rut: string): string {
   }
   return `${formatted}-${dv}`;
 }
+
+// Formatear números con separador de miles con puntos en tiempo real (Ej: "8000" -> "8.000")
+export function formatThousands(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '';
+  const digits = String(value).replace(/\D/g, '');
+  if (!digits) return '';
+  return new Intl.NumberFormat('es-CL').format(parseInt(digits, 10));
+}
+
+// Convertir string con puntos a número entero (Ej: "8.000" -> 8000)
+export function parseThousands(value: string | null | undefined): number {
+  if (!value) return 0;
+  const digits = String(value).replace(/\D/g, '');
+  return digits ? parseInt(digits, 10) : 0;
+}

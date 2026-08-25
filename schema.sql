@@ -178,6 +178,35 @@ AS $$
     LIMIT match_count;
 $$;
 
+-- Tabla de Materiales de Obra (Gestión de insumos por proyecto)
+CREATE TABLE IF NOT EXISTS materiales_proyecto (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proyecto_id UUID NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+    nombre VARCHAR(255) NOT NULL,
+    categoria VARCHAR(100),
+    cantidad NUMERIC(10,2) NOT NULL DEFAULT 1,
+    unidad VARCHAR(50) NOT NULL DEFAULT 'unidades',
+    precio_unitario NUMERIC(12,2) NOT NULL DEFAULT 0,
+    subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+    proveedor VARCHAR(100),
+    comprado BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Tabla de Bitácora Diaria de Obra & Evidencias
+CREATE TABLE IF NOT EXISTS bitacora_obra (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    proyecto_id UUID NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+    usuario_id UUID REFERENCES usuarios(id) ON DELETE SET NULL,
+    autor_nombre VARCHAR(150) NOT NULL,
+    titulo VARCHAR(255) NOT NULL,
+    nota TEXT NOT NULL,
+    foto_url TEXT,
+    fecha DATE DEFAULT CURRENT_DATE NOT NULL,
+    tipo VARCHAR(50) DEFAULT 'avance' NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
 -- ==============================================================================
 -- 5. CONFIGURACIÓN DE STORAGE (SUPABASE STORAGE BUCKETS)
 -- ==============================================================================
@@ -210,6 +239,8 @@ ALTER TABLE actividades ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pagos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE imprevistos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reportes_whatsapp ENABLE ROW LEVEL SECURITY;
+ALTER TABLE materiales_proyecto ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bitacora_obra ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalogo_materiales_chile ENABLE ROW LEVEL SECURITY;
 
 -- Función helper para obtener el empresa_id del usuario autenticado
@@ -242,6 +273,16 @@ CREATE POLICY "Acceso a pagos de proyectos de la empresa" ON pagos
   );
 
 CREATE POLICY "Acceso a imprevistos de proyectos de la empresa" ON imprevistos
+  FOR ALL USING (
+    proyecto_id IN (SELECT id FROM proyectos WHERE empresa_id = get_auth_empresa_id())
+  );
+
+CREATE POLICY "Acceso a materiales de proyectos de la empresa" ON materiales_proyecto
+  FOR ALL USING (
+    proyecto_id IN (SELECT id FROM proyectos WHERE empresa_id = get_auth_empresa_id())
+  );
+
+CREATE POLICY "Acceso a bitacora de proyectos de la empresa" ON bitacora_obra
   FOR ALL USING (
     proyecto_id IN (SELECT id FROM proyectos WHERE empresa_id = get_auth_empresa_id())
   );

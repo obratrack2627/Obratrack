@@ -9,6 +9,8 @@ import {
   UserRole,
   CotizacionEstimacion,
   SubscriptionPlanId,
+  MaterialProyecto,
+  BitacoraEntrada,
 } from '@/types/database';
 import {
   INITIAL_PROYECTOS,
@@ -34,6 +36,8 @@ const KEYS = {
   ACTIVE_USER: 'obratrack_active_user_v2',
   COTIZACIONES: 'obratrack_cotizaciones_v2',
   PLAN: 'obratrack_active_plan_v2',
+  MATERIALES_PROYECTO: 'obratrack_materiales_proyecto_v2',
+  BITACORA: 'obratrack_bitacora_v2',
 };
 
 class DataService {
@@ -138,17 +142,24 @@ class DataService {
   getProyectos(): Proyecto[] {
     const proyectos = this.getItem<Proyecto[]>(KEYS.PROYECTOS, INITIAL_PROYECTOS);
     const clientes = this.getClientes();
+    const usuarios = this.getUsuarios();
     const actividades = this.getItem<Actividad[]>(KEYS.ACTIVIDADES, INITIAL_ACTIVIDADES);
     const pagos = this.getItem<Pago[]>(KEYS.PAGOS, INITIAL_PAGOS);
     const imprevistos = this.getItem<Imprevisto[]>(KEYS.IMPREVISTOS, INITIAL_IMPREVISTOS);
+    const materiales = this.getItem<MaterialProyecto[]>(KEYS.MATERIALES_PROYECTO, []);
+    const bitacora = this.getItem<BitacoraEntrada[]>(KEYS.BITACORA, []);
 
     return proyectos.map((p) => {
       const projActs = actividades.filter((a) => a.proyecto_id === p.id);
       const projPagos = pagos.filter((pay) => pay.proyecto_id === p.id);
       const projImprevistos = imprevistos.filter((imp) => imp.proyecto_id === p.id);
+      const projMateriales = materiales.filter((m) => m.proyecto_id === p.id);
+      const projBitacora = bitacora.filter((b) => b.proyecto_id === p.id);
+      const projTrabajadores = usuarios.filter((u) => (p.trabajadores_ids || []).includes(u.id));
 
       const total_pagado = projPagos.reduce((sum, item) => sum + Number(item.monto), 0);
       const total_imprevistos = projImprevistos.reduce((sum, item) => sum + Number(item.monto), 0);
+      const total_materiales = projMateriales.reduce((sum, item) => sum + Number(item.subtotal || (item.cantidad * item.precio_unitario)), 0);
       const saldo_pendiente = Math.max(0, p.monto_cotizado - total_pagado);
 
       // Avance ponderado: promedio del porcentaje de sus actividades
@@ -161,11 +172,15 @@ class DataService {
       return {
         ...p,
         cliente: clientes.find((c) => c.id === p.cliente_id),
+        trabajadores: projTrabajadores,
         actividades: projActs,
+        materiales: projMateriales,
+        bitacora: projBitacora,
         pagos: projPagos,
         imprevistos: projImprevistos,
         total_pagado,
         total_imprevistos,
+        total_materiales,
         saldo_pendiente,
         porcentaje_avance_ponderado,
       };
@@ -259,6 +274,70 @@ class DataService {
     };
     this.setItem(KEYS.PROYECTOS, proyectos);
     return proyectos[index];
+  }
+
+  // --- MATERIALES DE PROYECTO ---
+  getMaterialesProyecto(proyectoId: string): MaterialProyecto[] {
+    const all = this.getItem<MaterialProyecto[]>(KEYS.MATERIALES_PROYECTO, []);
+    return all.filter((m) => m.proyecto_id === proyectoId);
+  }
+
+  createMaterialProyecto(material: Omit<MaterialProyecto, 'id'>): MaterialProyecto {
+    const all = this.getItem<MaterialProyecto[]>(KEYS.MATERIALES_PROYECTO, []);
+    const newMat: MaterialProyecto = {
+      ...material,
+      id: 'mat-' + Date.now(),
+      subtotal: material.subtotal || (material.cantidad * material.precio_unitario),
+      created_at: new Date().toISOString(),
+    };
+    all.push(newMat);
+    this.setItem(KEYS.MATERIALES_PROYECTO, all);
+    return newMat;
+  }
+
+  deleteMaterialProyecto(id: string): boolean {
+    const all = this.getItem<MaterialProyecto[]>(KEYS.MATERIALES_PROYECTO, []);
+    this.setItem(KEYS.MATERIALES_PROYECTO, all.filter((m) => m.id !== id));
+    return true;
+  }
+
+  updateMaterialProyecto(id: string, data: Partial<MaterialProyecto>): MaterialProyecto | null {
+    const all = this.getItem<MaterialProyecto[]>(KEYS.MATERIALES_PROYECTO, []);
+    const idx = all.findIndex((m) => m.id === id);
+    if (idx === -1) return null;
+    all[idx] = {
+      ...all[idx],
+      ...data,
+      subtotal: (data.cantidad ?? all[idx].cantidad) * (data.precio_unitario ?? all[idx].precio_unitario),
+    };
+    this.setItem(KEYS.MATERIALES_PROYECTO, all);
+    return all[idx];
+  }
+
+  // --- BITÁCORA Y FOTOS DE OBRA ---
+  getBitacora(proyectoId: string): BitacoraEntrada[] {
+    const all = this.getItem<BitacoraEntrada[]>(KEYS.BITACORA, []);
+    return all
+      .filter((b) => b.proyecto_id === proyectoId)
+      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+  }
+
+  createBitacoraEntrada(entry: Omit<BitacoraEntrada, 'id'>): BitacoraEntrada {
+    const all = this.getItem<BitacoraEntrada[]>(KEYS.BITACORA, []);
+    const newEntry: BitacoraEntrada = {
+      ...entry,
+      id: 'bit-' + Date.now(),
+      created_at: new Date().toISOString(),
+    };
+    all.unshift(newEntry);
+    this.setItem(KEYS.BITACORA, all);
+    return newEntry;
+  }
+
+  deleteBitacoraEntrada(id: string): boolean {
+    const all = this.getItem<BitacoraEntrada[]>(KEYS.BITACORA, []);
+    this.setItem(KEYS.BITACORA, all.filter((b) => b.id !== id));
+    return true;
   }
 
   // --- ACTIVIDADES (CARTA GANTT) ---

@@ -71,17 +71,49 @@ export interface Proyecto {
   fecha_termino_estimada: string;
   estado: ProjectStatus;
   monto_cotizado: number;
+  trabajadores_ids?: string[];
   created_at?: string;
   
   // Relaciones cargadas opcionalmente
   cliente?: Cliente;
+  trabajadores?: Usuario[];
   actividades?: Actividad[];
+  materiales?: MaterialProyecto[];
+  bitacora?: BitacoraEntrada[];
   pagos?: Pago[];
   imprevistos?: Imprevisto[];
   total_pagado?: number;
   total_imprevistos?: number;
+  total_materiales?: number;
   saldo_pendiente?: number;
   porcentaje_avance_ponderado?: number;
+}
+
+export interface MaterialProyecto {
+  id: string;
+  proyecto_id: string;
+  nombre: string;
+  categoria?: string;
+  cantidad: number;
+  unidad: string;
+  precio_unitario: number;
+  subtotal: number;
+  proveedor?: string;
+  comprado: boolean;
+  created_at?: string;
+}
+
+export interface BitacoraEntrada {
+  id: string;
+  proyecto_id: string;
+  usuario_id?: string;
+  autor_nombre: string;
+  titulo: string;
+  nota: string;
+  foto_url?: string;
+  fecha: string;
+  tipo: 'avance' | 'incidente' | 'clima' | 'entrega_material';
+  created_at?: string;
 }
 
 export interface Actividad {
