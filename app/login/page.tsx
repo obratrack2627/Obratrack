@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { HardHat, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { dataService } from '@/lib/data-service';
 import { UserRole } from '@/types/database';
+import Logo from '@/components/Logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,7 +18,9 @@ export default function LoginPage() {
     dataService.setActiveUserRole(selectedRole);
 
     if (selectedRole === 'terreno') {
-      alert('Los usuarios con rol "terreno" reportan directamente vía WhatsApp. Para acceder al panel web administrativo selecciona rol "admin" o "supervisor".');
+      alert(
+        'Los usuarios con rol "terreno" reportan directamente vía WhatsApp. Para acceder al panel web administrativo selecciona rol "admin" o "supervisor".'
+      );
     } else {
       router.push('/proyectos');
     }
@@ -29,20 +32,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-kraft-100 flex items-center justify-center p-4 w-full">
-      <div className="w-full max-w-md bg-white border border-kraft-200 rounded-2xl shadow-xl p-8">
-        
-        {/* Brand Logo */}
-        <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-navy-800 text-white flex items-center justify-center shadow-lg mb-3 border-2 border-obra-orange">
-            <HardHat className="w-8 h-8 text-obra-orange" />
+    <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center p-4 w-full relative overflow-hidden">
+      {/* Fondo con detalles sutiles blueprint */}
+      <div className="absolute inset-0 bg-blueprint-grid opacity-30 pointer-events-none"></div>
+
+      <div className="w-full max-w-md bg-white border border-[#E5DFC9] rounded-3xl shadow-2xl p-8 relative z-10">
+        {/* Brand Logo Oficial */}
+        <div className="flex flex-col items-center text-center mb-6">
+          <Logo variant="vertical" size="lg" withDescriptor={true} className="mb-2" />
+          
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FAF8F5] border border-[#E5DFC9] text-[11px] font-heading mt-2">
+            <span className="text-[#1E1E1E]">El</span>
+            <span className="text-[#FF6A00] font-bold">copiloto</span>
+            <span className="text-[#1E1E1E] font-bold">digital del constructor</span>
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#6B8F72] ml-0.5" />
           </div>
-          <h1 className="text-2xl font-bold font-heading text-navy-900">
-            Obra<span className="text-obra-orange">Track</span>
-          </h1>
-          <p className="text-xs text-gray-500 mt-1 font-sans">
-            Gestión de Obras & WhatsApp IA para PYMEs Constructoras
-          </p>
         </div>
 
         {/* Login Form */}
@@ -57,7 +61,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-kraft-50 border border-kraft-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-obra-orange focus:ring-1 focus:ring-obra-orange font-sans"
+                className="w-full pl-9 pr-4 py-2.5 bg-[#FAF8F5] border border-[#E5DFC9] rounded-xl text-sm text-[#1E1E1E] focus:outline-none focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/20 font-sans transition-all"
                 placeholder="tu@constructora.cl"
                 required
               />
@@ -74,7 +78,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-kraft-50 border border-kraft-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:border-obra-orange focus:ring-1 focus:ring-obra-orange font-sans"
+                className="w-full pl-9 pr-4 py-2.5 bg-[#FAF8F5] border border-[#E5DFC9] rounded-xl text-sm text-[#1E1E1E] focus:outline-none focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/20 font-sans transition-all"
                 placeholder="••••••••"
                 required
               />
@@ -82,28 +86,28 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1 font-mono">
+            <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5 font-mono">
               Rol de Acceso (Demo)
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => handleQuickRoleSelect('admin', 'admin@andinas.cl')}
-                className={`py-2 px-2 text-xs font-semibold rounded-lg border transition-all text-center ${
+                className={`py-2 px-2 text-xs font-semibold rounded-xl border transition-all text-center ${
                   selectedRole === 'admin'
-                    ? 'bg-navy-800 text-white border-navy-800 shadow-sm'
-                    : 'bg-kraft-50 text-gray-700 border-kraft-200 hover:bg-kraft-100'
+                    ? 'bg-[#1E1E1E] text-white border-[#1E1E1E] shadow-md shadow-black/10'
+                    : 'bg-[#FAF8F5] text-gray-700 border-[#E5DFC9] hover:bg-gray-100'
                 }`}
               >
-                Admin
+                Admin (Dueño)
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickRoleSelect('supervisor', 'supervisor@andinas.cl')}
-                className={`py-2 px-2 text-xs font-semibold rounded-lg border transition-all text-center ${
+                className={`py-2 px-2 text-xs font-semibold rounded-xl border transition-all text-center ${
                   selectedRole === 'supervisor'
-                    ? 'bg-navy-800 text-white border-navy-800 shadow-sm'
-                    : 'bg-kraft-50 text-gray-700 border-kraft-200 hover:bg-kraft-100'
+                    ? 'bg-[#1E1E1E] text-white border-[#1E1E1E] shadow-md shadow-black/10'
+                    : 'bg-[#FAF8F5] text-gray-700 border-[#E5DFC9] hover:bg-gray-100'
                 }`}
               >
                 Supervisor
@@ -111,10 +115,10 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => handleQuickRoleSelect('terreno', 'carlos.terreno@andinas.cl')}
-                className={`py-2 px-2 text-xs font-semibold rounded-lg border transition-all text-center ${
+                className={`py-2 px-2 text-xs font-semibold rounded-xl border transition-all text-center ${
                   selectedRole === 'terreno'
-                    ? 'bg-navy-800 text-white border-navy-800 shadow-sm'
-                    : 'bg-kraft-50 text-gray-700 border-kraft-200 hover:bg-kraft-100'
+                    ? 'bg-[#1E1E1E] text-white border-[#1E1E1E] shadow-md shadow-black/10'
+                    : 'bg-[#FAF8F5] text-gray-700 border-[#E5DFC9] hover:bg-gray-100'
                 }`}
               >
                 Terreno
@@ -124,19 +128,18 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full mt-2 py-3 bg-obra-orange hover:bg-obra-orange-hover text-white font-semibold rounded-lg shadow-md transition-all flex items-center justify-center gap-2 font-heading text-sm"
+            className="w-full mt-3 py-3 bg-[#FF6A00] hover:bg-[#E55F00] text-white font-bold rounded-xl shadow-lg shadow-[#FF6A00]/25 hover:shadow-xl hover:shadow-[#FF6A00]/35 transition-all flex items-center justify-center gap-2 font-heading text-sm"
           >
-            <span>Iniciar Sesión</span>
+            <span>Ingresar a ObraTrack</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
-        {/* Chile PYME badge footer */}
-        <div className="mt-8 pt-4 border-t border-kraft-200 flex items-center justify-center gap-2 text-xs text-gray-500 font-mono">
-          <ShieldCheck className="w-4 h-4 text-obra-green" />
-          <span>Supabase Auth & RLS Protegido</span>
+        {/* Footer */}
+        <div className="mt-6 pt-4 border-t border-[#E5DFC9] flex items-center justify-center gap-2 text-xs text-gray-500 font-mono">
+          <ShieldCheck className="w-4 h-4 text-[#6B8F72]" />
+          <span>Supabase Auth & PostgreSQL pgvector</span>
         </div>
-
       </div>
     </div>
   );

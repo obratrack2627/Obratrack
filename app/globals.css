@@ -4,16 +4,19 @@
 
 @layer base {
   :root {
-    --bg-kraft: #F3F0E8;
-    --navy-dark: #0B2E4D;
-    --obra-orange: #E8630A;
-    --obra-green: #2F855A;
-    --obra-red: #B23A2E;
+    --bg-kraft: #FAF8F5;
+    --brand-orange: #FF6A00;
+    --brand-carbon: #1E1E1E;
+    --brand-cement: #9A9A9A;
+    --brand-green: #6B8F72;
+    --obra-orange: #FF6A00;
+    --obra-green: #6B8F72;
+    --obra-red: #D94336;
   }
 
   body {
     background-color: var(--bg-kraft);
-    color: #1A202C;
+    color: #1E1E1E;
     font-family: var(--font-inter), 'Inter', sans-serif;
   }
 
@@ -27,10 +30,10 @@
   }
 }
 
-/* Textura sutil de plano técnico / Blueprint para el Sidebar */
+/* Textura técnica de plano de obra para el Sidebar / Hero */
 .bg-blueprint {
-  background-color: #0B2E4D;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-color: #1E1E1E;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
   background-size: 20px 20px;
 }
 
@@ -43,21 +46,21 @@
 }
 
 .gantt .bar {
-  fill: #6B7280;
-  stroke: #4B5563;
+  fill: #9A9A9A;
+  stroke: #1E1E1E;
   rx: 4px;
 }
 
 .gantt .bar.status-pendiente {
-  fill: #9CA3AF !important;
+  fill: #9A9A9A !important;
 }
 
 .gantt .bar.status-en_curso {
-  fill: #E8630A !important;
+  fill: #FF6A00 !important;
 }
 
 .gantt .bar.status-terminada {
-  fill: #2F855A !important;
+  fill: #6B8F72 !important;
 }
 
 .gantt .bar-progress {

@@ -22,9 +22,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ObraTrack - Gestión de Obras para PYMEs Constructoras en Chile',
+  title: 'ObraTrack | El copiloto digital del constructor',
   description:
-    'Plataforma integral de gestión de proyectos, carta Gantt, finanzas y reportes de terreno automáticos vía WhatsApp con IA.',
+    'Control, Cotizaciones, Costos, Pagos y Avances de Obra con Inteligencia Artificial (OpenAI) y WhatsApp para constructoras en Chile.',
 };
 
 export default function RootLayout({
