@@ -266,7 +266,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Usuarios Demo
 INSERT INTO usuarios (id, empresa_id, nombre, email, rol, telefono_whatsapp) VALUES
-('u1111111-1111-1111-1111-111111111111', 'e1111111-1111-1111-1111-111111111111', 'Gonzalo Morales (Dueño)', 'admin@andinas.cl', 'admin', '+56987654321'),
+('u1111111-1111-1111-1111-111111111111', 'e1111111-1111-1111-1111-111111111111', 'Benjamín Achávar (Dueño)', 'benja105.achavar@gmail.com', 'admin', '+56987654321'),
 ('u2222222-2222-2222-2222-222222222222', 'e1111111-1111-1111-1111-111111111111', 'Rodrigo Valenzuela (Supervisor)', 'supervisor@andinas.cl', 'supervisor', '+56976543210'),
 ('u3333333-3333-3333-3333-333333333333', 'e1111111-1111-1111-1111-111111111111', 'Carlos Pinto (Capataz)', 'carlos.terreno@andinas.cl', 'terreno', '+56965432109'),
 ('u4444444-4444-4444-4444-444444444444', 'e1111111-1111-1111-1111-111111111111', 'Manuel Soto (Maestro Mayor)', 'manuel.terreno@andinas.cl', 'terreno', '+56954321098')

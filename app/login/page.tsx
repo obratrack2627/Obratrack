@@ -9,7 +9,7 @@ import Logo from '@/components/Logo';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@andinas.cl');
+  const [email, setEmail] = useState('benja105.achavar@gmail.com');
   const [password, setPassword] = useState('********');
   const [selectedRole, setSelectedRole] = useState<UserRole>('admin');
 
@@ -92,7 +92,7 @@ export default function LoginPage() {
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => handleQuickRoleSelect('admin', 'admin@andinas.cl')}
+                onClick={() => handleQuickRoleSelect('admin', 'benja105.achavar@gmail.com')}
                 className={`py-2 px-2 text-xs font-semibold rounded-xl border transition-all text-center ${
                   selectedRole === 'admin'
                     ? 'bg-[#1E1E1E] text-white border-[#1E1E1E] shadow-md shadow-black/10'

@@ -10,8 +10,8 @@ export const INITIAL_USUARIOS: Usuario[] = [
   {
     id: 'u1111111-1111-1111-1111-111111111111',
     empresa_id: INITIAL_EMPRESA.id,
-    nombre: 'Gonzalo Morales',
-    email: 'admin@andinas.cl',
+    nombre: 'Benjamín Achávar',
+    email: 'benja105.achavar@gmail.com',
     rol: 'admin',
     telefono_whatsapp: '+56987654321',
   },
