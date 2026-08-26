@@ -86,19 +86,20 @@ export default function LoginPage() {
       }
 
       dataService.clearChatSessionHistory();
-      setSuccessMsg('¡Cuenta verificada en Firebase! Ingresando al Centro de Mando...');
+      const isTerreno = result.user?.rol === 'terreno';
+      setSuccessMsg(
+        isTerreno
+          ? `¡Hola ${result.user?.nombre || 'Maestro'}! Ingresando a la vista de faena...`
+          : '¡Cuenta verificada! Ingresando al Centro de Mando...'
+      );
+
       setTimeout(() => {
-        if (result.user?.rol === 'terreno') {
-          alert(
-            'Nota: Los trabajadores con rol "terreno" reportan directamente vía WhatsApp o vista de faena. Para la gestión integral ingresa como Dueño/Contratista.'
-          );
-        }
-        let target = '/dashboard';
+        let target = isTerreno ? '/proyectos' : '/dashboard';
         if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
           const redirect = params.get('redirect');
           if (redirect && redirect.startsWith('/')) {
-            target = redirect;
+            target = isTerreno ? '/proyectos' : redirect;
           }
         }
         router.replace(target);

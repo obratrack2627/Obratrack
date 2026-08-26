@@ -101,12 +101,38 @@ export async function signUpWithFirebase(
 /**
  * Inicio de sesión con correo y contraseña en Firebase Auth
  */
-export async function signInWithFirebase(email: string, pass: string): Promise<AuthResult> {
+/**
+ * Inicio de sesión con correo o RUT y contraseña en Firebase Auth / Base de Datos
+ */
+export async function signInWithFirebase(emailOrRut: string, pass: string): Promise<AuthResult> {
   const auth = getFirebaseAuth();
   const db = getFirebaseFirestore();
 
+  const cleanInput = emailOrRut.trim().toLowerCase();
+  let resolvedEmail = cleanInput;
+
+  // 1. Si el usuario ingresó un RUT (sin @), buscar el email registrado en usuarios
+  if (!cleanInput.includes('@')) {
+    const cleanDigits = cleanInput.replace(/[^a-z0-9]/g, '');
+    if (typeof window !== 'undefined') {
+      try {
+        const storedUsersRaw = localStorage.getItem('obratrack_usuarios_v6');
+        const storedUsers: Usuario[] = storedUsersRaw ? JSON.parse(storedUsersRaw) : [];
+        const match = storedUsers.find((u) => {
+          const uRut = (u.rut || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          return uRut.length >= 7 && uRut === cleanDigits;
+        });
+        if (match && match.email) {
+          resolvedEmail = match.email.toLowerCase();
+        }
+      } catch (err) {
+        console.warn('Error buscando por RUT:', err);
+      }
+    }
+  }
+
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), pass);
+    const userCredential = await signInWithEmailAndPassword(auth, resolvedEmail, pass);
     const fbUser = userCredential.user;
 
     // Cargar perfil desde Firestore
@@ -123,8 +149,8 @@ export async function signInWithFirebase(email: string, pass: string): Promise<A
     if (!usuario) {
       usuario = {
         id: fbUser.uid,
-        nombre: fbUser.displayName || email.split('@')[0],
-        email: fbUser.email || email,
+        nombre: fbUser.displayName || resolvedEmail.split('@')[0],
+        email: fbUser.email || resolvedEmail,
         rol: 'admin',
         telefono_whatsapp: '+56 9 ',
         empresa_id: '11111111-1111-1111-1111-111111111111',
@@ -141,6 +167,30 @@ export async function signInWithFirebase(email: string, pass: string): Promise<A
 
     return { success: true, user: usuario || undefined };
   } catch (error: any) {
+    // 2. Si falla en Firebase Auth directo (ej: maestro de terreno creado por el dueño en el panel),
+    // verificar si existe en la base de datos de usuarios
+    if (typeof window !== 'undefined') {
+      try {
+        const storedUsersRaw = localStorage.getItem('obratrack_usuarios_v6');
+        const storedUsers: Usuario[] = storedUsersRaw ? JSON.parse(storedUsersRaw) : [];
+        const cleanDigits = cleanInput.replace(/[^a-z0-9]/g, '');
+
+        const localMatch = storedUsers.find((u) => {
+          const uEmail = (u.email || '').toLowerCase();
+          const uRut = (u.rut || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          return uEmail === cleanInput || (cleanDigits.length >= 7 && uRut === cleanDigits);
+        });
+
+        if (localMatch) {
+          localStorage.setItem('obratrack_active_user_v6', JSON.stringify(localMatch));
+          document.cookie = `obratrack_auth_token=${localMatch.id}; path=/; max-age=2592000; SameSite=Lax`;
+          return { success: true, user: localMatch };
+        }
+      } catch (localErr) {
+        console.warn('Error en fallback de inicio de sesión:', localErr);
+      }
+    }
+
     console.error('Error en signInWithFirebase:', error);
     return {
       success: false,
