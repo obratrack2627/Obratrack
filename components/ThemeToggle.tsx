@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sun, Moon } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 
@@ -11,6 +11,20 @@ interface ThemeToggleProps {
 
 export default function ThemeToggle({ variant = 'button', className = '' }: ThemeToggleProps) {
   const { theme, toggleTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div
+        className={`w-9 h-9 rounded-xl border border-transparent opacity-0 pointer-events-none ${className}`}
+      />
+    );
+  }
+
   const isDark = theme === 'dark';
 
   if (variant === 'pill') {
@@ -27,7 +41,7 @@ export default function ThemeToggle({ variant = 'button', className = '' }: Them
       >
         {isDark ? (
           <>
-            <Sun className="w-3.5 h-3.5 text-amber-400 animate-spin-slow" />
+            <Sun className="w-3.5 h-3.5 text-amber-400" />
             <span>Modo Claro</span>
           </>
         ) : (

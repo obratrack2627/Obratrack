@@ -13,10 +13,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const isAuthPage = pathname === '/login' || pathname?.startsWith('/login');
 
-  const [isVerifying, setIsVerifying] = useState(!isAuthPage);
+  const [mounted, setMounted] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
-    let isMounted = true;
+    setMounted(true);
+    let isCurrent = true;
 
     if (isAuthPage) {
       setIsVerifying(false);
@@ -29,14 +31,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         const activeLocal = dataService.getActiveUser();
         const hasValidUser = !!(sessionUser || activeLocal);
 
-        if (isMounted) {
+        if (isCurrent) {
           setIsVerifying(false);
           if (!hasValidUser) {
             router.replace('/login');
           }
         }
       } catch (err) {
-        if (isMounted) {
+        if (isCurrent) {
           setIsVerifying(false);
           router.replace('/login');
         }
@@ -46,13 +48,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     checkAuth();
 
     return () => {
-      isMounted = false;
+      isCurrent = false;
     };
   }, [pathname, isAuthPage, router]);
 
   return (
     <ThemeProvider>
-      {isAuthPage ? (
+      {!mounted ? (
+        <div className="min-h-screen w-full bg-[#FAF8F5] dark:bg-[#0B0E14] flex flex-col items-center justify-center">
+          <Loader2 className="w-8 h-8 text-[#FF6A00] animate-spin" />
+        </div>
+      ) : isAuthPage ? (
         <main key={pathname} className="min-h-screen w-full page-fade-enter">
           {children}
         </main>
