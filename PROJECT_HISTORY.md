@@ -10,7 +10,7 @@ Este documento guarda la memoria permanente, decisiones de arquitectura, credenc
 - **GitHub**: [`https://github.com/xBenja105/ObraTrack`](https://github.com/xBenja105/ObraTrack)
 - **Rama Oficial Principal en GitHub**: `main` *(Fusionada con experimental con todas las capacidades de Google Gemini y WhatsApp Bot)*
 - **Rama de Respaldo**: `main-backup-pre-gemini`
-- **Despliegue en Producción**: Vercel ([`https://obra-track-ruddy.vercel.app/`](https://obra-track-ruddy.vercel.app/))
+- **Despliegue Oficial en Vercel**: [`https://obra-track-42is4k242-benjamin-arriagada-achavar-s-projects.vercel.app`](https://obra-track-42is4k242-benjamin-arriagada-achavar-s-projects.vercel.app)
 - **Base de Datos**: Supabase PostgreSQL (con soporte pgvector y Storage)
   - **Project URL**: `https://tpszbretbtxcmnrqvlxm.supabase.co`
   - **Project Ref**: `tpszbretbtxcmnrqvlxm`

@@ -9,26 +9,24 @@ Reemplaza las planillas Excel, los chats desordenados de WhatsApp y las notas en
 - **Control financiero de pagos e imprevistos** con gráficos de rentabilidad.
 - **Reportes automáticos de terreno vía WhatsApp con OpenAI Whisper & GPT-4o-mini**.
 
+## 🌐 Despliegue en Vivo
+- **URL Oficial en Vercel**: [`https://obra-track-42is4k242-benjamin-arriagada-achavar-s-projects.vercel.app`](https://obra-track-42is4k242-benjamin-arriagada-achavar-s-projects.vercel.app)
+
 ---
 
 ## 🚀 Stack Técnico Implementado
 
 - **Frontend & Backend**: Next.js 14 (App Router), TypeScript, React Server Components.
-- **Estilos & UI**: Tailwind CSS, Lucide Icons, paleta de diseño técnico chileno (kraft `#F3F0E8`, azul marino `#0B2E4D`, naranja obra `#E8630A`).
+- **Estilos & UI**: Tailwind CSS, Lucide Icons, paleta de diseño técnico chileno.
 - **Base de Datos & Auth**: Supabase (PostgreSQL 15+ con Row Level Security + Auth).
-- **RAG & Búsqueda Vectorial**: `pgvector` en Supabase (1536 dimensiones).
-- **Almacenamiento de Archivos**: Supabase Storage (`reportes-audio`, `imprevistos-fotos`, `proyectos-adjuntos`).
-- **Carta Gantt**: Frappe Gantt con barras horizontales coloreadas por estado y drag & drop.
-- **Gráficos Financieros**: Recharts (Donut chart de cotizado vs. cobrado vs. imprevistos).
-- **Inteligencia Artificial (100% OpenAI)**:
-  - **Cotizador & APU**: `gpt-4o-mini` con salida estructurada en JSON (`/api/cotizador`).
-  - **Asistente de Obras & Costos**: `gpt-4o-mini` conversacional (`/api/cotizador/chat`).
-  - **Transcripción de Audios de Terreno**: OpenAI **Whisper** (`whisper-1`).
-  - **Extracción de Partidas e Imprevistos**: `gpt-4o-mini` (`/api/webhook/whatsapp`).
+- **Carta Gantt**: Gantt interactivo semanal con seguimiento de partidas en terreno.
+- **Gráficos Financieros**: Recharts (desglose de cotizaciones, cobros e imprevistos).
+- **Inteligencia Artificial (Google Gemini 3.6 Flash)**:
+  - **Copiloto Obrero IA (`/cotizador`)**: Asistente conversacional de terreno con control autónomo de la web (creación de obras, registro de personal, asignación de cuadrillas y visitas técnicas).
+  - **Asistente de WhatsApp para Mandantes (`/reportes`)**: Chatbot conversacional con autenticación segura por RUT chileno, generación de fichas ejecutivas de obras y envío de fotografías de faena.
 - **Canal WhatsApp**:
-  - **WhatsApp Cloud API (Meta Oficial)**: Conexión directa y verificación Webhook (`/api/webhook/whatsapp`).
-  - **Twilio Sandbox**: Compatible como canal alternativo.
-- **Hosting Objetivo**: Vercel (Front + Serverless API en un solo deploy de costo $0 inicial).
+  - **WhatsApp Cloud API (Meta)** & **Twilio WhatsApp Sandbox**: Webhook bidireccional en vivo (`/api/webhook/whatsapp`).
+- **Hosting**: Vercel.
 
 ---
 
