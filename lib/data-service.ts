@@ -28,20 +28,20 @@ import {
 
 // Claves de almacenamiento local para persistencia en modo prototipo/demostración
 const KEYS = {
-  PROYECTOS: 'obratrack_proyectos_v2',
-  ACTIVIDADES: 'obratrack_actividades_v2',
-  PAGOS: 'obratrack_pagos_v2',
-  IMPREVISTOS: 'obratrack_imprevistos_v2',
-  REPORTES: 'obratrack_reportes_v2',
-  USUARIOS: 'obratrack_usuarios_v2',
-  CLIENTES: 'obratrack_clientes_v2',
-  ACTIVE_USER: 'obratrack_active_user_v2',
-  COTIZACIONES: 'obratrack_cotizaciones_v2',
-  PLAN: 'obratrack_active_plan_v2',
-  MATERIALES_PROYECTO: 'obratrack_materiales_proyecto_v2',
-  BITACORA: 'obratrack_bitacora_v2',
-  AGENDA: 'obratrack_agenda_eventos_v2',
-  CHAT_SESSION: 'obratrack_chat_session_history_v2',
+  PROYECTOS: 'obratrack_proyectos_v5',
+  ACTIVIDADES: 'obratrack_actividades_v5',
+  PAGOS: 'obratrack_pagos_v5',
+  IMPREVISTOS: 'obratrack_imprevistos_v5',
+  REPORTES: 'obratrack_reportes_v5',
+  USUARIOS: 'obratrack_usuarios_v5',
+  CLIENTES: 'obratrack_clientes_v5',
+  ACTIVE_USER: 'obratrack_active_user_v5',
+  COTIZACIONES: 'obratrack_cotizaciones_v5',
+  PLAN: 'obratrack_active_plan_v5',
+  MATERIALES_PROYECTO: 'obratrack_materiales_proyecto_v5',
+  BITACORA: 'obratrack_bitacora_v5',
+  AGENDA: 'obratrack_agenda_eventos_v5',
+  CHAT_SESSION: 'obratrack_chat_session_history_v5',
 };
 
 const INITIAL_AGENDA: EventoAgenda[] = [

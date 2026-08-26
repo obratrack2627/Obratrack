@@ -8,9 +8,9 @@ Este documento guarda la memoria permanente, decisiones de arquitectura, credenc
 - **Fundador & Administrador**: Benjamín Achávar
 - **Correo Oficial**: `benja105.achavar@gmail.com`
 - **GitHub**: [`https://github.com/xBenja105/ObraTrack`](https://github.com/xBenja105/ObraTrack)
-- **Rama Oficial Principal en GitHub**: `main` *(Fusionada con experimental con todas las capacidades de Google Gemini y WhatsApp Bot)*
-- **Rama de Respaldo**: `main-backup-pre-gemini`
-- **Despliegue Oficial en Vercel**: [`https://obra-track-42is4k242-benjamin-arriagada-achavar-s-projects.vercel.app`](https://obra-track-42is4k242-benjamin-arriagada-achavar-s-projects.vercel.app)
+- **Rama Oficial Principal en GitHub**: `main`
+- **Dominio Oficial en Producción**: [`https://obra-track-ruddy.vercel.app/`](https://obra-track-ruddy.vercel.app/)
+- **Despliegue Alternativo Vercel**: [`https://obra-track-88ee4c2yg-benjamin-arriagada-achavar-s-projects.vercel.app/`](https://obra-track-88ee4c2yg-benjamin-arriagada-achavar-s-projects.vercel.app/)
 - **Base de Datos**: Supabase PostgreSQL (con soporte pgvector y Storage)
   - **Project URL**: `https://tpszbretbtxcmnrqvlxm.supabase.co`
   - **Project Ref**: `tpszbretbtxcmnrqvlxm`
