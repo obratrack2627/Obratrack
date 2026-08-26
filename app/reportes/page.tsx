@@ -139,6 +139,7 @@ export default function ReportesWhatsAppPage() {
           historial: nuevosMensajes.slice(-8),
           cliente_autenticado: fichaCliente,
           clientes_disponibles: clientesDisponibles,
+          plan_id: activePlan,
         }),
       });
 

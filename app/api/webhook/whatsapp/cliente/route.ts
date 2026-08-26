@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
       historial = [],
       cliente_autenticado = null,
       clientes_disponibles = [],
+      plan_id = 'pro',
     } = body;
 
     if (!mensaje || typeof mensaje !== 'string') {
@@ -18,6 +19,14 @@ export async function POST(request: NextRequest) {
         { error: 'Debe proporcionar un mensaje del cliente.' },
         { status: 400 }
       );
+    }
+
+    // Regla de Negocio: El Chatbot de WhatsApp para Clientes solo está disponible a partir del Plan Pro
+    if (plan_id === 'gratis') {
+      return NextResponse.json({
+        respuesta:
+          '¡Hola! 👋 El servicio automatizado de atención y seguimiento de obras por WhatsApp con Inteligencia Artificial está disponible para constructoras a partir del *Plan Pro* de ObraTrack.\n\nPor favor contacta directamente a tu contratista o solicita que active el Plan Pro en la plataforma.',
+      });
     }
 
     const formattedHistory = (historial || []).map((h: any) => ({
