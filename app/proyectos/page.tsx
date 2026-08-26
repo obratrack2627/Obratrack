@@ -24,6 +24,8 @@ import {
   Sparkles,
   Users,
   ShieldCheck,
+  Search,
+  Filter,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
@@ -41,6 +43,11 @@ export default function ProyectosPage() {
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [projectToDelete, setProjectToDelete] = useState<Proyecto | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Filtros de búsqueda y estado
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'todos' | ProjectStatus>('todos');
+  const [clientFilter, setClientFilter] = useState<string>('todos');
 
   // Formulario nuevo proyecto
   const [nombre, setNombre] = useState('');
@@ -116,7 +123,7 @@ export default function ProyectosPage() {
 
     dataService.createProyecto(
       {
-        empresa_id: activeUser.empresa_id,
+        empresa_id: activeUser?.empresa_id || 'emp-1',
         cliente_id: clienteId || undefined,
         nombre: nombre.trim(),
         descripcion: descripcion.trim(),
@@ -333,48 +340,147 @@ export default function ProyectosPage() {
 
         {/* Grid de Proyectos */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold font-heading text-navy-900 flex items-center gap-2">
-              <span>Listado de Obras</span>
-              <span className="text-xs font-mono bg-kraft-200 px-2 py-0.5 rounded text-navy-800">
-                {proyectos.length}
-              </span>
-            </h2>
-          </div>
-
-          {proyectos.length === 0 ? (
-            <div className="bg-white border-2 border-dashed border-[#E5DFC9] rounded-3xl p-10 text-center max-w-xl mx-auto space-y-4">
-              <div className="w-16 h-16 rounded-3xl bg-[#FAF8F5] border border-[#E5DFC9] flex items-center justify-center mx-auto text-[#FF6A00]">
-                <HardHat className="w-8 h-8" />
-              </div>
-              <div>
-                <h3 className="font-heading font-black text-xl text-[#1E1E1E]">
-                  Aún no has registrado ninguna obra
-                </h3>
-                <p className="text-xs text-gray-500 font-sans mt-1.5 max-w-md mx-auto leading-relaxed">
-                  Comienza agregando tu primer proyecto con su monto en CLP (con separador de miles automático), cliente y trabajadores asignados.
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          {/* Barra de Búsqueda y Filtros de Proyectos */}
+          <div className="bg-white border border-kraft-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="relative w-full md:w-80">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Buscar obra, cliente o descripción..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs text-navy-900 focus:outline-none focus:border-obra-orange font-sans"
+              />
+              {searchTerm && (
                 <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="w-full sm:w-auto px-5 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 font-heading"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Crear Primera Obra</span>
+                  ✕
                 </button>
-                <Link
-                  href="/cotizador"
-                  className="w-full sm:w-auto px-5 py-2.5 bg-white border border-[#E5DFC9] hover:bg-[#FAF8F5] text-[#1E1E1E] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 font-heading"
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+              {/* Filtro por Cliente */}
+              {clientes.length > 0 && (
+                <select
+                  value={clientFilter}
+                  onChange={(e) => setClientFilter(e.target.value)}
+                  className="text-xs bg-kraft-50 border border-kraft-200 rounded-xl px-3 py-2 text-navy-900 font-sans focus:outline-none focus:border-obra-orange"
                 >
-                  <Sparkles className="w-4 h-4 text-[#FF6A00]" />
-                  <span>Ir al Cotizador IA</span>
-                </Link>
+                  <option value="todos">Todos los Clientes</option>
+                  {clientes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {/* Filtro por Estado */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setStatusFilter('todos')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold transition-all ${
+                    statusFilter === 'todos'
+                      ? 'bg-navy-800 text-white shadow-sm'
+                      : 'bg-kraft-50 text-gray-600 hover:bg-kraft-100 border border-kraft-200'
+                  }`}
+                >
+                  Todos ({proyectos.length})
+                </button>
+                <button
+                  onClick={() => setStatusFilter('activo')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold transition-all ${
+                    statusFilter === 'activo'
+                      ? 'bg-obra-green text-white shadow-sm'
+                      : 'bg-kraft-50 text-gray-600 hover:bg-kraft-100 border border-kraft-200'
+                  }`}
+                >
+                  Activos ({proyectos.filter((p) => p.estado === 'activo').length})
+                </button>
+                <button
+                  onClick={() => setStatusFilter('terminado')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold transition-all ${
+                    statusFilter === 'terminado'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-kraft-50 text-gray-600 hover:bg-kraft-100 border border-kraft-200'
+                  }`}
+                >
+                  Terminados ({proyectos.filter((p) => p.estado === 'terminado').length})
+                </button>
               </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {proyectos.map((proj) => {
+          </div>
+
+          {/* Listado */}
+          {(() => {
+            const filteredProyectos = proyectos.filter((p) => {
+              const matchStatus = statusFilter === 'todos' || p.estado === statusFilter;
+              const matchClient = clientFilter === 'todos' || p.cliente_id === clientFilter;
+              const term = searchTerm.toLowerCase();
+              const matchSearch =
+                p.nombre.toLowerCase().includes(term) ||
+                (p.descripcion && p.descripcion.toLowerCase().includes(term)) ||
+                (p.cliente?.nombre && p.cliente.nombre.toLowerCase().includes(term));
+              return matchStatus && matchClient && matchSearch;
+            });
+
+            if (filteredProyectos.length === 0) {
+              return (
+                <div className="bg-white border-2 border-dashed border-[#E5DFC9] rounded-3xl p-10 text-center max-w-xl mx-auto space-y-4">
+                  <div className="w-16 h-16 rounded-3xl bg-[#FAF8F5] border border-[#E5DFC9] flex items-center justify-center mx-auto text-[#FF6A00]">
+                    <HardHat className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h3 className="font-heading font-black text-xl text-[#1E1E1E]">
+                      {searchTerm || statusFilter !== 'todos' || clientFilter !== 'todos'
+                        ? 'No se encontraron obras'
+                        : 'Aún no has registrado ninguna obra'}
+                    </h3>
+                    <p className="text-xs text-gray-500 font-sans mt-1.5 max-w-md mx-auto leading-relaxed">
+                      {searchTerm || statusFilter !== 'todos' || clientFilter !== 'todos'
+                        ? 'Prueba modificando tus filtros o el término de búsqueda.'
+                        : 'Comienza agregando tu primer proyecto con su monto en CLP, cliente y trabajadores asignados.'}
+                    </p>
+                  </div>
+                  {searchTerm || statusFilter !== 'todos' || clientFilter !== 'todos' ? (
+                    <button
+                      onClick={() => {
+                        setSearchTerm('');
+                        setStatusFilter('todos');
+                        setClientFilter('todos');
+                      }}
+                      className="px-4 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 text-xs font-bold rounded-xl transition-all font-heading"
+                    >
+                      Limpiar filtros
+                    </button>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                      <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 font-heading"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Crear Primera Obra</span>
+                      </button>
+                      <Link
+                        href="/cotizador"
+                        className="w-full sm:w-auto px-5 py-2.5 bg-white border border-[#E5DFC9] hover:bg-[#FAF8F5] text-[#1E1E1E] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 font-heading"
+                      >
+                        <Sparkles className="w-4 h-4 text-[#FF6A00]" />
+                        <span>Ir al Cotizador IA</span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredProyectos.map((proj) => {
                 const pagado = proj.total_pagado || 0;
                 const cotizado = proj.monto_cotizado || 0;
                 const percentPago = cotizado > 0 ? Math.min(100, Math.round((pagado / cotizado) * 100)) : 0;
@@ -534,7 +640,8 @@ export default function ProyectosPage() {
                 );
               })}
             </div>
-          )}
+          );
+        })()}
         </div>
 
       </div>

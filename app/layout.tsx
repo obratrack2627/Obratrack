@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Space_Grotesk, Inter, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
-import Sidebar from '@/components/Sidebar';
+import AppShell from '@/components/AppShell';
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -34,11 +34,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`${spaceGrotesk.variable} ${inter.variable} ${ibmPlexMono.variable}`}>
-      <body className="min-h-screen bg-kraft-100 antialiased flex flex-col md:flex-row">
-        <Sidebar />
-        <main className="flex-1 flex flex-col min-h-screen w-full md:pl-64 transition-all">
-          {children}
-        </main>
+      <body className="min-h-screen bg-kraft-100 antialiased">
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

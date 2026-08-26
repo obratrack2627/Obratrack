@@ -81,6 +81,15 @@ class DataService {
     return newUsuario;
   }
 
+  updateUsuario(id: string, data: Partial<Usuario>): Usuario | null {
+    const usuarios = this.getUsuarios();
+    const index = usuarios.findIndex((u) => u.id === id);
+    if (index === -1) return null;
+    usuarios[index] = { ...usuarios[index], ...data };
+    this.setItem(KEYS.USUARIOS, usuarios);
+    return usuarios[index];
+  }
+
   deleteUsuario(id: string): boolean {
     const usuarios = this.getUsuarios();
     const filtered = usuarios.filter((u) => u.id !== id);
@@ -88,16 +97,32 @@ class DataService {
     return true;
   }
 
-  getActiveUser(): Usuario {
-    const usuarios = this.getUsuarios();
-    const defaultUser = usuarios.find((u) => u.rol === 'admin') || usuarios[0];
-    return this.getItem<Usuario>(KEYS.ACTIVE_USER, defaultUser);
+  getActiveUser(): Usuario | null {
+    return this.getItem<Usuario | null>(KEYS.ACTIVE_USER, null);
+  }
+
+  setActiveUser(user: Usuario | null): void {
+    if (user) {
+      this.setItem(KEYS.ACTIVE_USER, user);
+    } else {
+      this.clearActiveUser();
+    }
+  }
+
+  clearActiveUser(): void {
+    if (!this.isBrowser()) return;
+    try {
+      localStorage.removeItem(KEYS.ACTIVE_USER);
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   setActiveUserRole(rol: UserRole): Usuario {
     const usuarios = this.getUsuarios();
-    const user = usuarios.find((u) => u.rol === rol) || usuarios[0];
-    this.setItem(KEYS.ACTIVE_USER, user);
+    const current = this.getActiveUser();
+    const user = { ...(current || usuarios[0]), rol };
+    this.setActiveUser(user);
     return user;
   }
 
@@ -119,6 +144,11 @@ class DataService {
     return this.getItem<Cliente[]>(KEYS.CLIENTES, INITIAL_CLIENTES);
   }
 
+  getClienteById(id: string): Cliente | null {
+    const clientes = this.getClientes();
+    return clientes.find((c) => c.id === id) || null;
+  }
+
   createCliente(cliente: Omit<Cliente, 'id'>): Cliente {
     const clientes = this.getClientes();
     const newCliente: Cliente = {
@@ -129,6 +159,15 @@ class DataService {
     clientes.push(newCliente);
     this.setItem(KEYS.CLIENTES, clientes);
     return newCliente;
+  }
+
+  updateCliente(id: string, data: Partial<Cliente>): Cliente | null {
+    const clientes = this.getClientes();
+    const index = clientes.findIndex((c) => c.id === id);
+    if (index === -1) return null;
+    clientes[index] = { ...clientes[index], ...data };
+    this.setItem(KEYS.CLIENTES, clientes);
+    return clientes[index];
   }
 
   deleteCliente(id: string): boolean {
@@ -334,6 +373,15 @@ class DataService {
     return newEntry;
   }
 
+  updateBitacoraEntrada(id: string, data: Partial<BitacoraEntrada>): BitacoraEntrada | null {
+    const all = this.getItem<BitacoraEntrada[]>(KEYS.BITACORA, []);
+    const index = all.findIndex((b) => b.id === id);
+    if (index === -1) return null;
+    all[index] = { ...all[index], ...data };
+    this.setItem(KEYS.BITACORA, all);
+    return all[index];
+  }
+
   deleteBitacoraEntrada(id: string): boolean {
     const all = this.getItem<BitacoraEntrada[]>(KEYS.BITACORA, []);
     this.setItem(KEYS.BITACORA, all.filter((b) => b.id !== id));
@@ -376,6 +424,12 @@ class DataService {
     return updated;
   }
 
+  deleteActividad(id: string): boolean {
+    const all = this.getItem<Actividad[]>(KEYS.ACTIVIDADES, INITIAL_ACTIVIDADES);
+    this.setItem(KEYS.ACTIVIDADES, all.filter((a) => a.id !== id));
+    return true;
+  }
+
   // --- PAGOS & FINANZAS ---
   getPagos(proyectoId: string): Pago[] {
     const all = this.getItem<Pago[]>(KEYS.PAGOS, INITIAL_PAGOS);
@@ -392,6 +446,21 @@ class DataService {
     all.unshift(newPago);
     this.setItem(KEYS.PAGOS, all);
     return newPago;
+  }
+
+  updatePago(id: string, data: Partial<Pago>): Pago | null {
+    const all = this.getItem<Pago[]>(KEYS.PAGOS, INITIAL_PAGOS);
+    const index = all.findIndex((p) => p.id === id);
+    if (index === -1) return null;
+    all[index] = { ...all[index], ...data };
+    this.setItem(KEYS.PAGOS, all);
+    return all[index];
+  }
+
+  deletePago(id: string): boolean {
+    const all = this.getItem<Pago[]>(KEYS.PAGOS, INITIAL_PAGOS);
+    this.setItem(KEYS.PAGOS, all.filter((p) => p.id !== id));
+    return true;
   }
 
   // --- IMPREVISTOS ---
@@ -416,6 +485,21 @@ class DataService {
     all.unshift(newImp);
     this.setItem(KEYS.IMPREVISTOS, all);
     return newImp;
+  }
+
+  updateImprevisto(id: string, data: Partial<Imprevisto>): Imprevisto | null {
+    const all = this.getItem<Imprevisto[]>(KEYS.IMPREVISTOS, INITIAL_IMPREVISTOS);
+    const index = all.findIndex((i) => i.id === id);
+    if (index === -1) return null;
+    all[index] = { ...all[index], ...data };
+    this.setItem(KEYS.IMPREVISTOS, all);
+    return all[index];
+  }
+
+  deleteImprevisto(id: string): boolean {
+    const all = this.getItem<Imprevisto[]>(KEYS.IMPREVISTOS, INITIAL_IMPREVISTOS);
+    this.setItem(KEYS.IMPREVISTOS, all.filter((i) => i.id !== id));
+    return true;
   }
 
   // --- BANDEJA DE REPORTES WHATSAPP ---

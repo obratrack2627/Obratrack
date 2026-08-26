@@ -16,6 +16,7 @@ import {
   X,
   Package,
   Trash2,
+  Edit3,
   ShoppingBag,
   Store,
 } from 'lucide-react';
@@ -33,32 +34,63 @@ export default function ProyectoFinanzasPage() {
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [imprevistos, setImprevistos] = useState<Imprevisto[]>([]);
   const [materiales, setMateriales] = useState<MaterialProyecto[]>([]);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   
-  // Modales
+  // Modales de Creación
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isImprevistoModalOpen, setIsImprevistoModalOpen] = useState(false);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
 
-  // Formulario Pago
+  // Modales de Edición & Eliminación
+  const [editingPago, setEditingPago] = useState<Pago | null>(null);
+  const [pagoToDelete, setPagoToDelete] = useState<Pago | null>(null);
+
+  const [editingImprevisto, setEditingImprevisto] = useState<Imprevisto | null>(null);
+  const [imprevistoToDelete, setImprevistoToDelete] = useState<Imprevisto | null>(null);
+
+  const [editingMaterial, setEditingMaterial] = useState<MaterialProyecto | null>(null);
+  const [materialToDelete, setMaterialToDelete] = useState<MaterialProyecto | null>(null);
+
+  // Formulario Nuevo Pago
   const [montoPago, setMontoPago] = useState('');
   const [metodoPago, setMetodoPago] = useState<PaymentMethod>('transferencia');
   const [fechaPago, setFechaPago] = useState(new Date().toISOString().split('T')[0]);
   const [notaPago, setNotaPago] = useState('');
 
-  // Formulario Imprevisto
+  // Formulario Editar Pago
+  const [editPagoMonto, setEditPagoMonto] = useState('');
+  const [editPagoMetodo, setEditPagoMetodo] = useState<PaymentMethod>('transferencia');
+  const [editPagoFecha, setEditPagoFecha] = useState('');
+  const [editPagoNota, setEditPagoNota] = useState('');
+
+  // Formulario Nuevo Imprevisto
   const [descImprevisto, setDescImprevisto] = useState('');
   const [montoImprevisto, setMontoImprevisto] = useState('');
   const [fotoUrlImprevisto, setFotoUrlImprevisto] = useState('');
   const [fechaImprevisto, setFechaImprevisto] = useState(new Date().toISOString().split('T')[0]);
 
-  // Formulario Material
+  // Formulario Editar Imprevisto
+  const [editImpDesc, setEditImpDesc] = useState('');
+  const [editImpMonto, setEditImpMonto] = useState('');
+  const [editImpFoto, setEditImpFoto] = useState('');
+  const [editImpFecha, setEditImpFecha] = useState('');
+
+  // Formulario Nuevo Material
   const [nombreMat, setNombreMat] = useState('');
   const [categoriaMat, setCategoriaMat] = useState('Obra Gruesa');
   const [cantidadMat, setCantidadMat] = useState('1');
   const [unidadMat, setUnidadMat] = useState('unidades');
   const [precioUnitMat, setPrecioUnitMat] = useState('');
   const [proveedorMat, setProveedorMat] = useState('Imperial');
+
+  // Formulario Editar Material
+  const [editMatNombre, setEditMatNombre] = useState('');
+  const [editMatCategoria, setEditMatCategoria] = useState('');
+  const [editMatCantidad, setEditMatCantidad] = useState('1');
+  const [editMatUnidad, setEditMatUnidad] = useState('unidades');
+  const [editMatPrecioUnit, setEditMatPrecioUnit] = useState('');
+  const [editMatProveedor, setEditMatProveedor] = useState('Imperial');
 
   const loadData = () => {
     if (!projectId) return;
@@ -77,6 +109,12 @@ export default function ProyectoFinanzasPage() {
     loadData();
   }, [projectId]);
 
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // --- CRUD PAGOS ---
   const handleCreatePago = (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = parseThousands(montoPago);
@@ -94,8 +132,44 @@ export default function ProyectoFinanzasPage() {
     setMontoPago('');
     setNotaPago('');
     loadData();
+    showToast(`Pago de ${formatCLP(parsed)} registrado.`);
   };
 
+  const handleOpenEditPago = (p: Pago) => {
+    setEditingPago(p);
+    setEditPagoMonto(formatThousands(p.monto));
+    setEditPagoMetodo(p.metodo);
+    setEditPagoFecha(p.fecha);
+    setEditPagoNota(p.nota || '');
+  };
+
+  const handleSaveEditPago = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPago) return;
+    const parsed = parseThousands(editPagoMonto);
+    if (parsed <= 0) return;
+
+    dataService.updatePago(editingPago.id, {
+      monto: parsed,
+      metodo: editPagoMetodo,
+      fecha: editPagoFecha,
+      nota: editPagoNota.trim(),
+    });
+
+    setEditingPago(null);
+    loadData();
+    showToast(`Pago actualizado con éxito.`);
+  };
+
+  const handleConfirmDeletePago = () => {
+    if (!pagoToDelete) return;
+    dataService.deletePago(pagoToDelete.id);
+    showToast(`Pago de ${formatCLP(pagoToDelete.monto)} eliminado.`);
+    setPagoToDelete(null);
+    loadData();
+  };
+
+  // --- CRUD IMPREVISTOS ---
   const handleCreateImprevisto = (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = parseThousands(montoImprevisto);
@@ -115,8 +189,43 @@ export default function ProyectoFinanzasPage() {
     setMontoImprevisto('');
     setFotoUrlImprevisto('');
     loadData();
+    showToast(`Imprevisto de ${formatCLP(parsed)} registrado.`);
   };
 
+  const handleOpenEditImprevisto = (imp: Imprevisto) => {
+    setEditingImprevisto(imp);
+    setEditImpDesc(imp.descripcion);
+    setEditImpMonto(formatThousands(imp.monto));
+    setEditImpFoto(imp.foto_url || '');
+    setEditImpFecha(imp.fecha);
+  };
+
+  const handleSaveEditImprevisto = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingImprevisto) return;
+    const parsed = parseThousands(editImpMonto);
+
+    dataService.updateImprevisto(editingImprevisto.id, {
+      descripcion: editImpDesc.trim(),
+      monto: parsed,
+      foto_url: editImpFoto.trim() || undefined,
+      fecha: editImpFecha,
+    });
+
+    setEditingImprevisto(null);
+    loadData();
+    showToast(`Imprevisto actualizado con éxito.`);
+  };
+
+  const handleConfirmDeleteImprevisto = () => {
+    if (!imprevistoToDelete) return;
+    dataService.deleteImprevisto(imprevistoToDelete.id);
+    showToast(`Imprevisto eliminado.`);
+    setImprevistoToDelete(null);
+    loadData();
+  };
+
+  // --- CRUD MATERIALES ---
   const handleCreateMaterial = (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombreMat.trim()) return;
@@ -141,6 +250,39 @@ export default function ProyectoFinanzasPage() {
     setCantidadMat('1');
     setPrecioUnitMat('');
     loadData();
+    showToast(`Material "${nombreMat.trim()}" agregado a la lista.`);
+  };
+
+  const handleOpenEditMaterial = (m: MaterialProyecto) => {
+    setEditingMaterial(m);
+    setEditMatNombre(m.nombre);
+    setEditMatCategoria(m.categoria || 'Obra Gruesa');
+    setEditMatCantidad(String(m.cantidad));
+    setEditMatUnidad(m.unidad);
+    setEditMatPrecioUnit(formatThousands(m.precio_unitario));
+    setEditMatProveedor(m.proveedor || 'Imperial');
+  };
+
+  const handleSaveEditMaterial = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMaterial || !editMatNombre.trim()) return;
+
+    const parsedPrice = parseThousands(editMatPrecioUnit);
+    const qty = Number(editMatCantidad) || 1;
+
+    dataService.updateMaterialProyecto(editingMaterial.id, {
+      nombre: editMatNombre.trim(),
+      categoria: editMatCategoria,
+      cantidad: qty,
+      unidad: editMatUnidad,
+      precio_unitario: parsedPrice,
+      subtotal: qty * parsedPrice,
+      proveedor: editMatProveedor,
+    });
+
+    setEditingMaterial(null);
+    loadData();
+    showToast(`Material "${editMatNombre.trim()}" actualizado.`);
   };
 
   const handleToggleMaterial = (mat: MaterialProyecto) => {
@@ -148,8 +290,11 @@ export default function ProyectoFinanzasPage() {
     loadData();
   };
 
-  const handleDeleteMaterial = (id: string) => {
-    dataService.deleteMaterialProyecto(id);
+  const handleConfirmDeleteMaterial = () => {
+    if (!materialToDelete) return;
+    dataService.deleteMaterialProyecto(materialToDelete.id);
+    showToast(`Material "${materialToDelete.nombre}" eliminado.`);
+    setMaterialToDelete(null);
     loadData();
   };
 
@@ -173,8 +318,8 @@ export default function ProyectoFinanzasPage() {
   const porcentajePagado = montoCotizado > 0 ? Math.min(100, Math.round((totalPagado / montoCotizado) * 100)) : 0;
 
   const chartData = [
-    { name: 'Pagado', value: totalPagado, color: '#6B8F72' }, // Verde Terreno
-    { name: 'Por Cobrar', value: saldoPendiente, color: '#FF6A00' }, // Naranjo Obra
+    { name: 'Pagado', value: totalPagado, color: '#6B8F72' },
+    { name: 'Por Cobrar', value: saldoPendiente, color: '#FF6A00' },
   ];
   if (totalImprevistos > 0) {
     chartData.push({ name: 'Imprevistos', value: totalImprevistos, color: '#D94336' });
@@ -182,6 +327,14 @@ export default function ProyectoFinanzasPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
+          <CheckCircle2 className="w-4 h-4 text-obra-orange" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       <Navbar
         title={`Finanzas: ${proyecto.nombre}`}
         subtitle={`Control de pagos, flujo de caja, materiales e imprevistos`}
@@ -287,7 +440,7 @@ export default function ProyectoFinanzasPage() {
             </div>
           </div>
 
-          {/* Historial Cronológico de Pagos */}
+          {/* Historial Cronológico de Pagos (con CRUD) */}
           <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -308,14 +461,33 @@ export default function ProyectoFinanzasPage() {
                   <p className="text-xs text-gray-500 py-6 text-center">No se han registrado pagos.</p>
                 ) : (
                   pagos.map((pago) => (
-                    <div key={pago.id} className="py-2.5 flex items-center justify-between text-xs">
+                    <div key={pago.id} className="py-2.5 flex items-center justify-between text-xs gap-2">
                       <div>
                         <div className="font-mono font-bold text-navy-900">{formatCLP(pago.monto)}</div>
                         <p className="text-[11px] text-gray-500 capitalize">
                           {pago.metodo} {pago.nota ? `• ${pago.nota}` : ''}
                         </p>
+                        <span className="text-[10px] font-mono text-gray-400">{formatDate(pago.fecha)}</span>
                       </div>
-                      <span className="text-[10px] font-mono text-gray-400">{formatDate(pago.fecha)}</span>
+                      
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditPago(pago)}
+                          className="p-1 text-gray-400 hover:text-obra-orange rounded"
+                          title="Editar pago"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPagoToDelete(pago)}
+                          className="p-1 text-gray-400 hover:text-red-600 rounded"
+                          title="Eliminar pago"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -323,7 +495,7 @@ export default function ProyectoFinanzasPage() {
             </div>
           </div>
 
-          {/* Historial de Imprevistos con Fotos */}
+          {/* Historial de Imprevistos con Fotos (con CRUD) */}
           <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -356,19 +528,37 @@ export default function ProyectoFinanzasPage() {
                         <span className="text-[10px] font-mono text-gray-400">{formatDate(imp.fecha)}</span>
                       </div>
 
-                      {imp.foto_url && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        {imp.foto_url && (
+                          <button
+                            onClick={() => setPreviewPhoto(imp.foto_url || null)}
+                            className="w-7 h-7 rounded border border-kraft-200 overflow-hidden relative group"
+                            title="Ver foto de respaldo"
+                          >
+                            <img
+                              src={imp.foto_url}
+                              alt="Evidencia"
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                            />
+                          </button>
+                        )}
                         <button
-                          onClick={() => setPreviewPhoto(imp.foto_url || null)}
-                          className="flex-shrink-0 w-8 h-8 rounded border border-kraft-200 overflow-hidden relative group"
-                          title="Ver foto de respaldo"
+                          type="button"
+                          onClick={() => handleOpenEditImprevisto(imp)}
+                          className="p-1 text-gray-400 hover:text-obra-orange rounded"
+                          title="Editar imprevisto"
                         >
-                          <img
-                            src={imp.foto_url}
-                            alt="Evidencia"
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                          />
+                          <Edit3 className="w-3.5 h-3.5" />
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => setImprevistoToDelete(imp)}
+                          className="p-1 text-gray-400 hover:text-red-600 rounded"
+                          title="Eliminar imprevisto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -378,7 +568,7 @@ export default function ProyectoFinanzasPage() {
 
         </div>
 
-        {/* Sección: Materiales & Insumos de la Obra */}
+        {/* Sección: Materiales & Insumos de la Obra (con CRUD) */}
         <div className="bg-white border border-kraft-200 rounded-2xl p-6 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200">
             <div>
@@ -423,7 +613,7 @@ export default function ProyectoFinanzasPage() {
                     <th className="py-2.5 px-3 text-right">P. Unitario</th>
                     <th className="py-2.5 px-3 text-right">Subtotal</th>
                     <th className="py-2.5 px-3">Proveedor</th>
-                    <th className="py-2.5 px-3 text-center">Acción</th>
+                    <th className="py-2.5 px-3 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 font-sans">
@@ -451,14 +641,24 @@ export default function ProyectoFinanzasPage() {
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-navy-900">{formatCLP(m.subtotal)}</td>
                       <td className="py-2.5 px-3 text-gray-600 text-xs font-mono">{m.proveedor || '-'}</td>
                       <td className="py-2.5 px-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteMaterial(m.id)}
-                          className="p-1 text-gray-400 hover:text-red-600 rounded"
-                          title="Eliminar material"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditMaterial(m)}
+                            className="p-1 text-gray-400 hover:text-obra-orange rounded"
+                            title="Editar material"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMaterialToDelete(m)}
+                            className="p-1 text-gray-400 hover:text-red-600 rounded"
+                            title="Eliminar material"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -472,8 +672,8 @@ export default function ProyectoFinanzasPage() {
 
       {/* Modal: Registrar Pago Manual */}
       {isPaymentModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-obra-green" />
@@ -497,7 +697,7 @@ export default function ProyectoFinanzasPage() {
                     placeholder="5.000.000"
                     value={montoPago}
                     onChange={(e) => setMontoPago(formatThousands(e.target.value))}
-                    className="w-full pl-8 pr-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-sm font-mono font-bold focus:outline-none focus:border-obra-green text-navy-900"
+                    className="w-full pl-8 pr-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-sm font-mono font-bold focus:outline-none focus:border-obra-green text-navy-900"
                   />
                 </div>
               </div>
@@ -510,7 +710,7 @@ export default function ProyectoFinanzasPage() {
                   <select
                     value={metodoPago}
                     onChange={(e) => setMetodoPago(e.target.value as PaymentMethod)}
-                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs"
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
                   >
                     <option value="transferencia">Transferencia Bancaria</option>
                     <option value="efectivo">Efectivo</option>
@@ -526,7 +726,7 @@ export default function ProyectoFinanzasPage() {
                     required
                     value={fechaPago}
                     onChange={(e) => setFechaPago(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono"
+                    className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
                   />
                 </div>
               </div>
@@ -540,7 +740,7 @@ export default function ProyectoFinanzasPage() {
                   placeholder="Ej: Anticipo 50%, Estado de Pago N° 2"
                   value={notaPago}
                   onChange={(e) => setNotaPago(e.target.value)}
-                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs"
+                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
                 />
               </div>
 
@@ -564,10 +764,137 @@ export default function ProyectoFinanzasPage() {
         </div>
       )}
 
+      {/* Modal: Editar Pago */}
+      {editingPago && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
+              <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-obra-orange" />
+                <span>Editar Pago Registrado</span>
+              </h3>
+              <button onClick={() => setEditingPago(null)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditPago} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  Monto Recibido (CLP) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-sm">$</span>
+                  <input
+                    type="text"
+                    required
+                    value={editPagoMonto}
+                    onChange={(e) => setEditPagoMonto(formatThousands(e.target.value))}
+                    className="w-full pl-8 pr-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-sm font-mono font-bold focus:outline-none focus:border-obra-green text-navy-900"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Método de Pago
+                  </label>
+                  <select
+                    value={editPagoMetodo}
+                    onChange={(e) => setEditPagoMetodo(e.target.value as PaymentMethod)}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  >
+                    <option value="transferencia">Transferencia Bancaria</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="debito">Tarjeta / Débito</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Fecha
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editPagoFecha}
+                    onChange={(e) => setEditPagoFecha(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  Nota / Observación
+                </label>
+                <input
+                  type="text"
+                  value={editPagoNota}
+                  onChange={(e) => setEditPagoNota(e.target.value)}
+                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingPago(null)}
+                  className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-obra-green text-white text-xs font-bold rounded-xl font-heading shadow-sm hover:bg-emerald-700"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar Eliminar Pago */}
+      {pagoToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-heading font-bold text-base text-navy-900">
+                ¿Eliminar pago de {formatCLP(pagoToDelete.monto)}?
+              </h3>
+              <p className="text-xs text-gray-500 font-sans mt-1">
+                El monto se restará del total recaudado y aumentará el saldo por cobrar.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setPagoToDelete(null)}
+                className="px-4 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 text-xs font-bold rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeletePago}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
+              >
+                Sí, Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Registrar Imprevisto Manual */}
       {isImprevistoModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-obra-red" />
@@ -589,7 +916,7 @@ export default function ProyectoFinanzasPage() {
                   placeholder="Ej: Rotura de cañería oculta, refuerzo estructural no contemplado..."
                   value={descImprevisto}
                   onChange={(e) => setDescImprevisto(e.target.value)}
-                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs focus:outline-none focus:border-obra-red"
+                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-red"
                 />
               </div>
 
@@ -606,7 +933,7 @@ export default function ProyectoFinanzasPage() {
                       placeholder="150.000"
                       value={montoImprevisto}
                       onChange={(e) => setMontoImprevisto(formatThousands(e.target.value))}
-                      className="w-full pl-6 pr-2 py-1.5 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono font-bold focus:outline-none focus:border-obra-red"
+                      className="w-full pl-6 pr-2 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-obra-red"
                     />
                   </div>
                 </div>
@@ -619,9 +946,22 @@ export default function ProyectoFinanzasPage() {
                     required
                     value={fechaImprevisto}
                     onChange={(e) => setFechaImprevisto(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono"
+                    className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  URL Fotografía Respaldo (Opcional)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={fotoUrlImprevisto}
+                  onChange={(e) => setFotoUrlImprevisto(e.target.value)}
+                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                />
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
@@ -644,10 +984,135 @@ export default function ProyectoFinanzasPage() {
         </div>
       )}
 
+      {/* Modal: Editar Imprevisto */}
+      {editingImprevisto && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
+              <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-obra-orange" />
+                <span>Editar Imprevisto</span>
+              </h3>
+              <button onClick={() => setEditingImprevisto(null)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditImprevisto} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  Descripción *
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={editImpDesc}
+                  onChange={(e) => setEditImpDesc(e.target.value)}
+                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-red"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Monto (CLP) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-xs">$</span>
+                    <input
+                      type="text"
+                      required
+                      value={editImpMonto}
+                      onChange={(e) => setEditImpMonto(formatThousands(e.target.value))}
+                      className="w-full pl-6 pr-2 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-obra-red"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Fecha
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editImpFecha}
+                    onChange={(e) => setEditImpFecha(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  URL Fotografía
+                </label>
+                <input
+                  type="url"
+                  value={editImpFoto}
+                  onChange={(e) => setEditImpFoto(e.target.value)}
+                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingImprevisto(null)}
+                  className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-obra-red text-white text-xs font-bold rounded-xl font-heading shadow-sm hover:bg-red-700"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar Eliminar Imprevisto */}
+      {imprevistoToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-heading font-bold text-base text-navy-900">
+                ¿Eliminar este imprevisto?
+              </h3>
+              <p className="text-xs text-gray-500 font-sans mt-1">
+                {imprevistoToDelete.descripcion} ({formatCLP(imprevistoToDelete.monto)})
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setImprevistoToDelete(null)}
+                className="px-4 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 text-xs font-bold rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteImprevisto}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
+              >
+                Sí, Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: + Agregar Material a la Obra */}
       {isMaterialModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
                 <Package className="w-4 h-4 text-obra-orange" />
@@ -669,7 +1134,7 @@ export default function ProyectoFinanzasPage() {
                   placeholder="Ej: Cemento Polpaico Especial 25kg, Placa OSB 9.5mm..."
                   value={nombreMat}
                   onChange={(e) => setNombreMat(e.target.value)}
-                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs focus:outline-none focus:border-obra-orange"
+                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange"
                 />
               </div>
 
@@ -684,7 +1149,7 @@ export default function ProyectoFinanzasPage() {
                     required
                     value={cantidadMat}
                     onChange={(e) => setCantidadMat(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono focus:outline-none focus:border-obra-orange"
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"
                   />
                 </div>
                 <div>
@@ -694,7 +1159,7 @@ export default function ProyectoFinanzasPage() {
                   <select
                     value={unidadMat}
                     onChange={(e) => setUnidadMat(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono"
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
                   >
                     <option value="sacos">Sacos</option>
                     <option value="placas">Placas</option>
@@ -722,7 +1187,7 @@ export default function ProyectoFinanzasPage() {
                       placeholder="4.490"
                       value={precioUnitMat}
                       onChange={(e) => setPrecioUnitMat(formatThousands(e.target.value))}
-                      className="w-full pl-6 pr-2 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono font-bold focus:outline-none focus:border-obra-orange"
+                      className="w-full pl-6 pr-2 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-obra-orange"
                     />
                   </div>
                 </div>
@@ -734,7 +1199,7 @@ export default function ProyectoFinanzasPage() {
                   <select
                     value={proveedorMat}
                     onChange={(e) => setProveedorMat(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono"
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
                   >
                     <option value="Imperial">Imperial</option>
                     <option value="Construmart">Construmart</option>
@@ -761,6 +1226,160 @@ export default function ProyectoFinanzasPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Material */}
+      {editingMaterial && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
+              <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-obra-orange" />
+                <span>Editar Insumo / Material</span>
+              </h3>
+              <button onClick={() => setEditingMaterial(null)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditMaterial} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  Nombre del Material *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editMatNombre}
+                  onChange={(e) => setEditMatNombre(e.target.value)}
+                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Cantidad *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={editMatCantidad}
+                    onChange={(e) => setEditMatCantidad(e.target.value)}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Unidad
+                  </label>
+                  <select
+                    value={editMatUnidad}
+                    onChange={(e) => setEditMatUnidad(e.target.value)}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
+                  >
+                    <option value="sacos">Sacos</option>
+                    <option value="placas">Placas</option>
+                    <option value="tiras">Tiras</option>
+                    <option value="barras">Barras</option>
+                    <option value="m2">m²</option>
+                    <option value="m3">m³</option>
+                    <option value="kg">kg</option>
+                    <option value="unidades">Unidades</option>
+                    <option value="global">Global</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Precio Unitario (CLP) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-xs">$</span>
+                    <input
+                      type="text"
+                      required
+                      value={editMatPrecioUnit}
+                      onChange={(e) => setEditMatPrecioUnit(formatThousands(e.target.value))}
+                      className="w-full pl-6 pr-2 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-obra-orange"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Proveedor
+                  </label>
+                  <select
+                    value={editMatProveedor}
+                    onChange={(e) => setEditMatProveedor(e.target.value)}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
+                  >
+                    <option value="Imperial">Imperial</option>
+                    <option value="Construmart">Construmart</option>
+                    <option value="Sodimac">Sodimac Constructor</option>
+                    <option value="Red MTS">Red MTS</option>
+                    <option value="Barraca Local">Barraca Local</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingMaterial(null)}
+                  className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-obra-orange text-white text-xs font-bold rounded-xl font-heading shadow-sm hover:bg-obra-orange-hover"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar Eliminar Material */}
+      {materialToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-heading font-bold text-base text-navy-900">
+                ¿Eliminar material &quot;{materialToDelete.nombre}&quot;?
+              </h3>
+              <p className="text-xs text-gray-500 font-sans mt-1">
+                Se restará de la lista de insumos y costos del proyecto.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setMaterialToDelete(null)}
+                className="px-4 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 text-xs font-bold rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteMaterial}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
+              >
+                Sí, Eliminar
+              </button>
+            </div>
           </div>
         </div>
       )}

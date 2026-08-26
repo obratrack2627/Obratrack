@@ -4,7 +4,12 @@
 
 @layer base {
   :root {
-    --bg-kraft: #FAF8F5;
+    --bg-page: #FAF8F5;
+    --bg-card: #FFFFFF;
+    --border-card: #E5DFC9;
+    --text-primary: #1E1E1E;
+    --text-muted: #666666;
+    --bg-input: #FAF8F5;
     --brand-orange: #FF6A00;
     --brand-carbon: #1E1E1E;
     --brand-cement: #9A9A9A;
@@ -14,10 +19,27 @@
     --obra-red: #D94336;
   }
 
+  .dark {
+    --bg-page: #0B0E14;
+    --bg-card: #141A23;
+    --border-card: #263040;
+    --text-primary: #F3F4F6;
+    --text-muted: #9CA3AF;
+    --bg-input: #0F141C;
+    --brand-carbon: #0F141C;
+  }
+
+  * {
+    transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                color 0.15s ease-out;
+  }
+
   body {
-    background-color: var(--bg-kraft);
-    color: #1E1E1E;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
     font-family: var(--font-inter), 'Inter', sans-serif;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -30,6 +52,22 @@
   }
 }
 
+/* Transiciones de Página y Micro-animaciones Suaves */
+.page-fade-enter {
+  animation: pageFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pageFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Textura técnica de plano de obra para el Sidebar / Hero */
 .bg-blueprint {
   background-color: #1E1E1E;
@@ -37,12 +75,51 @@
   background-size: 20px 20px;
 }
 
-/* Estilos personalizados para Frappe Gantt */
+/* Soporte Dark Mode automático para elementos estándar */
+.dark .bg-white {
+  background-color: #141A23 !important;
+  color: #F3F4F6 !important;
+}
+
+.dark .bg-kraft-50,
+.dark .bg-kraft-100 {
+  background-color: #0F141C !important;
+}
+
+.dark .border-kraft-200,
+.dark .border-\[\#E5DFC9\] {
+  border-color: #263040 !important;
+}
+
+.dark .text-navy-900,
+.dark .text-\[\#1E1E1E\] {
+  color: #F9FAFB !important;
+}
+
+.dark .text-gray-700,
+.dark .text-gray-600 {
+  color: #D1D5DB !important;
+}
+
+.dark .text-gray-500 {
+  color: #9CA3AF !important;
+}
+
+.dark .bg-\[\#FAF8F5\] {
+  background-color: #0B0E14 !important;
+}
+
+/* Estilos para Frappe Gantt */
 .gantt-container {
   overflow-x: auto;
   background: #ffffff;
   border-radius: 0.75rem;
   border: 1px solid #E5DFC9;
+}
+
+.dark .gantt-container {
+  background: #141A23 !important;
+  border-color: #263040 !important;
 }
 
 .gantt .bar {

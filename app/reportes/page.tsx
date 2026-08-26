@@ -16,6 +16,7 @@ import {
   Send,
   Volume2,
   X,
+  Lock,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
@@ -23,6 +24,7 @@ import { ReporteWhatsApp, ReportStatus, SubscriptionPlanId } from '@/types/datab
 import { formatCLP, formatDate } from '@/lib/utils';
 import { getPlanDetails } from '@/lib/plans';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
+import PlanLockOverlay from '@/components/PlanLockOverlay';
 
 export default function ReportesWhatsAppPage() {
   const [reportes, setReportes] = useState<ReporteWhatsApp[]>([]);
@@ -199,29 +201,36 @@ export default function ReportesWhatsAppPage() {
         )}
         
         {/* Simulador rápido de mensaje WhatsApp para testing */}
-        <div className="bg-white border border-kraft-200 rounded-xl p-4 shadow-sm">
-          <form onSubmit={handleSimulateWhatsApp} className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="flex items-center gap-2 text-xs font-mono text-navy-900 font-semibold flex-shrink-0">
-              <MessageSquareShare className="w-4 h-4 text-obra-green" />
-              <span>Simular Mensaje WhatsApp:</span>
-            </div>
-            <input
-              type="text"
-              placeholder="Ej: Don Gonzalo, avanzamos al 85% la techumbre pero tuvimos que comprar 3 sacos de cemento extra por 15 mil pesos."
-              value={simulatedText}
-              onChange={(e) => setSimulatedText(e.target.value)}
-              className="flex-1 w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs focus:outline-none focus:border-obra-orange"
-            />
-            <button
-              type="submit"
-              disabled={isSimulating}
-              className="px-4 py-2 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 font-heading shadow-sm flex-shrink-0 disabled:opacity-50"
-            >
-              <Send className="w-3.5 h-3.5 text-obra-orange" />
-              <span>{isSimulating ? 'Procesando IA...' : 'Enviar y Procesar'}</span>
-            </button>
-          </form>
-        </div>
+        <PlanLockOverlay
+          isLocked={activePlan === 'gratis'}
+          featureName="Recepción & Procesamiento de Audios WhatsApp con Whisper IA"
+          requiredPlan="pro_ia"
+          description="Transcribe notas de voz y mensajes de WhatsApp enviados por maestros en terreno, deduciendo automáticamente avances porcentuales e imprevistos de costos."
+        >
+          <div className="bg-white border border-kraft-200 rounded-xl p-4 shadow-sm">
+            <form onSubmit={handleSimulateWhatsApp} className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="flex items-center gap-2 text-xs font-mono text-navy-900 font-semibold flex-shrink-0">
+                <MessageSquareShare className="w-4 h-4 text-obra-green" />
+                <span>Simular Mensaje WhatsApp:</span>
+              </div>
+              <input
+                type="text"
+                placeholder="Ej: Don Gonzalo, avanzamos al 85% la techumbre pero tuvimos que comprar 3 sacos de cemento extra por 15 mil pesos."
+                value={simulatedText}
+                onChange={(e) => setSimulatedText(e.target.value)}
+                className="flex-1 w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs focus:outline-none focus:border-obra-orange"
+              />
+              <button
+                type="submit"
+                disabled={isSimulating}
+                className="px-4 py-2 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 font-heading shadow-sm flex-shrink-0 disabled:opacity-50"
+              >
+                <Send className="w-3.5 h-3.5 text-obra-orange" />
+                <span>{isSimulating ? 'Procesando IA...' : 'Enviar y Procesar'}</span>
+              </button>
+            </form>
+          </div>
+        </PlanLockOverlay>
 
         {/* Filtro por Estado */}
         <div className="flex items-center gap-2">

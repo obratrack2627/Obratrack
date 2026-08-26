@@ -15,25 +15,25 @@ import {
   Sparkles,
   CreditCard,
   Zap,
-  Database,
+  LogOut,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { dataService } from '@/lib/data-service';
 import { Usuario, UserRole, SubscriptionPlanId } from '@/types/database';
 import { getPlanDetails } from '@/lib/plans';
 import Logo from '@/components/Logo';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
-import SupabaseConnectModal from '@/components/SupabaseConnectModal';
-import { isSupabaseConfigured } from '@/lib/supabase/client';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import ThemeToggle from '@/components/ThemeToggle';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeUser, setActiveUser] = useState<Usuario | null>(null);
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
-  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
-  const [isDbConnected, setIsDbConnected] = useState(false);
 
   const loadSidebarData = () => {
     const user = dataService.getActiveUser();
@@ -45,7 +45,19 @@ export default function Sidebar() {
 
     const plan = dataService.getActivePlan();
     setActivePlan(plan);
-    setIsDbConnected(isSupabaseConfigured());
+  };
+
+  const handleLogout = async () => {
+    try {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    dataService.clearActiveUser();
+    window.location.href = '/login';
   };
 
   useEffect(() => {
@@ -109,21 +121,13 @@ export default function Sidebar() {
         onClose={() => setIsPlanModalOpen(false)}
       />
 
-      {/* Supabase Connection Modal */}
-      <SupabaseConnectModal
-        isOpen={isSupabaseModalOpen}
-        onClose={() => {
-          setIsSupabaseModalOpen(false);
-          loadSidebarData();
-        }}
-      />
-
       {/* Mobile Top Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#1E1E1E] text-white z-50 flex items-center justify-between px-4 border-b border-[#2A2A2A] shadow-md">
         <Link href="/proyectos">
           <Logo variant="horizontal" theme="dark" size="sm" />
         </Link>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <button
             onClick={() => setIsPlanModalOpen(true)}
             className="px-2 py-1 rounded bg-[#FF6A00]/20 text-[#FF6A00] border border-[#FF6A00]/40 text-[10px] font-bold font-mono"
@@ -245,22 +249,6 @@ export default function Sidebar() {
             </button>
           </div>
 
-          {/* Supabase Database Connection Status */}
-          <button
-            type="button"
-            onClick={() => setIsSupabaseModalOpen(true)}
-            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#2A2A2A]/80 hover:bg-[#383838] border border-[#383838] text-[11px] font-mono text-gray-300 transition-colors"
-          >
-            <div className="flex items-center gap-1.5">
-              <Database className="w-3.5 h-3.5 text-[#3ECF8E]" />
-              <span>Supabase DB</span>
-            </div>
-            <span className="flex items-center gap-1 text-[10px]">
-              <span className={`w-2 h-2 rounded-full ${isDbConnected ? 'bg-[#3ECF8E]' : 'bg-amber-400'}`}></span>
-              <span className="text-gray-400">{isDbConnected ? 'Online' : 'Conectar'}</span>
-            </span>
-          </button>
-
           {/* WhatsApp Webhook Active Badge */}
           <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#2A2A2A]/80 border border-[#383838] text-[11px] font-mono text-gray-300">
             <div className="flex items-center gap-1.5">
@@ -273,23 +261,31 @@ export default function Sidebar() {
             </span>
           </div>
 
-          {/* Active User info & Role Switcher */}
+          {/* Active User info, Role Switcher & Logout */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#FF6A00] text-white flex items-center justify-center font-bold text-xs">
-                  {activeUser?.nombre.charAt(0) || 'B'}
+              <div className="flex items-center gap-2 overflow-hidden">
+                <div className="w-8 h-8 rounded-full bg-[#FF6A00] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                  {activeUser?.nombre ? activeUser.nombre.charAt(0).toUpperCase() : 'U'}
                 </div>
                 <div className="overflow-hidden">
-                  <p className="text-xs font-bold text-white truncate w-28">
-                    {activeUser?.nombre.split(' ')[0]}
+                  <p className="text-xs font-bold text-white truncate w-24">
+                    {activeUser?.nombre ? activeUser.nombre.split(' ')[0] : 'Usuario'}
                   </p>
                   <p className="text-[10px] text-gray-400 font-mono capitalize">
-                    Rol: {activeUser?.rol}
+                    Rol: {activeUser?.rol || 'admin'}
                   </p>
                 </div>
               </div>
-              <UserCog className="w-4 h-4 text-gray-400" />
+              
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition-colors"
+                title="Cerrar sesión"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Quick Role Switcher (Simulación de roles) */}

@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
+  darkMode: 'class',
   content: [
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -18,7 +19,7 @@ const config: Config = {
           'carbon-light': '#2A2A2A',
           cement: '#9A9A9A', // Gris Cemento
           'cement-light': '#E8E8E8',
-          green: '#6B8F72',  // Verde Terreno
+          green: '#6B8F72', // Verde Terreno
           'green-dark': '#55735B',
           'green-light': 'rgba(107, 143, 114, 0.15)',
         },
@@ -30,6 +31,7 @@ const config: Config = {
           800: '#4A4333',
         },
         navy: {
+          950: '#0B0F17',
           900: '#141414',
           800: '#1E1E1E', // Fondo Carbón para Sidebars y Headers
           700: '#2A2A2A',
@@ -39,13 +41,13 @@ const config: Config = {
           orange: '#FF6A00', // Naranjo Obra Oficial
           'orange-hover': '#E55F00',
           'orange-light': 'rgba(255, 106, 0, 0.12)',
-          green: '#6B8F72',  // Verde Terreno Oficial
+          green: '#6B8F72', // Verde Terreno Oficial
           'green-light': 'rgba(107, 143, 114, 0.15)',
-          red: '#D94336',    // Alertas/Imprevistos
+          red: '#D94336', // Alertas/Imprevistos
           'red-light': 'rgba(217, 67, 54, 0.12)',
-          gray: '#9A9A9A',   // Gris Cemento Oficial
+          gray: '#9A9A9A', // Gris Cemento Oficial
           carbon: '#1E1E1E', // Carbón Oficial
-        }
+        },
       },
       fontFamily: {
         heading: ['var(--font-space-grotesk)', 'Space Grotesk', 'sans-serif'],
@@ -53,11 +55,20 @@ const config: Config = {
         mono: ['var(--font-ibm-plex-mono)', 'IBM Plex Mono', 'monospace'],
       },
       backgroundImage: {
-        'blueprint-grid': "radial-gradient(rgba(255, 106, 0, 0.15) 1px, transparent 1px)",
+        'blueprint-grid': 'radial-gradient(rgba(255, 106, 0, 0.15) 1px, transparent 1px)',
       },
       backgroundSize: {
         'blueprint-size': '20px 20px',
-      }
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+      },
     },
   },
   plugins: [],

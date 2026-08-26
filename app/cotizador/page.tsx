@@ -33,22 +33,52 @@ import {
   ExternalLink,
   ChevronDown,
   Search,
+  Trash2,
+  Edit3,
+  Copy,
+  FolderPlus,
+  Plus,
+  X,
+  AlertTriangle,
+  Lock,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
 import { CotizacionEstimacion, MensajeChatCotizador, Cliente, SubscriptionPlanId } from '@/types/database';
-import { formatCLP, formatDate } from '@/lib/utils';
+import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 import { getPlanDetails } from '@/lib/plans';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
+import PlanLockOverlay from '@/components/PlanLockOverlay';
 
 export default function CotizadorPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'cotizador' | 'radar' | 'chat'>('cotizador');
+  const [activeTab, setActiveTab] = useState<'cotizador' | 'radar' | 'chat' | 'historial'>('cotizador');
   const [cotizaciones, setCotizaciones] = useState<CotizacionEstimacion[]>([]);
   const [currentCotizacion, setCurrentCotizacion] = useState<CotizacionEstimacion | null>(null);
   const [clientes, setClientes] = useState<Cliente[]>([]);
 
-  // Formulario de cotización
+  // Gestión & CRUD de Cotizaciones
+  const [searchCotizacion, setSearchCotizacion] = useState('');
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [editingCotizacion, setEditingCotizacion] = useState<CotizacionEstimacion | null>(null);
+  const [cotizacionToDelete, setCotizacionToDelete] = useState<CotizacionEstimacion | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Formulario Cotización Manual
+  const [manualTitulo, setManualTitulo] = useState('');
+  const [manualTipo, setManualTipo] = useState('Quinchos & Terrazas');
+  const [manualM2, setManualM2] = useState<number>(20);
+  const [manualCostoDirecto, setManualCostoDirecto] = useState('');
+  const [manualMargen, setManualMargen] = useState<number>(30);
+  const [manualDescripcion, setManualDescripcion] = useState('');
+
+  // Formulario Editar Cotización
+  const [editTitulo, setEditTitulo] = useState('');
+  const [editTipo, setEditTipo] = useState('');
+  const [editM2, setEditM2] = useState<number>(20);
+  const [editResumen, setEditResumen] = useState('');
+
+  // Formulario de cotización IA
   const [descripcion, setDescripcion] = useState('');
   const [tipoObra, setTipoObra] = useState('Quinchos & Terrazas');
   const [metrosCuadrados, setMetrosCuadrados] = useState<number>(25);
@@ -272,6 +302,138 @@ export default function CotizadorPage() {
   const handlePrint = () => {
     window.print();
   };
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleOpenEditCotizacion = (cot: CotizacionEstimacion) => {
+    setEditingCotizacion(cot);
+    setEditTitulo(cot.titulo_proyecto);
+    setEditTipo(cot.tipo_obra);
+    setEditM2(cot.metros_cuadrados || 20);
+    setEditResumen(cot.resumen_ejecutivo);
+  };
+
+  const handleSaveEditCotizacion = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCotizacion || !editTitulo.trim()) return;
+
+    const updated: CotizacionEstimacion = {
+      ...editingCotizacion,
+      titulo_proyecto: editTitulo.trim(),
+      tipo_obra: editTipo || editingCotizacion.tipo_obra,
+      metros_cuadrados: editM2,
+      resumen_ejecutivo: editResumen.trim() || editingCotizacion.resumen_ejecutivo,
+    };
+
+    dataService.saveCotizacion(updated);
+    const all = dataService.getCotizaciones();
+    setCotizaciones(all);
+    if (currentCotizacion?.id === updated.id) {
+      setCurrentCotizacion(updated);
+    }
+    setEditingCotizacion(null);
+    showToast(`Cotización "${editTitulo.trim()}" actualizada.`);
+  };
+
+  const handleSaveManualCotizacion = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualTitulo.trim()) return;
+    const costoDir = parseThousands(manualCostoDirecto);
+    const margenMonto = Math.round(costoDir * (manualMargen / 100));
+    const gastosGen = Math.round(costoDir * 0.08);
+    const imprevistos = Math.round(costoDir * 0.05);
+    const neto = costoDir + margenMonto + gastosGen + imprevistos;
+    const iva = Math.round(neto * 0.19);
+    const total = neto + iva;
+
+    const newCot: CotizacionEstimacion = {
+      id: 'cot-' + Date.now(),
+      titulo_proyecto: manualTitulo.trim(),
+      tipo_obra: manualTipo,
+      metros_cuadrados: manualM2,
+      comuna_region: comuna,
+      resumen_ejecutivo: manualDescripcion.trim() || `Presupuesto manual para ${manualTitulo}`,
+      duracion_dias_estimada: 15,
+      estructura_financiera: {
+        costo_materiales_total: Math.round(costoDir * 0.55),
+        costo_mano_obra_total: Math.round(costoDir * 0.45),
+        costo_directo: costoDir,
+        gastos_generales_porcentaje: 8,
+        gastos_generales_monto: gastosGen,
+        imprevistos_porcentaje: 5,
+        imprevistos_monto: imprevistos,
+        margen_utilidad_porcentaje: manualMargen,
+        margen_utilidad_monto: margenMonto,
+        precio_sugerido_neto: neto,
+        iva_19: iva,
+        precio_total_con_iva: total,
+        ahorro_compras_estrategicas: Math.round(costoDir * 0.07),
+      },
+      materiales: [],
+      mano_de_obra: [
+        {
+          rol: 'Maestro Mayor',
+          cantidad_personas: 1,
+          dias_estimados: 10,
+          valor_jornal_diario: 45000,
+          subtotal: 450000,
+        },
+        {
+          rol: 'Ayudante',
+          cantidad_personas: 1,
+          dias_estimados: 10,
+          valor_jornal_diario: 28000,
+          subtotal: 280000,
+        },
+      ],
+      actividades_gantt: [
+        { nombre: 'Trazado y preparación', dias: 3, orden: 1 },
+        { nombre: 'Ejecución principal', dias: 7, orden: 2 },
+        { nombre: 'Terminaciones y entrega', dias: 5, orden: 3 },
+      ],
+      radar_proveedores: [],
+      consejos_experto_pyme: [
+        'Definir estados de pago claros por avance de partidas.',
+        'Considerar compras por volumen en barracas para abaratar costos.',
+      ],
+      fecha_creacion: new Date().toISOString().split('T')[0],
+    };
+
+    dataService.saveCotizacion(newCot);
+    setCotizaciones(dataService.getCotizaciones());
+    setCurrentCotizacion(newCot);
+    setIsManualModalOpen(false);
+    setManualTitulo('');
+    setManualCostoDirecto('');
+    setManualDescripcion('');
+    setActiveTab('cotizador');
+    showToast(`Cotización "${manualTitulo}" creada exitosamente.`);
+  };
+
+  const handleDuplicateCotizacion = (cot: CotizacionEstimacion) => {
+    const duplicated: CotizacionEstimacion = {
+      ...cot,
+      id: 'cot-' + Date.now(),
+      titulo_proyecto: `${cot.titulo_proyecto} (Copia)`,
+    };
+    dataService.saveCotizacion(duplicated);
+    setCotizaciones(dataService.getCotizaciones());
+    setCurrentCotizacion(duplicated);
+    showToast(`Cotización duplicada con éxito.`);
+  };
+
+  const handleDeleteCotizacion = (id: string) => {
+    dataService.deleteCotizacion(id);
+    const updated = dataService.getCotizaciones();
+    setCotizaciones(updated);
+    if (currentCotizacion?.id === id) {
+      setCurrentCotizacion(updated[0] || null);
+    }
+    setCotizacionToDelete(null);
+    showToast(`Cotización eliminada.`);
+  };
 
   const filteredMateriales = catalogoMateriales.filter((m) => {
     if (!busquedaMaterial) return true;
@@ -282,8 +444,27 @@ export default function CotizadorPage() {
     );
   });
 
+  const filteredCotizaciones = cotizaciones.filter((c) => {
+    if (!searchCotizacion) return true;
+    const term = searchCotizacion.toLowerCase();
+    return (
+      c.titulo_proyecto.toLowerCase().includes(term) ||
+      c.tipo_obra.toLowerCase().includes(term) ||
+      c.comuna_region.toLowerCase().includes(term) ||
+      (c.resumen_ejecutivo && c.resumen_ejecutivo.toLowerCase().includes(term))
+    );
+  });
+
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-kraft-50/40">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
+          <CheckCircle2 className="w-4 h-4 text-obra-orange" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       <PlanSwitcherModal
         isOpen={isPlanModalOpen}
         onClose={() => setIsPlanModalOpen(false)}
@@ -294,6 +475,13 @@ export default function CotizadorPage() {
         subtitle="Cálculo de cobro al cliente, cubicación y radar de insumos más baratos en Chile con OpenAI (GPT-4o)"
         action={
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsManualModalOpen(true)}
+              className="px-3 py-1.5 bg-white border border-kraft-200 hover:bg-kraft-50 text-navy-900 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm font-heading"
+            >
+              <Plus className="w-3.5 h-3.5 text-obra-orange" />
+              <span>+ Cotización Manual</span>
+            </button>
             <button
               onClick={() => setIsPlanModalOpen(true)}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E5DFC9] text-xs font-mono text-gray-700 hover:border-[#FF6A00] transition-colors shadow-sm"
@@ -337,10 +525,10 @@ export default function CotizadorPage() {
           </div>
         )}
         {/* Selector de Pestañas */}
-        <div className="flex items-center gap-2 border-b border-kraft-200 pb-2">
+        <div className="flex items-center gap-2 border-b border-kraft-200 pb-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('cotizador')}
-            className={`px-4 py-2 rounded-lg text-xs font-heading font-semibold transition-all flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-lg text-xs font-heading font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'cotizador'
                 ? 'bg-navy-800 text-white shadow-sm'
                 : 'bg-white border border-kraft-200 text-gray-600 hover:bg-kraft-50'
@@ -348,10 +536,22 @@ export default function CotizadorPage() {
           >
             <Calculator className="w-4 h-4 text-obra-orange" />
             <span>Cotizador & Presupuesto IA</span>
+            {activePlan === 'gratis' && <Lock className="w-3.5 h-3.5 text-amber-500 ml-0.5" />}
+          </button>
+          <button
+            onClick={() => setActiveTab('historial')}
+            className={`px-4 py-2 rounded-lg text-xs font-heading font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'historial'
+                ? 'bg-navy-800 text-white shadow-sm'
+                : 'bg-white border border-kraft-200 text-gray-600 hover:bg-kraft-50'
+            }`}
+          >
+            <FolderPlus className="w-4 h-4 text-amber-500" />
+            <span>Mis Cotizaciones ({cotizaciones.length})</span>
           </button>
           <button
             onClick={() => setActiveTab('radar')}
-            className={`px-4 py-2 rounded-lg text-xs font-heading font-semibold transition-all flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-lg text-xs font-heading font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'radar'
                 ? 'bg-navy-800 text-white shadow-sm'
                 : 'bg-white border border-kraft-200 text-gray-600 hover:bg-kraft-50'
@@ -359,10 +559,11 @@ export default function CotizadorPage() {
           >
             <ShoppingBag className="w-4 h-4 text-obra-green" />
             <span>Radar de Precios en Chile</span>
+            {activePlan === 'gratis' && <Lock className="w-3.5 h-3.5 text-amber-500 ml-0.5" />}
           </button>
           <button
             onClick={() => setActiveTab('chat')}
-            className={`px-4 py-2 rounded-lg text-xs font-heading font-semibold transition-all flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-lg text-xs font-heading font-semibold transition-all flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'chat'
                 ? 'bg-navy-800 text-white shadow-sm'
                 : 'bg-white border border-kraft-200 text-gray-600 hover:bg-kraft-50'
@@ -370,6 +571,7 @@ export default function CotizadorPage() {
           >
             <MessageSquare className="w-4 h-4 text-purple-400" />
             <span>Chat Asesor de Obras</span>
+            {activePlan === 'gratis' && <Lock className="w-3.5 h-3.5 text-amber-500 ml-0.5" />}
           </button>
         </div>
 
@@ -377,14 +579,20 @@ export default function CotizadorPage() {
         {/* PESTAÑA 1: COTIZADOR & PRESUPUESTO */}
         {/* ========================================================================= */}
         {activeTab === 'cotizador' && (
-          <div className="space-y-6">
-            {/* Formulario y Plantillas Rápidas */}
-            <div className="bg-white border border-kraft-200 rounded-2xl p-5 md:p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-obra-orange/10 text-obra-orange flex items-center justify-center font-bold">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
+          <PlanLockOverlay
+            isLocked={activePlan === 'gratis'}
+            featureName="Cotizador & Cubicador Inteligente con OpenAI GPT-4o"
+            requiredPlan="pro"
+            description="Genera cubicación de insumos, cálculo de jornales de cuadrilla, desglose de márgenes netos y Carta Gantt en segundos usando Inteligencia Artificial."
+          >
+            <div className="space-y-6">
+              {/* Formulario y Plantillas Rápidas */}
+              <div className="bg-white border border-kraft-200 rounded-2xl p-5 md:p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-obra-orange/10 text-obra-orange flex items-center justify-center font-bold">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
                   <div>
                     <h2 className="font-heading font-bold text-base text-navy-900">
                       Describir Proyecto o Usar Plantilla Rápida
@@ -849,13 +1057,20 @@ export default function CotizadorPage() {
                 )}
               </div>
             )}
-          </div>
+            </div>
+          </PlanLockOverlay>
         )}
 
         {/* ========================================================================= */}
         {/* PESTAÑA 2: RADAR DE PRECIOS EN CHILE */}
         {/* ========================================================================= */}
         {activeTab === 'radar' && (
+          <PlanLockOverlay
+            isLocked={activePlan === 'gratis'}
+            featureName="Radar de Precios en Ferreterías de Chile"
+            requiredPlan="pro"
+            description="Compara precios de cemento, madera, fierros y terminaciones en Construmart, Imperial, Sodimac Constructor y Red MTS para optimizar las compras de tus obras."
+          >
           <div className="space-y-6">
             <div className="bg-white border border-kraft-200 rounded-2xl p-5 md:p-6 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -955,12 +1170,19 @@ export default function CotizadorPage() {
               </div>
             </div>
           </div>
+          </PlanLockOverlay>
         )}
 
         {/* ========================================================================= */}
         {/* PESTAÑA 3: CHAT ASESOR CON EL AGENTE IA */}
         {/* ========================================================================= */}
         {activeTab === 'chat' && (
+          <PlanLockOverlay
+            isLocked={activePlan === 'gratis'}
+            featureName="Chat Asesor Experto en Obras (OpenAI GPT-4o)"
+            requiredPlan="pro_ia"
+            description="Consulta directamente con el Agente de IA para calcular costos de jornales, resolver partidas constructivas complejas y optimizar cotizaciones."
+          >
           <div className="bg-white border border-kraft-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[650px]">
             {/* Header del Chat */}
             <div className="bg-navy-900 text-white p-4 border-b border-navy-700 flex items-center justify-between">
@@ -1071,20 +1293,442 @@ export default function CotizadorPage() {
               </form>
             </div>
           </div>
+          </PlanLockOverlay>
+        )}
+
+        {/* ========================================================================= */}
+        {/* PESTAÑA 4: MIS COTIZACIONES / HISTORIAL & GESTIÓN */}
+        {/* ========================================================================= */}
+        {activeTab === 'historial' && (
+          <div className="space-y-6">
+            <div className="bg-white border border-kraft-200 rounded-2xl p-5 md:p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <h2 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
+                  <FolderPlus className="w-5 h-5 text-amber-500" />
+                  <span>Historial & Gestión de Cotizaciones Guardadas</span>
+                </h2>
+                <p className="text-xs text-gray-500 font-sans mt-0.5">
+                  Gestiona tus presupuestos generados con IA o manualmente, duplica variantes y conviértelas en obras activas.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Buscar presupuesto..."
+                    value={searchCotizacion}
+                    onChange={(e) => setSearchCotizacion(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs text-navy-900 focus:outline-none focus:border-obra-orange font-sans"
+                  />
+                </div>
+                <button
+                  onClick={() => setIsManualModalOpen(true)}
+                  className="px-3.5 py-2 bg-obra-orange hover:bg-obra-orange-hover text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 font-heading whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Nueva</span>
+                </button>
+              </div>
+            </div>
+
+            {filteredCotizaciones.length === 0 ? (
+              <div className="bg-white border-2 border-dashed border-[#E5DFC9] rounded-3xl p-10 text-center max-w-xl mx-auto space-y-4">
+                <div className="w-16 h-16 rounded-3xl bg-[#FAF8F5] border border-[#E5DFC9] flex items-center justify-center mx-auto text-[#FF6A00]">
+                  <Calculator className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-black text-xl text-[#1E1E1E]">
+                    {searchCotizacion ? 'No se encontraron cotizaciones' : 'No tienes cotizaciones guardadas'}
+                  </h3>
+                  <p className="text-xs text-gray-500 font-sans mt-1.5 max-w-md mx-auto leading-relaxed">
+                    {searchCotizacion
+                      ? `No hay resultados para "${searchCotizacion}".`
+                      : 'Calcula tu primer presupuesto con el asistente de IA o ingresa una cotización manual.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('cotizador')}
+                  className="px-5 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl shadow-md transition-all inline-flex items-center gap-2 font-heading"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Ir al Cotizador IA</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredCotizaciones.map((cot) => {
+                  const est = cot.estructura_financiera;
+                  const isCurrent = currentCotizacion?.id === cot.id;
+
+                  return (
+                    <div
+                      key={cot.id}
+                      className={`bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between ${
+                        isCurrent ? 'border-obra-orange ring-2 ring-obra-orange/20' : 'border-kraft-200'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="overflow-hidden">
+                            <span className="text-[10px] font-mono uppercase bg-kraft-100 text-gray-700 px-2 py-0.5 rounded font-bold">
+                              {cot.tipo_obra}
+                            </span>
+                            <h3 className="font-heading font-bold text-base text-navy-900 mt-1 truncate leading-snug">
+                              {cot.titulo_proyecto}
+                            </h3>
+                            <p className="text-xs text-gray-500 font-mono mt-0.5">
+                              {cot.metros_cuadrados} m² • {cot.comuna_region}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDuplicateCotizacion(cot)}
+                              className="p-1.5 text-gray-400 hover:text-navy-900 hover:bg-kraft-100 rounded-lg transition-colors"
+                              title="Duplicar cotización"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditCotizacion(cot)}
+                              className="p-1.5 text-gray-400 hover:text-[#FF6A00] hover:bg-[#FF6A00]/10 rounded-lg transition-colors"
+                              title="Editar datos básicos"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCotizacionToDelete(cot)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Eliminar cotización"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {cot.resumen_ejecutivo && (
+                          <p className="text-xs text-gray-600 line-clamp-2 my-2 font-sans leading-relaxed">
+                            {cot.resumen_ejecutivo}
+                          </p>
+                        )}
+
+                        <div className="bg-kraft-50 border border-kraft-200/70 rounded-xl p-3 space-y-1.5 my-3">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500 font-mono">Cobro Neto:</span>
+                            <span className="font-mono font-bold text-navy-900">
+                              {formatCLP(est.precio_sugerido_neto)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500 font-mono">Con IVA 19%:</span>
+                            <span className="font-mono font-bold text-obra-green">
+                              {formatCLP(est.precio_total_con_iva)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs pt-1 border-t border-kraft-200/70">
+                            <span className="text-gray-500 font-mono">Margen Neto ({est.margen_utilidad_porcentaje}%):</span>
+                            <span className="font-mono font-semibold text-obra-orange">
+                              {formatCLP(est.margen_utilidad_monto)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-kraft-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCurrentCotizacion(cot);
+                            setActiveTab('cotizador');
+                          }}
+                          className="py-2 px-3 bg-navy-800 hover:bg-navy-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading"
+                        >
+                          <Calculator className="w-3.5 h-3.5 text-obra-orange" />
+                          <span>Ver / Desglose</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCurrentCotizacion(cot);
+                            setShowCreateModal(true);
+                          }}
+                          className="py-2 px-3 bg-obra-green hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          <span>Crear Obra</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
       </div>
 
+      {/* Modal: + Cotización Manual */}
+      {isManualModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
+              <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
+                <Plus className="w-4 h-4 text-obra-orange" />
+                <span>Nueva Cotización Manual</span>
+              </h3>
+              <button onClick={() => setIsManualModalOpen(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveManualCotizacion} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  Título del Proyecto / Presupuesto *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Remodelación Completa Baño Principal"
+                  value={manualTitulo}
+                  onChange={(e) => setManualTitulo(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-sans font-semibold text-navy-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Tipo de Obra
+                  </label>
+                  <select
+                    value={manualTipo}
+                    onChange={(e) => setManualTipo(e.target.value)}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange"
+                  >
+                    <option value="Quinchos & Terrazas">Quinchos & Terrazas</option>
+                    <option value="Ampliaciones">Ampliaciones</option>
+                    <option value="Remodelaciones">Remodelaciones</option>
+                    <option value="Obra Gruesa">Obra Gruesa</option>
+                    <option value="Pintura & Terminaciones">Pintura & Terminaciones</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Superficie (m²)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={manualM2}
+                    onChange={(e) => setManualM2(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Costo Directo (CLP) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-xs">$</span>
+                    <input
+                      type="text"
+                      required
+                      placeholder="3.500.000"
+                      value={manualCostoDirecto}
+                      onChange={(e) => setManualCostoDirecto(formatThousands(e.target.value))}
+                      className="w-full pl-7 pr-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono font-bold text-navy-900 focus:outline-none focus:border-obra-orange"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Margen Utilidad (%)
+                  </label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="60"
+                    value={manualMargen}
+                    onChange={(e) => setManualMargen(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  Descripción / Alcance
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Detalles de partidas, materiales considerados, etc."
+                  value={manualDescripcion}
+                  onChange={(e) => setManualDescripcion(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-sans"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-kraft-200">
+                <button
+                  type="button"
+                  onClick={() => setIsManualModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-obra-orange hover:bg-obra-orange-hover text-white text-xs font-bold rounded-xl shadow-sm font-heading"
+                >
+                  Guardar Cotización
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Cotización */}
+      {editingCotizacion && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
+              <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-obra-orange" />
+                <span>Editar Cotización</span>
+              </h3>
+              <button onClick={() => setEditingCotizacion(null)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditCotizacion} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  Título de la Cotización *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitulo}
+                  onChange={(e) => setEditTitulo(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-sans font-semibold text-navy-900"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Tipo de Obra
+                  </label>
+                  <input
+                    type="text"
+                    value={editTipo}
+                    onChange={(e) => setEditTipo(e.target.value)}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Superficie (m²)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editM2}
+                    onChange={(e) => setEditM2(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  Resumen Ejecutivo
+                </label>
+                <textarea
+                  rows={3}
+                  value={editResumen}
+                  onChange={(e) => setEditResumen(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-sans"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-kraft-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingCotizacion(null)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-obra-orange hover:bg-obra-orange-hover text-white text-xs font-bold rounded-xl shadow-sm font-heading"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar Eliminar Cotización */}
+      {cotizacionToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="font-heading font-bold text-base text-navy-900">
+                ¿Eliminar cotización &quot;{cotizacionToDelete.titulo_proyecto}&quot;?
+              </h3>
+              <p className="text-xs text-gray-500 font-sans mt-1">
+                Esta acción removerá el presupuesto del historial guardado.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setCotizacionToDelete(null)}
+                className="px-4 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 text-xs font-bold rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteCotizacion(cotizacionToDelete.id)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors"
+              >
+                Sí, Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Crear Proyecto desde la Cotización */}
       {showCreateModal && currentCotizacion && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-kraft-200 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-kraft-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
                 <PlusCircle className="w-5 h-5 text-obra-green" />
                 <span>Crear Proyecto en ObraTrack</span>
               </h3>
               <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-700">
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -1100,7 +1744,7 @@ export default function CotizadorPage() {
                 <input
                   type="text"
                   defaultValue={currentCotizacion.titulo_proyecto}
-                  className="w-full text-xs bg-kraft-50 border border-kraft-200 rounded-lg px-3 py-2 text-navy-900"
+                  className="w-full text-xs bg-kraft-50 border border-kraft-200 rounded-xl px-3.5 py-2 text-navy-900 font-semibold"
                 />
               </div>
 
@@ -1109,7 +1753,7 @@ export default function CotizadorPage() {
                 <select
                   value={selectedClienteId}
                   onChange={(e) => setSelectedClienteId(e.target.value)}
-                  className="w-full text-xs bg-kraft-50 border border-kraft-200 rounded-lg px-3 py-2 text-navy-900"
+                  className="w-full text-xs bg-kraft-50 border border-kraft-200 rounded-xl px-3.5 py-2 text-navy-900"
                 >
                   {clientes.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -1125,23 +1769,23 @@ export default function CotizadorPage() {
                   type="date"
                   value={fechaInicioProyecto}
                   onChange={(e) => setFechaInicioProyecto(e.target.value)}
-                  className="w-full text-xs bg-kraft-50 border border-kraft-200 rounded-lg px-3 py-2 text-navy-900 font-mono"
+                  className="w-full text-xs bg-kraft-50 border border-kraft-200 rounded-xl px-3.5 py-2 text-navy-900 font-mono"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-kraft-200">
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="px-3.5 py-1.5 text-xs text-gray-600 hover:text-gray-900"
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleCrearProyecto}
-                className="px-4 py-2 bg-obra-green hover:bg-emerald-700 text-white rounded-lg text-xs font-heading font-bold shadow-sm flex items-center gap-1.5"
+                className="px-5 py-2 bg-obra-green hover:bg-emerald-700 text-white rounded-xl text-xs font-heading font-bold shadow-sm flex items-center gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Confirmar y Ver Carta Gantt</span>
