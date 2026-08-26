@@ -7,7 +7,8 @@ import ThemeProvider from '@/components/ThemeProvider';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAuthPage = pathname === '/login' || pathname?.startsWith('/login');
+  // Tanto la raíz (/) como (/login) son vistas de autenticación que no muestran Sidebar ni Dashboard
+  const isAuthPage = !pathname || pathname === '/' || pathname === '/login' || pathname.startsWith('/login');
 
   return (
     <ThemeProvider>
