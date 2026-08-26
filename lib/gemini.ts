@@ -438,13 +438,15 @@ ${partidasTexto || '  - En ejecución según cronograma'}
       .join('\n\n');
 
     promptContextoCliente = `
-CLIENTE AUTENTICADO EXITOSAMENTE:
+CLIENTE IDENTIFICADO Y AUTENTICADO:
 - Nombre: ${clienteAutenticado.cliente.nombre}
-- RUT: ${clienteAutenticado.cliente.rut || 'No registrado'}
-- Teléfono: ${clienteAutenticado.cliente.telefono || 'No registrado'}
+- RUT: ${clienteAutenticado.cliente.rut || 'Validado'}
 
 DATOS DE SUS OBRAS CONTRATADAS:
-${projsTexto}`;
+${projsTexto}
+
+INSTRUCCIÓN ESPECÍFICA:
+El cliente ya está autenticado como ${clienteAutenticado.cliente.nombre}. Entrega de inmediato la FICHA OFICIAL DE SEGUIMIENTO de su proyecto con el desglose de avances, finanzas y fotos, dirigiéndote a él/ella por su nombre con saludo cordial.`;
   } else {
     promptContextoCliente = `
 EL CLIENTE AÚN NO HA SIDO AUTENTICADO.
@@ -463,10 +465,10 @@ Tu objetivo es dar seguimiento cálido, profesional, preciso y transparente a lo
 REGLAS DE COMUNICACIÓN EN WHATSAPP:
 1. Habla en español de Chile, con tono muy respetuoso, cercano y tranquilizador.
 2. Usa formato nativo de WhatsApp: *negritas* para montos, nombres y avances clave, emojis elegantes (🏗️ 📊 💰 📸 📅 ✅), y listas con viñetas claras.
-3. SI EL CLIENTE ESTÁ AUTENTICADO (O CONSULTA POR SU OBRA/AVANCE/PAGOS):
-   Debes entregar de forma clara y ordenada la *FICHA OFICIAL DE SEGUIMIENTO*:
+3. SI EL CLIENTE ESTÁ IDENTIFICADO:
+   Debes entregar de inmediato la *FICHA OFICIAL DE SEGUIMIENTO*:
    - 🏗️ *Proyecto:* Nombre y dirección.
-   - 📊 *Avance General:* % de avance ponderado y estado de partidas clave (ej: Radier 100%, Techumbre 45%).
+   - 📊 *Avance General:* % de avance ponderado y estado de partidas clave (ej: 100%, 80%, etc.).
    - 💰 *Estado Financiero:* Total Contratado, Total Pagado a la Fecha y Saldo Pendiente.
    - 📅 *Plazo Estimado:* Fecha de entrega estimada.
    - 📸 Agrega SIEMPRE al final la etiqueta [ENVIAR_FOTOS: true] para que el sistema adjunte las fotografías reales tomadas en terreno.
