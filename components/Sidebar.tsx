@@ -84,7 +84,7 @@ export default function Sidebar() {
       icon: LayoutDashboard,
     },
     {
-      label: 'Cotizador & Precios IA',
+      label: 'Copiloto Obrero IA',
       href: '/cotizador',
       icon: Sparkles,
       highlight: true,

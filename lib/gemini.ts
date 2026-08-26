@@ -249,11 +249,16 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
 }
 
 /**
- * Chat interactivo conversacional con el Asesor Experto en Obras & Agendador IA (Google Gemini)
+ * Chat interactivo conversacional con el Asesor Experto en Obras & Controlador Autónomo IA (Google Gemini)
  */
 export async function chatAsesorObrasGemini(
   historial: { rol: 'user' | 'model'; texto: string }[],
-  mensajeUsuario: string
+  mensajeUsuario: string,
+  contextoDB?: {
+    proyectos?: { id: string; nombre: string; comuna?: string; estado?: string }[];
+    trabajadores?: { id: string; nombre: string; rol?: string }[];
+    clientes?: { id: string; nombre: string }[];
+  }
 ): Promise<{ respuesta: string; accion?: any; sugerencias?: string[] }> {
   const gemini = getGeminiClient();
 
@@ -268,17 +273,45 @@ export async function chatAsesorObrasGemini(
   const fechaHoy = new Date().toISOString().split('T')[0];
   const diaSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][new Date().getDay()];
 
+  const proyectosTexto = (contextoDB?.proyectos || []).map((p) => `• ${p.nombre} (${p.comuna || 'Chile'}, ${p.estado})`).join('\n') || 'Ninguno creado aún.';
+  const trabajadoresTexto = (contextoDB?.trabajadores || []).map((t) => `• ${t.nombre} (${t.rol})`).join('\n') || 'Ninguno registrado aún.';
+  const clientesTexto = (contextoDB?.clientes || []).map((c) => `• ${c.nombre}`).join('\n') || 'Ninguno registrado aún.';
+
   const promptConversacional = `${SYSTEM_PROMPT_CONSTRUCCION_CHILE}
 
 HOY ES: ${diaSemana}, ${fechaHoy}.
 
-INSTRUCCIONES DE CONVERSACIÓN & COMPORTAMIENTO:
+CONTEXTO ACTUAL DE LA CONSTRUCTORA EN OBRATRACK:
+- Obras/Proyectos Activos:
+${proyectosTexto}
+- Equipo de Trabajadores:
+${trabajadoresTexto}
+- Clientes Registrados:
+${clientesTexto}
+
+INSTRUCCIONES DE CONVERSACIÓN & ACCIONES AUTÓNOMAS:
 1. Eres el Copiloto Inteligente de ObraTrack y Asesor Experto de Faena en Chile.
-2. Responde de forma completamente natural, experta, analítica y directa a la consulta del usuario. PIENSA y analiza lo que el usuario te está diciendo (ej: metros cuadrados, tipo de casa, radier, maderas, fierros, jornales, precios en UF/m2 o CLP, etapas de obra gruesa vs terminaciones).
+2. Responde de forma completamente natural, experta, analítica y directa a la consulta del usuario. PIENSA y asesora al usuario (por ejemplo: si pide una casa de 30m2, analiza los costos en UF/m2, tipos de fundaciones, madera vs Metalcon vs SIP, compras en Construmart/Imperial, mano de obra y permisos DOM).
 3. REGLA ESTRICTA DE CONTEXTO: Tu dominio es única y exclusivamente la construcción, edificación, cubicación, ingeniería civil, materiales en Chile y agendamiento de faenas. Si el usuario intenta hablar de temas no relacionados (cocina, fútbol, política, horóscopos), responde amablemente: "Mi función como Asistente de ObraTrack está 100% enfocada en faena, costos y construcción en Chile. ¿En qué obra o presupuesto te puedo colaborar hoy?".
-4. ACCIÓN DE AGENDAMIENTO:
-   - Si el usuario te pide agendar una visita a terreno, reunión, vaciado de hormigón o recordatorio, responde confirmando y al final del texto agrega una línea con la etiqueta:
-     [ACCION_AGENDA: {"tipo":"visita_terreno","titulo":"...","fecha":"YYYY-MM-DD","hora":"HH:MM","comuna_lugar":"...","descripcion":"...","cliente_nombre":"..."}]
+
+4. CAPACIDAD DE CONTROLAR LA WEB (EJECUTAR ACCIONES EN VIVO):
+   Cuando el usuario te pida crear una obra, agregar un trabajador, asignar cuadrilla o agendar un compromiso, responde conversacionalmente confirmándolo y agrega AL FINAL DE TU RESPUESTA una etiqueta [ACCION_OBRA: {...}] con el JSON correspondiente:
+
+   A) CREAR / AGENDAR NUEVA OBRA EN EL MENÚ DE PROYECTOS:
+      Si el usuario dice "créame la obra X para Don Carlos en Peñalolén por 3.5 millones":
+      [ACCION_OBRA: {"tipo":"crear_proyecto","nombre":"Nombre de la Obra","cliente_nombre":"Nombre Cliente","cliente_telefono":"+56912345678","comuna":"Comuna","monto":3500000,"dias":20,"descripcion":"Detalle de la obra"}]
+
+   B) AGREGAR NUEVO TRABAJADOR AL EQUIPO:
+      Si el usuario dice "agrega al maestro Juan Pérez como albañil con teléfono +56987654321":
+      [ACCION_OBRA: {"tipo":"agregar_trabajador","nombre":"Juan Pérez","rol":"albañil","telefono":"+56987654321","email":"juan.perez@obratrack.cl"}]
+
+   C) ASIGNAR TRABAJADOR A OBRA:
+      Si el usuario dice "asigna a Juan Pérez a la obra de Peñalolén":
+      [ACCION_OBRA: {"tipo":"asignar_trabajador","trabajador_nombre":"Juan Pérez","proyecto_nombre":"Peñalolén"}]
+
+   D) AGENDAR VISITA A TERRENO O HITO DE FAENA:
+      Si el usuario dice "agéndame una visita a terreno el viernes a las 10:00":
+      [ACCION_OBRA: {"tipo":"agendar_visita","titulo":"Visita a Terreno","fecha":"YYYY-MM-DD","hora":"10:00","comuna_lugar":"Peñalolén","descripcion":"Revisión de obra","cliente_nombre":"Don Carlos"}]
 
 HISTORIAL DE LA CONVERSACIÓN:
 ${historial.map((h) => `${h.rol === 'user' ? 'Usuario' : 'Copiloto'}: ${h.texto}`).join('\n')}
@@ -314,23 +347,22 @@ Responde como Copiloto de Obras experto:`;
       };
     }
 
-    // Detectar si incluye acción de agendamiento
+    // Detectar si incluye acción estructurada
     let accion: any = null;
-    const actionMatch = rawText.match(/\[ACCION_AGENDA:\s*(\{.*?\})\s*\]/);
+    const actionMatch = rawText.match(/\[ACCION_OBRA:\s*(\{.*?\})\s*\]/);
     if (actionMatch) {
       try {
         accion = JSON.parse(actionMatch[1]);
         rawText = rawText.replace(actionMatch[0], '').trim();
       } catch (err) {
-        console.warn('No se pudo parsear acción de agenda:', err);
+        console.warn('No se pudo parsear acción de obra:', err);
       }
     }
 
-    // Generar sugerencias contextuales
     const sugerencias = [
-      '¿Qué sistema constructivo me conviene más?',
-      '¿Cuánto rinde el cemento para el radier?',
-      'Agéndame una visita a terreno',
+      '¿Cuánto cobrar por metro cuadrado en este trabajo?',
+      'Agéndame una visita a terreno para mañana a las 10:00',
+      'Crear esta obra en el menú de proyectos',
     ];
 
     return {

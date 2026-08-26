@@ -313,11 +313,22 @@ export interface EventoAgenda {
   created_at: string;
 }
 
+export type TipoAccionIA =
+  | 'crear_proyecto'
+  | 'agregar_trabajador'
+  | 'asignar_trabajador'
+  | 'agendar_visita'
+  | 'agendar_evento'
+  | 'registrar_pago'
+  | 'crear_recordatorio';
+
 export interface AccionAsistenteIA {
-  tipo: 'agendar_evento' | 'crear_proyecto' | 'crear_tarea' | 'crear_recordatorio';
+  tipo: TipoAccionIA;
   titulo: string;
   detalles: Record<string, any>;
   resultado_texto: string;
+  link_destino?: string;
+  link_texto?: string;
 }
 
 export interface MensajeChatCotizador {

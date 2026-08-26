@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { mensaje, historial = [], contexto_cotizacion } = body;
+    const { mensaje, historial = [], contexto_cotizacion, contexto_db } = body;
 
     if (!mensaje || typeof mensaje !== 'string') {
       return NextResponse.json(
@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
 
     const { respuesta, accion, sugerencias } = await chatAsesorObrasGemini(
       formattedHistory,
-      contextualPrompt
+      contextualPrompt,
+      contexto_db
     );
 
     return NextResponse.json({

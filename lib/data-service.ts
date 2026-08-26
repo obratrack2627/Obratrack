@@ -738,6 +738,120 @@ class DataService {
     return true;
   }
 
+  // --- MÉTODOS DE CONTROL Y EJECUCIÓN AUTÓNOMA DESDE EL ASISTENTE IA ---
+
+  crearProyectoDesdeIA(datos: {
+    nombre: string;
+    cliente_nombre?: string;
+    cliente_telefono?: string;
+    comuna?: string;
+    direccion?: string;
+    monto?: number;
+    dias?: number;
+    descripcion?: string;
+    partidas?: string[];
+  }): Proyecto {
+    const clientes = this.getClientes();
+    let clienteId = clientes[0]?.id || 'c1';
+
+    if (datos.cliente_nombre && datos.cliente_nombre.trim() !== '') {
+      const match = clientes.find((c) =>
+        c.nombre.toLowerCase().includes(datos.cliente_nombre!.toLowerCase())
+      );
+      if (match) {
+        clienteId = match.id;
+      } else {
+        const nuevoCliente = this.createCliente({
+          empresa_id: '11111111-1111-1111-1111-111111111111',
+          nombre: datos.cliente_nombre,
+          telefono: datos.cliente_telefono || '+56 9 1234 5678',
+          direccion: datos.comuna || 'Santiago, Chile',
+        });
+        clienteId = nuevoCliente.id;
+      }
+    }
+
+    const fechaInicio = new Date().toISOString().split('T')[0];
+    const duracion = Number(datos.dias) || 20;
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + duracion);
+
+    const actividades =
+      datos.partidas && datos.partidas.length > 0
+        ? datos.partidas.map((p, idx) => ({ nombre: p, dias: Math.max(2, Math.round(duracion / datos.partidas!.length)) }))
+        : [
+            { nombre: 'Instalación de faenas y trazado', dias: 3 },
+            { nombre: 'Obra gruesa y fundaciones', dias: 8 },
+            { nombre: 'Instalaciones y terminaciones', dias: 6 },
+            { nombre: 'Recepción conforme y entrega', dias: 3 },
+          ];
+
+    return this.createProyecto(
+      {
+        empresa_id: '11111111-1111-1111-1111-111111111111',
+        cliente_id: clienteId,
+        nombre: datos.nombre,
+        descripcion: datos.descripcion || `Obra gestionada automáticamente por el Copiloto IA de ObraTrack.`,
+        comuna: datos.comuna || 'Santiago, Chile',
+        direccion: datos.direccion || datos.comuna || 'Dirección de obra',
+        fecha_inicio: fechaInicio,
+        fecha_termino_estimada: endDate.toISOString().split('T')[0],
+        estado: 'activo',
+        monto_cotizado: Number(datos.monto) || 3500000,
+      },
+      actividades
+    );
+  }
+
+  agregarTrabajadorDesdeIA(datos: {
+    nombre: string;
+    rol?: string;
+    telefono?: string;
+    email?: string;
+  }): Usuario {
+    let rolNormalizado: UserRole = 'terreno';
+    const r = (datos.rol || '').toLowerCase();
+    if (r.includes('admin') || r.includes('jefe')) rolNormalizado = 'admin';
+    else if (r.includes('super') || r.includes('capataz')) rolNormalizado = 'supervisor';
+
+    const cleanEmail =
+      datos.email ||
+      `${datos.nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '')}@obratrack.cl`;
+
+    return this.createUsuario({
+      empresa_id: '11111111-1111-1111-1111-111111111111',
+      nombre: datos.nombre,
+      rol: rolNormalizado,
+      telefono_whatsapp: datos.telefono || '+56 9 8765 4321',
+      email: cleanEmail,
+    });
+  }
+
+  asignarTrabajadorAProyecto(trabajadorNombre: string, proyectoNombre: string): boolean {
+    const proyectos = this.getProyectos();
+    const usuarios = this.getUsuarios();
+
+    const proj = proyectos.find((p) =>
+      p.nombre.toLowerCase().includes(proyectoNombre.toLowerCase())
+    );
+    const user = usuarios.find((u) =>
+      u.nombre.toLowerCase().includes(trabajadorNombre.toLowerCase())
+    );
+
+    if (!proj || !user) return false;
+
+    const list = this.getItem<Proyecto[]>(KEYS.PROYECTOS, INITIAL_PROYECTOS);
+    const target = list.find((p) => p.id === proj.id);
+    if (!target) return false;
+
+    if (!target.trabajadores_ids) target.trabajadores_ids = [];
+    if (!target.trabajadores_ids.includes(user.id)) {
+      target.trabajadores_ids.push(user.id);
+      this.setItem(KEYS.PROYECTOS, list);
+    }
+    return true;
+  }
+
   // --- SINCRONIZACIÓN CON SUPABASE POSTGRESQL ---
   async syncWithSupabase(): Promise<{ success: boolean; message: string }> {
     const { getSupabaseClient, isSupabaseConfigured } = await import('@/lib/supabase/client');
