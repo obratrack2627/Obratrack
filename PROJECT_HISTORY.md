@@ -8,7 +8,8 @@ Este documento guarda la memoria permanente, decisiones de arquitectura, credenc
 - **Fundador & Administrador**: Benjamín Achávar
 - **Correo Oficial**: `benja105.achavar@gmail.com`
 - **GitHub**: [`https://github.com/xBenja105/ObraTrack`](https://github.com/xBenja105/ObraTrack)
-- **Rama Oficial Única en GitHub**: `main` *(Todas las ramas secundarias eliminadas para evitar confusión de despliegue)*
+- **Rama Oficial Principal en GitHub**: `main` *(Fusionada con experimental con todas las capacidades de Google Gemini y WhatsApp Bot)*
+- **Rama de Respaldo**: `main-backup-pre-gemini`
 - **Despliegue en Producción**: Vercel ([`https://obra-track-ruddy.vercel.app/`](https://obra-track-ruddy.vercel.app/))
 - **Base de Datos**: Supabase PostgreSQL (con soporte pgvector y Storage)
   - **Project URL**: `https://tpszbretbtxcmnrqvlxm.supabase.co`
@@ -29,10 +30,10 @@ Este documento guarda la memoria permanente, decisiones de arquitectura, credenc
   - Catálogo nativo de Regiones y Comunas de Chile (`lib/chile-locations.ts`)
   - Detección de GPS con geolocalización del navegador y cálculo Haversine
 - **Inteligencia Artificial**:
-  - OpenAI GPT-4o / GPT-4o-mini (Cotizador inteligente & análisis de audios)
-  - OpenAI Whisper (Transcripción de notas de voz de WhatsApp)
-  - OpenAI Embeddings (`text-embedding-3-small` con pgvector para radar de ferreterías)
-- **Canal de Terreno**: WhatsApp Cloud API + Webhook de recepción de reportes
+  - **Google Gemini 3.6 Flash**:
+    - **Copiloto Obrero IA (`/cotizador`)**: Asistente conversacional de terreno y control autónomo de la web (creación de obras, registro de personal, asignación de cuadrillas y visitas técnicas).
+    - **Asistente WhatsApp para Mandantes (`/reportes`)**: Chatbot conversacional que valida identidad por RUT chileno, entrega la ficha ejecutiva de avances y pagos, y adjunta fotos de faena.
+- **Canal de Terreno**: WhatsApp Cloud API & Twilio WhatsApp Sandbox con soporte bidireccional en vivo.
 
 ---
 
