@@ -84,7 +84,7 @@ export async function signUpWithFirebase(
 
     // Persistir usuario activo en localStorage
     if (typeof window !== 'undefined') {
-      localStorage.setItem('obratrack_active_user_v5', JSON.stringify(usuario));
+      localStorage.setItem('obratrack_active_user_v6', JSON.stringify(usuario));
       document.cookie = `obratrack_auth_token=${fbUser.uid}; path=/; max-age=2592000; SameSite=Lax`;
     }
 
@@ -135,7 +135,7 @@ export async function signInWithFirebase(email: string, pass: string): Promise<A
 
     // Persistir usuario activo y cookie de sesión
     if (typeof window !== 'undefined') {
-      localStorage.setItem('obratrack_active_user_v5', JSON.stringify(usuario));
+      localStorage.setItem('obratrack_active_user_v6', JSON.stringify(usuario));
       document.cookie = `obratrack_auth_token=${fbUser.uid}; path=/; max-age=2592000; SameSite=Lax`;
     }
 

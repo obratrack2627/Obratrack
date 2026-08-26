@@ -26,54 +26,25 @@ import {
   CATALOGO_MATERIALES_CHILE,
 } from './mock-data';
 
-// Claves de almacenamiento local para persistencia en modo prototipo/demostración
+// Claves de almacenamiento local para persistencia limpia por usuario
 const KEYS = {
-  PROYECTOS: 'obratrack_proyectos_v5',
-  ACTIVIDADES: 'obratrack_actividades_v5',
-  PAGOS: 'obratrack_pagos_v5',
-  IMPREVISTOS: 'obratrack_imprevistos_v5',
-  REPORTES: 'obratrack_reportes_v5',
-  USUARIOS: 'obratrack_usuarios_v5',
-  CLIENTES: 'obratrack_clientes_v5',
-  ACTIVE_USER: 'obratrack_active_user_v5',
-  COTIZACIONES: 'obratrack_cotizaciones_v5',
-  PLAN: 'obratrack_active_plan_v5',
-  MATERIALES_PROYECTO: 'obratrack_materiales_proyecto_v5',
-  BITACORA: 'obratrack_bitacora_v5',
-  AGENDA: 'obratrack_agenda_eventos_v5',
-  CHAT_SESSION: 'obratrack_chat_session_history_v5',
+  PROYECTOS: 'obratrack_proyectos_v6',
+  ACTIVIDADES: 'obratrack_actividades_v6',
+  PAGOS: 'obratrack_pagos_v6',
+  IMPREVISTOS: 'obratrack_imprevistos_v6',
+  REPORTES: 'obratrack_reportes_v6',
+  USUARIOS: 'obratrack_usuarios_v6',
+  CLIENTES: 'obratrack_clientes_v6',
+  ACTIVE_USER: 'obratrack_active_user_v6',
+  COTIZACIONES: 'obratrack_cotizaciones_v6',
+  PLAN: 'obratrack_active_plan_v6',
+  MATERIALES_PROYECTO: 'obratrack_materiales_proyecto_v6',
+  BITACORA: 'obratrack_bitacora_v6',
+  AGENDA: 'obratrack_agenda_eventos_v6',
+  CHAT_SESSION: 'obratrack_chat_session_history_v6',
 };
 
-const INITIAL_AGENDA: EventoAgenda[] = [
-  {
-    id: 'evt-1',
-    titulo: 'Visita de Inspección y Trazado inicial',
-    tipo: 'visita_terreno',
-    fecha: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-    hora: '10:00',
-    comuna_lugar: 'Peñalolén, Santiago',
-    descripcion: 'Revisar niveles de terreno con el maestro mayor y validar puntos de agua.',
-    proyecto_nombre: 'Construcción Radier y Quincho',
-    cliente_nombre: 'Carlos Henríquez',
-    completado: false,
-    origen: 'asistente_ia',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'evt-2',
-    titulo: 'Recepción y Vaciado de Hormigón H-25',
-    tipo: 'vaciado_hormigon',
-    fecha: new Date(Date.now() + 259200000).toISOString().split('T')[0],
-    hora: '08:30',
-    comuna_lugar: 'La Florida, Santiago',
-    descripcion: 'Llegada de camión mixer de Melón Hormigones y cuadrilla de 4 maestros.',
-    proyecto_nombre: 'Remodelación Terraza & Radier',
-    cliente_nombre: 'Constructora del Valle',
-    completado: false,
-    origen: 'asistente_ia',
-    created_at: new Date().toISOString(),
-  },
-];
+const INITIAL_AGENDA: EventoAgenda[] = [];
 
 class DataService {
   private isBrowser(): boolean {
