@@ -221,7 +221,7 @@ export default function Sidebar() {
                   </div>
                   {item.highlight && !item.badge && (
                     <span className="bg-[#FF6A00]/20 text-[#FF6A00] border border-[#FF6A00]/40 text-[10px] font-bold px-1.5 py-0.5 rounded font-mono">
-                      OpenAI
+                      Gemini
                     </span>
                   )}
                   {item.badge && (
