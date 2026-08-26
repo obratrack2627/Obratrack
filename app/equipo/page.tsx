@@ -399,7 +399,7 @@ export default function EquipoPage() {
                             {user.nombre}
                           </h3>
                           <span className={`inline-block text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md mt-0.5 ${roleBadge}`}>
-                            {user.rol}
+                            {user.rol === 'admin' ? '🛡️ Dueño / Admin' : user.rol === 'supervisor' ? '📋 Supervisor' : '👷 Maestro Terreno'}
                           </span>
                         </div>
                       </div>
@@ -409,7 +409,7 @@ export default function EquipoPage() {
                           type="button"
                           onClick={() => handleOpenEdit(user)}
                           className="p-1.5 text-gray-400 hover:text-[#FF6A00] hover:bg-[#FF6A00]/10 rounded-lg transition-colors"
-                          title="Editar trabajador"
+                          title="Editar datos"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>

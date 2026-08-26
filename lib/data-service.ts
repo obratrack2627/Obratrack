@@ -101,7 +101,21 @@ class DataService {
 
   // --- USUARIOS Y ROL ACTIVO ---
   getUsuarios(): Usuario[] {
-    return this.getItem<Usuario[]>(KEYS.USUARIOS, INITIAL_USUARIOS);
+    let usuarios = this.getItem<Usuario[]>(KEYS.USUARIOS, INITIAL_USUARIOS);
+    const active = this.getActiveUser();
+    if (active) {
+      const existsIndex = usuarios.findIndex(
+        (u) => u.id === active.id || (u.email && active.email && u.email.toLowerCase() === active.email.toLowerCase())
+      );
+      if (existsIndex === -1) {
+        usuarios = [active, ...usuarios];
+        this.setItem(KEYS.USUARIOS, usuarios);
+      } else {
+        // Sincronizar datos actualizados del dueño
+        usuarios[existsIndex] = { ...usuarios[existsIndex], ...active, rol: active.rol || 'admin' };
+      }
+    }
+    return usuarios;
   }
 
   createUsuario(usuario: Omit<Usuario, 'id'>): Usuario {
@@ -122,11 +136,24 @@ class DataService {
     if (index === -1) return null;
     usuarios[index] = { ...usuarios[index], ...data };
     this.setItem(KEYS.USUARIOS, usuarios);
+
+    // Si se editó el usuario activo, actualizar activeUser también
+    const active = this.getActiveUser();
+    if (active && (active.id === id || active.email === usuarios[index].email)) {
+      this.setActiveUser(usuarios[index]);
+    }
+
     return usuarios[index];
   }
 
   deleteUsuario(id: string): boolean {
     const usuarios = this.getUsuarios();
+    const target = usuarios.find((u) => u.id === id);
+    // El dueño / administrador no se puede eliminar, solo editar
+    if (target?.rol === 'admin') {
+      console.warn('El dueño / administrador de la constructora no se puede eliminar, solo editar.');
+      return false;
+    }
     const filtered = usuarios.filter((u) => u.id !== id);
     this.setItem(KEYS.USUARIOS, filtered);
     return true;
@@ -139,6 +166,8 @@ class DataService {
   setActiveUser(user: Usuario | null): void {
     if (user) {
       this.setItem(KEYS.ACTIVE_USER, user);
+      // Asegurar que el usuario activo esté en la lista de usuarios
+      this.getUsuarios();
     } else {
       this.clearActiveUser();
     }

@@ -18,28 +18,10 @@ export const INITIAL_EMPRESA: Empresa = {
   rut: '76.123.456-7',
 };
 
-export const INITIAL_USUARIOS: Usuario[] = [
-  {
-    id: '22222222-2222-2222-2222-222222222222',
-    empresa_id: INITIAL_EMPRESA.id,
-    nombre: 'Benjamín Achávar',
-    email: 'benja105.achavar@gmail.com',
-    rol: 'admin',
-    telefono_whatsapp: '+56987654321',
-  },
-];
+export const INITIAL_USUARIOS: Usuario[] = [];
 
 // Listas iniciales con datos de ejemplo en Chile para seguimiento de obras
 export const INITIAL_CLIENTES: Cliente[] = [
-  {
-    id: 'cli-benja',
-    empresa_id: INITIAL_EMPRESA.id,
-    nombre: 'Benjamín Achávar',
-    rut: '20.123.456-7',
-    telefono: '+56 9 6150 2313',
-    email: 'benja105.achavar@gmail.com',
-    direccion: 'Av. Las Perdices 1420, Peñalolén, Santiago',
-  },
   {
     id: 'cli-carlos',
     empresa_id: INITIAL_EMPRESA.id,
