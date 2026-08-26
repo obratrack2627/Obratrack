@@ -17,15 +17,24 @@ import {
   CreditCard,
   Layers,
   Calculator,
-  HardHat,
+  Download,
+  FileText,
+  AlertTriangle,
+  RotateCcw,
+  Scale,
+  Lock,
 } from 'lucide-react';
 import { dataService } from '@/lib/data-service';
+import { exportService } from '@/lib/export-service';
 import { PLANES_SUSCRIPCION, getPlanDetails } from '@/lib/plans';
 import { SubscriptionPlanId } from '@/types/database';
+import LegalTermsModal from '@/components/LegalTermsModal';
 
 export default function PlanesPage() {
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [legalModalTab, setLegalModalTab] = useState<'terminos' | 'privacidad' | 'ciberseguridad'>('terminos');
 
   const loadPlan = () => {
     setActivePlan(dataService.getActivePlan());
@@ -425,33 +434,99 @@ export default function PlanesPage() {
           </div>
         </div>
 
-        {/* Justificación Comercial y ROI para Evaluación */}
-        <div className="bg-[#FAF8F5] border border-[#E5DFC9] rounded-3xl p-6 sm:p-8">
-          <h3 className="text-lg font-bold font-heading text-[#1E1E1E] mb-3 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-[#FF6A00]" />
-            <span>Fundamento Financiero del Modelo de Precios en Chile</span>
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-gray-700 leading-relaxed font-sans">
-            <div className="bg-white p-4 rounded-2xl border border-[#E5DFC9]">
-              <h4 className="font-bold text-[#1E1E1E] mb-1 font-heading">Plan Gratis como Embudo</h4>
-              <p>
-                Permite a cualquier maestro independiente registrarse sin tarjeta de crédito y probar la plataforma con 1 obra. Reduce la fricción de adquisición a costo marginal $0.
-              </p>
+        {/* Marco Legal, Gestión de Suscripción & Portabilidad de Datos (Leyes 19.496, 21.719 y 21.663) */}
+        <div className="bg-white border border-[#E5DFC9] rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#6B8F72]/10 text-[#6B8F72] flex items-center justify-center shrink-0">
+                <Scale className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold font-heading text-[#1E1E1E]">
+                  Protección al Consumidor & Portabilidad de Datos en Chile
+                </h3>
+                <p className="text-xs text-gray-500 font-sans">
+                  Garantías legales de cancelación simple, transparencia de cobros y no-secuestro de información
+                </p>
+              </div>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-[#E5DFC9]">
-              <h4 className="font-bold text-[#1E1E1E] mb-1 font-heading">Plan Pro ($9.990 - $14.990)</h4>
-              <p>
-                Se paga solo con el primer presupuesto: el comparador de precios de ferreterías chilenas (Imperial, Construmart) ahorra en promedio más de $80.000 CLP por obra.
-              </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                setLegalModalTab('terminos');
+                setIsLegalModalOpen(true);
+              }}
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl font-heading transition-colors inline-flex items-center gap-2 self-start sm:self-auto"
+            >
+              <FileText className="w-4 h-4 text-[#FF6A00]" />
+              <span>Ver Marco Legal Completo</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Tarjeta 1: Portabilidad & Respaldo */}
+            <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#E5DFC9] flex flex-col justify-between space-y-3">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-900 font-heading">
+                  <Download className="w-4 h-4 text-[#6B8F72]" />
+                  <span>Portabilidad Total (Ley N° 21.663)</span>
+                </div>
+                <p className="text-xs text-gray-600 font-sans mt-1.5 leading-relaxed">
+                  Tus planos, cotizaciones, registros de pagos y fotos son propiedad de tu constructora. Puedes descargar una copia completa de tu base de datos en formato abierto en cualquier momento.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const ok = exportService.exportAllDataAsJSON();
+                  if (ok) {
+                    setSuccessToast('Respaldo descargado exitosamente en tu equipo.');
+                    setTimeout(() => setSuccessToast(null), 3500);
+                  }
+                }}
+                className="w-full py-2.5 px-4 bg-[#6B8F72] hover:bg-[#55735B] text-white rounded-xl text-xs font-heading font-bold transition-all shadow-sm flex items-center justify-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>📥 Descargar Copia Completa de Obras (JSON)</span>
+              </button>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-[#E5DFC9]">
-              <h4 className="font-bold text-[#1E1E1E] mb-1 font-heading">Plan Pro IA ($19.990 - $29.990)</h4>
-              <p>
-                Reemplaza horas de digitación del supervisor mediante el procesamiento automático de notas de voz de WhatsApp y la actualización autónoma de la Carta Gantt.
-              </p>
+
+            {/* Tarjeta 2: Cancelación sin Trabas */}
+            <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#E5DFC9] flex flex-col justify-between space-y-3">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold text-gray-900 font-heading">
+                  <RotateCcw className="w-4 h-4 text-[#FF6A00]" />
+                  <span>Cancelación Simple & Sin Penalización (Ley N° 19.496)</span>
+                </div>
+                <p className="text-xs text-gray-600 font-sans mt-1.5 leading-relaxed">
+                  Puedes dar de baja tu plan de pago o regresar al plan Gratuito con un solo clic, sin llamadas ni trámites ocultos.
+                </p>
+              </div>
+              {activePlan !== 'gratis' ? (
+                <button
+                  type="button"
+                  onClick={() => handleSelectPlan('gratis')}
+                  className="w-full py-2.5 px-4 bg-gray-200 hover:bg-red-50 hover:text-red-700 hover:border-red-300 border border-transparent text-gray-800 rounded-xl text-xs font-heading font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Cancelar Suscripción y Volver a Plan Gratis</span>
+                </button>
+              ) : (
+                <div className="py-2 px-3 bg-emerald-100 text-emerald-800 rounded-xl text-xs font-mono font-bold text-center">
+                  ✓ Actualmente estás en el Plan Gratuito (Sin cobros periódicos)
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Modal de Términos Legales y Privacidad */}
+        <LegalTermsModal
+          isOpen={isLegalModalOpen}
+          onClose={() => setIsLegalModalOpen(false)}
+          initialTab={legalModalTab}
+        />
 
       </div>
     </div>

@@ -51,7 +51,7 @@ class DataService {
     return typeof window !== 'undefined';
   }
 
-  private getItem<T>(key: string, defaultValue: T): T {
+  public getItem<T>(key: string, defaultValue: T): T {
     if (!this.isBrowser()) return defaultValue;
     try {
       const item = localStorage.getItem(key);

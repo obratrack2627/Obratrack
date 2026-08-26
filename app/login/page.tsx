@@ -22,6 +22,7 @@ import {
 import { UserRole } from '@/types/database';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
+import LegalTermsModal from '@/components/LegalTermsModal';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
 import {
   signInWithFirebase,
@@ -39,6 +40,12 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Estados de Cumplimiento Legal (Ley 19.496, 21.719 y 21.663)
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [legalModalTab, setLegalModalTab] = useState<'terminos' | 'privacidad' | 'ciberseguridad'>('terminos');
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptMarketing, setAcceptMarketing] = useState(false);
 
   // Iniciar Sesión
   const [email, setEmail] = useState('');
@@ -108,7 +115,13 @@ export default function LoginPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    // 1. Validación estricta de RUT chileno (Módulo 11)
+    // 1. Validación de Términos y Condiciones Legales (Ley 19.496 y 21.719)
+    if (!acceptTerms) {
+      setErrorMsg('Debes leer y aceptar los Términos de Servicio y la Política de Privacidad y Confidencialidad de ObraTrack.');
+      return;
+    }
+
+    // 2. Validación estricta de RUT chileno (Módulo 11)
     if (!validarRutChileno(rut)) {
       setErrorMsg('El RUT ingresado no es válido según el formato oficial chileno (Módulo 11). Verifica el número y dígito verificador.');
       return;
@@ -593,9 +606,59 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Consentimientos Legales (Ley 19.496, Ley 21.719 y Ley 21.663) */}
+            <div className="space-y-2 pt-1">
+              <label className="flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  required
+                  checked={acceptTerms}
+                  onChange={(e) => setAcceptTerms(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#FF6A00] focus:ring-[#FF6A00] shrink-0"
+                />
+                <span className="text-[11px] text-gray-600 dark:text-gray-400 leading-tight">
+                  He leído y acepto los{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLegalModalTab('terminos');
+                      setIsLegalModalOpen(true);
+                    }}
+                    className="text-[#FF6A00] underline font-semibold hover:text-[#E55F00]"
+                  >
+                    Términos de Servicio
+                  </button>{' '}
+                  y la{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLegalModalTab('privacidad');
+                      setIsLegalModalOpen(true);
+                    }}
+                    className="text-[#FF6A00] underline font-semibold hover:text-[#E55F00]"
+                  >
+                    Política de Privacidad y Confidencialidad
+                  </button>{' '}
+                  (Leyes N° 19.496 y 21.719).
+                </span>
+              </label>
+
+              <label className="flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={acceptMarketing}
+                  onChange={(e) => setAcceptMarketing(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#FF6A00] focus:ring-[#FF6A00] shrink-0"
+                />
+                <span className="text-[11px] text-gray-500 dark:text-gray-400 leading-tight">
+                  (Opcional) Deseo recibir reportes de precios de materiales y novedades del sector por correo.
+                </span>
+              </label>
+            </div>
+
             <button
               type="submit"
-              disabled={isLoading || (!!rut && !validarRutChileno(rut))}
+              disabled={isLoading || !acceptTerms || (!!rut && !validarRutChileno(rut))}
               className="w-full mt-2 py-3 bg-[#FF6A00] hover:bg-[#E55F00] text-white font-bold rounded-xl shadow-lg shadow-[#FF6A00]/25 transition-all flex items-center justify-center gap-2 font-heading text-xs uppercase tracking-wider disabled:opacity-50"
             >
               {isLoading ? (
@@ -663,12 +726,55 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Footer Seguridad */}
-        <div className="mt-5 pt-3.5 border-t border-[#E5DFC9] dark:border-[#263040] flex items-center justify-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400 font-mono">
-          <ShieldCheck className="w-3.5 h-3.5 text-[#6B8F72]" />
-          <span>Acceso Protegido con Firebase Auth</span>
+        {/* Footer Seguridad & Marco Legal */}
+        <div className="mt-5 pt-3.5 border-t border-[#E5DFC9] dark:border-[#263040] flex flex-col items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 font-mono">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#6B8F72]" />
+            <span>Protección de Datos & Firebase Auth (Chile)</span>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setLegalModalTab('terminos');
+                setIsLegalModalOpen(true);
+              }}
+              className="hover:underline hover:text-gray-800 dark:hover:text-white"
+            >
+              Términos (Ley 19.496)
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => {
+                setLegalModalTab('privacidad');
+                setIsLegalModalOpen(true);
+              }}
+              className="hover:underline hover:text-gray-800 dark:hover:text-white"
+            >
+              Privacidad (Ley 21.719)
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => {
+                setLegalModalTab('ciberseguridad');
+                setIsLegalModalOpen(true);
+              }}
+              className="hover:underline hover:text-gray-800 dark:hover:text-white"
+            >
+              Ciberseguridad (Ley 21.663)
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Modal Interactivo de Términos y Condiciones / Privacidad */}
+      <LegalTermsModal
+        isOpen={isLegalModalOpen}
+        onClose={() => setIsLegalModalOpen(false)}
+        initialTab={legalModalTab}
+      />
     </div>
   );
 }
