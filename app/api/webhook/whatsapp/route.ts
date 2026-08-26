@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
 
       if (metaToken && phoneNumberId && cleanPhone) {
         try {
+          // 1. Enviar mensaje de texto con Gemini
           await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
             method: 'POST',
             headers: {
@@ -127,6 +128,25 @@ export async function POST(request: NextRequest) {
               text: { body: respuestaTexto },
             }),
           });
+
+          // 2. Si Gemini incluyó fotos de la obra, enviarlas al WhatsApp del cliente
+          if (aiResult.fotos && aiResult.fotos.length > 0) {
+            for (const fotoUrl of aiResult.fotos.slice(0, 2)) {
+              await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${metaToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  messaging_product: 'whatsapp',
+                  to: cleanPhone.replace('+', ''),
+                  type: 'image',
+                  image: { link: fotoUrl },
+                }),
+              });
+            }
+          }
         } catch (metaSendErr) {
           console.error('Error enviando mensaje por Meta Graph API:', metaSendErr);
         }
