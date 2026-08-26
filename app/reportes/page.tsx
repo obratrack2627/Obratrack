@@ -1,515 +1,570 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   MessageSquareShare,
   CheckCircle2,
-  XCircle,
-  Edit3,
-  Bot,
-  User,
+  Phone,
+  Send,
   Building2,
+  User,
   Clock,
   Sparkles,
-  AlertTriangle,
-  Send,
-  Volume2,
-  X,
-  Lock,
+  ShieldCheck,
+  RotateCcw,
+  Image as ImageIcon,
+  DollarSign,
+  ExternalLink,
+  Check,
+  CheckCheck,
+  Bot,
+  Layers,
+  ArrowRight,
+  Smile,
+  Paperclip,
+  Mic,
+  Copy,
+  Info,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
-import { ReporteWhatsApp, ReportStatus, SubscriptionPlanId } from '@/types/database';
+import { Cliente, Proyecto, SubscriptionPlanId } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
 import { getPlanDetails } from '@/lib/plans';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 import PlanLockOverlay from '@/components/PlanLockOverlay';
 
+interface MensajeWhatsAppSimulado {
+  id: string;
+  remitente: 'cliente' | 'asistente';
+  texto: string;
+  timestamp: string;
+  fotos?: string[];
+  esAudio?: boolean;
+}
+
 export default function ReportesWhatsAppPage() {
-  const [reportes, setReportes] = useState<ReporteWhatsApp[]>([]);
-  const [statusFilter, setStatusFilter] = useState<ReportStatus | 'todos'>('todos');
-  const [selectedReporte, setSelectedReporte] = useState<ReporteWhatsApp | null>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Formulario de Corrección
-  const [editAvance, setEditAvance] = useState<number>(0);
-  const [editImprevistoMonto, setEditImprevistoMonto] = useState<number>(0);
-  const [editImprevistoDesc, setEditImprevistoDesc] = useState<string>('');
-
-  // Simulador de mensaje WhatsApp
-  const [simulatedText, setSimulatedText] = useState('');
-  const [isSimulating, setIsSimulating] = useState(false);
-
-  // Estado de suscripción
+  // Estados de datos
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const loadData = () => {
-    const reps = dataService.getReportes();
+  // Cliente autenticado en la sesión del chat de WhatsApp
+  const [clienteAutenticadoId, setClienteAutenticadoId] = useState<string | null>(null);
+
+  // Mensajes del simulador de WhatsApp
+  const [mensajes, setMensajes] = useState<MensajeWhatsAppSimulado[]>([
+    {
+      id: 'wa-1',
+      remitente: 'asistente',
+      texto:
+        '¡Hola! 👋 Bienvenido al servicio oficial de atención y seguimiento de obras de *ObraTrack*.\n\nPara consultar el avance, estado de pagos y fotos en tiempo real de tu obra contratada, por favor indícame tu *Nombre Completo* y *RUT* (ej: 15.432.890-1).',
+      timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+    },
+  ]);
+  const [inputTexto, setInputTexto] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Cargar datos
+  const reloadData = () => {
+    setClientes(dataService.getClientes());
+    setProyectos(dataService.getProyectos());
     const plan = dataService.getActivePlan();
-    setReportes(reps);
-    setActivePlan(plan);
+    if (plan) setActivePlan(plan);
   };
 
   useEffect(() => {
-    loadData();
-    const handler = (e: any) => {
-      if (e.detail) setActivePlan(e.detail);
-    };
-    window.addEventListener('obratrack_plan_changed', handler);
-    return () => window.removeEventListener('obratrack_plan_changed', handler);
+    reloadData();
   }, []);
 
-  const filteredReportes = reportes.filter((r) => {
-    if (statusFilter === 'todos') return true;
-    return r.estado === statusFilter;
-  });
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [mensajes, isLoading]);
 
-  const handleAprobar = (id: string) => {
-    dataService.aprobarReporte(id);
-    loadData();
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleRechazar = (id: string) => {
-    dataService.rechazarReporte(id);
-    loadData();
-  };
+  // Enviar mensaje en el simulador
+  const handleEnviarMensaje = async (textoPersonalizado?: string) => {
+    const texto = textoPersonalizado || inputTexto;
+    if (!texto.trim() || isLoading) return;
 
-  const openEditModal = (rep: ReporteWhatsApp) => {
-    setSelectedReporte(rep);
-    setEditAvance(rep.extraccion_ia?.avance_porcentaje || 0);
-    setEditImprevistoMonto(rep.extraccion_ia?.imprevisto_monto_estimado || 0);
-    setEditImprevistoDesc(rep.extraccion_ia?.imprevisto_descripcion || '');
-  };
+    const nuevoMensajeUsuario: MensajeWhatsAppSimulado = {
+      id: 'wa-u-' + Date.now(),
+      remitente: 'cliente',
+      texto: texto,
+      timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+    };
 
-  const handleSaveCorrection = () => {
-    if (!selectedReporte) return;
-    dataService.aprobarReporte(selectedReporte.id, {
-      avance_porcentaje: editAvance,
-      imprevisto_monto: editImprevistoMonto,
-      imprevisto_descripcion: editImprevistoDesc,
-    });
-    setSelectedReporte(null);
-    loadData();
-  };
+    const nuevosMensajes = [...mensajes, nuevoMensajeUsuario];
+    setMensajes(nuevosMensajes);
+    setInputTexto('');
+    setIsLoading(true);
 
-  // Simular recepción de mensaje vía WhatsApp
-  const handleSimulateWhatsApp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!simulatedText.trim()) return;
+    try {
+      // 1. Obtener ficha si ya tenemos un cliente autenticado
+      let fichaCliente = clienteAutenticadoId
+        ? dataService.obtenerFichaCompletaCliente(clienteAutenticadoId)
+        : null;
 
-    setIsSimulating(true);
-    const usuarios = dataService.getUsuarios();
-    const proyectos = dataService.getProyectos();
-    const sender = usuarios.find((u) => u.rol === 'terreno') || usuarios[0];
-    const targetProject = proyectos[0];
-
-    // Simular extracción con IA
-    setTimeout(() => {
-      let avance = 50;
-      let tieneImp = false;
-      let impMonto = 0;
-      let impDesc = null;
-
-      const lower = simulatedText.toLowerCase();
-      const numMatch = lower.match(/(\d+)%/);
-      if (numMatch) avance = parseInt(numMatch[1], 10);
-
-      if (lower.includes('compramos') || lower.includes('costó') || lower.includes('imprevisto') || lower.includes('roto') || lower.includes('pesos')) {
-        tieneImp = true;
-        const montoMatch = lower.match(/(\d+)\s*(mil|pesos|\$)/);
-        if (montoMatch) {
-          impMonto = parseInt(montoMatch[1], 10) * (montoMatch[2] === 'mil' ? 1000 : 1);
-        } else {
-          impMonto = 35000;
+      // 2. Si no estaba autenticado, verificar si en este mensaje viene el RUT o Nombre
+      if (!fichaCliente) {
+        const clienteEncontrado = dataService.buscarClientePorRutONombre(texto);
+        if (clienteEncontrado) {
+          setClienteAutenticadoId(clienteEncontrado.id);
+          fichaCliente = dataService.obtenerFichaCompletaCliente(clienteEncontrado.id);
         }
-        impDesc = 'Gasto imprevisto mencionado en el reporte de terreno';
       }
 
-      dataService.createReporte({
-        proyecto_id: targetProject.id,
-        usuario_id: sender.id,
-        mensaje_original: simulatedText.trim(),
-        extraccion_ia: {
-          actividad_detectada: targetProject.actividades?.[1]?.nombre || 'Montaje de Estructura',
-          avance_porcentaje: avance,
-          tiene_imprevisto: tieneImp,
-          imprevisto_descripcion: impDesc,
-          imprevisto_monto_estimado: impMonto,
-        },
-        estado: 'pendiente',
-        fecha: new Date().toISOString(),
+      // 3. Preparar lista de clientes para que Gemini los reconozca
+      const clientesDisponibles = dataService.getClientes().map((c) => ({
+        id: c.id,
+        nombre: c.nombre,
+        rut: c.rut,
+      }));
+
+      // 4. Llamar a la API de WhatsApp con Gemini
+      const response = await fetch('/api/webhook/whatsapp/cliente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mensaje: texto,
+          historial: nuevosMensajes.slice(-8),
+          cliente_autenticado: fichaCliente,
+          clientes_disponibles: clientesDisponibles,
+        }),
       });
 
-      setSimulatedText('');
-      setIsSimulating(false);
-      loadData();
-    }, 600);
+      const data = await response.json();
+
+      // Si Gemini detectó un RUT/Nombre para autenticar que no habíamos capturado
+      if (data.autenticar_rut_o_nombre && !fichaCliente) {
+        const match = dataService.buscarClientePorRutONombre(data.autenticar_rut_o_nombre);
+        if (match) {
+          setClienteAutenticadoId(match.id);
+          showToast(`✅ Identidad verificada: ${match.nombre} (RUT: ${match.rut || 'OK'})`);
+        }
+      }
+
+      const respuestaAsistente: MensajeWhatsAppSimulado = {
+        id: 'wa-a-' + Date.now(),
+        remitente: 'asistente',
+        texto: data.respuesta || 'He recibido tu mensaje.',
+        timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+        fotos: data.fotos,
+      };
+
+      setMensajes((prev) => [...prev, respuestaAsistente]);
+    } catch (error) {
+      console.error(error);
+      setMensajes((prev) => [
+        ...prev,
+        {
+          id: 'wa-err-' + Date.now(),
+          remitente: 'asistente',
+          texto:
+            '⚠️ Hubo un problema de conexión con el servidor de WhatsApp. Por favor intenta de nuevo.',
+          timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const pendingCount = reportes.filter((r) => r.estado === 'pendiente').length;
+  const handleReiniciarSimulador = () => {
+    setClienteAutenticadoId(null);
+    setMensajes([
+      {
+        id: 'wa-1',
+        remitente: 'asistente',
+        texto:
+          '¡Hola! 👋 Bienvenido al servicio oficial de atención y seguimiento de obras de *ObraTrack*.\n\nPara consultar el avance, estado de pagos y fotos en tiempo real de tu obra contratada, por favor indícame tu *Nombre Completo* y *RUT* (ej: 15.432.890-1).',
+        timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+    showToast('Simulador de WhatsApp reiniciado.');
+  };
+
+  const handleSeleccionarClientePrueba = (c: Cliente) => {
+    setClienteAutenticadoId(c.id);
+    const ficha = dataService.obtenerFichaCompletaCliente(c.id);
+    const primerProj = ficha?.proyectos[0];
+
+    const textoIdentificacion = `Soy ${c.nombre}, mi RUT es ${c.rut || '15.432.890-1'}. ¿Cómo va mi obra?`;
+    handleEnviarMensaje(textoIdentificacion);
+    showToast(`Cliente seleccionado: ${c.nombre}`);
+  };
+
+  const handleEnviarFichaWhatsAppDirecto = (cliente: Cliente) => {
+    const ficha = dataService.obtenerFichaCompletaCliente(cliente.id);
+    if (!ficha || ficha.proyectos.length === 0) {
+      showToast('Este cliente no tiene obras activas registradas.');
+      return;
+    }
+    const p = ficha.proyectos[0];
+    const mensajeWA = `🏗️ *INFORME DE AVANCE DE OBRA - OBRATRACK*
+Estimado/a *${cliente.nombre}*, le compartimos el estado de su proyecto:
+
+📌 *Proyecto:* ${p.proyecto.nombre}
+📍 *Ubicación:* ${p.proyecto.direccion || p.proyecto.comuna || 'Chile'}
+📊 *Avance General:* ${p.porcentaje_avance}%
+💰 *Total Pagado:* ${formatCLP(p.total_pagado)} de ${formatCLP(p.total_contratado)}
+⏳ *Saldo Restante:* ${formatCLP(p.saldo_pendiente)}
+📅 *Término Estimado:* ${formatDate(p.proyecto.fecha_termino_estimada)}
+
+_Puede consultar avances y fotos 24/7 respondiendo a este WhatsApp._`;
+
+    const url = `https://wa.me/${(cliente.telefono || '+56987654321').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(mensajeWA)}`;
+    window.open(url, '_blank');
+    showToast(`Abriendo WhatsApp para ${cliente.nombre}...`);
+  };
+
+  const clienteActivoObj = clienteAutenticadoId
+    ? dataService.getClienteById(clienteAutenticadoId)
+    : null;
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen">
-      <PlanSwitcherModal
-        isOpen={isPlanModalOpen}
-        onClose={() => setIsPlanModalOpen(false)}
-      />
+    <div className="flex-1 flex flex-col min-h-screen bg-[#FAF8F5] font-sans pb-12">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#111B21] text-white px-4 py-3 rounded-2xl shadow-2xl border border-[#25D366] flex items-center gap-2 text-xs font-semibold animate-in slide-in-from-bottom-5">
+          <Sparkles className="w-4 h-4 text-[#25D366] shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
+      <PlanSwitcherModal isOpen={isPlanModalOpen} onClose={() => setIsPlanModalOpen(false)} />
+
+      {/* Navbar Superior */}
       <Navbar
-        title="Bandeja de Reportes WhatsApp (IA)"
-        subtitle="Recepción de audios de faena y extracción estructurada con Google Gemini 2.5 Pro / Flash IA"
+        title="Seguimiento WhatsApp Clientes"
+        subtitle="Asistente de IA para que los mandantes consulten estado de obra, fotos y pagos por WhatsApp"
         action={
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsPlanModalOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E5DFC9] text-xs font-mono text-gray-700 hover:border-[#FF6A00] transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E5DFC9] text-xs font-mono text-gray-700 hover:border-[#25D366] transition-colors shadow-sm"
             >
-              <span className="w-2 h-2 rounded-full bg-[#6B8F72]"></span>
+              <span className="w-2 h-2 rounded-full bg-[#25D366]"></span>
               <span>{getPlanDetails(activePlan).nombre}</span>
             </button>
-            <span className="text-xs font-mono text-gray-500 bg-white border border-kraft-200 px-3 py-1.5 rounded-xl shadow-sm">
-              Pendientes: <strong className="text-obra-orange">{pendingCount}</strong>
-            </span>
           </div>
         }
       />
 
-      <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
-        
-        {/* Banner si el usuario NO está en Plan Pro IA */}
-        {activePlan !== 'pro_ia' && (
-          <div className="p-4 rounded-2xl bg-[#6B8F72]/15 border border-[#6B8F72]/40 text-[#1E1E1E] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-            <div className="flex items-center gap-3">
-              <Sparkles className="w-5 h-5 text-[#6B8F72] shrink-0" />
-              <div>
-                <p className="text-xs font-bold font-heading">
-                  Módulo de Automatización WhatsApp & Gemini IA (Exclusivo Plan Pro IA)
-                </p>
-                <p className="text-[11px] text-gray-600 font-sans">
-                  El <strong>Plan Pro IA ($19.990 - $29.990)</strong> incluye recepción de audios de voz de maestros, análisis con Google Gemini IA y extracción de avances e imprevistos en tiempo real.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsPlanModalOpen(true)}
-              className="px-3.5 py-1.5 bg-[#6B8F72] hover:bg-[#55735B] text-white text-xs font-bold rounded-xl shadow-sm transition-colors whitespace-nowrap"
-            >
-              ⚡ Simular Plan Pro IA en Demo
-            </button>
-          </div>
-        )}
-        
-        {/* Simulador rápido de mensaje WhatsApp para testing */}
+      <div className="p-4 md:p-6 max-w-7xl w-full mx-auto">
         <PlanLockOverlay
           isLocked={activePlan === 'gratis'}
-          featureName="Recepción & Procesamiento de Audios WhatsApp con Whisper IA"
-          requiredPlan="pro_ia"
-          description="Transcribe notas de voz y mensajes de WhatsApp enviados por maestros en terreno, deduciendo automáticamente avances porcentuales e imprevistos de costos."
+          featureName="Asistente de WhatsApp para Mandantes & Seguimiento de Obras"
+          requiredPlan="pro"
+          description="Permite que tus clientes consulten el avance de sus obras, estado de pagos y fotos de terreno directamente por WhatsApp con autenticación segura de RUT."
         >
-          <div className="bg-white border border-kraft-200 rounded-xl p-4 shadow-sm">
-            <form onSubmit={handleSimulateWhatsApp} className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="flex items-center gap-2 text-xs font-mono text-navy-900 font-semibold flex-shrink-0">
-                <MessageSquareShare className="w-4 h-4 text-obra-green" />
-                <span>Simular Mensaje WhatsApp:</span>
-              </div>
-              <input
-                type="text"
-                placeholder="Ej: Don Gonzalo, avanzamos al 85% la techumbre pero tuvimos que comprar 3 sacos de cemento extra por 15 mil pesos."
-                value={simulatedText}
-                onChange={(e) => setSimulatedText(e.target.value)}
-                className="flex-1 w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs focus:outline-none focus:border-obra-orange"
-              />
-              <button
-                type="submit"
-                disabled={isSimulating}
-                className="px-4 py-2 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 font-heading shadow-sm flex-shrink-0 disabled:opacity-50"
-              >
-                <Send className="w-3.5 h-3.5 text-obra-orange" />
-                <span>{isSimulating ? 'Procesando IA...' : 'Enviar y Procesar'}</span>
-              </button>
-            </form>
-          </div>
-        </PlanLockOverlay>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            {/* ========================================================================= */}
+            {/* COLUMNA IZQUIERDA: SIMULADOR DE CELULAR SMARTPHONE WHATSAPP (7 cols) */}
+            {/* ========================================================================= */}
+            <div className="lg:col-span-7 flex flex-col items-center">
+              
+              {/* Contenedor del Smartphone */}
+              <div className="w-full max-w-md bg-[#111B21] rounded-[42px] p-3 shadow-2xl border-4 border-gray-800 relative">
+                
+                {/* Notch / Cámara Superior */}
+                <div className="w-32 h-4 bg-gray-800 rounded-full mx-auto mb-2 flex items-center justify-center">
+                  <div className="w-2 h-2 rounded-full bg-black/60"></div>
+                </div>
 
-        {/* Filtro por Estado */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setStatusFilter('todos')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-heading transition-all ${
-              statusFilter === 'todos'
-                ? 'bg-navy-800 text-white shadow-sm'
-                : 'bg-white border border-kraft-200 text-gray-600 hover:bg-kraft-50'
-            }`}
-          >
-            Todos ({reportes.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter('pendiente')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-heading transition-all ${
-              statusFilter === 'pendiente'
-                ? 'bg-obra-orange text-white shadow-sm'
-                : 'bg-white border border-kraft-200 text-gray-600 hover:bg-kraft-50'
-            }`}
-          >
-            Pendientes ({pendingCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter('aprobado')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-heading transition-all ${
-              statusFilter === 'aprobado'
-                ? 'bg-obra-green text-white shadow-sm'
-                : 'bg-white border border-kraft-200 text-gray-600 hover:bg-kraft-50'
-            }`}
-          >
-            Aprobados
-          </button>
-          <button
-            onClick={() => setStatusFilter('rechazado')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-heading transition-all ${
-              statusFilter === 'rechazado'
-                ? 'bg-obra-red text-white shadow-sm'
-                : 'bg-white border border-kraft-200 text-gray-600 hover:bg-kraft-50'
-            }`}
-          >
-            Rechazados
-          </button>
-        </div>
-
-        {/* Lista de Reportes WhatsApp */}
-        <div className="space-y-4">
-          {filteredReportes.length === 0 ? (
-            <div className="bg-white border border-kraft-200 rounded-xl p-12 text-center">
-              <MessageSquareShare className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-gray-500 text-sm">No hay reportes de WhatsApp en esta categoría.</p>
-            </div>
-          ) : (
-            filteredReportes.map((rep) => {
-              const extraccion = rep.extraccion_ia || {};
-
-              return (
-                <div
-                  key={rep.id}
-                  className={`bg-white border rounded-xl p-5 shadow-sm transition-all ${
-                    rep.estado === 'pendiente'
-                      ? 'border-obra-orange/60 ring-1 ring-obra-orange/20'
-                      : 'border-kraft-200'
-                  }`}
-                >
-                  {/* Encabezado del Reporte */}
-                  <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-kraft-200">
+                {/* Pantalla Interna de WhatsApp */}
+                <div className="bg-[#0B141A] rounded-[32px] overflow-hidden flex flex-col h-[620px] border border-gray-800/80">
+                  
+                  {/* Header de WhatsApp */}
+                  <div className="bg-[#202C33] text-white px-4 py-3 flex items-center justify-between border-b border-gray-800">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-navy-800 text-obra-orange flex items-center justify-center font-bold text-xs">
-                        {rep.usuario?.nombre.charAt(0) || 'T'}
+                      <div className="relative">
+                        <div className="w-10 h-10 rounded-full bg-[#25D366] flex items-center justify-center text-white font-bold text-sm shadow">
+                          <Bot className="w-5 h-5" />
+                        </div>
+                        <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-[#25D366] border-2 border-[#202C33]"></span>
                       </div>
                       <div>
-                        <h4 className="font-heading font-bold text-sm text-navy-900 flex items-center gap-2">
-                          <span>{rep.usuario?.nombre || 'Operario Terreno'}</span>
-                          <span className="text-[11px] font-mono text-gray-400">
-                            ({rep.usuario?.telefono_whatsapp || 'WhatsApp'})
-                          </span>
+                        <h4 className="font-bold text-xs text-white flex items-center gap-1.5">
+                          <span>ObraTrack Asistente</span>
+                          <ShieldCheck className="w-3.5 h-3.5 text-[#25D366]" />
                         </h4>
-                        <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                          <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{rep.proyecto?.nombre || 'Obra no identificada'}</span>
+                        <p className="text-[10px] text-[#25D366] font-mono">
+                          {clienteActivoObj
+                            ? `Identificado: ${clienteActivoObj.nombre}`
+                            : 'En línea • Cuenta oficial'}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      <span className="text-[11px] font-mono text-gray-400">
-                        {new Date(rep.fecha).toLocaleTimeString('es-CL', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}{' '}
-                        • {formatDate(rep.fecha.split('T')[0])}
-                      </span>
-                      <span
-                        className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded ${
-                          rep.estado === 'pendiente'
-                            ? 'bg-obra-orange-light text-obra-orange animate-pulse'
-                            : rep.estado === 'aprobado'
-                            ? 'bg-obra-green-light text-obra-green'
-                            : 'bg-gray-100 text-gray-500'
+                    <button
+                      onClick={handleReiniciarSimulador}
+                      title="Reiniciar chat"
+                      className="p-2 rounded-full hover:bg-gray-700/50 text-gray-300 transition-colors"
+                    >
+                      <RotateCcw className="w-4 h-4 text-gray-300" />
+                    </button>
+                  </div>
+
+                  {/* Feed de Mensajes estilo WhatsApp */}
+                  <div
+                    className="flex-1 p-4 overflow-y-auto space-y-3 text-xs"
+                    style={{
+                      backgroundImage:
+                        'radial-gradient(circle at center, rgba(37,211,102,0.03) 0%, transparent 70%)',
+                    }}
+                  >
+                    {/* Aviso de Cifrado */}
+                    <div className="bg-[#182229] text-gray-400 text-[10px] py-1.5 px-3 rounded-xl mx-auto w-fit text-center flex items-center gap-1.5 shadow-sm border border-gray-800">
+                      <ShieldCheck className="w-3 h-3 text-[#25D366]" />
+                      <span>Mensajes protegidos con autenticación de identidad por RUT</span>
+                    </div>
+
+                    {mensajes.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex flex-col ${
+                          msg.remitente === 'cliente' ? 'items-end' : 'items-start'
                         }`}
                       >
-                        {rep.estado}
-                      </span>
-                    </div>
-                  </div>
+                        <div
+                          className={`max-w-[85%] rounded-2xl p-3 space-y-2 shadow-sm relative ${
+                            msg.remitente === 'cliente'
+                              ? 'bg-[#005C4B] text-white rounded-tr-xs'
+                              : 'bg-[#202C33] text-gray-100 rounded-tl-xs'
+                          }`}
+                        >
+                          {/* Texto del Mensaje */}
+                          <div className="whitespace-pre-line leading-relaxed text-xs">
+                            {msg.texto}
+                          </div>
 
-                  {/* Cuerpo: Mensaje Original vs Extracción IA */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4">
-                    
-                    {/* Mensaje original / Transcripción */}
-                    <div className="bg-kraft-50 border border-kraft-200/80 rounded-lg p-3.5">
-                      <span className="text-[10px] font-mono uppercase text-gray-500 font-bold block mb-1.5 flex items-center gap-1">
-                        {rep.transcripcion ? (
-                          <>
-                            <Volume2 className="w-3.5 h-3.5 text-obra-orange" />
-                            <span>Audio Transcrito (Whisper):</span>
-                          </>
-                        ) : (
-                          <>
-                            <MessageSquareShare className="w-3.5 h-3.5 text-obra-green" />
-                            <span>Mensaje de Texto Original:</span>
-                          </>
-                        )}
-                      </span>
-                      <p className="text-xs text-gray-800 leading-relaxed font-sans italic">
-                        "{rep.transcripcion || rep.mensaje_original}"
-                      </p>
-                    </div>
+                          {/* Fotografías enviadas por la IA */}
+                          {msg.fotos && msg.fotos.length > 0 && (
+                            <div className="grid grid-cols-2 gap-1.5 pt-1.5">
+                              {msg.fotos.map((fotoUrl, fIdx) => (
+                                <div
+                                  key={fIdx}
+                                  className="relative rounded-xl overflow-hidden border border-gray-700 group aspect-video bg-black"
+                                >
+                                  <img
+                                    src={fotoUrl}
+                                    alt="Foto de terreno"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                  <span className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/70 text-[9px] text-white rounded font-mono">
+                                    📸 Faena {fIdx + 1}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
 
-                    {/* Extracción Estructurada por IA (Google Gemini) */}
-                    <div className="bg-navy-900 text-white rounded-lg p-3.5 space-y-2 border border-navy-700 shadow-inner">
-                      <span className="text-[10px] font-mono uppercase text-obra-orange font-bold flex items-center gap-1">
-                        <Bot className="w-3.5 h-3.5" />
-                        <span>Extracción Inteligente (Google Gemini 2.5 IA JSON):</span>
-                      </span>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                        <div>
-                          <span className="text-gray-400 block text-[10px]">Actividad Detectada:</span>
-                          <strong className="text-gray-200 truncate block">
-                            {extraccion.actividad_detectada || 'No especificada'}
-                          </strong>
-                        </div>
-                        <div>
-                          <span className="text-gray-400 block text-[10px]">Avance Sugerido:</span>
-                          <strong className="text-obra-orange text-sm">
-                            {extraccion.avance_porcentaje !== null && extraccion.avance_porcentaje !== undefined
-                              ? `${extraccion.avance_porcentaje}%`
-                              : '-'}
-                          </strong>
+                          {/* Timestamp y Vistos */}
+                          <div className="flex items-center justify-end gap-1 text-[9px] text-gray-400 font-mono pt-1">
+                            <span>{msg.timestamp}</span>
+                            {msg.remitente === 'cliente' && (
+                              <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />
+                            )}
+                          </div>
                         </div>
                       </div>
+                    ))}
 
-                      {extraccion.tiene_imprevisto && (
-                        <div className="pt-2 border-t border-navy-700/80 text-xs font-mono">
-                          <span className="text-obra-red text-[10px] font-bold flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" />
-                            <span>Imprevisto de Costo Detectado:</span>
-                          </span>
-                          <p className="text-gray-300 text-[11px] mt-0.5">
-                            {extraccion.imprevisto_descripcion || 'Sin descripción'}
-                          </p>
-                          <span className="text-obra-red font-bold block mt-0.5">
-                            Monto Estimado: {formatCLP(extraccion.imprevisto_monto_estimado)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
+                    {isLoading && (
+                      <div className="flex items-center gap-2 text-gray-300 bg-[#202C33] px-3.5 py-2 rounded-2xl w-fit text-xs animate-pulse">
+                        <span className="w-2 h-2 rounded-full bg-[#25D366] animate-ping"></span>
+                        <span className="font-mono text-[11px]">Asistente escribiendo...</span>
+                      </div>
+                    )}
+                    <div ref={chatBottomRef} />
                   </div>
 
-                  {/* Acciones de Aprobación */}
-                  {rep.estado === 'pendiente' && (
-                    <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
-                      <button
-                        onClick={() => handleRechazar(rep.id)}
-                        className="px-3 py-1.5 text-xs text-gray-500 hover:text-obra-red rounded-lg font-heading"
-                      >
-                        Rechazar
-                      </button>
-                      <button
-                        onClick={() => openEditModal(rep)}
-                        className="px-3.5 py-1.5 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-lg text-xs font-semibold flex items-center gap-1 font-heading"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                        <span>Corregir Datos</span>
-                      </button>
-                      <button
-                        onClick={() => handleAprobar(rep.id)}
-                        className="px-4 py-1.5 bg-obra-green hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 font-heading shadow-sm"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Aprobar y Actualizar Obra</span>
-                      </button>
-                    </div>
-                  )}
+                  {/* Sugerencias Rápidas de Prueba */}
+                  <div className="px-3 py-2 bg-[#111B21] border-t border-gray-800 flex gap-1.5 overflow-x-auto text-[11px] no-scrollbar">
+                    <button
+                      onClick={() =>
+                        handleEnviarMensaje('Soy Carlos Henríquez, RUT 15.432.890-1. ¿Cómo va mi obra?')
+                      }
+                      className="px-2.5 py-1 bg-[#202C33] hover:bg-[#2A3942] text-gray-200 rounded-lg whitespace-nowrap border border-gray-700 transition-colors"
+                    >
+                      👤 Carlos Henríquez
+                    </button>
+                    <button
+                      onClick={() => handleEnviarMensaje('¿Cuánto he pagado y cuánto me falta?')}
+                      className="px-2.5 py-1 bg-[#202C33] hover:bg-[#2A3942] text-gray-200 rounded-lg whitespace-nowrap border border-gray-700 transition-colors"
+                    >
+                      💰 Consultar Pagos
+                    </button>
+                    <button
+                      onClick={() => handleEnviarMensaje('¿Me pueden mandar fotos del avance de hoy?')}
+                      className="px-2.5 py-1 bg-[#202C33] hover:bg-[#2A3942] text-gray-200 rounded-lg whitespace-nowrap border border-gray-700 transition-colors"
+                    >
+                      📸 Pedir Fotos
+                    </button>
+                  </div>
+
+                  {/* Input de Mensaje estilo WhatsApp */}
+                  <div className="p-2.5 bg-[#202C33] flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={inputTexto}
+                      onChange={(e) => setInputTexto(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleEnviarMensaje()}
+                      placeholder="Escribe como mandante (ej: Mi RUT es 15.432.890-1)..."
+                      className="flex-1 bg-[#2A3942] text-white placeholder-gray-400 text-xs px-4 py-2.5 rounded-full focus:outline-none focus:ring-1 focus:ring-[#25D366]"
+                    />
+                    <button
+                      onClick={() => handleEnviarMensaje()}
+                      disabled={!inputTexto.trim() || isLoading}
+                      className="w-9 h-9 rounded-full bg-[#25D366] hover:bg-[#1EBE5D] text-white flex items-center justify-center disabled:opacity-50 transition-all shadow"
+                    >
+                      <Send className="w-4 h-4 ml-0.5" />
+                    </button>
+                  </div>
+
                 </div>
-              );
-            })
-          )}
-        </div>
-
-      </div>
-
-      {/* Modal: Corregir Extracción IA */}
-      {selectedReporte && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl sm:rounded-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
-              <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-obra-orange" />
-                <span>Corregir Extracción antes de Aplicar</span>
-              </h3>
-              <button onClick={() => setSelectedReporte(null)} className="text-gray-400 hover:text-gray-700">
-                <X className="w-5 h-5" />
-              </button>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  Porcentaje de Avance a Aplicar (%)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={editAvance}
-                  onChange={(e) => setEditAvance(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono focus:outline-none focus:border-obra-orange"
-                />
+            {/* ========================================================================= */}
+            {/* COLUMNA DERECHA: DIRECTORIO DE MANDANTES & AUTOMATIZACIÓN (5 cols) */}
+            {/* ========================================================================= */}
+            <div className="lg:col-span-5 space-y-6">
+              
+              {/* Tarjeta de Clientes Registrados */}
+              <div className="bg-white border border-[#E5DFC9] rounded-3xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-[#FAF8F5] pb-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-[#25D366]" />
+                    <h3 className="font-heading font-bold text-sm text-[#1E1E1E]">
+                      Mandantes con Seguimiento ({clientes.length})
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    IA Activa
+                  </span>
+                </div>
+
+                <p className="text-xs text-gray-600">
+                  Haz clic en <strong>Probar en Simulador</strong> para autenticar automáticamente al cliente o en <strong>Enviar WhatsApp</strong> para enviarle su ficha oficial.
+                </p>
+
+                <div className="space-y-3">
+                  {clientes.map((c) => {
+                    const ficha = dataService.obtenerFichaCompletaCliente(c.id);
+                    const primerProj = ficha?.proyectos[0];
+                    const isSelected = clienteAutenticadoId === c.id;
+
+                    return (
+                      <div
+                        key={c.id}
+                        className={`p-4 rounded-2xl border transition-all space-y-2.5 ${
+                          isSelected
+                            ? 'bg-emerald-50/70 border-[#25D366] shadow-sm'
+                            : 'bg-[#FAF8F5] border-[#E5DFC9] hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="font-bold text-xs text-[#1E1E1E] flex items-center gap-1.5">
+                              <span>{c.nombre}</span>
+                              {isSelected && (
+                                <span className="px-1.5 py-0.5 bg-[#25D366] text-white text-[9px] font-bold rounded">
+                                  ACTIVO
+                                </span>
+                              )}
+                            </h4>
+                            <span className="text-[11px] font-mono text-gray-500 block">
+                              RUT: {c.rut || '15.432.890-1'} • 📞 {c.telefono || '+56 9 8765 4321'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {primerProj && (
+                          <div className="bg-white p-2.5 rounded-xl border border-[#E5DFC9] space-y-1.5 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[#1E1E1E] text-[11px] truncate">
+                                {primerProj.proyecto.nombre}
+                              </span>
+                              <span className="font-mono font-bold text-emerald-600 text-[11px]">
+                                {primerProj.porcentaje_avance}% Avance
+                              </span>
+                            </div>
+
+                            {/* Barra de Progreso */}
+                            <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="bg-[#25D366] h-full rounded-full transition-all duration-500"
+                                style={{ width: `${primerProj.porcentaje_avance}%` }}
+                              ></div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono pt-1">
+                              <span>Pagado: {formatCLP(primerProj.total_pagado)}</span>
+                              <span>Saldo: {formatCLP(primerProj.saldo_pendiente)}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={() => handleSeleccionarClientePrueba(c)}
+                            className="flex-1 py-2 px-3 bg-white hover:bg-gray-50 text-[#1E1E1E] border border-[#E5DFC9] rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+                          >
+                            <Bot className="w-3.5 h-3.5 text-[#25D366]" />
+                            <span>Probar en Simulador</span>
+                          </button>
+                          <button
+                            onClick={() => handleEnviarFichaWhatsAppDirecto(c)}
+                            className="py-2 px-3 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5"
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                            <span>Enviar WhatsApp</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  Descripción del Imprevisto (opcional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej: Compra de pernos y anclajes"
-                  value={editImprevistoDesc}
-                  onChange={(e) => setEditImprevistoDesc(e.target.value)}
-                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs focus:outline-none focus:border-obra-orange"
-                />
+              {/* Parámetros de Seguridad y Configuración */}
+              <div className="bg-white border border-[#E5DFC9] rounded-3xl p-6 shadow-sm space-y-3">
+                <h3 className="font-heading font-bold text-xs text-[#1E1E1E] flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-obra-orange" />
+                  <span>Seguridad de Identidad de Mandantes</span>
+                </h3>
+                <ul className="text-xs text-gray-600 space-y-2">
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <span><strong>Autenticación por RUT:</strong> El asistente solo entrega información financiera y de avance a clientes cuyo RUT coincida con el contrato.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <span><strong>Fotografías en Vivo:</strong> Envía imágenes reales cargadas en la bitácora de la faena.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <span><strong>IA Conversacional:</strong> Respuestas analíticas impulsadas por Google Gemini.</span>
+                  </li>
+                </ul>
               </div>
 
-              <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  Monto Imprevisto (CLP)
-                </label>
-                <input
-                  type="number"
-                  value={editImprevistoMonto}
-                  onChange={(e) => setEditImprevistoMonto(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono focus:outline-none focus:border-obra-orange"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
-                <button
-                  type="button"
-                  onClick={() => setSelectedReporte(null)}
-                  className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveCorrection}
-                  className="px-4 py-1.5 bg-obra-orange text-white text-xs font-semibold rounded-lg font-heading shadow-sm"
-                >
-                  Guardar y Aprobar
-                </button>
-              </div>
             </div>
           </div>
-        </div>
-      )}
+        </PlanLockOverlay>
+      </div>
     </div>
   );
 }

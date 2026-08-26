@@ -379,3 +379,167 @@ Responde como Copiloto de Obras experto:`;
     };
   }
 }
+
+/**
+ * Asistente Automatizado de WhatsApp para Clientes / Mandantes (Seguimiento de Obra en Vivo con Gemini)
+ */
+export async function chatAsistenteClienteWhatsAppGemini(params: {
+  historial: { rol: 'user' | 'model'; texto: string }[];
+  mensajeCliente: string;
+  clienteAutenticado?: {
+    cliente: { id: string; nombre: string; rut?: string; telefono?: string; direccion?: string };
+    proyectos: Array<{
+      proyecto: { id: string; nombre: string; comuna?: string; direccion?: string; fecha_inicio: string; fecha_termino_estimada: string; estado: string };
+      actividades: Array<{ nombre: string; porcentaje_avance: number; estado: string }>;
+      porcentaje_avance: number;
+      total_contratado: number;
+      total_pagado: number;
+      saldo_pendiente: number;
+      fotos_avance: string[];
+    }>;
+  } | null;
+  clientesRegistrados?: Array<{ id: string; nombre: string; rut?: string }>;
+}): Promise<{
+  respuesta: string;
+  fotos?: string[];
+  autenticar_rut_o_nombre?: string;
+}> {
+  const gemini = getGeminiClient();
+
+  if (!gemini) {
+    return {
+      respuesta:
+        '¡Hola! Soy el Asistente de ObraTrack. En este momento estamos actualizando el servicio de mensajería.',
+    };
+  }
+
+  const { historial, mensajeCliente, clienteAutenticado, clientesRegistrados = [] } = params;
+
+  let promptContextoCliente = '';
+  if (clienteAutenticado && clienteAutenticado.proyectos.length > 0) {
+    const projsTexto = clienteAutenticado.proyectos
+      .map((p, idx) => {
+        const partidasTexto = p.actividades
+          .map((a) => `  - ${a.nombre}: ${a.porcentaje_avance}% (${a.estado})`)
+          .join('\n');
+        return `
+OBRA #${idx + 1}: ${p.proyecto.nombre}
+• Ubicación: ${p.proyecto.direccion || p.proyecto.comuna || 'Chile'}
+• Estado: ${p.proyecto.estado.toUpperCase()}
+• Avance General Ponderado: ${p.porcentaje_avance}%
+• Total Contratado: $${p.total_contratado.toLocaleString('es-CL')} CLP
+• Total Pagado a la Fecha: $${p.total_pagado.toLocaleString('es-CL')} CLP
+• Saldo Restante por Pagar: $${p.saldo_pendiente.toLocaleString('es-CL')} CLP
+• Fechas: Inicio ${p.proyecto.fecha_inicio} | Término Estimado ${p.proyecto.fecha_termino_estimada}
+• Partidas y Cronograma:
+${partidasTexto || '  - En ejecución según cronograma'}
+• Fotos de Avance Disponibles: ${p.fotos_avance.length} fotos`;
+      })
+      .join('\n\n');
+
+    promptContextoCliente = `
+CLIENTE AUTENTICADO EXITOSAMENTE:
+- Nombre: ${clienteAutenticado.cliente.nombre}
+- RUT: ${clienteAutenticado.cliente.rut || 'No registrado'}
+- Teléfono: ${clienteAutenticado.cliente.telefono || 'No registrado'}
+
+DATOS DE SUS OBRAS CONTRATADAS:
+${projsTexto}`;
+  } else {
+    promptContextoCliente = `
+EL CLIENTE AÚN NO HA SIDO AUTENTICADO.
+Clientes registrados en el sistema:
+${clientesRegistrados.map((c) => `• ${c.nombre} (RUT: ${c.rut || 'Sin RUT'})`).join('\n') || 'Ninguno'}
+
+INSTRUCCIÓN DE AUTENTICACIÓN:
+1. Pide cortésmente al cliente su Nombre Completo y su RUT chileno (ej: 15.432.890-1) para consultar su ficha de obra.
+2. Si el cliente menciona su nombre o su RUT en su mensaje (o ya lo entregó), extrae el dato agregando al final la etiqueta:
+   [AUTENTICAR: {"query": "NOMBRE O RUT EXTRAIDO"}]`;
+  }
+
+  const promptFinal = `Eres el Asistente Virtual Oficial de ObraTrack para Mandantes y Clientes de Construcción en WhatsApp.
+Tu objetivo es dar seguimiento cálido, profesional, preciso y transparente a los clientes sobre las obras por las que están pagando.
+
+REGLAS DE COMUNICACIÓN EN WHATSAPP:
+1. Habla en español de Chile, con tono muy respetuoso, cercano y tranquilizador (estilo servicio al cliente de constructora de excelencia).
+2. Usa formato nativo de WhatsApp: *negritas* para montos, nombres y avances clave, emojis elegantes (🏗️ 📊 💰 📸 📅 ✅), y listas con viñetas claras.
+3. Si el cliente está autenticado y pregunta sobre:
+   - Avance de su obra: Detalla el % de avance y qué partidas se han completado.
+   - Pagos y Finanzas: Informa con total exactitud cuánto ha pagado, cuánto le falta por pagar y en qué etapa corresponde el siguiente hito.
+   - Fotos de terreno: Si pide fotos o estás entregando el reporte de avance, agrega al final la etiqueta [ENVIAR_FOTOS: true] para que el sistema adjunte las fotografías reales.
+4. Si el cliente pregunta por temas ajenos a sus obras contratadas, responde amablemente que tu función es el seguimiento de sus proyectos de construcción en ObraTrack.
+
+${promptContextoCliente}
+
+HISTORIAL WHATSAPP:
+${historial.map((h) => `${h.rol === 'user' ? 'Cliente' : 'Asistente'}: ${h.texto}`).join('\n')}
+
+MENSAJE DEL CLIENTE: "${mensajeCliente}"
+
+Respuesta de WhatsApp:`;
+
+  try {
+    const candidateModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+    let rawText = '';
+
+    for (const m of candidateModels) {
+      try {
+        const response = await gemini.models.generateContent({
+          model: m,
+          contents: promptFinal,
+        });
+        if (response.text) {
+          rawText = response.text;
+          break;
+        }
+      } catch (err) {
+        console.warn(`Asistente cliente falló con ${m}...`);
+      }
+    }
+
+    if (!rawText) {
+      return {
+        respuesta:
+          'Hola, en este momento no pudimos cargar tu ficha de obra. Por favor indícanos tu Nombre y RUT para buscarte.',
+      };
+    }
+
+    // Extraer intención de autenticación
+    let autenticarQuery: string | undefined = undefined;
+    const authMatch = rawText.match(/\[AUTENTICAR:\s*(\{.*?\})\s*\]/);
+    if (authMatch) {
+      try {
+        const parsed = JSON.parse(authMatch[1]);
+        autenticarQuery = parsed.query;
+        rawText = rawText.replace(authMatch[0], '').trim();
+      } catch (err) {
+        console.warn('Error parseando tag de autenticación:', err);
+      }
+    }
+
+    // Extraer fotos
+    let enviarFotos = false;
+    const fotoMatch = rawText.match(/\[ENVIAR_FOTOS:\s*(true|false)\s*\]/);
+    if (fotoMatch) {
+      enviarFotos = fotoMatch[1] === 'true';
+      rawText = rawText.replace(fotoMatch[0], '').trim();
+    }
+
+    let fotos: string[] = [];
+    if (enviarFotos && clienteAutenticado && clienteAutenticado.proyectos.length > 0) {
+      fotos = clienteAutenticado.proyectos.flatMap((p) => p.fotos_avance).slice(0, 3);
+    }
+
+    return {
+      respuesta: rawText,
+      fotos: fotos.length > 0 ? fotos : undefined,
+      autenticar_rut_o_nombre: autenticarQuery,
+    };
+  } catch (error: any) {
+    console.error('Error en chatAsistenteClienteWhatsAppGemini:', error);
+    return {
+      respuesta:
+        '¡Hola! Ocurrió una intermitencia al consultar tu ficha. Por favor indícanos tu Nombre y RUT.',
+    };
+  }
+}

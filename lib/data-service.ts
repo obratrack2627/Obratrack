@@ -245,6 +245,90 @@ class DataService {
     return true;
   }
 
+  buscarClientePorRutONombre(busqueda: string): Cliente | null {
+    if (!busqueda || busqueda.trim() === '') return null;
+    const clientes = this.getClientes();
+    const cleanSearch = busqueda.toLowerCase().replace(/[\.\-\s]/g, '');
+
+    // Buscar por RUT exacto o parcial
+    for (const c of clientes) {
+      if (c.rut) {
+        const cleanRut = c.rut.toLowerCase().replace(/[\.\-\s]/g, '');
+        if (cleanRut.includes(cleanSearch) || cleanSearch.includes(cleanRut)) {
+          return c;
+        }
+      }
+    }
+
+    // Buscar por Nombre
+    const cleanQuery = busqueda.toLowerCase().trim();
+    for (const c of clientes) {
+      if (c.nombre.toLowerCase().includes(cleanQuery) || cleanQuery.includes(c.nombre.toLowerCase())) {
+        return c;
+      }
+    }
+
+    return null;
+  }
+
+  obtenerFichaCompletaCliente(clienteId: string): {
+    cliente: Cliente;
+    proyectos: Array<{
+      proyecto: Proyecto;
+      actividades: Actividad[];
+      porcentaje_avance: number;
+      total_contratado: number;
+      total_pagado: number;
+      saldo_pendiente: number;
+      fotos_avance: string[];
+    }>;
+  } | null {
+    const cliente = this.getClienteById(clienteId);
+    if (!cliente) return null;
+
+    const proyectos = this.getProyectos().filter((p) => p.cliente_id === clienteId);
+    const todasActividades = this.getItem<Actividad[]>(KEYS.ACTIVIDADES, INITIAL_ACTIVIDADES);
+    const todosPagos = this.getItem<Pago[]>(KEYS.PAGOS, INITIAL_PAGOS);
+    const todasBitacoras = this.getItem<BitacoraEntrada[]>(KEYS.BITACORA, []);
+
+    const fotosPorDefecto = [
+      'https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&auto=format&fit=crop&q=80',
+    ];
+
+    const proyectosDetalle = proyectos.map((p) => {
+      const acts = todasActividades.filter((a) => a.proyecto_id === p.id);
+      const pagos = todosPagos.filter((pg) => pg.proyecto_id === p.id);
+      const bitacoras = todasBitacoras.filter((b) => b.proyecto_id === p.id && b.foto_url);
+
+      const totalPagado = pagos.reduce((sum, pg) => sum + pg.monto, 0);
+      const totalContratado = p.monto_cotizado || 3500000;
+      const saldoPendiente = Math.max(0, totalContratado - totalPagado);
+
+      const porcentajeAvance =
+        acts.length > 0
+          ? Math.round(acts.reduce((sum, a) => sum + (a.porcentaje_avance || 0), 0) / acts.length)
+          : 50;
+
+      const fotos = bitacoras.map((b) => b.foto_url!).concat(fotosPorDefecto);
+
+      return {
+        proyecto: p,
+        actividades: acts,
+        porcentaje_avance: porcentajeAvance,
+        total_contratado: totalContratado,
+        total_pagado: totalPagado,
+        saldo_pendiente: saldoPendiente,
+        fotos_avance: Array.from(new Set(fotos)),
+      };
+    });
+
+    return {
+      cliente,
+      proyectos: proyectosDetalle,
+    };
+  }
+
   // --- PROYECTOS ---
   getProyectos(): Proyecto[] {
     const proyectos = this.getItem<Proyecto[]>(KEYS.PROYECTOS, INITIAL_PROYECTOS);
