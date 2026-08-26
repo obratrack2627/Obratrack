@@ -244,6 +244,16 @@ export interface EstructuraFinanciera {
   ahorro_compras_estrategicas: number;
 }
 
+export interface RecomendacionCobroCliente {
+  precio_minimo_rentable: number;
+  precio_sugerido_mercado: number;
+  precio_premium_garantia: number;
+  estrategia_negociacion: string;
+  desglose_por_metro_cuadrado?: number;
+  formas_pago_recomendadas: string[];
+  justificacion_precio: string;
+}
+
 export interface CotizacionEstimacion {
   id: string;
   titulo_proyecto: string;
@@ -258,6 +268,7 @@ export interface CotizacionEstimacion {
   radar_proveedores: ProveedorComparativa[];
   actividades_gantt: PartidaGanttSugerida[];
   consejos_experto_pyme: string[];
+  recomendacion_cobro?: RecomendacionCobroCliente;
   fecha_creacion: string;
 }
 

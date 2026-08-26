@@ -24,7 +24,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: 'ObraTrack | El copiloto digital del constructor',
   description:
-    'Control, Cotizaciones, Costos, Pagos y Avances de Obra con Inteligencia Artificial (OpenAI) y WhatsApp para constructoras en Chile.',
+    'Control, Cotizaciones, Costos, Pagos, Avances y Georreferenciación con Inteligencia Artificial (Google Gemini), Google Maps y WhatsApp para constructoras en Chile.',
 };
 
 export default function RootLayout({

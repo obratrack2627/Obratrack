@@ -158,7 +158,7 @@ export default function ReportesWhatsAppPage() {
 
       <Navbar
         title="Bandeja de Reportes WhatsApp (IA)"
-        subtitle="Transcripción con OpenAI Whisper y extracción estructurada con GPT-4o-mini"
+        subtitle="Recepción de audios de faena y extracción estructurada con Google Gemini 2.5 Pro / Flash IA"
         action={
           <div className="flex items-center gap-2">
             <button
@@ -184,10 +184,10 @@ export default function ReportesWhatsAppPage() {
               <Sparkles className="w-5 h-5 text-[#6B8F72] shrink-0" />
               <div>
                 <p className="text-xs font-bold font-heading">
-                  Módulo de Automatización WhatsApp & Whisper (Exclusivo Plan Pro IA)
+                  Módulo de Automatización WhatsApp & Gemini IA (Exclusivo Plan Pro IA)
                 </p>
                 <p className="text-[11px] text-gray-600 font-sans">
-                  El <strong>Plan Pro IA ($19.990 - $29.990)</strong> incluye recepción de audios de voz de maestros, transcripción automática con OpenAI Whisper y extracción de avances e imprevistos en tiempo real.
+                  El <strong>Plan Pro IA ($19.990 - $29.990)</strong> incluye recepción de audios de voz de maestros, análisis con Google Gemini IA y extracción de avances e imprevistos en tiempo real.
                 </p>
               </div>
             </div>
@@ -361,11 +361,11 @@ export default function ReportesWhatsAppPage() {
                       </p>
                     </div>
 
-                    {/* Extracción Estructurada por IA (Claude) */}
+                    {/* Extracción Estructurada por IA (Google Gemini) */}
                     <div className="bg-navy-900 text-white rounded-lg p-3.5 space-y-2 border border-navy-700 shadow-inner">
                       <span className="text-[10px] font-mono uppercase text-obra-orange font-bold flex items-center gap-1">
                         <Bot className="w-3.5 h-3.5" />
-                        <span>Extracción Inteligente (OpenAI GPT-4o-mini JSON):</span>
+                        <span>Extracción Inteligente (Google Gemini 2.5 IA JSON):</span>
                       </span>
 
                       <div className="grid grid-cols-2 gap-2 text-xs font-mono">

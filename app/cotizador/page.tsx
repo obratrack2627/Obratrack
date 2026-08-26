@@ -176,13 +176,60 @@ export default function CotizadorPage() {
     setMetrosCuadrados(tpl.m2);
   };
 
-  // Generar Cotización llamando al Backend API (OpenAI GPT-4o)
+  const [copiedPresupuesto, setCopiedPresupuesto] = useState(false);
+
+  // Compartir cotización estructurada por WhatsApp al Cliente
+  const handleShareWhatsAppCliente = () => {
+    if (!currentCotizacion) return;
+    const est = currentCotizacion.estructura_financiera;
+    const rec = currentCotizacion.recomendacion_cobro;
+    const precioNeto = est.precio_sugerido_neto;
+    const precioTotal = est.precio_total_con_iva;
+
+    const text = `🏗️ *PROPUESTA DE PRESUPUESTO - ${currentCotizacion.titulo_proyecto.toUpperCase()}*
+
+📍 *Comuna / Ubicación:* ${currentCotizacion.comuna_region}
+⏱️ *Plazo Estimado:* ${currentCotizacion.duracion_dias_estimada} días hábiles
+📐 *Superficie:* ${currentCotizacion.metros_cuadrados ? `${currentCotizacion.metros_cuadrados} m²` : 'A convenir'}
+
+💰 *VALOR DE LA OBRA:*
+• Total Neto: $${precioNeto.toLocaleString('es-CL')} CLP
+• Total con IVA (19%): $${precioTotal.toLocaleString('es-CL')} CLP
+
+📋 *PLAN DE PAGO SUGERIDO:*
+1️⃣ 40% Anticipo (Materiales e inicio de faena)
+2️⃣ 30% Avance Obra Gruesa / 50%
+3️⃣ 20% Terminaciones e Instalaciones
+4️⃣ 10% Recepción Conforme y Entrega
+
+_Generado automáticamente con ObraTrack & Google Gemini 2.5 IA._`;
+
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
+
+  // Copiar resumen de presupuesto al portapapeles
+  const handleCopyPresupuesto = () => {
+    if (!currentCotizacion) return;
+    const est = currentCotizacion.estructura_financiera;
+    const text = `PRESUPUESTO DE OBRA: ${currentCotizacion.titulo_proyecto}
+Ubicación: ${currentCotizacion.comuna_region}
+Plazo: ${currentCotizacion.duracion_dias_estimada} días
+Monto Neto: $${est.precio_sugerido_neto.toLocaleString('es-CL')} CLP
+Monto Total con IVA: $${est.precio_total_con_iva.toLocaleString('es-CL')} CLP
+Generado con ObraTrack.`;
+    navigator.clipboard.writeText(text);
+    setCopiedPresupuesto(true);
+    setTimeout(() => setCopiedPresupuesto(false), 3000);
+  };
+
+  // Generar Cotización llamando al Backend API (Google Gemini 2.5)
   const handleGenerarCotizacion = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!descripcion.trim()) return;
 
     setIsLoading(true);
-    setStatusMessage('OpenAI GPT-4o está cubicando materiales y consultando precios en Chile...');
+    setStatusMessage('Google Gemini 2.5 IA está cubicando materiales y analizando precios en Chile...');
 
     try {
       const response = await fetch('/api/cotizador', {
@@ -202,7 +249,8 @@ export default function CotizadorPage() {
         throw new Error('No se pudo generar la cotización');
       }
 
-      const data: CotizacionEstimacion = await response.json();
+      const raw = await response.json();
+      const data: CotizacionEstimacion = raw.cotizacion || raw;
       dataService.saveCotizacion(data);
       setCurrentCotizacion(data);
       setCotizaciones(dataService.getCotizaciones());
@@ -472,7 +520,7 @@ export default function CotizadorPage() {
 
       <Navbar
         title="Cotizador Inteligente & Radar de Precios IA"
-        subtitle="Cálculo de cobro al cliente, cubicación y radar de insumos más baratos en Chile con OpenAI (GPT-4o)"
+        subtitle="Cálculo de cobro al cliente, cubicación y radar de insumos más baratos en Chile con Google Gemini 2.5 Pro / Flash IA"
         action={
           <div className="flex items-center gap-2">
             <button
@@ -512,7 +560,7 @@ export default function CotizadorPage() {
                   Módulo de Cotización con IA & Radar de Ferreterías (Exclusivo Plan Pro y Pro IA)
                 </p>
                 <p className="text-[11px] text-gray-600 font-sans">
-                  El <strong>Plan Pro ($9.990 - $14.990)</strong> incluye cubicación automática con OpenAI GPT-4o, estimación de jornales y comparador de precios en Sodimac, Construmart e Imperial.
+                  El <strong>Plan Pro ($9.990 - $14.990)</strong> incluye cubicación automática con Google Gemini 2.5 IA, asesor de cobro al mandante y comparador de precios en Sodimac, Construmart e Imperial.
                 </p>
               </div>
             </div>
@@ -581,9 +629,9 @@ export default function CotizadorPage() {
         {activeTab === 'cotizador' && (
           <PlanLockOverlay
             isLocked={activePlan === 'gratis'}
-            featureName="Cotizador & Cubicador Inteligente con OpenAI GPT-4o"
+            featureName="Cotizador & Cubicador Inteligente con Google Gemini 2.5 IA"
             requiredPlan="pro"
-            description="Genera cubicación de insumos, cálculo de jornales de cuadrilla, desglose de márgenes netos y Carta Gantt en segundos usando Inteligencia Artificial."
+            description="Genera cubicación de insumos, cálculo de jornales de cuadrilla, asesor de cobro al mandante y Carta Gantt en segundos usando Inteligencia Artificial de Google."
           >
             <div className="space-y-6">
               {/* Formulario y Plantillas Rápidas */}
@@ -720,7 +768,7 @@ export default function CotizadorPage() {
                     {isLoading ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>OpenAI GPT-4o Cubicando...</span>
+                        <span>Google Gemini 2.5 IA Cubicando...</span>
                       </>
                     ) : (
                       <>
@@ -863,6 +911,162 @@ export default function CotizadorPage() {
                         className="flex-1 accent-obra-orange cursor-pointer h-2 bg-navy-700 rounded-lg"
                       />
                       <span className="text-[11px] font-mono text-gray-400">50%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ========================================================================= */}
+                {/* 💼 ASESOR DE COBRO AL MANDANTE: ¿CUÁNTO COBRAR? (GOOGLE GEMINI IA) */}
+                {/* ========================================================================= */}
+                <div className="bg-gradient-to-br from-navy-900 via-navy-800 to-[#141A23] border-2 border-obra-orange/40 rounded-2xl p-5 md:p-6 shadow-xl space-y-5 text-white animate-in fade-in duration-300">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-navy-700">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-obra-orange text-white flex items-center justify-center font-bold shadow-md shrink-0">
+                        <Sparkles className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-heading font-bold text-base md:text-lg text-white flex items-center gap-2 flex-wrap">
+                          <span>Asesor de Cobro al Cliente: ¿Cuánto Cobrar?</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-obra-orange text-white font-bold">
+                            Google Gemini 2.5 IA
+                          </span>
+                        </h3>
+                        <p className="text-xs text-gray-300 font-sans">
+                          Recomendación de tarifas según mercado chileno, costos directos y margen óptimo de ganancia
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleCopyPresupuesto}
+                        className="px-3 py-1.5 bg-navy-700 hover:bg-navy-600 text-gray-200 border border-navy-600 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-colors"
+                      >
+                        {copiedPresupuesto ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                        <span>{copiedPresupuesto ? '¡Copiado!' : 'Copiar Resumen'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleShareWhatsAppCliente}
+                        className="px-3.5 py-1.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold font-mono flex items-center gap-1.5 shadow-md transition-all"
+                        title="Abrir WhatsApp para enviar presupuesto formateado al cliente"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Enviar por WhatsApp al Cliente</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 3 Niveles de Cobro al Cliente */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* 1. Mínimo de Entrada */}
+                    <div className="bg-navy-800/80 border border-navy-600/80 rounded-xl p-4 space-y-2 hover:border-gray-400 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-gray-400">
+                          🥉 Precio Mínimo Rentable
+                        </span>
+                        <span className="text-[9px] font-mono bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded">
+                          Licitación
+                        </span>
+                      </div>
+                      <p className="text-2xl font-bold font-mono text-gray-200">
+                        {formatCLP(
+                          currentCotizacion.recomendacion_cobro?.precio_minimo_rentable ||
+                            Math.round(currentCotizacion.estructura_financiera.costo_directo * 1.2)
+                        )}
+                      </p>
+                      <p className="text-[11px] text-gray-300 font-sans leading-relaxed">
+                        Tarifa ajustada con 15% de margen mínimo. Ideal para ganar licitaciones o trabajos de alta competencia sin incurrir en pérdidas.
+                      </p>
+                    </div>
+
+                    {/* 2. Sugerido de Mercado (Recomendado) */}
+                    <div className="bg-navy-800/95 border-2 border-obra-orange rounded-xl p-4 space-y-2 relative shadow-lg overflow-hidden">
+                      <div className="absolute top-0 right-0 bg-obra-orange text-white text-[9px] font-mono font-bold px-2 py-0.5 rounded-bl-lg">
+                        ⭐ RECOMENDADO
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-obra-orange">
+                          🥇 Precio Estándar de Mercado
+                        </span>
+                      </div>
+                      <p className="text-2xl font-bold font-mono text-white">
+                        {formatCLP(
+                          currentCotizacion.recomendacion_cobro?.precio_sugerido_mercado ||
+                            currentCotizacion.estructura_financiera.precio_total_con_iva
+                        )}
+                      </p>
+                      <p className="text-[11px] text-gray-200 font-sans leading-relaxed">
+                        Margen óptimo ({currentCotizacion.estructura_financiera.margen_utilidad_porcentaje}%) que cubre costos directos, gastos generales, imprevistos y utilidad neta justa.
+                      </p>
+                    </div>
+
+                    {/* 3. Premium */}
+                    <div className="bg-navy-800/80 border border-purple-500/50 rounded-xl p-4 space-y-2 hover:border-purple-400 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400">
+                          💎 Precio Premium con Garantía
+                        </span>
+                        <span className="text-[9px] font-mono bg-purple-950 text-purple-300 px-1.5 py-0.5 rounded">
+                          Alta Exigencia
+                        </span>
+                      </div>
+                      <p className="text-2xl font-bold font-mono text-purple-300">
+                        {formatCLP(
+                          currentCotizacion.recomendacion_cobro?.precio_premium_garantia ||
+                            Math.round(currentCotizacion.estructura_financiera.precio_total_con_iva * 1.25)
+                        )}
+                      </p>
+                      <p className="text-[11px] text-gray-300 font-sans leading-relaxed">
+                        Para mandantes exigentes: incluye póliza de post-venta, acabados de primera línea y atención prioritaria en faena.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Desglose de Pago Seguro & Consejos de Negociación */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-navy-700 text-xs">
+                    <div className="bg-navy-800/60 rounded-xl p-3.5 space-y-2 border border-navy-700">
+                      <h4 className="font-heading font-bold text-xs text-obra-orange flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Esquema de Pago Seguro Sugerido (40/30/20/10)</span>
+                      </h4>
+                      <ul className="space-y-1.5 text-[11px] text-gray-300 font-sans">
+                        {(
+                          currentCotizacion.recomendacion_cobro?.formas_pago_recomendadas || [
+                            '40% al firmar e iniciar (Materiales iniciales y fletes)',
+                            '30% al terminar obra gruesa / 50% de avance físico',
+                            '20% al finalizar instalaciones y pinturas finas',
+                            '10% de retención contra entrega de llaves conforme',
+                          ]
+                        ).map((forma, idx) => (
+                          <li key={idx} className="flex items-start gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-obra-green shrink-0 mt-0.5" />
+                            <span>{forma}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="bg-navy-800/60 rounded-xl p-3.5 space-y-2 border border-navy-700">
+                      <h4 className="font-heading font-bold text-xs text-emerald-400 flex items-center gap-1.5">
+                        <HelpCircle className="w-4 h-4" />
+                        <span>Estrategia de Negociación para el Mandante</span>
+                      </h4>
+                      <p className="text-[11px] text-gray-300 leading-relaxed font-sans">
+                        {currentCotizacion.recomendacion_cobro?.estrategia_negociacion ||
+                          'Presenta el presupuesto destacando la compra en ferreterías con control de calidad (Construmart/Imperial) y la planificación con Carta Gantt para evitar sobrecostos.'}
+                      </p>
+                      {currentCotizacion.recomendacion_cobro?.desglose_por_metro_cuadrado && (
+                        <p className="text-[11px] font-mono text-amber-300">
+                          📍 Tarifa promedio por m²: <strong>{formatCLP(currentCotizacion.recomendacion_cobro.desglose_por_metro_cuadrado)} / m²</strong>
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1179,7 +1383,7 @@ export default function CotizadorPage() {
         {activeTab === 'chat' && (
           <PlanLockOverlay
             isLocked={activePlan === 'gratis'}
-            featureName="Chat Asesor Experto en Obras (OpenAI GPT-4o)"
+            featureName="Chat Asesor Experto en Obras (Google Gemini 2.5 Pro / Flash IA)"
             requiredPlan="pro_ia"
             description="Consulta directamente con el Agente de IA para calcular costos de jornales, resolver partidas constructivas complejas y optimizar cotizaciones."
           >
@@ -1192,7 +1396,7 @@ export default function CotizadorPage() {
                 </div>
                 <div>
                   <h3 className="font-heading font-bold text-sm text-white">
-                    Asesor de Obras & Costos ObraTrack (OpenAI GPT-4o)
+                    Asesor de Obras & Costos ObraTrack (Google Gemini 2.5 IA)
                   </h3>
                   <p className="text-[11px] text-gray-400 font-mono">
                     Especialista en cubicaciones, optimización de presupuestos y precios en Chile

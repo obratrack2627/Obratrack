@@ -20,11 +20,12 @@ export const PLANES_SUSCRIPCION: PlanSuscripcion[] = [
     colorAcento: '#9A9A9A', // Gris Cemento
     caracteristicas: [
       '1 obra activa a la vez',
+      'Georreferenciación en Chile con Google Maps',
       'Directorio de clientes y contactos',
       'Registro de estados de pago y anticipos',
       'Control de gastos básicos e imprevistos',
-      'Carta Gantt básica',
-      'Acceso móvil y web',
+      'Carta Gantt interactiva con soporte táctil',
+      'Acceso móvil y web responsivo',
     ],
   },
   {
@@ -37,7 +38,7 @@ export const PLANES_SUSCRIPCION: PlanSuscripcion[] = [
     periodo: '/mes',
     usuarioObjetivo: 'Maestro / contratista habitual',
     descripcion:
-      'Para maestros y constructores que necesitan presupuestar en minutos y asegurar su margen de ganancia real.',
+      'Para maestros y constructores que necesitan presupuestar en minutos y asegurar su margen de ganancia real con Google Gemini.',
     limiteObrasActivas: 'ilimitadas',
     soportaCotizadorIA: true,
     soportaWhatsAppIA: false,
@@ -46,13 +47,13 @@ export const PLANES_SUSCRIPCION: PlanSuscripcion[] = [
     soportaExportacionBoletas: true,
     colorAcento: '#FF6A00', // Naranjo Obra
     caracteristicas: [
-      'Obras y proyectos ilimitados',
-      'Cotizador Inteligente con OpenAI GPT-4o (APU y cubicación)',
-      'Módulo "¿Cuánto cobrar?" con margen neto asegurado',
+      'Obras y proyectos ilimitados con Google Maps',
+      'Cotizador Inteligente con Google Gemini 2.5 (APU y cubicación en segundos)',
+      'Asesor de Cobro al Cliente: "¿Cuánto cobrar?" con 3 niveles de tarifa',
       'Radar comparador de precios en ferreterías chilenas (Sodimac, Construmart, Imperial, MTS, Easy)',
       'Control financiero avanzado con gráficos de rentabilidad',
+      'Envío directo de cotizaciones y rutas GPS por WhatsApp',
       'Carga de boletas, facturas y respaldos fotográficos',
-      'Exportación de cotizaciones y reportes financieros',
     ],
   },
   {
@@ -64,7 +65,7 @@ export const PLANES_SUSCRIPCION: PlanSuscripcion[] = [
     periodo: '/mes',
     usuarioObjetivo: 'Contratista que maneja varias obras y cuadrillas',
     descripcion:
-      'La solución completa con agentes autónomos de IA y sincronización en tiempo real vía WhatsApp Cloud API.',
+      'La solución integral impulsada por Google Gemini Pro IA, agentes autónomos y sincronización en tiempo real vía WhatsApp.',
     limiteObrasActivas: 'ilimitadas',
     soportaCotizadorIA: true,
     soportaWhatsAppIA: true,
@@ -74,11 +75,11 @@ export const PLANES_SUSCRIPCION: PlanSuscripcion[] = [
     colorAcento: '#6B8F72', // Verde Terreno
     caracteristicas: [
       'Todo lo incluido en el Plan Pro',
-      'Recepción y transcripción de audios de terreno vía WhatsApp con OpenAI Whisper',
+      'Recepción y análisis de audios y reportes de terreno con Google Gemini IA',
       'Agente IA que extrae partidas y actualiza la Carta Gantt automáticamente',
       'Detección inteligente de compras e imprevistos desde mensajes de chat',
       'Recordatorios de pago y cobranza automática a clientes por WhatsApp',
-      'Búsqueda semántica con pgvector para partidas y normativas chilenas',
+      'Chat Asesor de Obras 24/7 con normativas chilenas y análisis de precios',
       'Soporte prioritario y multi-cuadrilla',
     ],
   },

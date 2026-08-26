@@ -87,13 +87,13 @@ export default function PlanesPage() {
       categoria: 'Presupuestos & Rentabilidad con IA',
       items: [
         {
-          nombre: 'Cotizador Inteligente & APU (OpenAI GPT-4o)',
+          nombre: 'Cotizador Inteligente & APU (Google Gemini 2.5 IA)',
           gratis: false,
           pro: true,
           pro_ia: true,
         },
         {
-          nombre: 'Módulo "¿Cuánto cobrar?" con margen neto asegurado',
+          nombre: 'Asesor de Cobro "¿Cuánto cobrar al mandante?" (3 niveles)',
           gratis: false,
           pro: true,
           pro_ia: true,
@@ -111,7 +111,7 @@ export default function PlanesPage() {
           pro_ia: true,
         },
         {
-          nombre: 'Exportación de presupuestos a PDF y Excel',
+          nombre: 'Exportación y envío directo a WhatsApp del cliente',
           gratis: false,
           pro: true,
           pro_ia: true,
@@ -122,7 +122,7 @@ export default function PlanesPage() {
       categoria: 'WhatsApp Cloud API & Agentes Autónomos',
       items: [
         {
-          nombre: 'Transcripción de notas de voz de terreno (OpenAI Whisper)',
+          nombre: 'Procesamiento de audios de faena (Google Gemini IA)',
           gratis: false,
           pro: false,
           pro_ia: true,
