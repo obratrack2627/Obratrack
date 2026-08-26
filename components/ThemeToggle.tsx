@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Sun, Moon } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 
@@ -11,20 +11,6 @@ interface ThemeToggleProps {
 
 export default function ThemeToggle({ variant = 'button', className = '' }: ThemeToggleProps) {
   const { theme, toggleTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return (
-      <div
-        className={`w-9 h-9 rounded-xl border border-transparent opacity-0 pointer-events-none ${className}`}
-      />
-    );
-  }
-
   const isDark = theme === 'dark';
 
   if (variant === 'pill') {
