@@ -31,6 +31,15 @@ export const INITIAL_USUARIOS: Usuario[] = [
 // Listas iniciales con datos de ejemplo en Chile para seguimiento de obras
 export const INITIAL_CLIENTES: Cliente[] = [
   {
+    id: 'cli-benja',
+    empresa_id: INITIAL_EMPRESA.id,
+    nombre: 'Benjamín Achávar',
+    rut: '20.123.456-7',
+    telefono: '+56 9 6150 2313',
+    email: 'benja105.achavar@gmail.com',
+    direccion: 'Av. Las Perdices 1420, Peñalolén, Santiago',
+  },
+  {
     id: 'cli-carlos',
     empresa_id: INITIAL_EMPRESA.id,
     nombre: 'Carlos Henríquez',
@@ -54,7 +63,7 @@ export const INITIAL_PROYECTOS: Proyecto[] = [
   {
     id: 'proj-penalolen',
     empresa_id: INITIAL_EMPRESA.id,
-    cliente_id: 'cli-carlos',
+    cliente_id: 'cli-benja',
     nombre: 'Construcción Radier y Quincho Peñalolén',
     descripcion: 'Construcción de radier de 35m2 en hormigón H-20 y estructura de quincho en pino oregón con parrilla empotrada.',
     direccion: 'Av. Las Perdices 1420',
@@ -66,6 +75,22 @@ export const INITIAL_PROYECTOS: Proyecto[] = [
     fecha_termino_estimada: '2026-09-15',
     estado: 'activo',
     monto_cotizado: 3850000,
+  },
+  {
+    id: 'proj-carlos',
+    empresa_id: INITIAL_EMPRESA.id,
+    cliente_id: 'cli-carlos',
+    nombre: 'Ampliación Segundo Piso & Mansarda La Florida',
+    descripcion: 'Estructura en Metalcon estructural, aislación térmica EIFS y techumbre en teja asfáltica.',
+    direccion: 'Av. Vicuña Mackenna 7890',
+    comuna: 'La Florida',
+    region: 'Región Metropolitana',
+    latitud: -33.5212,
+    longitud: -70.5982,
+    fecha_inicio: '2026-08-12',
+    fecha_termino_estimada: '2026-09-20',
+    estado: 'activo',
+    monto_cotizado: 5200000,
   },
   {
     id: 'proj-lascondes',
