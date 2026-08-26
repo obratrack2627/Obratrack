@@ -180,10 +180,122 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#FAF8F5] dark:bg-[#0B0E14] flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors duration-300">
+    <div className="min-h-screen w-full bg-gradient-to-br from-[#F5F0E6] via-[#FAF8F5] to-[#EAE2D2] dark:from-[#06080C] dark:via-[#0D1117] dark:to-[#040609] flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors duration-300">
       
-      {/* Fondo técnico blueprint */}
-      <div className="absolute inset-0 bg-blueprint-grid opacity-25 dark:opacity-10 pointer-events-none"></div>
+      {/* Resplandores difusos ambientales (Warm Amber & Safety Green / Steel Slate) */}
+      <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#FF6A00]/12 dark:bg-[#FF6A00]/10 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '6s' }}></div>
+      <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#6B8F72]/15 dark:bg-[#2563EB]/10 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '8s' }}></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#E5DFC9]/30 dark:bg-[#151D28]/30 rounded-full blur-3xl pointer-events-none"></div>
+
+      {/* Retícula técnica milimétrica de plano / blueprint con cruces de arquitectura */}
+      <svg className="absolute inset-0 w-full h-full opacity-35 dark:opacity-15 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="grid-pattern" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.6" className="text-[#C8BFAB] dark:text-[#263040]" />
+            <path d="M 19 20 L 21 20 M 20 19 L 20 21" stroke="currentColor" strokeWidth="0.8" className="text-[#FF6A00]/40 dark:text-[#FF6A00]/30" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid-pattern)" />
+      </svg>
+
+      {/* FIGURA 1: Grúa Torre Isométrica y Cota de Nivel (Esquina Superior Izquierda) */}
+      <div className="absolute top-6 left-6 sm:top-12 sm:left-12 opacity-40 dark:opacity-25 pointer-events-none select-none hidden md:block">
+        <svg width="220" height="180" viewBox="0 0 220 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
+          {/* Torre vertical */}
+          <line x1="40" y1="40" x2="40" y2="160" stroke="currentColor" strokeWidth="1.5" />
+          <line x1="60" y1="40" x2="60" y2="160" stroke="currentColor" strokeWidth="1.5" />
+          {/* Enrejado torre */}
+          <line x1="40" y1="60" x2="60" y2="80" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
+          <line x1="60" y1="60" x2="40" y2="80" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
+          <line x1="40" y1="100" x2="60" y2="120" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
+          <line x1="60" y1="100" x2="40" y2="120" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
+          <line x1="40" y1="140" x2="60" y2="160" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
+          {/* Cabina & Cúspide */}
+          <polygon points="40,40 50,15 60,40" stroke="#FF6A00" strokeWidth="1.5" fill="none" />
+          {/* Pluma horizontal principal */}
+          <line x1="10" y1="40" x2="200" y2="40" stroke="currentColor" strokeWidth="1.5" />
+          <line x1="50" y1="15" x2="160" y2="40" stroke="#FF6A00" strokeWidth="1" strokeDasharray="3 2" />
+          <line x1="50" y1="15" x2="20" y2="40" stroke="currentColor" strokeWidth="1" />
+          {/* Contrapeso */}
+          <rect x="15" y="42" width="18" height="12" stroke="currentColor" strokeWidth="1" fill="#FF6A00" fillOpacity="0.2" />
+          {/* Carro y cable con gancho */}
+          <line x1="140" y1="40" x2="140" y2="95" stroke="#FF6A00" strokeWidth="1" strokeDasharray="2 2" />
+          <circle cx="140" cy="98" r="3" stroke="#FF6A00" strokeWidth="1.5" />
+          {/* Cotas técnicas */}
+          <text x="68" y="30" fill="currentColor" className="text-[9px] font-mono font-bold tracking-widest opacity-80">+28.50m COTA GRÚA</text>
+          <text x="68" y="150" fill="#FF6A00" className="text-[8px] font-mono font-semibold tracking-wider">OBRA.TRACK // 01</text>
+        </svg>
+      </div>
+
+      {/* FIGURA 2: Celosía Estructural Warren & Cota Angular (Esquina Superior Derecha) */}
+      <div className="absolute top-8 right-8 sm:top-14 sm:right-14 opacity-35 dark:opacity-20 pointer-events-none select-none hidden lg:block">
+        <svg width="240" height="130" viewBox="0 0 240 130" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
+          {/* Cuerdas superior e inferior */}
+          <line x1="10" y1="30" x2="230" y2="30" stroke="currentColor" strokeWidth="1.5" />
+          <line x1="10" y1="90" x2="230" y2="90" stroke="currentColor" strokeWidth="1.5" />
+          {/* Diagonales y montantes */}
+          <line x1="10" y1="90" x2="45" y2="30" stroke="currentColor" strokeWidth="1.2" />
+          <line x1="45" y1="30" x2="80" y2="90" stroke="#FF6A00" strokeWidth="1.2" />
+          <line x1="80" y1="90" x2="115" y2="30" stroke="currentColor" strokeWidth="1.2" />
+          <line x1="115" y1="30" x2="150" y2="90" stroke="currentColor" strokeWidth="1.2" />
+          <line x1="150" y1="90" x2="185" y2="30" stroke="#FF6A00" strokeWidth="1.2" />
+          <line x1="185" y1="30" x2="220" y2="90" stroke="currentColor" strokeWidth="1.2" />
+          {/* Nodos circulares en uniones */}
+          <circle cx="45" cy="30" r="3" fill="#FF6A00" />
+          <circle cx="115" cy="30" r="3" fill="currentColor" />
+          <circle cx="185" cy="30" r="3" fill="#FF6A00" />
+          <circle cx="80" cy="90" r="3" fill="currentColor" />
+          <circle cx="150" cy="90" r="3" fill="currentColor" />
+          {/* Medidas y Cota */}
+          <line x1="10" y1="105" x2="230" y2="105" stroke="currentColor" strokeWidth="0.8" strokeDasharray="3 3" />
+          <path d="M 10 101 L 10 109 M 230 101 L 230 109" stroke="currentColor" strokeWidth="1" />
+          <text x="95" y="120" fill="currentColor" className="text-[9px] font-mono font-bold tracking-widest">L = 12.00 METROS</text>
+        </svg>
+      </div>
+
+      {/* FIGURA 3: Cubo Isométrico & Estratigrafía de Cimentación (Esquina Inferior Izquierda) */}
+      <div className="absolute bottom-8 left-8 sm:bottom-12 sm:left-12 opacity-40 dark:opacity-25 pointer-events-none select-none hidden md:block">
+        <svg width="220" height="190" viewBox="0 0 220 190" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
+          {/* Cubo isométrico 3D alambre */}
+          {/* Cara Superior */}
+          <polygon points="90,20 160,55 90,90 20,55" stroke="#FF6A00" strokeWidth="1.5" fill="#FF6A00" fillOpacity="0.06" />
+          {/* Cara Izquierda */}
+          <polygon points="20,55 90,90 90,160 20,125" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          {/* Cara Derecha */}
+          <polygon points="90,90 160,55 160,125 90,160" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          {/* Línea de nivel de cimentación */}
+          <line x1="20" y1="90" x2="90" y2="125" stroke="#6B8F72" strokeWidth="1.2" strokeDasharray="3 2" />
+          <line x1="90" y1="125" x2="160" y2="90" stroke="#6B8F72" strokeWidth="1.2" strokeDasharray="3 2" />
+          {/* Ejes x, y, z */}
+          <line x1="90" y1="90" x2="90" y2="10" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" />
+          {/* Leyenda técnica */}
+          <text x="100" y="15" fill="#FF6A00" className="text-[8px] font-mono font-bold">EJE Z [HORMIGÓN H-25]</text>
+          <text x="15" y="180" fill="currentColor" className="text-[8.5px] font-mono tracking-wider opacity-80">RADIER 3D // SECCIÓN 04</text>
+        </svg>
+      </div>
+
+      {/* FIGURA 4: Perfil Viga I / Doble T y Coordenadas Geodésicas (Esquina Inferior Derecha) */}
+      <div className="absolute bottom-8 right-8 sm:bottom-12 sm:right-12 opacity-40 dark:opacity-25 pointer-events-none select-none hidden md:block">
+        <svg width="220" height="180" viewBox="0 0 220 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
+          {/* Perfil I-Beam Isométrico */}
+          {/* Ala Superior */}
+          <polygon points="80,30 180,60 160,70 60,40" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          {/* Alma central */}
+          <line x1="120" y1="50" x2="120" y2="120" stroke="#FF6A00" strokeWidth="2" />
+          <line x1="110" y1="46" x2="110" y2="116" stroke="currentColor" strokeWidth="1.2" />
+          {/* Ala Inferior */}
+          <polygon points="80,100 180,130 160,140 60,110" stroke="currentColor" strokeWidth="1.5" fill="#FF6A00" fillOpacity="0.08" />
+          {/* Roseta de Orientación / Norte de Obra */}
+          <g transform="translate(160, 110)">
+            <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" />
+            <polygon points="20,6 24,20 20,17 16,20" fill="#FF6A00" />
+            <polygon points="20,34 24,20 20,23 16,20" fill="currentColor" opacity="0.6" />
+            <text x="17" y="3" fill="#FF6A00" className="text-[7px] font-mono font-bold">N</text>
+          </g>
+          {/* Coordenadas de Obra */}
+          <text x="35" y="165" fill="currentColor" className="text-[8.5px] font-mono tracking-widest font-semibold">COORD: 33°28'S 70°36'W</text>
+        </svg>
+      </div>
 
       {/* Botón de Modo Claro / Oscuro */}
       <div className="absolute top-4 right-4 z-20">
@@ -191,7 +303,7 @@ export default function LoginPage() {
       </div>
 
       {/* Card Principal */}
-      <div className="w-full max-w-md bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-3xl shadow-xl p-6 sm:p-8 relative z-10 animate-in fade-in transition-all duration-300">
+      <div className="w-full max-w-md bg-white/95 dark:bg-[#141A23]/95 backdrop-blur-md border border-[#E5DFC9] dark:border-[#263040] rounded-3xl shadow-2xl p-6 sm:p-8 relative z-10 animate-in fade-in transition-all duration-300">
         
         {/* Logo & Marca */}
         <div className="flex flex-col items-center text-center mb-6">
