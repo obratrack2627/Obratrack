@@ -137,7 +137,7 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
   }
 }`;
 
-    const candidateModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+    const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
     let text: string | undefined;
 
     for (const modelName of candidateModels) {
@@ -314,7 +314,7 @@ NUEVO MENSAJE DEL USUARIO: "${mensajeUsuario}"
 Responde como Copiloto de Obras experto:`;
 
   try {
-    const candidateModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+    const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
     let rawText = '';
 
     for (const m of candidateModels) {
@@ -477,7 +477,7 @@ MENSAJE DEL CLIENTE: "${mensajeCliente}"
 Respuesta de WhatsApp:`;
 
   try {
-    const candidateModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+    const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
     let rawText = '';
 
     for (const m of candidateModels) {

@@ -4,11 +4,13 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import ThemeProvider from '@/components/ThemeProvider';
+import FloatingCopilotWidget from '@/components/FloatingCopilotWidget';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   // Tanto la raíz (/) como (/login) son vistas de autenticación que no muestran Sidebar ni Dashboard
   const isAuthPage = !pathname || pathname === '/' || pathname === '/login' || pathname.startsWith('/login');
+  const isCotizadorPage = pathname === '/cotizador';
 
   return (
     <ThemeProvider>
@@ -24,6 +26,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {children}
             </div>
           </main>
+          {!isCotizadorPage && <FloatingCopilotWidget />}
         </div>
       )}
     </ThemeProvider>
