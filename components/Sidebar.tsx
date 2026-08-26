@@ -144,9 +144,18 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Mobile Drawer Backdrop */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-35 transition-opacity animate-in fade-in duration-200"
+          aria-hidden="true"
+        />
+      )}
+
       {/* Sidebar Desktop & Mobile Drawer */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 w-64 bg-blueprint text-white z-40 flex flex-col justify-between border-r border-[#2A2A2A] transition-transform duration-300 ${
+        className={`fixed top-0 bottom-0 left-0 w-64 bg-blueprint text-white z-40 flex flex-col justify-between border-r border-[#2A2A2A] transition-transform duration-300 shadow-2xl md:shadow-none ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         } pt-16 md:pt-0`}
       >

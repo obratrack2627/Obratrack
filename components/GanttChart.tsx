@@ -49,17 +49,18 @@ export default function GanttChart({
   return (
     <div className="space-y-4">
       {/* Vista de Gantt / Cronograma Visual */}
-      <div className="bg-white border border-kraft-200 rounded-2xl overflow-hidden shadow-sm">
-        
-        {/* Cabecera de la tabla / Gantt */}
-        <div className="grid grid-cols-12 bg-navy-800 text-white text-xs font-mono font-semibold py-3 px-4 border-b border-navy-700">
-          <div className="col-span-4 sm:col-span-3">Actividad / Partida</div>
-          <div className="col-span-2 hidden sm:block">Responsable</div>
-          <div className="col-span-2 sm:col-span-2">Fechas</div>
-          <div className="col-span-1 sm:col-span-1 text-center">% Avance</div>
-          <div className="col-span-4 sm:col-span-4 pl-4">Línea de Tiempo (Gantt)</div>
-          <div className="col-span-1 sm:col-span-0 text-right hidden sm:block"></div>
-        </div>
+      <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl overflow-hidden shadow-sm">
+        <div className="overflow-x-auto w-full">
+          <div className="min-w-[680px]">
+            {/* Cabecera de la tabla / Gantt */}
+            <div className="grid grid-cols-12 bg-navy-800 text-white text-xs font-mono font-semibold py-3 px-4 border-b border-navy-700">
+              <div className="col-span-4 sm:col-span-3">Actividad / Partida</div>
+              <div className="col-span-2 hidden sm:block">Responsable</div>
+              <div className="col-span-2 sm:col-span-2">Fechas</div>
+              <div className="col-span-1 sm:col-span-1 text-center">% Avance</div>
+              <div className="col-span-4 sm:col-span-4 pl-4">Línea de Tiempo (Gantt)</div>
+              <div className="col-span-1 sm:col-span-0 text-right hidden sm:block"></div>
+            </div>
 
         {/* Filas de Actividades */}
         <div className="divide-y divide-kraft-200/80">
@@ -172,6 +173,8 @@ export default function GanttChart({
               </div>
             );
           })}
+        </div>
+          </div>
         </div>
       </div>
 
