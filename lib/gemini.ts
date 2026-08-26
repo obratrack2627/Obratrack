@@ -499,10 +499,26 @@ Respuesta de WhatsApp:`;
     }
 
     if (!rawText) {
-      return {
-        respuesta:
-          'Hola, en este momento no pudimos cargar tu ficha de obra. Por favor indícanos tu Nombre y RUT para buscarte.',
-      };
+      if (clienteAutenticado && clienteAutenticado.proyectos.length > 0) {
+        const pPrincipal = clienteAutenticado.proyectos[0];
+        const fotos = clienteAutenticado.proyectos.flatMap((p) => p.fotos_avance).slice(0, 3);
+        const partidasTexto = pPrincipal.actividades
+          .slice(0, 4)
+          .map((a) => `• ${a.nombre}: *${a.porcentaje_avance}%* (${a.estado})`)
+          .join('\n');
+
+        const fallbackFicha = `¡Hola, *${clienteAutenticado.cliente.nombre}*! 👋\n\nA continuación te comparto el reporte actualizado de tu obra:\n\n🏗️ *Proyecto:* ${pPrincipal.proyecto.nombre}\n📍 *Ubicación:* ${pPrincipal.proyecto.direccion || pPrincipal.proyecto.comuna || 'Chile'}\n📊 *Avance General:* *${pPrincipal.porcentaje_avance}%*\n📅 *Fecha Estimada de Entrega:* ${pPrincipal.proyecto.fecha_termino_estimada || 'En cronograma'}\n\n📋 *Partidas en ejecución:*\n${partidasTexto || '• Obra en desarrollo normal según Carta Gantt'}\n\n💰 *Estado de Pagos:*\n• Total Contratado: *$${pPrincipal.total_contratado.toLocaleString('es-CL')} CLP*\n• Total Pagado: *$${pPrincipal.total_pagado.toLocaleString('es-CL')} CLP*\n• Saldo Pendiente: *$${pPrincipal.saldo_pendiente.toLocaleString('es-CL')} CLP*\n\n📸 *Fotografías de faena adjuntas:*`;
+
+        return {
+          respuesta: fallbackFicha,
+          fotos: fotos.length > 0 ? fotos : undefined,
+        };
+      } else {
+        return {
+          respuesta:
+            '¡Hola! 👋 Bienvenido al servicio de seguimiento de obras de *ObraTrack*.\n\nPara poder consultar la ficha de avance, fotografías de faena y estado de tu proyecto, por favor indícame tu *Nombre Completo* y tu *RUT* (ej: 12.345.678-9).',
+        };
+      }
     }
 
     // Extraer intención de autenticación
