@@ -8,23 +8,31 @@ Este documento guarda la memoria permanente, decisiones de arquitectura, credenc
 - **Fundador & Administrador**: Benjamín Achávar
 - **Correo Oficial**: `benja105.achavar@gmail.com`
 - **GitHub**: [`https://github.com/xBenja105/ObraTrack`](https://github.com/xBenja105/ObraTrack)
-- **Despliegue en Producción**: Vercel (sincronizado con la rama `main`)
+- **Rama Oficial Única en GitHub**: `main` *(Todas las ramas secundarias eliminadas para evitar confusión de despliegue)*
+- **Despliegue en Producción**: Vercel ([`https://obra-track-ruddy.vercel.app/`](https://obra-track-ruddy.vercel.app/))
 - **Base de Datos**: Supabase PostgreSQL (con soporte pgvector y Storage)
   - **Project URL**: `https://tpszbretbtxcmnrqvlxm.supabase.co`
   - **Project Ref**: `tpszbretbtxcmnrqvlxm`
+- **Espacio Local de Desarrollo**: `C:\Users\Benja\.gemini\antigravity-ide\scratch\ObraTrack`
+- **Espacio de Trabajo en Escritorio**: `C:\Users\Benja\Desktop\ObraTrack-main` *(Sincronizado vía robocopy)*
 
 ---
 
 ## 🛠️ Stack Tecnológico
-- **Frontend / Framework**: Next.js 14 (App Router), React 18, TypeScript, Vanilla Tailwind CSS
+- **Frontend / Framework**: Next.js 14.2.5 (App Router), React 18, TypeScript, Tailwind CSS
 - **Iconografía & Gráficos**: Lucide React, Recharts
-- **Planificación**: Frappe Gantt (Carta Gantt interactiva)
-- **Base de Datos & Auth**: Supabase PostgreSQL (`@supabase/supabase-js`, `@supabase/ssr`), Row Level Security (RLS)
+- **Planificación**: Gantt Chart interactivo personalizado con soporte táctil horizontal en móviles
+- **Base de Datos & Auth**: Supabase PostgreSQL (`@supabase/supabase-js`, `@supabase/ssr`), Row Level Security (RLS) + LocalStorage Fallback con soporte para límites de correo SMTP
+- **Georreferenciación & Mapas**:
+  - Google Maps Platform (Embed Viewer, Satélite HD / Callejero)
+  - Reverse Geocoding API (`/api/geocode/reverse`)
+  - Catálogo nativo de Regiones y Comunas de Chile (`lib/chile-locations.ts`)
+  - Detección de GPS con geolocalización del navegador y cálculo Haversine
 - **Inteligencia Artificial**:
   - OpenAI GPT-4o / GPT-4o-mini (Cotizador inteligente & análisis de audios)
   - OpenAI Whisper (Transcripción de notas de voz de WhatsApp)
-  - OpenAI Embeddings (`text-embedding-3-small` 1536 dim con pgvector para radar de precios de materiales)
-- **Canal de Terreno**: WhatsApp Cloud API (Meta Oficial) + Webhook
+  - OpenAI Embeddings (`text-embedding-3-small` con pgvector para radar de ferreterías)
+- **Canal de Terreno**: WhatsApp Cloud API + Webhook de recepción de reportes
 
 ---
 
@@ -48,41 +56,62 @@ Este documento guarda la memoria permanente, decisiones de arquitectura, credenc
 
 ## 📂 Estructura de Módulos Implementados
 
-### 1. Gestión de Obras (`/proyectos`)
-- Creación, edición y eliminación de obras con confirmación modal.
-- Asignación de cuadrillas / trabajadores responsables a cada proyecto.
-- Formateo automático de moneda en Pesos Chilenos (CLP) con separadores de miles en tiempo real (`8000` -> `8.000`).
+### 1. Control de Acceso & Autenticación Limpia (`/` y `/login`)
+- Carga directa del formulario de inicio de sesión en `/` y `/login` sin micro-destellos ni montaje prematuro del Sidebar.
+- Manejo inteligente del límite de envíos de correo (*email rate limit exceeded* del plan gratuito de Supabase) para permitir el registro y prueba sin bloqueos.
+
+### 2. Gestión de Obras & Google Maps Chile (`/proyectos`)
+- **Georreferenciación en Chile**:
+  - Selector de las 16 regiones de Chile y todas sus comunas con coordenadas GPS precalculadas.
+  - Botón **"Detectar y Rellenar con GPS"**: captura latitud/longitud del celular/PC y autocompleta automáticamente calle, número, comuna y región mediante Reverse Geocoding.
+  - Visor interactivo de Google Maps (`GoogleMapsProjectViewer`) con botones directos:
+    - 🚗 **"Cómo llegar en Google Maps / Waze"** (Ruta GPS directa a faena).
+    - 📲 **"Compartir por WhatsApp a Cuadrilla"** (Texto formateado con enlace de mapas).
+    - 📋 **"Copiar Coordenadas"**.
+- Formateo dinámico de CLP con separadores de miles (`formatThousands`).
 - Cálculo ponderado de avance general y saldo pendiente de cobro.
 
-### 2. Control Financiero & Insumos (`/proyectos/[id]/finanzas`)
-- Gráficos de distribución de ingresos, cobros pendientes e imprevistos.
-- Módulo de **Materiales & Costos Directos**: agregar insumos (cantidad, unidad, precio unitario CLP, proveedor sugerido) y marcar estado entre `⏳ Pendiente` y `✓ Comprado`.
-- Registro de pagos con comprobantes y métodos (transferencia, efectivo, débito).
-- Registro de imprevistos con soporte para fotografías de evidencia.
-
 ### 3. Planificación & Bitácora de Terreno (`/proyectos/[id]/gantt`)
-- Carta Gantt interactiva con partidas, duración estimada y asignación de trabajadores.
-- **Bitácora Diaria de Obra**: registro cronológico de eventos (avances, clima, incidentes, recepción de materiales) con fotografías y autor.
+- Carta Gantt interactiva con partidas, duración estimada y asignación de cuadrillas.
+- Vista optimizada para teléfonos móviles con scroll táctil horizontal (`min-w-[680px]`).
+- **Bitácora Diaria de Obra**: registro cronológico de eventos (avances, clima, incidentes, recepción de materiales) con evidencia fotográfica.
+- Acceso directo a Google Maps desde la cabecera.
 
-### 4. Cotizador con IA & Radar de Materiales (`/cotizador`)
-- Estimación paramétrica de obras con estructura de costos directos (materiales + mano de obra), gastos generales (12%), imprevistos (5%), utilidad (18%) e IVA (19%).
-- Comparativa de tiendas de construcción en Chile.
-- Conversión directa de cotización aprobada en obra activa con Carta Gantt autogenerada.
+### 4. Control Financiero & Insumos (`/proyectos/[id]/finanzas`)
+- Gráficos de distribución de ingresos, cobros pendientes e imprevistos.
+- Módulo de **Materiales & Costos Directos**: agregar insumos con precio unitario CLP y proveedor asignado (Imperial, Construmart, Sodimac, Barracas).
+- Registro de pagos recibidos con comprobantes y métodos (transferencia, efectivo, débito).
+- Registro de imprevistos con fotografías de evidencia fotográfica.
+- Acceso directo a Google Maps desde la cabecera.
 
-### 5. Directorio de Clientes & Equipo (`/clientes` y `/equipo`)
+### 5. Cotizador con IA & Radar de Materiales (`/cotizador`)
+- Estimación paramétrica en lenguaje natural con GPT-4o.
+- Estructura transparente de costos directos, gastos generales (12%), imprevistos (5%), utilidad (18%) e IVA (19%).
+- Comparador de precios de ferreterías chilenas para optimizar compras.
+- Conversión directa de cotización aprobada a obra activa con Carta Gantt preconfigurada.
+
+### 6. Directorio de Clientes & Equipo (`/clientes` y `/equipo`)
 - CRUD de mandantes y clientes asociados a obras.
 - Gestión de trabajadores y asignación de roles (`admin`, `supervisor`, `terreno`).
+- Contacto directo por WhatsApp con cada maestro de faena.
 
-### 6. Conexión en Vivo con Supabase (`/schema.sql` y `lib/supabase/client.ts`)
-- Script SQL con extensiones `uuid-ossp`, `vector`, tablas con RLS, funciones RPC y triggers.
-- Modal interactivo de diagnóstico y estado de conexión en tiempo real (`SupabaseConnectModal`).
+### 7. Responsividad Móvil & Centrado de Modales
+- **Centrado Absoluto en Teléfonos**: Todos los diálogos modales aplican `my-auto` en el contenedor `fixed inset-0 flex items-center justify-center p-3 sm:p-4 overflow-y-auto` y `max-h-[calc(100dvh-2rem)]` para evitar desplazamientos verticales indeseados en iOS y Android.
+- Menú lateral (Sidebar) con drawer deslizable, overlay con backdrop blur y cierre automático al navegar.
 
 ---
 
-## 📜 Historial de Versiones & Commits Clave
+## 📜 Historial de Commits Clave
 - `eac72ab`: Conexión de la app con el proyecto en vivo de Supabase (`https://tpszbretbtxcmnrqvlxm.supabase.co`).
 - `2dcbfec`: Implementación de modal de conexión dinámica y sincronización PostgreSQL.
 - `46e3f68`: Corrección de sintaxis de UUID hexadecimal estándar para PostgreSQL.
 - `b046f49`: Formateo automático de CLP con puntos, asignación de trabajadores a obras, gestión de materiales y bitácora de obra.
 - `490c26c`: Edición de proyectos, limpieza de datos falsos de prueba y empty states.
 - `0c35809`: Eliminación de proyectos y reautoría completa de commits para Benjamín Achávar.
+- `95e0c52`: Carga limpia directa del Login en `/` y eliminación del micro-destello del dashboard.
+- `b4578de`: Fallback resiliente para registro ante límite SMTP de Supabase (*email rate limit*).
+- `d048d08`: Consolidación de repositorio en una sola rama remota `main` en GitHub.
+- `3203e6f`: Optimización responsiva integral para smartphones y tablets.
+- `c687dde`: Centrado geométrico de todas las ventanas emergentes (modales) con `my-auto` y `max-h-[calc(100dvh-2rem)]`.
+- `cabf76f`: Integración completa de Google Maps para proyectos en Chile (comunas, coordenadas y visor interactivo).
+- `9bcac27`: Detección GPS con auto-rellenado inteligente de calle, comuna y región vía Reverse Geocoding.
