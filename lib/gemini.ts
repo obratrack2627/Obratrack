@@ -25,7 +25,7 @@ export function getGeminiClient(): GoogleGenAI | null {
 /**
  * Prompt del Sistema especializado en Construcción en Chile y Tarifas de Mercado
  */
-export const SYSTEM_PROMPT_CONSTRUCCION_CHILE = `Eres el Agente Experto Cotizador de ObraTrack y Asesor de Costos, impulsado por Google Gemini 2.5 Pro / Flash. Eres el especialista de mayor nivel en presupuestos de construcción, cubicaciones, análisis de precios unitarios (APU), compras en ferreterías chilenas y fijación de precios ("¿Cuánto cobrar?") para contratistas, maestros mayores y constructoras en Chile.
+export const SYSTEM_PROMPT_CONSTRUCCION_CHILE = `Eres el Agente Experto Cotizador de ObraTrack y Asesor de Costos, impulsado por Google Gemini IA. Eres el especialista de mayor nivel en presupuestos de construcción, cubicaciones, análisis de precios unitarios (APU), compras en ferreterías chilenas y fijación de precios ("¿Cuánto cobrar?") para contratistas, maestros mayores y constructoras en Chile.
 
 Reglas del Mercado Chileno de Construcción (Valores en Pesos Chilenos CLP):
 1. Red de Ferreterías y Materiales en Chile:
@@ -137,15 +137,27 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
   }
 }`;
 
-    const response = await gemini.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
+    const candidateModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+    let text: string | undefined;
 
-    const text = response.text;
+    for (const modelName of candidateModels) {
+      try {
+        const response = await gemini.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
+        if (response.text) {
+          text = response.text;
+          break;
+        }
+      } catch (err) {
+        console.warn(`Generar cotización falló con ${modelName}, probando siguiente modelo...`);
+      }
+    }
+
     if (!text) return null;
 
     const parsed = JSON.parse(text);
@@ -174,7 +186,6 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
       0
     );
 
-    // Garantizar que recomendacion_cobro esté perfectamente calculada
     const recCobro: RecomendacionCobroCliente = parsed.recomendacion_cobro || {
       precio_minimo_rentable: Math.round(baseConCostosIndirectos * 1.15),
       precio_sugerido_mercado: precioConIva,
@@ -240,7 +251,6 @@ export async function chatAsesorObrasGemini(
   const gemini = getGeminiClient();
 
   if (!gemini) {
-    // Respuesta inteligente de fallback en caso de no tener API key configurada
     const lower = mensajeUsuario.toLowerCase();
     if (lower.includes('cobrar') || lower.includes('precio') || lower.includes('m2')) {
       return {
@@ -279,15 +289,31 @@ export async function chatAsesorObrasGemini(
       ],
     });
 
-    const response = await gemini.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: formattedContents.map((c) => ({
-        role: c.role,
-        text: c.parts[0].text,
-      })),
-    });
+    const candidateModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
+    let respuesta = '';
 
-    const respuesta = response.text || 'Sin respuesta del modelo.';
+    for (const m of candidateModels) {
+      try {
+        const response = await gemini.models.generateContent({
+          model: m,
+          contents: formattedContents.map((c) => ({
+            role: c.role,
+            text: c.parts[0].text,
+          })),
+        });
+        if (response.text) {
+          respuesta = response.text;
+          break;
+        }
+      } catch (mErr) {
+        console.warn(`Chat fallo con ${m}, probando siguiente modelo...`);
+      }
+    }
+
+    if (!respuesta) {
+      respuesta = 'No se obtuvo respuesta del modelo Gemini.';
+    }
+
     return {
       respuesta,
       sugerencias: [
