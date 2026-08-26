@@ -248,23 +248,42 @@ class DataService {
   buscarClientePorRutONombre(busqueda: string): Cliente | null {
     if (!busqueda || busqueda.trim() === '') return null;
     const clientes = this.getClientes();
-    const cleanSearch = busqueda.toLowerCase().replace(/[\.\-\s]/g, '');
 
-    // Buscar por RUT exacto o parcial
+    const normalize = (str: string) =>
+      str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+
+    const cleanQuery = normalize(busqueda);
+    const cleanSearchDigits = cleanQuery.replace(/[^a-z0-9]/g, '');
+
+    // 1. Buscar por RUT
     for (const c of clientes) {
       if (c.rut) {
-        const cleanRut = c.rut.toLowerCase().replace(/[\.\-\s]/g, '');
-        if (cleanRut.includes(cleanSearch) || cleanSearch.includes(cleanRut)) {
+        const cleanRut = normalize(c.rut).replace(/[^a-z0-9]/g, '');
+        if (cleanRut.length >= 7 && cleanSearchDigits.includes(cleanRut)) {
           return c;
         }
       }
     }
 
-    // Buscar por Nombre
-    const cleanQuery = busqueda.toLowerCase().trim();
+    // 2. Buscar por Nombre Completo
     for (const c of clientes) {
-      if (c.nombre.toLowerCase().includes(cleanQuery) || cleanQuery.includes(c.nombre.toLowerCase())) {
+      const cleanNombre = normalize(c.nombre);
+      if (cleanQuery.includes(cleanNombre)) {
         return c;
+      }
+    }
+
+    // 3. Buscar por Nombre de Pila o Apellido (tokens >= 4 caracteres)
+    for (const c of clientes) {
+      const tokens = normalize(c.nombre).split(/\s+/);
+      for (const token of tokens) {
+        if (token.length >= 4 && cleanQuery.includes(token)) {
+          return c;
+        }
       }
     }
 

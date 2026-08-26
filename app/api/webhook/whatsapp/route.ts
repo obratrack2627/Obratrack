@@ -76,18 +76,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Datos de mensaje insuficientes' }, { status: 400 });
     }
 
-    // Buscar si el cliente ya está registrado por teléfono, RUT o nombre en el mensaje
+    // 1. Buscar si en el mensaje del cliente viene un RUT o Nombre explícito
     let clienteFicha = null;
-    const clientePorTelefono = dataService.getClientes().find(
-      (c) => c.telefono && c.telefono.replace(/[^0-9]/g, '').includes(cleanPhone.replace(/[^0-9]/g, ''))
-    );
+    const matchRutONombre = dataService.buscarClientePorRutONombre(bodyText);
 
-    if (clientePorTelefono) {
-      clienteFicha = dataService.obtenerFichaCompletaCliente(clientePorTelefono.id);
+    if (matchRutONombre) {
+      clienteFicha = dataService.obtenerFichaCompletaCliente(matchRutONombre.id);
     } else {
-      const matchRut = dataService.buscarClientePorRutONombre(bodyText);
-      if (matchRut) {
-        clienteFicha = dataService.obtenerFichaCompletaCliente(matchRut.id);
+      // 2. Si no viene en el texto, verificar si el número de teléfono ya está registrado
+      const clientePorTelefono = dataService.getClientes().find(
+        (c) => c.telefono && c.telefono.replace(/[^0-9]/g, '').includes(cleanPhone.replace(/[^0-9]/g, ''))
+      );
+      if (clientePorTelefono) {
+        clienteFicha = dataService.obtenerFichaCompletaCliente(clientePorTelefono.id);
       }
     }
 

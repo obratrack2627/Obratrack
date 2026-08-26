@@ -5,6 +5,7 @@ import {
   Proyecto,
   Actividad,
   Pago,
+  BitacoraEntrada,
   Imprevisto,
   ReporteWhatsApp,
   CotizacionEstimacion,
@@ -111,6 +112,7 @@ export const INITIAL_PROYECTOS: Proyecto[] = [
 ];
 
 export const INITIAL_ACTIVIDADES: Actividad[] = [
+  // PROYECTO 1: Benjamín Achávar (Peñalolén)
   {
     id: 'act-1',
     proyecto_id: 'proj-penalolen',
@@ -161,9 +163,114 @@ export const INITIAL_ACTIVIDADES: Actividad[] = [
     estado: 'pendiente',
     orden: 5,
   },
+
+  // PROYECTO 2: Carlos Henríquez (La Florida)
+  {
+    id: 'act-c1',
+    proyecto_id: 'proj-carlos',
+    nombre: 'Refuerzo de vigas maestras en losa existente',
+    fecha_inicio: '2026-08-12',
+    fecha_termino: '2026-08-16',
+    porcentaje_avance: 100,
+    estado: 'terminada',
+    orden: 1,
+  },
+  {
+    id: 'act-c2',
+    proyecto_id: 'proj-carlos',
+    nombre: 'Montaje de tabiquería estructural en Metalcon',
+    fecha_inicio: '2026-08-17',
+    fecha_termino: '2026-08-23',
+    porcentaje_avance: 100,
+    estado: 'terminada',
+    orden: 2,
+  },
+  {
+    id: 'act-c3',
+    proyecto_id: 'proj-carlos',
+    nombre: 'Instalación de aislación térmica exterior EIFS y lana de vidrio',
+    fecha_inicio: '2026-08-24',
+    fecha_termino: '2026-08-30',
+    porcentaje_avance: 80,
+    estado: 'en_curso',
+    orden: 3,
+  },
+  {
+    id: 'act-c4',
+    proyecto_id: 'proj-carlos',
+    nombre: 'Estructura de cerchas y cubierta teja asfáltica',
+    fecha_inicio: '2026-08-31',
+    fecha_termino: '2026-09-10',
+    porcentaje_avance: 30,
+    estado: 'en_curso',
+    orden: 4,
+  },
+  {
+    id: 'act-c5',
+    proyecto_id: 'proj-carlos',
+    nombre: 'Revestimiento interior en planchas Volcanita y pintura',
+    fecha_inicio: '2026-09-11',
+    fecha_termino: '2026-09-20',
+    porcentaje_avance: 0,
+    estado: 'pendiente',
+    orden: 5,
+  },
+
+  // PROYECTO 3: María José Ovalle (Las Condes)
+  {
+    id: 'act-m1',
+    proyecto_id: 'proj-lascondes',
+    nombre: 'Demolición de cerámicos y retiro de artefactos existentes',
+    fecha_inicio: '2026-08-18',
+    fecha_termino: '2026-08-21',
+    porcentaje_avance: 100,
+    estado: 'terminada',
+    orden: 1,
+  },
+  {
+    id: 'act-m2',
+    proyecto_id: 'proj-lascondes',
+    nombre: 'Modificación y prueba de presión en redes sanitarias PPR',
+    fecha_inicio: '2026-08-22',
+    fecha_termino: '2026-08-25',
+    porcentaje_avance: 100,
+    estado: 'terminada',
+    orden: 2,
+  },
+  {
+    id: 'act-m3',
+    proyecto_id: 'proj-lascondes',
+    nombre: 'Instalación de porcelanato rectificado 60x120 en muros y piso',
+    fecha_inicio: '2026-08-26',
+    fecha_termino: '2026-09-05',
+    porcentaje_avance: 75,
+    estado: 'en_curso',
+    orden: 3,
+  },
+  {
+    id: 'act-m4',
+    proyecto_id: 'proj-lascondes',
+    nombre: 'Montaje de vanitorio flotante en roble y grifería empotrada',
+    fecha_inicio: '2026-09-06',
+    fecha_termino: '2026-09-15',
+    porcentaje_avance: 10,
+    estado: 'en_curso',
+    orden: 4,
+  },
+  {
+    id: 'act-m5',
+    proyecto_id: 'proj-lascondes',
+    nombre: 'Instalación de shower door en cristal templado 8mm y sellos',
+    fecha_inicio: '2026-09-16',
+    fecha_termino: '2026-09-25',
+    porcentaje_avance: 0,
+    estado: 'pendiente',
+    orden: 5,
+  },
 ];
 
 export const INITIAL_PAGOS: Pago[] = [
+  // Pagos Benjamín
   {
     id: 'pago-1',
     proyecto_id: 'proj-penalolen',
@@ -178,7 +285,86 @@ export const INITIAL_PAGOS: Pago[] = [
     monto: 1155000,
     metodo: 'transferencia',
     fecha: '2026-08-22',
-    nota: 'Segundo pago 30% contra término de vaciado de radier y fundaciones',
+    nota: 'Segundo estado de pago (30%) contra término exitoso de radier H-20',
+  },
+
+  // Pagos Carlos Henríquez
+  {
+    id: 'pago-c1',
+    proyecto_id: 'proj-carlos',
+    monto: 2080000,
+    metodo: 'transferencia',
+    fecha: '2026-08-12',
+    nota: 'Anticipo 40% compra perfiles Metalcon estructural y fijaciones',
+  },
+  {
+    id: 'pago-c2',
+    proyecto_id: 'proj-carlos',
+    monto: 1020000,
+    metodo: 'transferencia',
+    fecha: '2026-08-24',
+    nota: 'Segundo estado de pago contra montaje de estructura completa',
+  },
+
+  // Pagos María José Ovalle
+  {
+    id: 'pago-m1',
+    proyecto_id: 'proj-lascondes',
+    monto: 1960000,
+    metodo: 'transferencia',
+    fecha: '2026-08-18',
+    nota: 'Anticipo 40% compra porcelanatos rectificados y griferías empotradas',
+  },
+  {
+    id: 'pago-m2',
+    proyecto_id: 'proj-lascondes',
+    monto: 980000,
+    metodo: 'transferencia',
+    fecha: '2026-08-26',
+    nota: 'Segundo abono contra término de demolición e impermeabilización',
+  },
+];
+
+export const INITIAL_BITACORA: BitacoraEntrada[] = [
+  {
+    id: 'bit-1',
+    proyecto_id: 'proj-penalolen',
+    fecha: '2026-08-20',
+    titulo: 'Vaciado y nivelación de hormigón H-20',
+    nota: 'Vaciado y nivelación de hormigón preparado H-20 para radier de 35m2.',
+    foto_url: 'https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=800&auto=format&fit=crop&q=80',
+    autor_nombre: 'Maestro Mario Soto',
+    tipo: 'avance',
+  },
+  {
+    id: 'bit-2',
+    proyecto_id: 'proj-penalolen',
+    fecha: '2026-08-24',
+    titulo: 'Montaje de tijerales en pino oregón',
+    nota: 'Montaje de tijerales y pilares en pino oregón cepillado.',
+    foto_url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=800&auto=format&fit=crop&q=80',
+    autor_nombre: 'Maestro Mario Soto',
+    tipo: 'avance',
+  },
+  {
+    id: 'bit-c1',
+    proyecto_id: 'proj-carlos',
+    fecha: '2026-08-23',
+    titulo: 'Estructuración muros perimetrales Metalcon',
+    nota: 'Estructuración completa de muros perimetrales en Metalcon estructural.',
+    foto_url: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800&auto=format&fit=crop&q=80',
+    autor_nombre: 'Supervisor Rodrigo Tapia',
+    tipo: 'avance',
+  },
+  {
+    id: 'bit-m1',
+    proyecto_id: 'proj-lascondes',
+    fecha: '2026-08-26',
+    titulo: 'Colocación porcelanato 60x120 rectificado',
+    nota: 'Avance en colocación de porcelanato rectificado 60x120 en muro principal y nicho.',
+    foto_url: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=800&auto=format&fit=crop&q=80',
+    autor_nombre: 'Maestro Juan Morales',
+    tipo: 'avance',
   },
 ];
 
