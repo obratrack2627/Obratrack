@@ -115,3 +115,5 @@ Este documento guarda la memoria permanente, decisiones de arquitectura, credenc
 - `c687dde`: Centrado geométrico de todas las ventanas emergentes (modales) con `my-auto` y `max-h-[calc(100dvh-2rem)]`.
 - `cabf76f`: Integración completa de Google Maps para proyectos en Chile (comunas, coordenadas y visor interactivo).
 - `9bcac27`: Detección GPS con auto-rellenado inteligente de calle, comuna y región vía Reverse Geocoding.
+- `c187f00`: Rama `experimental` - Migración a motor de IA nativo de Google Gemini 2.5 Flash / Pro, módulo asesor de cobro al mandante (3 niveles) y botón de envío formal por WhatsApp.
+- `5860e9f`: Cascada inteligente de modelos Gemini (`gemini-3.6-flash` / `gemini-3.7-flash` / `gemini-2.5-flash`) y configuración de clave API de Google AI Pro en producción Vercel.
