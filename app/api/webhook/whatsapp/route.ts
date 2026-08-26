@@ -75,20 +75,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Datos de mensaje insuficientes' }, { status: 400 });
     }
 
-    // 1. Buscar si en el mensaje del cliente viene un RUT o Nombre explícito
+    // 1. Buscar si en el mensaje del cliente viene un RUT o Nombre explícito para autenticación estricta
     let clienteFicha = null;
     const matchRutONombre = dataService.buscarClientePorRutONombre(bodyText);
 
     if (matchRutONombre) {
       clienteFicha = dataService.obtenerFichaCompletaCliente(matchRutONombre.id);
-    } else {
-      // 2. Si no viene en el texto, verificar si el número de teléfono ya está registrado
-      const clientePorTelefono = dataService.getClientes().find(
-        (c) => c.telefono && c.telefono.replace(/[^0-9]/g, '').includes(cleanPhone.replace(/[^0-9]/g, ''))
-      );
-      if (clientePorTelefono) {
-        clienteFicha = dataService.obtenerFichaCompletaCliente(clientePorTelefono.id);
-      }
     }
 
     const clientesDisponibles = dataService.getClientes().map((c) => ({
