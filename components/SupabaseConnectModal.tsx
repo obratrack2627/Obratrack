@@ -97,8 +97,8 @@ export default function SupabaseConnectModal({ isOpen, onClose }: SupabaseConnec
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white border border-kraft-200 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in zoom-in-95 space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl sm:rounded-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6 shadow-2xl animate-in zoom-in-95 space-y-5">
         
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-kraft-200">

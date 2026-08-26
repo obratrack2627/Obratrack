@@ -44,8 +44,8 @@ export default function PlanSwitcherModal({ isOpen, onClose }: PlanSwitcherModal
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white border border-[#E5DFC9] rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative p-6 sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-4xl my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl sm:rounded-3xl shadow-2xl p-5 sm:p-8 max-h-[calc(100dvh-2rem)] overflow-y-auto animate-in zoom-in-95">
         
         {/* Close Button */}
         <button
