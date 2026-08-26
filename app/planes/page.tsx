@@ -146,7 +146,7 @@ export default function PlanesPage() {
           pro_ia: true,
         },
         {
-          nombre: 'Búsqueda semántica con pgvector en Supabase',
+          nombre: 'Búsqueda semántica y vector search en Firebase',
           gratis: false,
           pro: false,
           pro_ia: true,

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGeminiClient, chatAsistenteClienteWhatsAppGemini } from '@/lib/gemini';
-import { createClient } from '@supabase/supabase-js';
 import { dataService } from '@/lib/data-service';
 
 export const dynamic = 'force-dynamic';

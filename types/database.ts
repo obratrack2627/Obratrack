@@ -1,6 +1,6 @@
 /**
  * ObraTrack - TypeScript Definitions
- * Interfaces para el modelo de datos de Supabase
+ * Interfaces para el modelo de datos de Firebase Cloud Firestore
  */
 
 export type UserRole = 'admin' | 'supervisor' | 'terreno';

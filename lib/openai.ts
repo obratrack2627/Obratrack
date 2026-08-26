@@ -39,7 +39,7 @@ export async function transcribirAudioWhisper(
 }
 
 /**
- * Genera embedding vectorial de 1536 dimensiones (compatible con pgvector en Supabase)
+ * Genera embedding vectorial de 1536 dimensiones (compatible con Vector Search)
  */
 export async function generarEmbedding(texto: string): Promise<number[] | null> {
   const openai = getOpenAIClient();

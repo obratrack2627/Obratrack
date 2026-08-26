@@ -487,9 +487,9 @@ class DataService {
   }
 
   // --- MATERIALES DE PROYECTO ---
-  getMaterialesProyecto(proyectoId: string): MaterialProyecto[] {
+  getMaterialesProyecto(proyectoId?: string): MaterialProyecto[] {
     const all = this.getItem<MaterialProyecto[]>(KEYS.MATERIALES_PROYECTO, []);
-    return all.filter((m) => m.proyecto_id === proyectoId);
+    return proyectoId ? all.filter((m) => m.proyecto_id === proyectoId) : all;
   }
 
   createMaterialProyecto(material: Omit<MaterialProyecto, 'id'>): MaterialProyecto {
@@ -525,11 +525,10 @@ class DataService {
   }
 
   // --- BITÁCORA Y FOTOS DE OBRA ---
-  getBitacora(proyectoId: string): BitacoraEntrada[] {
+  getBitacora(proyectoId?: string): BitacoraEntrada[] {
     const all = this.getItem<BitacoraEntrada[]>(KEYS.BITACORA, []);
-    return all
-      .filter((b) => b.proyecto_id === proyectoId)
-      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    const list = proyectoId ? all.filter((b) => b.proyecto_id === proyectoId) : all;
+    return list.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
   }
 
   createBitacoraEntrada(entry: Omit<BitacoraEntrada, 'id'>): BitacoraEntrada {
@@ -560,11 +559,11 @@ class DataService {
   }
 
   // --- ACTIVIDADES (CARTA GANTT) ---
-  getActividades(proyectoId: string): Actividad[] {
+  getActividades(proyectoId?: string): Actividad[] {
     const all = this.getItem<Actividad[]>(KEYS.ACTIVIDADES, INITIAL_ACTIVIDADES);
     const usuarios = this.getUsuarios();
-    return all
-      .filter((a) => a.proyecto_id === proyectoId)
+    const list = proyectoId ? all.filter((a) => a.proyecto_id === proyectoId) : all;
+    return list
       .map((a) => ({
         ...a,
         responsable: usuarios.find((u) => u.id === a.responsable_id),
@@ -602,9 +601,9 @@ class DataService {
   }
 
   // --- PAGOS & FINANZAS ---
-  getPagos(proyectoId: string): Pago[] {
+  getPagos(proyectoId?: string): Pago[] {
     const all = this.getItem<Pago[]>(KEYS.PAGOS, INITIAL_PAGOS);
-    return all.filter((p) => p.proyecto_id === proyectoId);
+    return proyectoId ? all.filter((p) => p.proyecto_id === proyectoId) : all;
   }
 
   createPago(pago: Omit<Pago, 'id'>): Pago {
@@ -635,15 +634,14 @@ class DataService {
   }
 
   // --- IMPREVISTOS ---
-  getImprevistos(proyectoId: string): Imprevisto[] {
+  getImprevistos(proyectoId?: string): Imprevisto[] {
     const all = this.getItem<Imprevisto[]>(KEYS.IMPREVISTOS, INITIAL_IMPREVISTOS);
     const acts = this.getItem<Actividad[]>(KEYS.ACTIVIDADES, INITIAL_ACTIVIDADES);
-    return all
-      .filter((i) => i.proyecto_id === proyectoId)
-      .map((i) => ({
-        ...i,
-        actividad: acts.find((a) => a.id === i.actividad_id),
-      }));
+    const list = proyectoId ? all.filter((i) => i.proyecto_id === proyectoId) : all;
+    return list.map((i) => ({
+      ...i,
+      actividad: acts.find((a) => a.id === i.actividad_id),
+    }));
   }
 
   createImprevisto(imprevisto: Omit<Imprevisto, 'id'>): Imprevisto {
@@ -990,34 +988,81 @@ class DataService {
     return true;
   }
 
-  // --- SINCRONIZACIÓN CON SUPABASE POSTGRESQL ---
-  async syncWithSupabase(): Promise<{ success: boolean; message: string }> {
-    const { getSupabaseClient, isSupabaseConfigured } = await import('@/lib/supabase/client');
-    if (!isSupabaseConfigured()) {
-      return { success: false, message: 'Supabase no está configurado aún.' };
-    }
-    const client = getSupabaseClient();
-    if (!client) return { success: false, message: 'Cliente de Supabase no disponible.' };
-
+  // --- SINCRONIZACIÓN CON FIREBASE CLOUD FIRESTORE ---
+  async syncWithFirestore(): Promise<{ success: boolean; message: string; count?: number }> {
     try {
-      const [projsRes, clientsRes] = await Promise.all([
-        client.from('proyectos').select('*'),
-        client.from('clientes').select('*'),
+      const { firestoreService } = await import('@/lib/firebase/firestore');
+      const proyectos = this.getProyectos();
+      const actividades = this.getActividades();
+      const pagos = this.getPagos();
+      const imprevistos = this.getImprevistos();
+      const materiales = this.getMaterialesProyecto();
+      const bitacora = this.getBitacora();
+      const clientes = this.getClientes();
+      const usuarios = this.getUsuarios();
+      const agenda = this.getEventosAgenda();
+
+      const result = await firestoreService.bulkSyncToFirestore({
+        proyectos,
+        actividades,
+        pagos,
+        imprevistos,
+        materiales,
+        bitacora,
+        clientes,
+        usuarios,
+        agenda,
+      });
+
+      if (result.success) {
+        return {
+          success: true,
+          count: result.count,
+          message: `Sincronización exitosa con Firebase Cloud Firestore (${result.count} documentos).`,
+        };
+      } else {
+        return {
+          success: false,
+          message: result.error || 'Error al sincronizar con Firebase Cloud Firestore.',
+        };
+      }
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Error de sincronización con Firebase.' };
+    }
+  }
+
+  async pullFromFirestore(): Promise<{ success: boolean; message: string }> {
+    try {
+      const { firestoreService } = await import('@/lib/firebase/firestore');
+      const [projs, acts, pgs, imps, mats, bit, clis, usrs, agn] = await Promise.all([
+        firestoreService.getProyectos(),
+        firestoreService.getActividades(),
+        firestoreService.getPagos(),
+        firestoreService.getImprevistos(),
+        firestoreService.getMateriales(),
+        firestoreService.getBitacora(),
+        firestoreService.getClientes(),
+        firestoreService.getUsuarios(),
+        firestoreService.getAgenda(),
       ]);
 
-      if (projsRes.data && projsRes.data.length > 0) {
-        this.setItem(KEYS.PROYECTOS, projsRes.data);
-      }
-      if (clientsRes.data && clientsRes.data.length > 0) {
-        this.setItem(KEYS.CLIENTES, clientsRes.data);
-      }
+      if (projs.length > 0) this.setItem(KEYS.PROYECTOS, projs);
+      if (acts.length > 0) this.setItem(KEYS.ACTIVIDADES, acts);
+      if (pgs.length > 0) this.setItem(KEYS.PAGOS, pgs);
+      if (imps.length > 0) this.setItem(KEYS.IMPREVISTOS, imps);
+      if (mats.length > 0) this.setItem(KEYS.MATERIALES_PROYECTO, mats);
+      if (bit.length > 0) this.setItem(KEYS.BITACORA, bit);
+      if (clis.length > 0) this.setItem(KEYS.CLIENTES, clis);
+      if (usrs.length > 0) this.setItem(KEYS.USUARIOS, usrs);
+      if (agn.length > 0) this.setItem(KEYS.AGENDA, agn);
 
-      return { success: true, message: 'Sincronización completada con Supabase PostgreSQL.' };
+      return { success: true, message: 'Datos descargados exitosamente desde Firebase Cloud Firestore.' };
     } catch (err: any) {
-      return { success: false, message: err.message || 'Error de sincronización con Supabase.' };
+      return { success: false, message: err.message || 'Error al obtener datos desde Firebase.' };
     }
   }
 }
 
 export const dataService = new DataService();
+
 

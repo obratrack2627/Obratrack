@@ -23,14 +23,13 @@ import { UserRole } from '@/types/database';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
 import {
-  signInWithSupabase,
-  signUpWithSupabase,
-  resendConfirmationEmail,
-  resetPasswordForEmail,
-} from '@/lib/supabase/auth';
+  signInWithFirebase,
+  signUpWithFirebase,
+  resetPasswordWithFirebase,
+} from '@/lib/firebase/auth';
 import { dataService } from '@/lib/data-service';
 
-type AuthMode = 'signin' | 'signup' | 'verify_email' | 'forgot_password';
+type AuthMode = 'signin' | 'signup' | 'forgot_password';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -52,20 +51,10 @@ export default function LoginPage() {
   const [telefono, setTelefono] = useState('');
   const [rol, setRol] = useState<UserRole>('admin');
 
-  // Recuperación & Verificación
+  // Recuperación
   const [forgotEmail, setForgotEmail] = useState('');
-  const [registeredEmail, setRegisteredEmail] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Timer cooldown para reenvío
-  useEffect(() => {
-    if (resendCooldown > 0) {
-      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [resendCooldown]);
-
-  // Manejo de inicio de sesión real en Supabase Auth
+  // Manejo de inicio de sesión en Firebase Auth
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -73,28 +62,30 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await signInWithSupabase(email, password);
+      const result = await signInWithFirebase(email, password);
       if (!result.success) {
-        if (result.isConfirmationPending) {
-          setRegisteredEmail(email);
-          setMode('verify_email');
-          setErrorMsg(result.error || 'Por favor confirma tu correo electrónico en Supabase para ingresar.');
-        } else {
-          setErrorMsg(result.error || 'Credenciales inválidas o cuenta no registrada en Supabase.');
-        }
+        setErrorMsg(result.error || 'Credenciales inválidas o cuenta no registrada en Firebase.');
         setIsLoading(false);
         return;
       }
 
       dataService.clearChatSessionHistory();
-      setSuccessMsg('¡Cuenta verificada en Supabase! Ingresando...');
+      setSuccessMsg('¡Cuenta verificada en Firebase! Ingresando...');
       setTimeout(() => {
         if (result.user?.rol === 'terreno') {
           alert(
             'Nota: Los usuarios con rol "terreno" reportan directamente vía WhatsApp. Para el panel administrativo ingresa con rol "admin" o "supervisor".'
           );
         }
-        router.replace('/proyectos');
+        let target = '/dashboard';
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const redirect = params.get('redirect');
+          if (redirect && redirect.startsWith('/')) {
+            target = redirect;
+          }
+        }
+        router.replace(target);
       }, 400);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error de autenticación.');
@@ -102,7 +93,7 @@ export default function LoginPage() {
     }
   };
 
-  // Manejo de registro real en Supabase Auth
+  // Manejo de registro en Firebase Auth
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -120,7 +111,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await signUpWithSupabase(
+      const result = await signUpWithFirebase(
         signupEmail,
         signupPassword,
         nombre,
@@ -129,40 +120,27 @@ export default function LoginPage() {
       );
 
       if (!result.success) {
-        setErrorMsg(result.error || 'No se pudo crear la cuenta en Supabase.');
+        setErrorMsg(result.error || 'No se pudo crear la cuenta en Firebase.');
         setIsLoading(false);
         return;
       }
 
-      setRegisteredEmail(signupEmail);
       setIsLoading(false);
-
-      if (result.isConfirmationPending) {
-        setResendCooldown(45);
-        setMode('verify_email');
-        setSuccessMsg('¡Cuenta registrada en Supabase! Revisa tu correo para activar el acceso.');
-      } else {
-        setSuccessMsg('¡Cuenta creada y autenticada en Supabase! Ingresando...');
-        setTimeout(() => {
-          router.replace('/proyectos');
-        }, 500);
-      }
+      setSuccessMsg('¡Cuenta creada y autenticada en Firebase! Ingresando...');
+      setTimeout(() => {
+        let target = '/dashboard';
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const redirect = params.get('redirect');
+          if (redirect && redirect.startsWith('/')) {
+            target = redirect;
+          }
+        }
+        router.replace(target);
+      }, 500);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al registrar la cuenta.');
       setIsLoading(false);
-    }
-  };
-
-  const handleResendConfirmation = async () => {
-    if (!registeredEmail || resendCooldown > 0) return;
-    setIsLoading(true);
-    const res = await resendConfirmationEmail(registeredEmail);
-    setIsLoading(false);
-    if (res.success) {
-      setResendCooldown(60);
-      setSuccessMsg(res.message);
-    } else {
-      setErrorMsg(res.message);
     }
   };
 
@@ -171,12 +149,12 @@ export default function LoginPage() {
     if (!forgotEmail) return;
     setErrorMsg(null);
     setIsLoading(true);
-    const res = await resetPasswordForEmail(forgotEmail);
+    const res = await resetPasswordWithFirebase(forgotEmail);
     setIsLoading(false);
     if (res.success) {
-      setSuccessMsg(res.message);
+      setSuccessMsg(res.message || 'Correo de recuperación enviado.');
     } else {
-      setErrorMsg(res.message);
+      setErrorMsg(res.message || 'No se pudo enviar el correo de recuperación.');
     }
   };
 
@@ -203,7 +181,7 @@ export default function LoginPage() {
         </div>
 
         {/* Selector de Modo: Iniciar Sesión / Crear Cuenta */}
-        {mode !== 'verify_email' && mode !== 'forgot_password' && (
+        {mode !== 'forgot_password' && (
           <div className="grid grid-cols-2 p-1 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl mb-5">
             <button
               type="button"
@@ -320,7 +298,7 @@ export default function LoginPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verificando en Supabase...</span>
+                  <span>Verificando en Firebase...</span>
                 </>
               ) : (
                 <>
@@ -448,63 +426,19 @@ export default function LoginPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Registrando en Supabase...</span>
+                  <span>Registrando en Firebase...</span>
                 </>
               ) : (
                 <>
                   <UserPlus className="w-4 h-4" />
-                  <span>Crear Cuenta en Supabase</span>
+                  <span>Crear Cuenta en Firebase</span>
                 </>
               )}
             </button>
           </form>
         )}
 
-        {/* 3. VISTA: CONFIRMACIÓN DE CORREO */}
-        {mode === 'verify_email' && (
-          <div className="space-y-4 text-center animate-in fade-in py-2">
-            <div className="w-12 h-12 rounded-2xl bg-[#FF6A00]/15 text-[#FF6A00] flex items-center justify-center mx-auto">
-              <Mail className="w-6 h-6 animate-pulse" />
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-gray-900 dark:text-white font-heading">
-                Confirma tu correo en Supabase
-              </h3>
-              <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
-                Enviamos un enlace de activación a{' '}
-                <strong className="text-[#FF6A00]">{registeredEmail || email}</strong>. Haz clic en el enlace para activar tu cuenta.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 pt-2">
-              <button
-                type="button"
-                onClick={handleResendConfirmation}
-                disabled={isLoading || resendCooldown > 0}
-                className="w-full py-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl text-xs font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>{resendCooldown > 0 ? `Reenviar en (${resendCooldown}s)` : 'Reenviar enlace de activación'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('signin');
-                  setErrorMsg(null);
-                  setSuccessMsg(null);
-                }}
-                className="w-full py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Ya la confirmé, Iniciar Sesión</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 4. VISTA: RECUPERACIÓN DE CONTRASEÑA */}
+        {/* 3. VISTA: RECUPERACIÓN DE CONTRASEÑA */}
         {mode === 'forgot_password' && (
           <div className="space-y-4 animate-in fade-in">
             <div>
@@ -512,7 +446,7 @@ export default function LoginPage() {
                 Recuperar Contraseña
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Ingresa tu correo para recibir instrucciones de recuperación de Supabase.
+                Ingresa tu correo para recibir instrucciones de recuperación de Firebase.
               </p>
             </div>
 
@@ -557,7 +491,7 @@ export default function LoginPage() {
         {/* Footer Seguridad */}
         <div className="mt-5 pt-3.5 border-t border-[#E5DFC9] dark:border-[#263040] flex items-center justify-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400 font-mono">
           <ShieldCheck className="w-3.5 h-3.5 text-[#6B8F72]" />
-          <span>Acceso Protegido con Supabase Auth</span>
+          <span>Acceso Protegido con Firebase Auth</span>
         </div>
       </div>
     </div>

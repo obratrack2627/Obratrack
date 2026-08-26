@@ -6,6 +6,15 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    // Validar token/cookie de autenticación
+    const authToken = request.cookies.get('obratrack_auth_token')?.value;
+    if (!authToken && process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'No autorizado. Inicia sesión para usar el cotizador.' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const {
       descripcion,

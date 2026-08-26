@@ -11,9 +11,12 @@ Este documento guarda la memoria permanente, decisiones de arquitectura, credenc
 - **Rama Oficial Principal en GitHub**: `main`
 - **Dominio Oficial en Producción**: [`https://obra-track-ruddy.vercel.app/`](https://obra-track-ruddy.vercel.app/)
 - **Despliegue Alternativo Vercel**: [`https://obra-track-88ee4c2yg-benjamin-arriagada-achavar-s-projects.vercel.app/`](https://obra-track-88ee4c2yg-benjamin-arriagada-achavar-s-projects.vercel.app/)
-- **Base de Datos**: Supabase PostgreSQL (con soporte pgvector y Storage)
-  - **Project URL**: `https://tpszbretbtxcmnrqvlxm.supabase.co`
-  - **Project Ref**: `tpszbretbtxcmnrqvlxm`
+- **Backend & Base de Datos**: Google Firebase
+  - **Firebase Project ID**: `obratrack-24ff6`
+  - **Firebase App ID**: `1:992662638390:web:1fb0f8d8cf2f6bc56c6d97`
+  - **Cloud Firestore**: Native Mode (`STANDARD`)
+  - **Firebase Auth**: Autenticación con persistencia de sesiones
+  - **Firebase Storage**: `obratrack-24ff6.firebasestorage.app`
 - **Espacio Local de Desarrollo**: `C:\Users\Benja\.gemini\antigravity-ide\scratch\ObraTrack`
 - **Espacio de Trabajo en Escritorio**: `C:\Users\Benja\Desktop\ObraTrack-main` *(Sincronizado vía robocopy)*
 
@@ -23,7 +26,7 @@ Este documento guarda la memoria permanente, decisiones de arquitectura, credenc
 - **Frontend / Framework**: Next.js 14.2.5 (App Router), React 18, TypeScript, Tailwind CSS
 - **Iconografía & Gráficos**: Lucide React, Recharts
 - **Planificación**: Gantt Chart interactivo personalizado con soporte táctil horizontal en móviles
-- **Base de Datos & Auth**: Supabase PostgreSQL (`@supabase/supabase-js`, `@supabase/ssr`), Row Level Security (RLS) + LocalStorage Fallback con soporte para límites de correo SMTP
+- **Base de Datos & Auth**: Google Firebase (Cloud Firestore + Firebase Auth + Firebase Storage) con sincronización resiliente y caché local
 - **Georreferenciación & Mapas**:
   - Google Maps Platform (Embed Viewer, Satélite HD / Callejero)
   - Reverse Geocoding API (`/api/geocode/reverse`)
@@ -120,3 +123,8 @@ Este documento guarda la memoria permanente, decisiones de arquitectura, credenc
 - `d9013b4`: Canal de razonamiento y conversación natural chilena en tiempo real para faenas con Google Gemini.
 - `9e65f56`: Transformación integral de `/cotizador` en Centro de Mando 100% Conversacional con Copiloto Obrero IA capaz de controlar autónomamente la web (creación de obras en `/proyectos`, alta de trabajadores en `/equipo`, asignación de cuadrillas y agenda de visitas a terreno).
 - `f832dcd`: Persistencia de historial de chat por sesión activa (mantiene mensajes al navegar entre menús y reinicia limpiamente al cerrar sesión o iniciar un nuevo login).
+- `a71bc90`: Fase 1 de Seguridad: eliminación de fallback de clave API Gemini en Base64, restricción de IA a server-side (`/api/*`), eliminación de bypass de credenciales inválidas, corrección de keys `v5` en localStorage, y creación de `middleware.ts` para protección de rutas con Supabase SSR.
+- `b84de12`: Fase 2 de Gestión & Experiencia: Implementación del nuevo **Centro de Mando & Dashboard con KPIs en vivo** (`/dashboard`), gráficos financieros interactivos con Recharts (cartera cotizada, cobros e imprevistos), semáforos de plazo por obra, agenda próxima de faena, validación matemática de RUT chileno (Módulo 11) en `lib/utils.ts` y políticas RLS granulares por rol (Admin, Supervisor, Terreno) en `schema.sql`.
+- `firebase-migration`: **Migración total de Backend a Google Firebase (`obratrack-24ff6`)**: Eliminación completa de Supabase (`@supabase/supabase-js`, `@supabase/ssr`, `schema.sql`), integración nativa de Cloud Firestore para colecciones de datos, autenticación robusta con Firebase Auth (`lib/firebase/auth.ts`), servicio de evidencias con Firebase Storage, modal de sincronización `FirebaseStatusModal.tsx` y actualización de variables de entorno.
+
+

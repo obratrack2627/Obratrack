@@ -7,8 +7,10 @@
    - Todos los commits de Git deben conservar la autoría de `Benjamín Achávar <benja105.achavar@gmail.com>`.
 
 2. **Base de Datos & Backend**:
-   - Base de datos oficial: Supabase PostgreSQL (`https://tpszbretbtxcmnrqvlxm.supabase.co`).
-   - El esquema SQL se encuentra en `schema.sql` con soporte para pgvector, storage y Row Level Security (RLS).
+   - Backend oficial: Google Firebase (`obratrack-24ff6`).
+   - Base de datos en la nube: Cloud Firestore (Native Mode) con reglas de seguridad en `firestore.rules`.
+   - Autenticación: Firebase Auth con persistencia de sesiones.
+   - Almacenamiento multimedia: Firebase Storage (`obratrack-24ff6.firebasestorage.app`).
 
 3. **Convenciones de Interfaz & Negocio (Chile)**:
    - Moneda: Pesos Chilenos (CLP) sin decimales.

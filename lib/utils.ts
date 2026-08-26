@@ -58,3 +58,30 @@ export function parseThousands(value: string | null | undefined): number {
   const digits = String(value).replace(/\D/g, '');
   return digits ? parseInt(digits, 10) : 0;
 }
+
+// Validación matemática de RUT chileno (Módulo 11)
+export function validarRutChileno(rut: string | null | undefined): boolean {
+  if (!rut) return false;
+  const clean = rut.replace(/[^0-9kK]/g, '').toUpperCase();
+  if (clean.length < 8 || clean.length > 9) return false;
+
+  const cuerpo = clean.slice(0, -1);
+  const dvIngresado = clean.slice(-1);
+
+  let suma = 0;
+  let multiplo = 2;
+
+  for (let i = cuerpo.length - 1; i >= 0; i--) {
+    suma += parseInt(cuerpo[i], 10) * multiplo;
+    multiplo = multiplo < 7 ? multiplo + 1 : 2;
+  }
+
+  const dvEsperadoCalculado = 11 - (suma % 11);
+  let dvEsperado = '';
+  if (dvEsperadoCalculado === 11) dvEsperado = '0';
+  else if (dvEsperadoCalculado === 10) dvEsperado = 'K';
+  else dvEsperado = dvEsperadoCalculado.toString();
+
+  return dvIngresado === dvEsperado;
+}
+

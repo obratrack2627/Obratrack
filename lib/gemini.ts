@@ -3,19 +3,12 @@ import { CotizacionEstimacion, RecomendacionCobroCliente } from '@/types/databas
 
 let geminiClientInstance: GoogleGenAI | null = null;
 
-// Clave decodificada segura en tiempo de ejecución para garantizar funcionamiento en cualquier entorno
-const FALLBACK_GEMINI_KEY = Buffer.from(
-  'QVEuQWI4Uk42SlAza0pnd3N2eHF2WTgyRUc1WmlGNngwUmRSVm9XdkR5YXJBenh4d2U2TkE=',
-  'base64'
-).toString('utf-8');
-
 export function getGeminiClient(): GoogleGenAI | null {
+  // Solo usar variables de entorno server-side — NUNCA hardcodear claves
   const apiKey =
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_GENAI_API_KEY ||
-    process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
-    FALLBACK_GEMINI_KEY;
+    process.env.GOOGLE_GENAI_API_KEY;
 
   if (!apiKey || apiKey.trim() === '' || apiKey.includes('YourGeminiApiKeyHere')) {
     return null;

@@ -23,8 +23,13 @@ import { Usuario, UserRole, SubscriptionPlanId } from '@/types/database';
 import { getPlanDetails } from '@/lib/plans';
 import Logo from '@/components/Logo';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
-import { getSupabaseClient } from '@/lib/supabase/client';
+import { signOutFirebase } from '@/lib/firebase/auth';
 import ThemeToggle from '@/components/ThemeToggle';
+
+interface SidebarProps {
+  mobileOpen?: boolean;
+  setMobileOpen?: (open: boolean) => void;
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -38,21 +43,17 @@ export default function Sidebar() {
   const loadSidebarData = () => {
     const user = dataService.getActiveUser();
     setActiveUser(user);
+    setActivePlan(dataService.getActivePlan());
 
-    const reports = dataService.getReportes();
-    const pending = reports.filter((r) => r.estado === 'pendiente').length;
+    const pending = dataService
+      .getReportes()
+      .filter((r) => r.estado === 'pendiente').length;
     setPendingReportsCount(pending);
-
-    const plan = dataService.getActivePlan();
-    setActivePlan(plan);
   };
 
   const handleLogout = async () => {
     try {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
+      await signOutFirebase();
     } catch (e) {
       console.error(e);
     }
@@ -79,9 +80,14 @@ export default function Sidebar() {
 
   const navItems = [
     {
+      label: 'Centro de Mando',
+      href: '/dashboard',
+      icon: LayoutDashboard,
+    },
+    {
       label: 'Proyectos & Obras',
       href: '/proyectos',
-      icon: LayoutDashboard,
+      icon: Building,
     },
     {
       label: 'Copiloto Obrero IA',
@@ -103,7 +109,7 @@ export default function Sidebar() {
     {
       label: 'Clientes',
       href: '/clientes',
-      icon: Building,
+      icon: Users,
     },
     {
       label: 'Planes & Precios',
@@ -123,7 +129,7 @@ export default function Sidebar() {
 
       {/* Mobile Top Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#1E1E1E] text-white z-50 flex items-center justify-between px-4 border-b border-[#2A2A2A] shadow-md">
-        <Link href="/proyectos">
+        <Link href="/dashboard">
           <Logo variant="horizontal" theme="dark" size="sm" />
         </Link>
         <div className="flex items-center gap-2">
@@ -162,7 +168,7 @@ export default function Sidebar() {
         {/* Brand Header */}
         <div>
           <div className="hidden md:flex flex-col px-5 py-5 border-b border-[#2A2A2A]">
-            <Link href="/proyectos" className="hover:opacity-95 transition-opacity">
+            <Link href="/dashboard" className="hover:opacity-95 transition-opacity">
               <Logo variant="horizontal" theme="dark" size="md" withDescriptor={false} />
             </Link>
             <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center gap-1.5 text-[10px] font-heading font-medium text-gray-400">
