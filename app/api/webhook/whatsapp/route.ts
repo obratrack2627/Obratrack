@@ -101,8 +101,12 @@ export async function POST(request: NextRequest) {
 
     // Si es Meta Cloud API y tenemos token, responder enviando mensaje vía Graph API
     if (isMetaCloud) {
-      const metaToken = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
-      const phoneNumberId = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
+      const metaToken =
+        process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN ||
+        'EAAXDQlen7wEBScb7wR9RmbZAPa2jPm0F76ZBHhBU4SkES3gJhsOlFEkv3xr8YqnZAkmZAIJgrywYeHCIPl3yaZCX0lc7rquG5QaV1KYJN09MVQbUANJuk5dT5YQwIc3vzFQXSIZCi6ifbEojCMBaoMVqwTJVDUowfedh7TUrDqZCwZBK6egRyyROTvQoqAiWbYRJZAks3F9bR2EUqa6GC9ZB7ZBorUemt5nhxJWg0edDw3IraePmv6mZC4RvoW144I0TCfVpiSlJ69Mji0TPK9JTg31RPX33';
+      const phoneNumberId =
+        process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID ||
+        '1278818638652294';
 
       if (metaToken && phoneNumberId && cleanPhone) {
         try {

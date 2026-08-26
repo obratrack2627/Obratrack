@@ -8,7 +8,8 @@ export function getGeminiClient(): GoogleGenAI | null {
   const apiKey =
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_GENAI_API_KEY;
+    process.env.GOOGLE_GENAI_API_KEY ||
+    'AIzaSyADGLLef_wdpfmKkh7WrOnjm3S_8l5wSNQ';
 
   if (!apiKey || apiKey.trim() === '' || apiKey.includes('YourGeminiApiKeyHere')) {
     return null;
