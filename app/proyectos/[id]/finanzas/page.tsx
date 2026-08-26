@@ -19,9 +19,11 @@ import {
   Edit3,
   ShoppingBag,
   Store,
+  MapPin,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import Navbar from '@/components/Navbar';
+import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import { dataService } from '@/lib/data-service';
 import { Proyecto, Pago, Imprevisto, PaymentMethod, MaterialProyecto } from '@/types/database';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
@@ -40,6 +42,7 @@ export default function ProyectoFinanzasPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isImprevistoModalOpen, setIsImprevistoModalOpen] = useState(false);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
+  const [isMapsModalOpen, setIsMapsModalOpen] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
 
   // Modales de Edición & Eliminación
@@ -340,6 +343,14 @@ export default function ProyectoFinanzasPage() {
         subtitle={`Control de pagos, flujo de caja, materiales e imprevistos`}
         action={
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsMapsModalOpen(true)}
+              className="px-3 py-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
+              title="Ver ubicación en Google Maps"
+            >
+              <MapPin className="w-3.5 h-3.5 text-[#FF6A00]" />
+              <span>Maps</span>
+            </button>
             <Link
               href={`/proyectos/${proyecto.id}/gantt`}
               className="px-3 py-1.5 bg-white border border-kraft-200 hover:bg-kraft-50 text-navy-900 text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
@@ -1398,6 +1409,13 @@ export default function ProyectoFinanzasPage() {
           </div>
         </div>
       )}
+
+      {/* Modal: Visor Google Maps de la Obra */}
+      <GoogleMapsProjectViewer
+        proyecto={proyecto}
+        isOpen={isMapsModalOpen}
+        onClose={() => setIsMapsModalOpen(false)}
+      />
 
     </div>
   );

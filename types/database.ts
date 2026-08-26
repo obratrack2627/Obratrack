@@ -67,6 +67,15 @@ export interface Proyecto {
   cliente_id?: string;
   nombre: string;
   descripcion?: string;
+  
+  // Ubicación Geográfica (Google Maps Chile)
+  direccion?: string;
+  comuna?: string;
+  region?: string;
+  latitud?: number;
+  longitud?: number;
+  lugar_referencia?: string;
+
   fecha_inicio: string;
   fecha_termino_estimada: string;
   estado: ProjectStatus;

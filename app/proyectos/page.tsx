@@ -26,13 +26,20 @@ import {
   ShieldCheck,
   Search,
   Filter,
+  MapPin,
+  Navigation,
+  Compass,
+  Globe,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
 import { Proyecto, Cliente, Usuario, SubscriptionPlanId, ProjectStatus } from '@/types/database';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 import { getPlanDetails } from '@/lib/plans';
+import { getCoordenadasComuna } from '@/lib/chile-locations';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
+import GoogleMapsLocationPicker from '@/components/GoogleMapsLocationPicker';
+import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 
 export default function ProyectosPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
@@ -43,6 +50,7 @@ export default function ProyectosPage() {
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [projectToDelete, setProjectToDelete] = useState<Proyecto | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [viewingMapsProject, setViewingMapsProject] = useState<Proyecto | null>(null);
 
   // Filtros de búsqueda y estado
   const [searchTerm, setSearchTerm] = useState('');
@@ -58,6 +66,12 @@ export default function ProyectosPage() {
     new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
   const [descripcion, setDescripcion] = useState('');
+  const [direccion, setDireccion] = useState('');
+  const [comuna, setComuna] = useState('Las Condes');
+  const [region, setRegion] = useState('Región Metropolitana de Santiago');
+  const [latitud, setLatitud] = useState<number>(-33.4116);
+  const [longitud, setLongitud] = useState<number>(-70.5794);
+  const [lugarReferencia, setLugarReferencia] = useState('');
   const [selectedTrabajadores, setSelectedTrabajadores] = useState<string[]>([]);
   const [actividadesTexto, setActividadesTexto] = useState(
     'Cimientos y Radier (10 días)\nMontaje de Estructura y Muros (15 días)\nInstalaciones y Terminaciones (15 días)'
@@ -71,6 +85,12 @@ export default function ProyectosPage() {
   const [editFechaInicio, setEditFechaInicio] = useState('');
   const [editFechaTermino, setEditFechaTermino] = useState('');
   const [editDescripcion, setEditDescripcion] = useState('');
+  const [editDireccion, setEditDireccion] = useState('');
+  const [editComuna, setEditComuna] = useState('Las Condes');
+  const [editRegion, setEditRegion] = useState('Región Metropolitana de Santiago');
+  const [editLatitud, setEditLatitud] = useState<number>(-33.4116);
+  const [editLongitud, setEditLongitud] = useState<number>(-70.5794);
+  const [editReferencia, setEditReferencia] = useState('');
   const [editEstado, setEditEstado] = useState<ProjectStatus>('activo');
   const [editTrabajadores, setEditTrabajadores] = useState<string[]>([]);
 
@@ -127,6 +147,12 @@ export default function ProyectosPage() {
         cliente_id: clienteId || undefined,
         nombre: nombre.trim(),
         descripcion: descripcion.trim(),
+        direccion: direccion.trim(),
+        comuna: comuna.trim(),
+        region: region.trim(),
+        latitud,
+        longitud,
+        lugar_referencia: lugarReferencia.trim(),
         fecha_inicio: fechaInicio,
         fecha_termino_estimada: fechaTermino,
         estado: 'activo',
@@ -139,14 +165,20 @@ export default function ProyectosPage() {
     setIsModalOpen(false);
     setNombre('');
     setDescripcion('');
+    setDireccion('');
+    setLugarReferencia('');
     setMontoCotizado('');
     setSelectedTrabajadores([]);
-    setToastMessage(`Obra "${nombre.trim()}" creada exitosamente.`);
+    setToastMessage(`Obra "${nombre.trim()}" creada con ubicación geográfica exitosamente.`);
     loadData();
     setTimeout(() => setToastMessage(null), 3000);
   };
 
   const handleOpenEdit = (proj: Proyecto) => {
+    const coords = {
+      lat: proj.latitud ?? getCoordenadasComuna(proj.comuna).lat,
+      lng: proj.longitud ?? getCoordenadasComuna(proj.comuna).lng,
+    };
     setEditingProject(proj);
     setEditNombre(proj.nombre);
     setEditClienteId(proj.cliente_id || (clientes.length > 0 ? clientes[0].id : ''));
@@ -154,6 +186,12 @@ export default function ProyectosPage() {
     setEditFechaInicio(proj.fecha_inicio);
     setEditFechaTermino(proj.fecha_termino_estimada);
     setEditDescripcion(proj.descripcion || '');
+    setEditDireccion(proj.direccion || '');
+    setEditComuna(proj.comuna || 'Las Condes');
+    setEditRegion(proj.region || 'Región Metropolitana de Santiago');
+    setEditLatitud(coords.lat);
+    setEditLongitud(coords.lng);
+    setEditReferencia(proj.lugar_referencia || '');
     setEditEstado(proj.estado);
     setEditTrabajadores(proj.trabajadores_ids || []);
   };
@@ -169,6 +207,12 @@ export default function ProyectosPage() {
       fecha_inicio: editFechaInicio,
       fecha_termino_estimada: editFechaTermino,
       descripcion: editDescripcion.trim(),
+      direccion: editDireccion.trim(),
+      comuna: editComuna.trim(),
+      region: editRegion.trim(),
+      latitud: editLatitud,
+      longitud: editLongitud,
+      lugar_referencia: editReferencia.trim(),
       estado: editEstado,
       trabajadores_ids: editTrabajadores,
     });
@@ -499,10 +543,24 @@ export default function ProyectosPage() {
                           <h3 className="font-heading font-bold text-base text-navy-900 leading-snug truncate">
                             {proj.nombre}
                           </h3>
-                          <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5 truncate">
-                            <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span>{proj.cliente?.nombre || 'Cliente Particular'}</span>
-                          </p>
+                          <div className="flex flex-col gap-0.5 mt-0.5">
+                            <p className="text-xs text-gray-500 flex items-center gap-1 truncate">
+                              <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              <span>{proj.cliente?.nombre || 'Cliente Particular'}</span>
+                            </p>
+                            {/* Botón rápido para abrir en Google Maps */}
+                            <button
+                              type="button"
+                              onClick={() => setViewingMapsProject(proj)}
+                              className="text-xs text-gray-500 hover:text-[#FF6A00] flex items-center gap-1 truncate transition-colors text-left group"
+                              title="Ver ubicación en Google Maps"
+                            >
+                              <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0 group-hover:scale-110 transition-transform" />
+                              <span className="font-semibold truncate">
+                                {proj.direccion ? `${proj.direccion}, ${proj.comuna || 'Chile'}` : `📍 ${proj.comuna || 'Chile'}`}
+                              </span>
+                            </button>
+                          </div>
                         </div>
                         
                         <div className="flex items-center gap-1 shrink-0">
@@ -618,23 +676,35 @@ export default function ProyectosPage() {
                       </div>
                     </div>
 
-                    {/* Acciones directas (Gantt & Finanzas) */}
-                    <div className="grid grid-cols-2 gap-2 pt-3 border-t border-kraft-200">
+                    {/* Acciones directas (Gantt, Finanzas, Google Maps) */}
+                    <div className="grid grid-cols-3 gap-2 pt-3 border-t border-kraft-200">
                       <Link
                         href={`/proyectos/${proj.id}/gantt`}
-                        className="py-2 px-3 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all font-heading"
+                        className="py-2 px-1.5 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                        title="Carta Gantt & Partidas"
                       >
-                        <GanttChartSquare className="w-3.5 h-3.5 text-obra-orange" />
-                        <span>Carta Gantt</span>
+                        <GanttChartSquare className="w-3.5 h-3.5 text-obra-orange shrink-0" />
+                        <span className="truncate">Gantt</span>
                       </Link>
 
                       <Link
                         href={`/proyectos/${proj.id}/finanzas`}
-                        className="py-2 px-3 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all font-heading"
+                        className="py-2 px-1.5 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                        title="Control Financiero"
                       >
-                        <Wallet className="w-3.5 h-3.5 text-navy-800" />
-                        <span>Finanzas</span>
+                        <Wallet className="w-3.5 h-3.5 text-navy-800 shrink-0" />
+                        <span className="truncate">Finanzas</span>
                       </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => setViewingMapsProject(proj)}
+                        className="py-2 px-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-[#1E1E1E] dark:text-white hover:text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
+                        title="Ver ubicación en Google Maps"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
+                        <span className="truncate">Maps</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -777,6 +847,24 @@ export default function ProyectosPage() {
                   />
                 </div>
               </div>
+
+              {/* Selector Interactivo de Ubicación en Google Maps */}
+              <GoogleMapsLocationPicker
+                direccion={direccion}
+                comuna={comuna}
+                region={region}
+                latitud={latitud}
+                longitud={longitud}
+                lugarReferencia={lugarReferencia}
+                onChange={(loc) => {
+                  setDireccion(loc.direccion);
+                  setComuna(loc.comuna);
+                  setRegion(loc.region);
+                  setLatitud(loc.latitud);
+                  setLongitud(loc.longitud);
+                  setLugarReferencia(loc.lugarReferencia);
+                }}
+              />
 
               <div>
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
@@ -971,6 +1059,24 @@ export default function ProyectosPage() {
                 </div>
               </div>
 
+              {/* Selector Interactivo de Ubicación en Google Maps (Edición) */}
+              <GoogleMapsLocationPicker
+                direccion={editDireccion}
+                comuna={editComuna}
+                region={editRegion}
+                latitud={editLatitud}
+                longitud={editLongitud}
+                lugarReferencia={editReferencia}
+                onChange={(loc) => {
+                  setEditDireccion(loc.direccion);
+                  setEditComuna(loc.comuna);
+                  setEditRegion(loc.region);
+                  setEditLatitud(loc.latitud);
+                  setEditLongitud(loc.longitud);
+                  setEditReferencia(loc.lugarReferencia);
+                }}
+              />
+
               <div>
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
                   Descripción / Alcance
@@ -1043,6 +1149,13 @@ export default function ProyectosPage() {
           </div>
         </div>
       )}
+
+      {/* Modal: Visor Completo de Google Maps de la Obra */}
+      <GoogleMapsProjectViewer
+        proyecto={viewingMapsProject}
+        isOpen={!!viewingMapsProject}
+        onClose={() => setViewingMapsProject(null)}
+      />
 
       {/* Toast Notification */}
       {toastMessage && (

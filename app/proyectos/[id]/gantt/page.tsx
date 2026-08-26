@@ -19,9 +19,11 @@ import {
   Tag,
   Users,
   AlertTriangle,
+  MapPin,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import GanttChart from '@/components/GanttChart';
+import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import { dataService } from '@/lib/data-service';
 import { Proyecto, Actividad, Usuario, BitacoraEntrada } from '@/types/database';
 import { formatDate } from '@/lib/utils';
@@ -39,6 +41,7 @@ export default function ProyectoGanttPage() {
   // Modales
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isBitacoraModalOpen, setIsBitacoraModalOpen] = useState(false);
+  const [isMapsModalOpen, setIsMapsModalOpen] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
 
   // Modales de Edición & Eliminación de Bitácora
@@ -209,11 +212,19 @@ export default function ProyectoGanttPage() {
         action={
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setIsMapsModalOpen(true)}
+              className="px-3 py-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
+              title="Ver ubicación en Google Maps"
+            >
+              <MapPin className="w-3.5 h-3.5 text-[#FF6A00]" />
+              <span>Maps</span>
+            </button>
+            <button
               onClick={() => setIsBitacoraModalOpen(true)}
               className="px-3 py-1.5 bg-white border border-kraft-200 hover:bg-kraft-50 text-navy-900 text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
             >
               <BookOpen className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>+ Bitácora Diaria</span>
+              <span>+ Bitácora</span>
             </button>
             <button
               onClick={() => setIsAddModalOpen(true)}
@@ -714,6 +725,13 @@ export default function ProyectoGanttPage() {
           </div>
         </div>
       )}
+
+      {/* Modal: Visor Google Maps de la Obra */}
+      <GoogleMapsProjectViewer
+        proyecto={proyecto}
+        isOpen={isMapsModalOpen}
+        onClose={() => setIsMapsModalOpen(false)}
+      />
 
     </div>
   );
