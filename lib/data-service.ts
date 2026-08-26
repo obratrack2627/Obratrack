@@ -12,6 +12,7 @@ import {
   MaterialProyecto,
   BitacoraEntrada,
   EventoAgenda,
+  MensajeChatCotizador,
 } from '@/types/database';
 import {
   INITIAL_PROYECTOS,
@@ -40,6 +41,7 @@ const KEYS = {
   MATERIALES_PROYECTO: 'obratrack_materiales_proyecto_v2',
   BITACORA: 'obratrack_bitacora_v2',
   AGENDA: 'obratrack_agenda_eventos_v2',
+  CHAT_SESSION: 'obratrack_chat_session_history_v2',
 };
 
 const INITIAL_AGENDA: EventoAgenda[] = [
@@ -146,6 +148,39 @@ class DataService {
     if (!this.isBrowser()) return;
     try {
       localStorage.removeItem(KEYS.ACTIVE_USER);
+      this.clearChatSessionHistory();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // --- PERSISTENCIA DE CHAT POR SESIÓN ---
+  getChatSessionHistory(): MensajeChatCotizador[] | null {
+    if (!this.isBrowser()) return null;
+    try {
+      const data = sessionStorage.getItem(KEYS.CHAT_SESSION) || localStorage.getItem(KEYS.CHAT_SESSION);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  saveChatSessionHistory(messages: any[]): void {
+    if (!this.isBrowser()) return;
+    try {
+      const serialized = JSON.stringify(messages);
+      sessionStorage.setItem(KEYS.CHAT_SESSION, serialized);
+      localStorage.setItem(KEYS.CHAT_SESSION, serialized);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  clearChatSessionHistory(): void {
+    if (!this.isBrowser()) return;
+    try {
+      sessionStorage.removeItem(KEYS.CHAT_SESSION);
+      localStorage.removeItem(KEYS.CHAT_SESSION);
     } catch (e) {
       console.error(e);
     }

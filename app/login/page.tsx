@@ -28,6 +28,7 @@ import {
   resendConfirmationEmail,
   resetPasswordForEmail,
 } from '@/lib/supabase/auth';
+import { dataService } from '@/lib/data-service';
 
 type AuthMode = 'signin' | 'signup' | 'verify_email' | 'forgot_password';
 
@@ -85,6 +86,7 @@ export default function LoginPage() {
         return;
       }
 
+      dataService.clearChatSessionHistory();
       setSuccessMsg('¡Cuenta verificada en Supabase! Ingresando...');
       setTimeout(() => {
         if (result.user?.rol === 'terreno') {

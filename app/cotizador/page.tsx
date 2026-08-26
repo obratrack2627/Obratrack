@@ -27,6 +27,7 @@ import {
   Zap,
   Phone,
   MessageCircle,
+  RotateCcw,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
@@ -44,6 +45,20 @@ import { getPlanDetails } from '@/lib/plans';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 import PlanLockOverlay from '@/components/PlanLockOverlay';
 
+const INITIAL_CHAT_MESSAGE: MensajeChatCotizador = {
+  id: 'm-init',
+  remitente: 'agente',
+  texto:
+    '¡Hola! Soy tu **Copiloto Obrero IA de ObraTrack**, impulsado por **Google Gemini**.\n\nPuedo cotizar obras, asesorarte en costos de faena, y lo más importante: **controlar y actualizar la plataforma por ti**.\n\nPruébame pidiéndome cosas como:\n• *"Créame una obra de radier para Carlos Henríquez en Peñalolén por 3.5 millones iniciando este lunes"*\n• *"Agrega al maestro Juan Pérez como albañil con teléfono +56912345678"*\n• *"Agéndame una visita a terreno para el viernes a las 10:00 en Las Condes"*',
+  timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+  sugerencias: [
+    'Créame una obra de radier de 35m2 en Peñalolén por 3.2M',
+    'Agrega al maestro Pedro Soto como carpintero',
+    'Agéndame una visita a terreno para el viernes a las 10:00',
+    '¿Cuánto cobrar por instalar 40m2 de porcelanato?',
+  ],
+};
+
 export default function CopilotoObreroPage() {
   const router = useRouter();
   const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -59,26 +74,12 @@ export default function CopilotoObreroPage() {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Mensajes de chat
-  const [mensajesChat, setMensajesChat] = useState<MensajeChatCotizador[]>([
-    {
-      id: 'm-init',
-      remitente: 'agente',
-      texto:
-        '¡Hola! Soy tu **Copiloto Obrero IA de ObraTrack**, impulsado por **Google Gemini**.\n\nPuedo cotizar obras, asesorarte en costos de faena, y lo más importante: **controlar y actualizar la plataforma por ti**.\n\nPruébame pidiéndome cosas como:\n• *"Créame una obra de radier para Carlos Henríquez en Peñalolén por 3.5 millones iniciando este lunes"*\n• *"Agrega al maestro Juan Pérez como albañil con teléfono +56912345678"*\n• *"Agéndame una visita a terreno para el viernes a las 10:00 en Las Condes"*',
-      timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
-      sugerencias: [
-        'Créame una obra de radier de 35m2 en Peñalolén por 3.2M',
-        'Agrega al maestro Pedro Soto como carpintero',
-        'Agéndame una visita a terreno para el viernes a las 10:00',
-        '¿Cuánto cobrar por instalar 40m2 de porcelanato?',
-      ],
-    },
-  ]);
+  // Mensajes de chat (Persistidos por sesión de usuario)
+  const [mensajesChat, setMensajesChat] = useState<MensajeChatCotizador[]>([INITIAL_CHAT_MESSAGE]);
   const [inputChat, setInputChat] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
 
-  // Cargar datos
+  // Cargar datos y restaurar historial de sesión
   const reloadData = () => {
     setProyectos(dataService.getProyectos());
     setUsuarios(dataService.getUsuarios());
@@ -90,6 +91,12 @@ export default function CopilotoObreroPage() {
     reloadData();
     const savedPlan = dataService.getActivePlan();
     if (savedPlan) setActivePlan(savedPlan);
+
+    // Recuperar historial de la sesión activa
+    const savedChat = dataService.getChatSessionHistory();
+    if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
+      setMensajesChat(savedChat);
+    }
   }, []);
 
   useEffect(() => {
@@ -99,6 +106,19 @@ export default function CopilotoObreroPage() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Reiniciar conversación activa para empezar una nueva
+  const handleResetChat = () => {
+    dataService.clearChatSessionHistory();
+    const freshMessage: MensajeChatCotizador = {
+      ...INITIAL_CHAT_MESSAGE,
+      id: 'm-init-' + Date.now(),
+      timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+    };
+    setMensajesChat([freshMessage]);
+    dataService.saveChatSessionHistory([freshMessage]);
+    showToast('✨ Conversación reiniciada para esta sesión.');
   };
 
   // Enviar mensaje a Google Gemini y ejecutar acciones
@@ -113,7 +133,10 @@ export default function CopilotoObreroPage() {
       timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
     };
 
-    setMensajesChat((prev) => [...prev, userMsg]);
+    const nextHistory = [...mensajesChat, userMsg];
+    setMensajesChat(nextHistory);
+    dataService.saveChatSessionHistory(nextHistory);
+
     setInputChat('');
     setIsChatLoading(true);
 
@@ -142,7 +165,7 @@ export default function CopilotoObreroPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mensaje: msgToSend,
-          historial: mensajesChat.slice(-8),
+          historial: nextHistory.slice(-8),
           contexto_db: contextoDB,
         }),
       });
@@ -243,19 +266,21 @@ export default function CopilotoObreroPage() {
         accion_ejecutada: accionEjecutada,
       };
 
-      setMensajesChat((prev) => [...prev, agentMsg]);
+      const updatedHistory = [...nextHistory, agentMsg];
+      setMensajesChat(updatedHistory);
+      dataService.saveChatSessionHistory(updatedHistory);
     } catch (err: any) {
       console.error(err);
-      setMensajesChat((prev) => [
-        ...prev,
-        {
-          id: 'm-err-' + Date.now(),
-          remitente: 'agente',
-          texto:
-            'Hubo un problema de conexión con Google Gemini. Por favor verifica tu red e intenta de nuevo.',
-          timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
+      const errMsg: MensajeChatCotizador = {
+        id: 'm-err-' + Date.now(),
+        remitente: 'agente',
+        texto:
+          'Hubo un problema de conexión con Google Gemini. Por favor verifica tu red e intenta de nuevo.',
+        timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+      };
+      const updatedHistory = [...nextHistory, errMsg];
+      setMensajesChat(updatedHistory);
+      dataService.saveChatSessionHistory(updatedHistory);
     } finally {
       setIsChatLoading(false);
     }
@@ -315,7 +340,7 @@ export default function CopilotoObreroPage() {
             {/* ========================================================================= */}
             <div className="lg:col-span-8 bg-white border border-kraft-200 rounded-3xl shadow-sm overflow-hidden flex flex-col h-[calc(100vh-12rem)] min-h-[580px]">
               
-              {/* Header del Chat */}
+              {/* Header del Chat con Botón de Nueva Conversación */}
               <div className="bg-navy-900 text-white px-5 py-4 border-b border-navy-700 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-obra-orange flex items-center justify-center text-white shadow-md">
@@ -334,6 +359,16 @@ export default function CopilotoObreroPage() {
                     </p>
                   </div>
                 </div>
+
+                {/* Botón Nueva Conversación */}
+                <button
+                  onClick={handleResetChat}
+                  title="Iniciar nueva conversación limpia"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-gray-300 hover:text-white border border-navy-700 text-[11px] font-bold transition-all shadow-sm"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-obra-orange" />
+                  <span className="hidden sm:inline">Nueva Conversación</span>
+                </button>
               </div>
 
               {/* Feed de Conversación */}
