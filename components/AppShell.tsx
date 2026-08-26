@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import ThemeProvider from '@/components/ThemeProvider';
@@ -10,7 +10,7 @@ import { dataService } from '@/lib/data-service';
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isAuthPage = pathname === '/login' || pathname?.startsWith('/login');
+  const isAuthPage = !pathname || pathname === '/' || pathname === '/login' || pathname.startsWith('/login');
 
   useEffect(() => {
     let isCurrent = true;
