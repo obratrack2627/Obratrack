@@ -288,11 +288,44 @@ export interface MaterialChile {
   precio_minimo: number;
 }
 
+export type TipoEventoAgenda =
+  | 'visita_terreno'
+  | 'reunion_cliente'
+  | 'inspeccion_obra'
+  | 'vaciado_hormigon'
+  | 'entrega_material'
+  | 'hito_pago'
+  | 'recordatorio';
+
+export interface EventoAgenda {
+  id: string;
+  titulo: string;
+  tipo: TipoEventoAgenda;
+  fecha: string; // YYYY-MM-DD
+  hora?: string; // HH:MM
+  comuna_lugar?: string;
+  descripcion?: string;
+  proyecto_id?: string;
+  proyecto_nombre?: string;
+  cliente_nombre?: string;
+  completado: boolean;
+  origen: 'asistente_ia' | 'manual';
+  created_at: string;
+}
+
+export interface AccionAsistenteIA {
+  tipo: 'agendar_evento' | 'crear_proyecto' | 'crear_tarea' | 'crear_recordatorio';
+  titulo: string;
+  detalles: Record<string, any>;
+  resultado_texto: string;
+}
+
 export interface MensajeChatCotizador {
   id: string;
   remitente: 'usuario' | 'agente';
   texto: string;
   timestamp: string;
   sugerencias?: string[];
+  accion_ejecutada?: AccionAsistenteIA;
 }
 

@@ -11,6 +11,7 @@ import {
   SubscriptionPlanId,
   MaterialProyecto,
   BitacoraEntrada,
+  EventoAgenda,
 } from '@/types/database';
 import {
   INITIAL_PROYECTOS,
@@ -38,7 +39,39 @@ const KEYS = {
   PLAN: 'obratrack_active_plan_v2',
   MATERIALES_PROYECTO: 'obratrack_materiales_proyecto_v2',
   BITACORA: 'obratrack_bitacora_v2',
+  AGENDA: 'obratrack_agenda_eventos_v2',
 };
+
+const INITIAL_AGENDA: EventoAgenda[] = [
+  {
+    id: 'evt-1',
+    titulo: 'Visita de Inspección y Trazado inicial',
+    tipo: 'visita_terreno',
+    fecha: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+    hora: '10:00',
+    comuna_lugar: 'Peñalolén, Santiago',
+    descripcion: 'Revisar niveles de terreno con el maestro mayor y validar puntos de agua.',
+    proyecto_nombre: 'Construcción Radier y Quincho',
+    cliente_nombre: 'Carlos Henríquez',
+    completado: false,
+    origen: 'asistente_ia',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'evt-2',
+    titulo: 'Recepción y Vaciado de Hormigón H-25',
+    tipo: 'vaciado_hormigon',
+    fecha: new Date(Date.now() + 259200000).toISOString().split('T')[0],
+    hora: '08:30',
+    comuna_lugar: 'La Florida, Santiago',
+    descripcion: 'Llegada de camión mixer de Melón Hormigones y cuadrilla de 4 maestros.',
+    proyecto_nombre: 'Remodelación Terraza & Radier',
+    cliente_nombre: 'Constructora del Valle',
+    completado: false,
+    origen: 'asistente_ia',
+    created_at: new Date().toISOString(),
+  },
+];
 
 class DataService {
   private isBrowser(): boolean {
@@ -656,6 +689,53 @@ class DataService {
     );
 
     return nuevoProyecto;
+  }
+
+  // --- AGENDA DE VISITAS, HITOS Y EVENTOS (CREADOS POR ASISTENTE IA O MANUAL) ---
+  getEventosAgenda(): EventoAgenda[] {
+    return this.getItem<EventoAgenda[]>(KEYS.AGENDA, INITIAL_AGENDA);
+  }
+
+  saveEventoAgenda(
+    evento: Omit<EventoAgenda, 'id' | 'created_at'> & { id?: string }
+  ): EventoAgenda {
+    const list = this.getEventosAgenda();
+    if (evento.id) {
+      const idx = list.findIndex((e) => e.id === evento.id);
+      if (idx >= 0) {
+        list[idx] = {
+          ...list[idx],
+          ...evento,
+        } as EventoAgenda;
+        this.setItem(KEYS.AGENDA, list);
+        return list[idx];
+      }
+    }
+
+    const nuevo: EventoAgenda = {
+      ...evento,
+      id: 'evt-' + Date.now(),
+      created_at: new Date().toISOString(),
+    };
+    list.unshift(nuevo);
+    this.setItem(KEYS.AGENDA, list);
+    return nuevo;
+  }
+
+  deleteEventoAgenda(id: string): boolean {
+    let list = this.getEventosAgenda();
+    list = list.filter((e) => e.id !== id);
+    this.setItem(KEYS.AGENDA, list);
+    return true;
+  }
+
+  toggleEventoAgenda(id: string): boolean {
+    const list = this.getEventosAgenda();
+    const item = list.find((e) => e.id === id);
+    if (!item) return false;
+    item.completado = !item.completado;
+    this.setItem(KEYS.AGENDA, list);
+    return true;
   }
 
   // --- SINCRONIZACIÓN CON SUPABASE POSTGRESQL ---

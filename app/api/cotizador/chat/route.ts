@@ -29,13 +29,14 @@ export async function POST(request: NextRequest) {
       )} CLP]\n\nPregunta: ${mensaje}`;
     }
 
-    const { respuesta, sugerencias } = await chatAsesorObrasGemini(
+    const { respuesta, accion, sugerencias } = await chatAsesorObrasGemini(
       formattedHistory,
       contextualPrompt
     );
 
     return NextResponse.json({
       respuesta,
+      accion: accion || null,
       sugerencias: sugerencias || [
         '¿Dónde comprar materiales más baratos en Chile?',
         '¿Cuánto cobrar por mano de obra?',

@@ -242,91 +242,170 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
 }
 
 /**
- * Chat interactivo con el Asesor Experto en Obras (Google Gemini)
+ * Chat interactivo conversacional con el Asesor Experto en Obras & Agendador IA (Google Gemini)
  */
 export async function chatAsesorObrasGemini(
   historial: { rol: 'user' | 'model'; texto: string }[],
   mensajeUsuario: string
-): Promise<{ respuesta: string; sugerencias?: string[] }> {
+): Promise<{ respuesta: string; accion?: any; sugerencias?: string[] }> {
   const gemini = getGeminiClient();
+
+  const fechaHoy = new Date().toISOString().split('T')[0];
+  const diaSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][new Date().getDay()];
+
+  const systemInstructionsChat = `${SYSTEM_PROMPT_CONSTRUCCION_CHILE}
+
+HOY ES: ${diaSemana}, ${fechaHoy}.
+
+ROL Y REGLAS DE CONVERSACIÓN:
+1. Eres el Copiloto Inteligente de ObraTrack y Asistente de Faena para Chile. Hablas en español de Chile de forma profesional, clara, cercana y directa como un ingeniero civil / jefe de obras experimentado.
+2. REGLA ESTRICTA DE CONTEXTO: Tu único dominio es la construcción, ingeniería civil, edificación, cálculo de materiales (cemento, maderas, fierros, cerámicos), cubicaciones, precios en ferreterías chilenas, mano de obra y agendamiento de faenas. Si el usuario intenta hablar de recetas de cocina, videojuegos, política internacional o temas fuera de obra, dile amablemente: "Mi función como Asistente de ObraTrack está 100% enfocada en faena, costos y construcción en Chile. ¿En qué obra o presupuesto te puedo colaborar hoy?".
+3. CAPACIDAD DE AGENDAR Y CREAR TAREAS:
+   - Si el usuario te pide agendar una visita a terreno, reunión con mandante, vaciado de hormigón, inspección de faena, entrega de materiales o recordatorio (ejemplo: "Agéndame una visita a terreno para el viernes a las 10:00 en Peñalolén con Don Carlos"):
+     Debes incluir en el JSON el objeto "accion" con los datos estructurados.
+   - Si es solo una consulta técnica o de costos (ej: "¿cuánto rinde un saco de cemento?"), "accion" debe ser null.
+
+FORMATO DE RESPUESTA OBLIGATORIO:
+Debes responder SIEMPRE con un JSON válido con esta estructura:
+{
+  "respuesta": "Texto conversacional natural, empático y técnico explicando la respuesta o confirmando el agendamiento...",
+  "accion": {
+    "tipo": "agendar_evento",
+    "titulo": "Visita de Terreno con Don Carlos",
+    "tipo_evento": "visita_terreno",
+    "fecha": "YYYY-MM-DD",
+    "hora": "10:00",
+    "comuna_lugar": "Peñalolén, Santiago",
+    "descripcion": "Revisión de avances y niveles de terreno",
+    "cliente_nombre": "Don Carlos"
+  } | null,
+  "sugerencias": [
+    "Sugerencia 1",
+    "Sugerencia 2",
+    "Sugerencia 3"
+  ]
+}`;
 
   if (!gemini) {
     const lower = mensajeUsuario.toLowerCase();
-    if (lower.includes('cobrar') || lower.includes('precio') || lower.includes('m2')) {
+    if (lower.includes('agendar') || lower.includes('visita') || lower.includes('reunión') || lower.includes('reunion')) {
       return {
         respuesta:
-          'Para fijar el cobro a tu cliente en Chile, la regla de oro es sumar tus Costos Directos (Materiales + Mano de obra de cuadrilla) + 10% de Gastos Generales (fletes, combustible, herramientas) + 5% de Imprevistos. A esa base agrégale tu Margen de Utilidad (mínimo 20% para obras pequeñas, 25-30% para estándar). Recuerda acordar siempre 40% de anticipo para no financiar la obra con tu propio bolsillo.',
-        sugerencias: [
-          '¿Cómo calculo el saco de cemento por m2 de radier?',
-          '¿Cuál es el valor del jornal de un maestro en Santiago?',
-          '¿Cómo redacto un presupuesto para que el cliente no regatee?',
-        ],
+          '¡Listo! He registrado la visita a terreno en la agenda de tu obra. Puedes verla en cualquier momento en tu cronograma.',
+        accion: {
+          tipo: 'agendar_evento',
+          titulo: 'Visita de Terreno',
+          tipo_evento: 'visita_terreno',
+          fecha: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+          hora: '10:00',
+          comuna_lugar: 'Santiago, Chile',
+          descripcion: mensajeUsuario,
+          cliente_nombre: 'Cliente Mandante',
+        },
+        sugerencias: ['Ver agenda de obras', 'Calcular insumos para la visita', '¿Cuánto cobrar por el proyecto?'],
       };
     }
+
     return {
       respuesta:
-        '¡Hola! Soy tu Asesor de Obras & Costos de ObraTrack impulsado por Google Gemini. Puedo ayudarte a calcular cuánto cobrarle al mandante, estimar sacos de cemento, madera, fierro, jornales de maestros o comparar precios entre Construmart, Imperial y Sodimac.',
+        '¡Hola! Soy tu Asesor de Obras & Costos de ObraTrack. Puedo ayudarte a calcular rendimientos de cemento, madera, fierro, jornales en Chile, o agendar visitas a terreno y tareas de faena directamente.',
       sugerencias: [
-        '¿Cuánto cobrar por instalar 40m2 de porcelanato?',
+        'Agéndame una visita a terreno para mañana a las 10:00',
         '¿Cuánto rinde un saco de cemento en un radier de 10cm?',
-        '¿Dónde me conviene comprar madera en Santiago o Valparaíso?',
+        '¿Cuánto cobrar por instalar 40m2 de porcelanato?',
       ],
     };
   }
 
   try {
-    const formattedContents = historial.map((h) => ({
-      role: h.rol,
-      parts: [{ text: h.texto }],
-    }));
+    const formattedContents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
 
+    // Prompt de sistema como primer mensaje de contexto
     formattedContents.push({
       role: 'user',
+      parts: [{ text: systemInstructionsChat }],
+    });
+    formattedContents.push({
+      role: 'model',
       parts: [
         {
-          text: `${SYSTEM_PROMPT_CONSTRUCCION_CHILE}\n\nPregunta del usuario: ${mensajeUsuario}`,
+          text: JSON.stringify({
+            respuesta: 'Entendido. Estoy listo como Asistente de Obras de ObraTrack para responder consultas técnicas y agendar eventos de faena en Chile.',
+            accion: null,
+            sugerencias: ['¿Cómo calculo sacos de cemento?', 'Agéndame una visita a terreno', '¿Cuánto cobrar por m2?'],
+          }),
         },
       ],
     });
 
+    // Historial previo
+    for (const h of historial) {
+      if (h.texto && h.texto.trim() !== '') {
+        formattedContents.push({
+          role: h.rol === 'user' ? 'user' : 'model',
+          parts: [{ text: h.texto }],
+        });
+      }
+    }
+
+    // Mensaje actual del usuario
+    formattedContents.push({
+      role: 'user',
+      parts: [{ text: mensajeUsuario }],
+    });
+
     const candidateModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'];
-    let respuesta = '';
+    let rawText = '';
 
     for (const m of candidateModels) {
       try {
         const response = await gemini.models.generateContent({
           model: m,
-          contents: formattedContents.map((c) => ({
-            role: c.role,
-            text: c.parts[0].text,
-          })),
+          contents: formattedContents,
+          config: {
+            responseMimeType: 'application/json',
+          },
         });
         if (response.text) {
-          respuesta = response.text;
+          rawText = response.text;
           break;
         }
       } catch (mErr) {
-        console.warn(`Chat fallo con ${m}, probando siguiente modelo...`);
+        console.warn(`Chat falló con ${m}, intentando modelo alternativo...`);
       }
     }
 
-    if (!respuesta) {
-      respuesta = 'No se obtuvo respuesta del modelo Gemini.';
+    if (!rawText) {
+      return {
+        respuesta:
+          'No pude procesar la consulta en este momento. Por favor reintenta tu pregunta sobre faena o agendamiento.',
+        sugerencias: ['Reintentar', 'Ver precios de referencia'],
+      };
     }
 
-    return {
-      respuesta,
-      sugerencias: [
-        '¿Cuánto cobrar por metro cuadrado en este trabajo?',
-        '¿Cómo divido las partidas para la Carta Gantt?',
-        '¿Qué ferretería tiene el mejor precio para estos materiales?',
-      ],
-    };
+    try {
+      const parsed = JSON.parse(rawText);
+      return {
+        respuesta: parsed.respuesta || rawText,
+        accion: parsed.accion || null,
+        sugerencias: parsed.sugerencias || [
+          '¿Cuánto cobrar por metro cuadrado en este trabajo?',
+          '¿Cómo divido las partidas para la Carta Gantt?',
+          '¿Qué ferretería tiene el mejor precio para estos materiales?',
+        ],
+      };
+    } catch {
+      return {
+        respuesta: rawText,
+        accion: null,
+        sugerencias: ['Ver costos de jornales', 'Cubicación de materiales', 'Agendar visita'],
+      };
+    }
   } catch (error) {
     console.error('Error en chatAsesorObrasGemini:', error);
     return {
       respuesta:
-        'Hubo un problema al consultar al Asesor de Google Gemini. Verifica tu clave de API o intenta nuevamente.',
+        'Hubo un problema al consultar al Asesor de Google Gemini. Verifica tu conexión o intenta nuevamente.',
       sugerencias: ['Reintentar consulta', 'Ver precios de referencia'],
     };
   }
