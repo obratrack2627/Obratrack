@@ -65,6 +65,11 @@ export default function ClientesPage() {
   };
 
   useEffect(() => {
+    const user = dataService.getActiveUser();
+    if (user?.rol === 'terreno') {
+      window.location.href = '/proyectos';
+      return;
+    }
     loadData();
   }, []);
 

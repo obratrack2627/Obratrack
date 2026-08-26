@@ -88,6 +88,11 @@ export default function CopilotoObreroPage() {
   };
 
   useEffect(() => {
+    const user = dataService.getActiveUser();
+    if (user?.rol === 'terreno') {
+      router.replace('/proyectos');
+      return;
+    }
     reloadData();
     const savedPlan = dataService.getActivePlan();
     if (savedPlan) setActivePlan(savedPlan);
@@ -97,7 +102,7 @@ export default function CopilotoObreroPage() {
     if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
       setMensajesChat(savedChat);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });

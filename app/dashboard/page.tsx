@@ -46,6 +46,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const user = dataService.getActiveUser();
+    if (user?.rol === 'terreno') {
+      router.replace('/proyectos');
+      return;
+    }
     setActiveUser(user);
 
     const projs = dataService.getProyectos();
@@ -58,7 +62,7 @@ export default function DashboardPage() {
     setReportes(reps);
 
     setLoading(false);
-  }, []);
+  }, [router]);
 
   // Cálculos de KPIs Financieros y Operacionales
   const obrasActivas = proyectos.filter((p) => p.estado === 'activo');

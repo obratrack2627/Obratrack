@@ -292,19 +292,19 @@ export default function Sidebar() {
             </span>
           </div>
 
-          {/* Active User info, Role Switcher & Logout */}
+          {/* Active User info & Logout */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 overflow-hidden">
-                <div className="w-8 h-8 rounded-full bg-[#FF6A00] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                <div className="w-8 h-8 rounded-full bg-[#FF6A00] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
                   {activeUser?.nombre ? activeUser.nombre.charAt(0).toUpperCase() : 'U'}
                 </div>
                 <div className="overflow-hidden">
-                  <p className="text-xs font-bold text-white truncate w-24">
+                  <p className="text-xs font-bold text-white truncate w-28">
                     {activeUser?.nombre ? activeUser.nombre.split(' ')[0] : 'Usuario'}
                   </p>
-                  <p className="text-[10px] text-gray-400 font-mono capitalize">
-                    Rol: {activeUser?.rol || 'admin'}
+                  <p className="text-[10px] text-[#FF6A00] font-mono capitalize">
+                    {activeUser?.rol === 'admin' ? 'Dueño / Admin' : activeUser?.rol === 'supervisor' ? 'Supervisor' : 'Maestro Terreno'}
                   </p>
                 </div>
               </div>
@@ -317,26 +317,6 @@ export default function Sidebar() {
               >
                 <LogOut className="w-4 h-4" />
               </button>
-            </div>
-
-            {/* Quick Role Switcher (Simulación de roles) */}
-            <div className="pt-2 border-t border-[#2A2A2A] flex items-center justify-between gap-1 text-[10px] font-mono">
-              <span className="text-gray-400">Ver como:</span>
-              <div className="flex gap-1">
-                {(['admin', 'supervisor', 'terreno'] as UserRole[]).map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => handleRoleChange(r)}
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-semibold transition-colors uppercase ${
-                      activeUser?.rol === r
-                        ? 'bg-[#FF6A00] text-white'
-                        : 'bg-[#2A2A2A] text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    {r.slice(0, 3)}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
         </div>

@@ -109,6 +109,11 @@ export default function ProyectoFinanzasPage() {
   };
 
   useEffect(() => {
+    const user = dataService.getActiveUser();
+    if (user?.rol === 'terreno') {
+      window.location.href = `/proyectos/${projectId}/gantt`;
+      return;
+    }
     loadData();
   }, [projectId]);
 

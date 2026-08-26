@@ -30,6 +30,9 @@ import {
   Navigation,
   Compass,
   Globe,
+  Camera,
+  Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
@@ -45,12 +48,21 @@ export default function ProyectosPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [activeUser, setActiveUser] = useState<Usuario | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [projectToDelete, setProjectToDelete] = useState<Proyecto | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [viewingMapsProject, setViewingMapsProject] = useState<Proyecto | null>(null);
+
+  // Modal para que el Maestro suba Avances y Fotos
+  const [isAvanceModalOpen, setIsAvanceModalOpen] = useState(false);
+  const [selectedProjectForAvance, setSelectedProjectForAvance] = useState<Proyecto | null>(null);
+  const [avanceTitulo, setAvanceTitulo] = useState('');
+  const [avanceNota, setAvanceNota] = useState('');
+  const [avanceFoto, setAvanceFoto] = useState('');
+  const [avanceTipo, setAvanceTipo] = useState<'avance' | 'incidente' | 'clima' | 'entrega_material'>('avance');
 
   // Filtros de búsqueda y estado
   const [searchTerm, setSearchTerm] = useState('');
@@ -95,6 +107,8 @@ export default function ProyectosPage() {
   const [editTrabajadores, setEditTrabajadores] = useState<string[]>([]);
 
   const loadData = () => {
+    const user = dataService.getActiveUser();
+    setActiveUser(user);
     const projs = dataService.getProyectos();
     const cls = dataService.getClientes();
     const usrs = dataService.getUsuarios();
@@ -223,6 +237,52 @@ export default function ProyectosPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const isTerreno = activeUser?.rol === 'terreno';
+
+  const handleCrearAvanceTerreno = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProjectForAvance || !avanceTitulo.trim()) return;
+
+    const autor = activeUser?.nombre || 'Maestro de Faena';
+
+    // 1. Guardar en Bitácora de la Obra
+    dataService.createBitacoraEntrada({
+      proyecto_id: selectedProjectForAvance.id,
+      titulo: avanceTitulo.trim(),
+      nota: avanceNota.trim(),
+      foto_url: avanceFoto.trim() || undefined,
+      tipo: avanceTipo,
+      fecha: new Date().toISOString().split('T')[0],
+      autor_nombre: autor,
+    });
+
+    // 2. Crear Reporte para el Dueño
+    dataService.createReporte({
+      proyecto_id: selectedProjectForAvance.id,
+      usuario_id: activeUser?.id,
+      mensaje_original: `[Reporte de Faena Web] ${avanceTitulo.trim()}: ${avanceNota.trim()}`,
+      transcripcion: avanceNota.trim(),
+      fecha: new Date().toISOString().split('T')[0],
+      extraccion_ia: {
+        actividad_detectada: avanceTitulo.trim(),
+        avance_porcentaje: avanceTipo === 'avance' ? 100 : null,
+        tiene_imprevisto: avanceTipo === 'incidente',
+        imprevisto_descripcion: avanceTipo === 'incidente' ? avanceNota.trim() : null,
+      },
+      estado: 'aprobado',
+    });
+
+    setToastMessage(`📸 Avance y foto registrados con éxito en la obra "${selectedProjectForAvance.nombre}".`);
+    setIsAvanceModalOpen(false);
+    setSelectedProjectForAvance(null);
+    setAvanceTitulo('');
+    setAvanceNota('');
+    setAvanceFoto('');
+    setAvanceTipo('avance');
+    loadData();
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
   const confirmDelete = () => {
     if (!projectToDelete) return;
     dataService.deleteProyecto(projectToDelete.id);
@@ -252,31 +312,37 @@ export default function ProyectosPage() {
       />
 
       <Navbar
-        title="Obras & Proyectos"
-        subtitle="Panel central de control, avance ponderado, trabajadores y estado financiero"
+        title={isTerreno ? 'Obras Asignadas' : 'Obras & Proyectos'}
+        subtitle={
+          isTerreno
+            ? 'Vista de faena para reporte de avances, fotos y ubicación en mapas'
+            : 'Panel central de control, avance ponderado, trabajadores y estado financiero'
+        }
         action={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsPlanModalOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E5DFC9] text-xs font-mono text-gray-700 hover:border-[#FF6A00] transition-colors shadow-sm"
-            >
-              <span className="w-2 h-2 rounded-full bg-[#FF6A00]"></span>
-              <span>{getPlanDetails(activePlan).nombre}</span>
-            </button>
-            <button
-              onClick={() => {
-                if (activePlan === 'gratis' && proyectosActivos.length >= 1) {
-                  setIsPlanModalOpen(true);
-                } else {
-                  setIsModalOpen(true);
-                }
-              }}
-              className="px-4 py-2.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-sm font-semibold rounded-xl shadow-sm flex items-center gap-2 transition-all font-heading"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Nuevo Proyecto</span>
-            </button>
-          </div>
+          isTerreno ? null : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsPlanModalOpen(true)}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E5DFC9] text-xs font-mono text-gray-700 hover:border-[#FF6A00] transition-colors shadow-sm"
+              >
+                <span className="w-2 h-2 rounded-full bg-[#FF6A00]"></span>
+                <span>{getPlanDetails(activePlan).nombre}</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (activePlan === 'gratis' && proyectosActivos.length >= 1) {
+                    setIsPlanModalOpen(true);
+                  } else {
+                    setIsModalOpen(true);
+                  }
+                }}
+                className="px-4 py-2.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-sm font-semibold rounded-xl shadow-sm flex items-center gap-2 transition-all font-heading"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nuevo Proyecto</span>
+              </button>
+            </div>
+          )
         }
       />
 
@@ -645,25 +711,37 @@ export default function ProyectosPage() {
                         </div>
                       </div>
 
-                      {/* Estado de Pago (Cotizado vs Pagado) */}
-                      <div className="bg-kraft-50 border border-kraft-200/60 rounded-lg p-3 space-y-1.5 mb-4">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-500 font-mono">Cotizado:</span>
-                          <span className="font-mono font-bold text-navy-900">{formatCLP(cotizado)}</span>
+                      {/* Estado de Pago vs Info de Terreno */}
+                      {isTerreno ? (
+                        <div className="bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40 rounded-xl p-3 mb-4">
+                          <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5 mb-1">
+                            <HardHat className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Faena Asignada a tu Cuadrilla</span>
+                          </p>
+                          <p className="text-[10px] text-gray-500 font-sans leading-tight">
+                            Usa el botón de abajo para registrar el avance del día y adjuntar fotografías.
+                          </p>
                         </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-500 font-mono">Pagado:</span>
-                          <span className="font-mono font-bold text-obra-green">
-                            {formatCLP(pagado)} ({percentPago}%)
-                          </span>
+                      ) : (
+                        <div className="bg-kraft-50 border border-kraft-200/60 rounded-lg p-3 space-y-1.5 mb-4">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500 font-mono">Cotizado:</span>
+                            <span className="font-mono font-bold text-navy-900">{formatCLP(cotizado)}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-gray-500 font-mono">Pagado:</span>
+                            <span className="font-mono font-bold text-obra-green">
+                              {formatCLP(pagado)} ({percentPago}%)
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs pt-1 border-t border-kraft-200/60">
+                            <span className="text-gray-500 font-mono">Saldo:</span>
+                            <span className="font-mono font-semibold text-obra-red">
+                              {formatCLP(proj.saldo_pendiente)}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex justify-between text-xs pt-1 border-t border-kraft-200/60">
-                          <span className="text-gray-500 font-mono">Saldo:</span>
-                          <span className="font-mono font-semibold text-obra-red">
-                            {formatCLP(proj.saldo_pendiente)}
-                          </span>
-                        </div>
-                      </div>
+                      )}
 
                       {/* Fechas de Obra */}
                       <div className="flex items-center justify-between text-[11px] text-gray-500 font-mono mb-4">
@@ -676,36 +754,62 @@ export default function ProyectosPage() {
                       </div>
                     </div>
 
-                    {/* Acciones directas (Gantt, Finanzas, Google Maps) */}
-                    <div className="grid grid-cols-3 gap-2 pt-3 border-t border-kraft-200">
-                      <Link
-                        href={`/proyectos/${proj.id}/gantt`}
-                        className="py-2 px-1.5 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
-                        title="Carta Gantt & Partidas"
-                      >
-                        <GanttChartSquare className="w-3.5 h-3.5 text-obra-orange shrink-0" />
-                        <span className="truncate">Gantt</span>
-                      </Link>
+                    {/* Acciones directas */}
+                    {isTerreno ? (
+                      <div className="grid grid-cols-3 gap-2 pt-3 border-t border-kraft-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedProjectForAvance(proj);
+                            setIsAvanceModalOpen(true);
+                          }}
+                          className="col-span-2 py-2 px-2 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all font-heading shadow-md shadow-[#FF6A00]/20 truncate"
+                        >
+                          <Camera className="w-4 h-4 shrink-0" />
+                          <span className="truncate">Subir Fotos / Avance</span>
+                        </button>
 
-                      <Link
-                        href={`/proyectos/${proj.id}/finanzas`}
-                        className="py-2 px-1.5 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
-                        title="Control Financiero"
-                      >
-                        <Wallet className="w-3.5 h-3.5 text-navy-800 shrink-0" />
-                        <span className="truncate">Finanzas</span>
-                      </Link>
+                        <button
+                          type="button"
+                          onClick={() => setViewingMapsProject(proj)}
+                          className="py-2 px-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-gray-800 dark:text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 transition-all font-heading shadow-sm truncate"
+                          title="Ver ubicación en Google Maps"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
+                          <span className="truncate">Maps</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 pt-3 border-t border-kraft-200">
+                        <Link
+                          href={`/proyectos/${proj.id}/gantt`}
+                          className="py-2 px-1.5 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                          title="Carta Gantt & Partidas"
+                        >
+                          <GanttChartSquare className="w-3.5 h-3.5 text-obra-orange shrink-0" />
+                          <span className="truncate">Gantt</span>
+                        </Link>
 
-                      <button
-                        type="button"
-                        onClick={() => setViewingMapsProject(proj)}
-                        className="py-2 px-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-[#1E1E1E] dark:text-white hover:text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
-                        title="Ver ubicación en Google Maps"
-                      >
-                        <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
-                        <span className="truncate">Maps</span>
-                      </button>
-                    </div>
+                        <Link
+                          href={`/proyectos/${proj.id}/finanzas`}
+                          className="py-2 px-1.5 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                          title="Control Financiero"
+                        >
+                          <Wallet className="w-3.5 h-3.5 text-navy-800 shrink-0" />
+                          <span className="truncate">Finanzas</span>
+                        </Link>
+
+                        <button
+                          type="button"
+                          onClick={() => setViewingMapsProject(proj)}
+                          className="py-2 px-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-[#1E1E1E] dark:text-white hover:text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
+                          title="Ver ubicación en Google Maps"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
+                          <span className="truncate">Maps</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1146,6 +1250,169 @@ export default function ProyectosPage() {
                 <span>Sí, Eliminar</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Subir Fotos y Reporte de Avance (Vista Maestro / Terreno) */}
+      {isAvanceModalOpen && selectedProjectForAvance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl sm:rounded-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#FF6A00]/10 text-[#FF6A00] flex items-center justify-center">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-bold text-sm text-gray-900 dark:text-white">
+                    Subir Avance / Fotos de Faena
+                  </h3>
+                  <p className="text-[11px] text-[#FF6A00] font-mono truncate max-w-[240px]">
+                    {selectedProjectForAvance.nombre}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAvanceModalOpen(false)}
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCrearAvanceTerreno} className="space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
+                  Título del Avance / Tarea Realizada *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Hormigonado de radier sector poniente completado"
+                  value={avanceTitulo}
+                  onChange={(e) => setAvanceTitulo(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-[#FF6A00] font-sans"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
+                    Tipo de Reporte
+                  </label>
+                  <select
+                    value={avanceTipo}
+                    onChange={(e) => setAvanceTipo(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-[#FF6A00] font-mono"
+                  >
+                    <option value="avance">✅ Avance de Partida</option>
+                    <option value="incidente">⚠️ Imprevisto / Incidente</option>
+                    <option value="entrega_material">📦 Llegada de Materiales</option>
+                    <option value="clima">🌧️ Condición Climática</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
+                    Autor
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value={activeUser?.nombre || 'Maestro Terreno'}
+                    className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-600 dark:text-gray-400 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
+                  Fotografía de Faena (Archivo o Link)
+                </label>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://... o selecciona abajo una foto de prueba"
+                      value={avanceFoto}
+                      onChange={(e) => setAvanceFoto(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-gray-900 dark:text-white font-mono focus:outline-none focus:border-[#FF6A00]"
+                    />
+                  </div>
+
+                  {/* Fotos rápidas de prueba para faena */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] font-mono">
+                    <span className="text-gray-400 shrink-0">Ejemplos:</span>
+                    <button
+                      type="button"
+                      onClick={() => setAvanceFoto('https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=600&q=80')}
+                      className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-[#FF6A00]/10 text-gray-700 dark:text-gray-300 hover:text-[#FF6A00] rounded-lg transition-colors shrink-0"
+                    >
+                      🧱 Muro Estructura
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAvanceFoto('https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600&q=80')}
+                      className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-[#FF6A00]/10 text-gray-700 dark:text-gray-300 hover:text-[#FF6A00] rounded-lg transition-colors shrink-0"
+                    >
+                      🏗️ Radier & Enfierradura
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAvanceFoto('https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&q=80')}
+                      className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-[#FF6A00]/10 text-gray-700 dark:text-gray-300 hover:text-[#FF6A00] rounded-lg transition-colors shrink-0"
+                    >
+                      🔧 Instalaciones
+                    </button>
+                  </div>
+
+                  {avanceFoto && (
+                    <div className="relative w-full h-36 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black">
+                      <img src={avanceFoto} alt="Preview Faena" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setAvanceFoto('')}
+                        className="absolute top-2 right-2 p-1 bg-black/70 hover:bg-red-600 text-white rounded-full transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
+                  Observaciones / Detalle para el Jefe *
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="Describe el avance del día, materiales utilizados o cualquier necesidad para mañana..."
+                  value={avanceNota}
+                  onChange={(e) => setAvanceNota(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-[#FF6A00] font-sans"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setIsAvanceModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={!avanceTitulo.trim() || !avanceNota.trim()}
+                  className="px-5 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl shadow-md font-heading transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Enviar Avance a Bitácora</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

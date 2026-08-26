@@ -32,6 +32,11 @@ export default function PlanesPage() {
   };
 
   useEffect(() => {
+    const user = dataService.getActiveUser();
+    if (user?.rol === 'terreno') {
+      window.location.href = '/proyectos';
+      return;
+    }
     loadPlan();
     const handler = (e: any) => {
       if (e.detail) setActivePlan(e.detail);
