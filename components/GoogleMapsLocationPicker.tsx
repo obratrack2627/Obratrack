@@ -10,11 +10,13 @@ import {
   Check,
   Search,
   Crosshair,
+  Sparkles,
 } from 'lucide-react';
 import {
   REGIONES_CHILE,
   COORDENADAS_COMUNAS_CHILE,
   getCoordenadasComuna,
+  findNearestComuna,
 } from '@/lib/chile-locations';
 
 interface GoogleMapsLocationPickerProps {
@@ -56,11 +58,35 @@ export default function GoogleMapsLocationPicker({
     return getCoordenadasComuna(comuna || 'Las Condes');
   });
   const [isDetectingGps, setIsDetectingGps] = useState(false);
-  const [gpsSuccess, setGpsSuccess] = useState(false);
+  const [gpsStatusText, setGpsStatusText] = useState<string | null>(null);
   const [mapType, setMapType] = useState<'m' | 'k'>('m'); // 'm' = Roadmap, 'k' = Satellite
 
+  // Sincronizar props entrantes si cambian desde el modal padre
+  useEffect(() => {
+    if (direccion !== undefined) setCurrentDireccion(direccion);
+  }, [direccion]);
+
+  useEffect(() => {
+    if (comuna) setSelectedComuna(comuna);
+  }, [comuna]);
+
+  useEffect(() => {
+    if (region) setSelectedRegion(region);
+  }, [region]);
+
+  useEffect(() => {
+    if (latitud && longitud) {
+      setCoords({ lat: latitud, lng: longitud });
+    }
+  }, [latitud, longitud]);
+
+  useEffect(() => {
+    if (lugarReferencia !== undefined) setCurrentReferencia(lugarReferencia);
+  }, [lugarReferencia]);
+
   // Buscar comunas correspondientes a la región seleccionada
-  const activeRegionObj = REGIONES_CHILE.find((r) => r.nombre === selectedRegion) || REGIONES_CHILE[0];
+  const activeRegionObj =
+    REGIONES_CHILE.find((r) => r.nombre === selectedRegion) || REGIONES_CHILE[0];
   const comunasDisponibles = activeRegionObj.comunas;
 
   // Actualizar coordenadas cuando el usuario cambia de comuna
@@ -122,38 +148,76 @@ export default function GoogleMapsLocationPicker({
     });
   };
 
-  // Detección automática por GPS del dispositivo
+  // Detección automática por GPS del dispositivo + Reverse Geocoding automático
   const handleDetectGPS = () => {
     if (!navigator.geolocation) {
-      alert('Tu navegador no soporta geolocalización GPS.');
+      alert('Tu navegador o dispositivo no soporta geolocalización GPS.');
       return;
     }
+
     setIsDetectingGps(true);
+    setGpsStatusText('Capturando señal GPS...');
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const newCoords = {
-          lat: Number(pos.coords.latitude.toFixed(5)),
-          lng: Number(pos.coords.longitude.toFixed(5)),
-        };
+      async (pos) => {
+        const newLat = Number(pos.coords.latitude.toFixed(6));
+        const newLng = Number(pos.coords.longitude.toFixed(6));
+        const newCoords = { lat: newLat, lng: newLng };
         setCoords(newCoords);
-        setIsDetectingGps(false);
-        setGpsSuccess(true);
-        setTimeout(() => setGpsSuccess(false), 3000);
+
+        setGpsStatusText('Identificando calle y comuna...');
+
+        let finalDireccion = currentDireccion;
+        let finalComuna = selectedComuna;
+        let finalRegion = selectedRegion;
+
+        try {
+          const res = await fetch(`/api/geocode/reverse?lat=${newLat}&lng=${newLng}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.direccion) finalDireccion = data.direccion;
+            if (data.comuna) finalComuna = data.comuna;
+            if (data.region) finalRegion = data.region;
+          } else {
+            const nearest = findNearestComuna(newLat, newLng);
+            finalComuna = nearest.comuna;
+            finalRegion = nearest.region;
+          }
+        } catch (err) {
+          console.warn('Reverse geocoding error:', err);
+          const nearest = findNearestComuna(newLat, newLng);
+          finalComuna = nearest.comuna;
+          finalRegion = nearest.region;
+        }
+
+        // Rellenar campos de forma inmediata en el formulario
+        setCurrentDireccion(finalDireccion);
+        setSelectedComuna(finalComuna);
+        setSelectedRegion(finalRegion);
+
+        // Notificar al componente padre
         onChange({
-          direccion: currentDireccion,
-          comuna: selectedComuna,
-          region: selectedRegion,
-          latitud: newCoords.lat,
-          longitud: newCoords.lng,
+          direccion: finalDireccion,
+          comuna: finalComuna,
+          region: finalRegion,
+          latitud: newLat,
+          longitud: newLng,
           lugarReferencia: currentReferencia,
         });
+
+        setIsDetectingGps(false);
+        setGpsStatusText(`¡Ubicación detectada: ${finalComuna}!`);
+        setTimeout(() => setGpsStatusText(null), 4000);
       },
       (err) => {
         setIsDetectingGps(false);
+        setGpsStatusText(null);
         console.warn('GPS Error:', err);
-        alert('No se pudo obtener la ubicación GPS automática. Por favor selecciona tu comuna en la lista.');
+        alert(
+          'No se pudo obtener la ubicación GPS automática. Por favor activa los permisos de ubicación en tu navegador o selecciona tu comuna en la lista.'
+        );
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
   };
 
@@ -165,21 +229,25 @@ export default function GoogleMapsLocationPicker({
   );
   const mapsEmbedUrl = `https://maps.google.com/maps?q=${queryParam}&t=${mapType}&z=15&ie=UTF8&iwloc=&output=embed`;
   const externalGoogleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    currentDireccion ? `${currentDireccion}, ${selectedComuna}, Chile` : `${coords.lat},${coords.lng}`
+    currentDireccion
+      ? `${currentDireccion}, ${selectedComuna}, Chile`
+      : `${coords.lat},${coords.lng}`
   )}`;
 
   return (
     <div className="space-y-3.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-4 transition-colors">
-      
-      {/* Título de la Sección */}
-      <div className="flex items-center justify-between">
+      {/* Título de la Sección y Botón GPS */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-[#FF6A00]/10 text-[#FF6A00] flex items-center justify-center font-bold">
-            <MapPin className="w-3.5 h-3.5" />
+          <div className="w-7 h-7 rounded-xl bg-[#FF6A00]/10 text-[#FF6A00] flex items-center justify-center font-bold shrink-0">
+            <MapPin className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-xs font-bold font-heading text-[#1E1E1E] dark:text-white uppercase tracking-wider">
-              Ubicación Geográfica en Chile (Google Maps)
+            <h4 className="text-xs font-bold font-heading text-[#1E1E1E] dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+              <span>Ubicación Geográfica en Chile</span>
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-[#FF6A00]/15 text-[#FF6A00] font-bold">
+                Google Maps
+              </span>
             </h4>
             <p className="text-[10px] text-gray-500 dark:text-gray-400 font-sans">
               Georreferenciación precisa de la obra para cuadrillas, fletes y clientes
@@ -187,26 +255,30 @@ export default function GoogleMapsLocationPicker({
           </div>
         </div>
 
-        {/* Botón GPS Automático */}
+        {/* Botón GPS con Reverse Geocoding Automático */}
         <button
           type="button"
           onClick={handleDetectGPS}
           disabled={isDetectingGps}
-          className={`px-2.5 py-1 text-[11px] font-mono font-bold rounded-lg border transition-all flex items-center gap-1.5 shadow-sm ${
-            gpsSuccess
-              ? 'bg-[#6B8F72] text-white border-[#6B8F72]'
+          className={`px-3 py-1.5 text-xs font-mono font-bold rounded-xl border transition-all flex items-center gap-1.5 shadow-sm shrink-0 ${
+            gpsStatusText?.startsWith('¡')
+              ? 'bg-[#6B8F72] text-white border-[#6B8F72] animate-in zoom-in-95'
+              : isDetectingGps
+              ? 'bg-[#FF6A00]/15 text-[#FF6A00] border-[#FF6A00]'
               : 'bg-white dark:bg-[#141A23] border-[#E5DFC9] dark:border-[#263040] text-gray-700 dark:text-gray-300 hover:text-[#FF6A00] hover:border-[#FF6A00]'
           }`}
-          title="Detectar coordenadas actuales por GPS del celular/computador"
+          title="Detectar coordenadas y rellenar dirección y comuna automáticamente por GPS"
         >
           {isDetectingGps ? (
-            <span className="w-3 h-3 border-2 border-[#FF6A00] border-t-transparent rounded-full animate-spin"></span>
-          ) : gpsSuccess ? (
-            <Check className="w-3 h-3 text-white" />
+            <span className="w-3.5 h-3.5 border-2 border-[#FF6A00] border-t-transparent rounded-full animate-spin"></span>
+          ) : gpsStatusText?.startsWith('¡') ? (
+            <Check className="w-3.5 h-3.5 text-white" />
           ) : (
-            <Crosshair className="w-3 h-3 text-[#FF6A00]" />
+            <Crosshair className="w-3.5 h-3.5 text-[#FF6A00]" />
           )}
-          <span>{isDetectingGps ? 'Obteniendo GPS...' : gpsSuccess ? '¡GPS Capturado!' : 'Detectar GPS'}</span>
+          <span>
+            {gpsStatusText || 'Detectar y Rellenar con GPS'}
+          </span>
         </button>
       </div>
 
@@ -219,7 +291,7 @@ export default function GoogleMapsLocationPicker({
           <select
             value={selectedRegion}
             onChange={(e) => handleRegionChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] transition-colors"
+            className="w-full px-3 py-2 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] transition-colors font-medium"
           >
             {REGIONES_CHILE.map((r) => (
               <option key={r.numero} value={r.nombre}>
@@ -236,7 +308,7 @@ export default function GoogleMapsLocationPicker({
           <select
             value={selectedComuna}
             onChange={(e) => handleComunaChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] transition-colors font-medium"
+            className="w-full px-3 py-2 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] transition-colors font-semibold"
           >
             {comunasDisponibles.map((c) => (
               <option key={c} value={c}>
@@ -258,7 +330,7 @@ export default function GoogleMapsLocationPicker({
             placeholder="Ej: Av. Las Condes 12461, Parcela 14, Camino Los Trapenses..."
             value={currentDireccion}
             onChange={(e) => handleDireccionChange(e.target.value)}
-            className="w-full px-3 py-2 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] transition-colors"
+            className="w-full px-3 py-2 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] transition-colors font-medium"
           />
         </div>
 
@@ -278,7 +350,6 @@ export default function GoogleMapsLocationPicker({
 
       {/* Visor Embebido de Google Maps con Controles */}
       <div className="relative rounded-xl overflow-hidden border border-[#E5DFC9] dark:border-[#263040] bg-gray-100 dark:bg-gray-800 shadow-inner">
-        
         {/* Barra superior del mapa */}
         <div className="absolute top-2 left-2 z-10 flex items-center gap-1.5 bg-white/90 dark:bg-[#141A23]/90 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-black/10 dark:border-white/10 shadow-sm text-[10px] font-mono">
           <span className="w-2 h-2 rounded-full bg-[#FF6A00] animate-ping"></span>
@@ -346,7 +417,6 @@ export default function GoogleMapsLocationPicker({
           </a>
         </div>
       </div>
-
     </div>
   );
 }
