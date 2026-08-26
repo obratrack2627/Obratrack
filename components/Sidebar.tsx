@@ -78,46 +78,62 @@ export default function Sidebar() {
 
   const currentPlanDetails = getPlanDetails(activePlan);
 
-  const navItems = [
-    {
-      label: 'Centro de Mando',
-      href: '/dashboard',
-      icon: LayoutDashboard,
-    },
-    {
-      label: 'Proyectos & Obras',
-      href: '/proyectos',
-      icon: Building,
-    },
-    {
-      label: 'Copiloto Obrero IA',
-      href: '/cotizador',
-      icon: Sparkles,
-      highlight: true,
-    },
-    {
-      label: 'Reportes WhatsApp',
-      href: '/reportes',
-      icon: MessageSquareShare,
-      badge: pendingReportsCount > 0 ? pendingReportsCount : null,
-    },
-    {
-      label: 'Equipo de Obra',
-      href: '/equipo',
-      icon: Users,
-    },
-    {
-      label: 'Clientes',
-      href: '/clientes',
-      icon: Users,
-    },
-    {
-      label: 'Planes & Precios',
-      href: '/planes',
-      icon: CreditCard,
-      planBadge: currentPlanDetails.nombre.replace('Plan ', ''),
-    },
-  ];
+  const isTerreno = activeUser?.rol === 'terreno';
+
+  const navItems = isTerreno
+    ? [
+        {
+          label: 'Obras Asignadas',
+          href: '/proyectos',
+          icon: Building,
+        },
+        {
+          label: 'Reportes & Avances',
+          href: '/reportes',
+          icon: MessageSquareShare,
+          badge: pendingReportsCount > 0 ? pendingReportsCount : null,
+        },
+      ]
+    : [
+        {
+          label: 'Centro de Mando',
+          href: '/dashboard',
+          icon: LayoutDashboard,
+        },
+        {
+          label: 'Proyectos & Obras',
+          href: '/proyectos',
+          icon: Building,
+        },
+        {
+          label: 'Copiloto Obrero IA',
+          href: '/cotizador',
+          icon: Sparkles,
+          highlight: true,
+        },
+        {
+          label: 'Reportes WhatsApp',
+          href: '/reportes',
+          icon: MessageSquareShare,
+          badge: pendingReportsCount > 0 ? pendingReportsCount : null,
+        },
+        {
+          label: 'Equipo de Obra',
+          href: '/equipo',
+          icon: Users,
+        },
+        {
+          label: 'Clientes',
+          href: '/clientes',
+          icon: Users,
+        },
+        {
+          label: 'Planes & Precios',
+          href: '/planes',
+          icon: CreditCard,
+          planBadge: currentPlanDetails.nombre.replace('Plan ', ''),
+        },
+      ];
 
   return (
     <>

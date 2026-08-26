@@ -47,6 +47,8 @@ export interface Usuario {
   email: string;
   rol: UserRole;
   telefono_whatsapp: string;
+  rut?: string;
+  empresa_nombre?: string;
   created_at?: string;
 }
 

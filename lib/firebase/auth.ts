@@ -42,13 +42,14 @@ function mapFirebaseAuthError(code: string): string {
 }
 
 /**
- * Registro de un nuevo usuario en Firebase Auth y guardado de perfil en Firestore
+ * Registro de un nuevo Dueño / Contratista en Firebase Auth con validación de RUT y guardado de perfil en Firestore
  */
 export async function signUpWithFirebase(
   email: string,
   pass: string,
   nombre: string,
-  rol: UserRole = 'admin',
+  rut: string,
+  empresaNombre: string,
   telefono: string = '+56 9 '
 ): Promise<AuthResult> {
   const auth = getFirebaseAuth();
@@ -65,8 +66,10 @@ export async function signUpWithFirebase(
       id: fbUser.uid,
       nombre: nombre.trim(),
       email: fbUser.email || email.trim().toLowerCase(),
-      rol,
+      rol: 'admin', // Cuentas creadas en la web son siempre Dueño / Contratista
       telefono_whatsapp: telefono.trim(),
+      rut: rut.trim(),
+      empresa_nombre: empresaNombre.trim(),
       empresa_id: '11111111-1111-1111-1111-111111111111',
       auth_user_id: fbUser.uid,
       created_at: new Date().toISOString(),
