@@ -153,7 +153,7 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
       "tienda": "Imperial Barracas",
       "categoria_destacada": "Maderas y Tableros",
       "nivel_precio": "mas_barato",
-      "descuentos_disponibles": "Descuento en compras por volumen",
+      "descuentos_disponibles": "Descuento Constructor 10%",
       "ahorro_estimado_total": 85000,
       "ventajas": ["Cortes a medida", "Stock permanente"]
     }
@@ -167,8 +167,7 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
   ],
   "consejos_experto_pyme": [
     "Consejo de compra estratégica",
-    "Consejo de control de mano de obra",
-    "Advertencia técnica de faena"
+    "Consejo de control de mano de obra"
   ],
   "recomendacion_cobro": {
     "precio_minimo_rentable": 1200000,
@@ -291,20 +290,32 @@ export function generarRespuestaHeuristicaCopiloto(
   ) {
     let clienteNombre = 'Carlos Henríquez';
     let clienteTelefono = '+56987654321';
-    let proyectoNombre = 'Instalación de Porcelanato (35 m²)';
-    let montoTotal = 1994201;
+    let proyectoNombre = 'Presupuesto de Faena';
+    let montoTotal = 28908505;
 
     if (contextoDB?.clientes && contextoDB.clientes.length > 0) {
       clienteNombre = contextoDB.clientes[0].nombre;
     }
     if (contextoDB?.proyectos && contextoDB.proyectos.length > 0) {
       proyectoNombre = contextoDB.proyectos[0].nombre;
+      montoTotal = contextoDB.proyectos[0].monto_cotizado || montoTotal;
     }
 
-    const clienteMatch = msg.match(/(?:a|para)\s+([a-záéíóúñ\s]+?)(?:\s+por|\s+el|\s+la|$)/i);
+    const clienteMatch = msg.match(/(?:a|para)\s+([a-zA-ZáéíóúñÁÉÍÓÚÑ\s]+?)(?:\s+por|\s+el|\s+la|$)/i);
     if (clienteMatch) clienteNombre = clienteMatch[1].trim();
 
-    const textoWhatsApp = `🏗️ *PROPUESTA FORMAL DE COTIZACIÓN - OBRATRACK*\n\nEstimado(a) *${clienteNombre}*, le comparto el presupuesto oficial para la obra:\n📌 *${proyectoNombre}*\n💰 *Total Propuesta con IVA:* *$${montoTotal.toLocaleString('es-CL')} CLP*\n\n📋 *Forma de Pago Acordada:*\n• 40% Anticipo (Materiales): $${Math.round(montoTotal * 0.4).toLocaleString('es-CL')} CLP\n• 30% Avance 50%: $${Math.round(montoTotal * 0.3).toLocaleString('es-CL')} CLP\n• 20% Terminaciones: $${Math.round(montoTotal * 0.2).toLocaleString('es-CL')} CLP\n• 10% Recepción Conforme: $${Math.round(montoTotal * 0.1).toLocaleString('es-CL')} CLP\n\nEmitido a través de ObraTrack.`;
+    const textoWhatsApp = `🏗️ *PROPUESTA FORMAL DE COTIZACIÓN - OBRATRACK*
+
+Estimado(a) *${clienteNombre}*, le comparto el presupuesto oficial para la obra:
+📌 *${proyectoNombre}*
+💰 *Total Propuesta con IVA:* *$${montoTotal.toLocaleString('es-CL')} CLP*
+
+📋 *Forma de Pago Acordada:*
+• 40% Anticipo (Materiales): $${Math.round(montoTotal * 0.4).toLocaleString('es-CL')} CLP
+• 30% Avance 50%: $${Math.round(montoTotal * 0.3).toLocaleString('es-CL')} CLP
+• 30% Contra Entrega: $${Math.round(montoTotal * 0.3).toLocaleString('es-CL')} CLP
+
+Emitido a través de ObraTrack.`;
 
     const accion = {
       tipo: 'enviar_cotizacion_cliente',
@@ -316,7 +327,11 @@ export function generarRespuestaHeuristicaCopiloto(
     };
 
     return {
-      respuesta: `📲 **¡Cotización oficial preparada para enviar a ${clienteNombre}!**\n\nHe generado el documento formal de cotización con desglose de materiales, mano de obra, IVA (19%) y calendario de pagos 40/30/20/10.\n\nPuedes **descargar el PDF oficial membretado** o presionar el botón de **Enviar por WhatsApp** para abrir el mensaje directamente en el teléfono del cliente.`,
+      respuesta: `📲 **¡Cotización oficial preparada para enviar a ${clienteNombre}!**
+
+He generado el documento formal de cotización con desglose de materiales, mano de obra, IVA (19%) y calendario de pagos 40/30/30.
+
+Puedes **descargar el PDF oficial membretado** o presionar el botón de **Enviar por WhatsApp** para abrir el mensaje directamente en el teléfono del cliente.`,
       accion,
       sugerencias: [
         'Ver / Descargar PDF de Cotización',
@@ -327,17 +342,18 @@ export function generarRespuestaHeuristicaCopiloto(
   }
 
   // 2. Detectar intención de CREAR / AGENDAR OBRA
-  const matchCrearObra = msg.match(/(?:crea(?:me|r)?\s+(?:la\s+)?obra|nueva\s+obra|ingresa\s+obra)\s+([^\n\r]+)/i);
+  const matchCrearObra = msg.match(/(?:crea(?:me|r)?\s+(?:la\s+)?obra|nueva\s+obra|ingresa\s+obra)\s+([^
+]+)/i);
   if (matchCrearObra || msg.includes('crear obra') || msg.includes('créame una obra')) {
     let nombreObra = 'Nueva Obra';
     let comuna = 'Santiago';
     let clienteNombre = 'Cliente';
     let monto = 3500000;
 
-    const clienteMatch = msg.match(/para\s+([a-záéíóúñ\s]+?)(?:\s+en|\s+por|\s+de|\s+iniciando|$)/i);
+    const clienteMatch = msg.match(/para\s+([a-zA-ZáéíóúñÁÉÍÓÚÑ\s]+?)(?:\s+en|\s+por|\s+de|\s+iniciando|$)/i);
     if (clienteMatch) clienteNombre = clienteMatch[1].trim();
 
-    const comunaMatch = msg.match(/en\s+([a-záéíóúñ\s]+?)(?:\s+por|\s+para|\s+iniciando|$)/i);
+    const comunaMatch = msg.match(/en\s+([a-zA-ZáéíóúñÁÉÍÓÚÑ\s]+?)(?:\s+por|\s+para|\s+iniciando|$)/i);
     if (comunaMatch) comuna = comunaMatch[1].trim();
 
     const montoMatch = msg.match(/por\s+(\d+(?:[\.,]\d+)?)\s*(?:millones|m|clp|\$)/i);
@@ -347,8 +363,13 @@ export function generarRespuestaHeuristicaCopiloto(
     }
 
     if (msg.includes('radier')) nombreObra = `Construcción de Radier - ${clienteNombre}`;
-    else if (msg.includes('porcelanato') || msg.includes('ceramica')) nombreObra = `Instalación de Porcelanato - ${clienteNombre}`;
+    else if (msg.includes('pintura')) nombreObra = `Pintura y Terminaciones - ${clienteNombre}`;
+    else if (msg.includes('tabique')) nombreObra = `Tabiquería Volcanita - ${clienteNombre}`;
+    else if (msg.includes('techumbre') || msg.includes('techo')) nombreObra = `Techumbre - ${clienteNombre}`;
+    else if (msg.includes('electr')) nombreObra = `Instalación Eléctrica - ${clienteNombre}`;
+    else if (msg.includes('sanit') || msg.includes('gasfit')) nombreObra = `Instalación Sanitaria - ${clienteNombre}`;
     else if (msg.includes('quincho')) nombreObra = `Construcción de Quincho - ${clienteNombre}`;
+    else if (msg.includes('porcelanato') || msg.includes('ceramica')) nombreObra = `Instalación de Porcelanato - ${clienteNombre}`;
     else nombreObra = `Obra General - ${clienteNombre}`;
 
     const accion = {
@@ -363,7 +384,11 @@ export function generarRespuestaHeuristicaCopiloto(
     };
 
     return {
-      respuesta: `✅ **¡Obra registrada exitosamente en el sistema!**\n\nHe creado el proyecto **"${nombreObra}"** para **${clienteNombre}** en la comuna de **${comuna}** con un presupuesto cotizado de **$${monto.toLocaleString('es-CL')} CLP**.\n\nEl proyecto ya aparece en tu panel de **Proyectos** y en el visor de **Google Maps** listo para asignar cuadrilla y generar su Carta Gantt.`,
+      respuesta: `✅ **¡Obra registrada exitosamente en el sistema!**
+
+He creado el proyecto **"${nombreObra}"** para **${clienteNombre}** en la comuna de **${comuna}** con un presupuesto cotizado de **$${monto.toLocaleString('es-CL')} CLP**.
+
+El proyecto ya aparece en tu panel de **Proyectos** y en el visor de **Google Maps** listo para asignar cuadrilla y generar su Carta Gantt.`,
       accion,
       sugerencias: [
         'Agendar una visita a terreno para esta obra',
@@ -427,39 +452,233 @@ Para un radier de **${m2} m²** en Chile:
     };
   }
 
-  // 5. CÁLCULO DE PORCELANATO / PISOS / CERÁMICAS O CONSULTAS GENERALES CON MEDIDAS
-  const merma = 1.15;
-  const m2Material = Math.ceil(m2 * merma * 10) / 10;
-  const sacosBekron = Math.ceil(m2 / 4.5);
-  const kgFrague = Math.ceil(m2 * 0.22);
-  const cajasCrucetas = Math.ceil(m2 / 20);
+  // 5. PINTURA / EMPASTE / MUROS
+  if (msg.includes('pint') || msg.includes('latex') || msg.includes('látex') || msg.includes('esmalte') || msg.includes('pasta muro') || msg.includes('empaste')) {
+    const galonesPintura = Math.ceil(m2 / 30); // 1 galón rinde ~30-35m2 a 2 manos
+    const tinetaPasta = Math.ceil(m2 / 40);
+    const costoPintura = galonesPintura * 22990;
+    const costoPasta = tinetaPasta * 14990;
+    const costoInsumos = 18000; // lijas, cinta enmascarar, plásticos
+    const costoMateriales = costoPintura + costoPasta + costoInsumos;
+    const manoObraM2 = 4500;
+    const totalManoObra = Math.round(m2 * manoObraM2);
+    const costoDirecto = costoMateriales + totalManoObra;
+    const precioTotalConIva = Math.round((costoDirecto * 1.15) * 1.30 * 1.19);
 
-  const costoPorcelanatoM2 = 12990;
-  const costoTotalPorcelanato = Math.round(m2Material * costoPorcelanatoM2);
-  const costoBekron = sacosBekron * 7490;
-  const costoFrague = kgFrague * 2490;
-  const costoInsumos = 25000;
-  const totalMateriales = costoTotalPorcelanato + costoBekron + costoFrague + costoInsumos;
+    return {
+      respuesta: `🎨 **CUBICACIÓN Y COSTOS: PINTURA Y PREPARACIÓN DE MUROS (${m2} m²)**
 
-  const manoObraM2 = 14000;
-  const totalManoObra = Math.round(m2 * manoObraM2);
-  const diasTrabajo = Math.max(3, Math.ceil(m2 / 12));
+Para pintar y empastar una superficie de **${m2} m²** en Chile:
 
-  const costoDirecto = totalMateriales + totalManoObra;
-  const gastosGenerales = Math.round(costoDirecto * 0.1);
-  const imprevistos = Math.round(costoDirecto * 0.05);
-  const costoBase = costoDirecto + gastosGenerales + imprevistos;
+• **Esmalte al Agua / Látex Extra Cubriente:** **${galonesPintura} galón(es)** (~$${costoPintura.toLocaleString('es-CL')} CLP en *Sodimac / Tricolor* a 2 manos).
+• **Pasta Muro Interior:** **${tinetaPasta} tineta(s)** (~$${costoPasta.toLocaleString('es-CL')} CLP).
+• **Insumos de Preparación:** Lijas de grano 120/180, cinta masking tape azul, plásticos protectores (~$${costoInsumos.toLocaleString('es-CL')} CLP).
 
-  const precioSugeridoNeto = Math.round(costoBase * 1.30);
-  const iva = Math.round(precioSugeridoNeto * 0.19);
-  const precioTotalConIva = precioSugeridoNeto + iva;
-  const precioMinimo = Math.round(costoBase * 1.15 * 1.19);
-  const precioPremium = Math.round(costoBase * 1.40 * 1.19);
+💰 **Costo Materiales:** **$${costoMateriales.toLocaleString('es-CL')} CLP**
+👷 **Mano de Obra Pintor Calificado:** **$${totalManoObra.toLocaleString('es-CL')} CLP** ($4.500 CLP/m² incluye lijado, 2 manos de pasta y 2 manos de pintura).
+📊 **Precio Sugerido al Cliente con IVA:** **$${precioTotalConIva.toLocaleString('es-CL')} CLP**.`,
+      sugerencias: [
+        `Créame la obra de pintura de ${m2}m2`,
+        'Descargar cotización en PDF',
+        'Enviar propuesta por WhatsApp',
+      ],
+    };
+  }
 
-  return {
-    respuesta: `📐 **ANÁLISIS TÉCNICO Y PRESUPUESTO: INSTALACIÓN DE PORCELANATO (${m2} m²)**
+  // 6. TABIQUERÍA / VOLCANITA / METALCON
+  if (msg.includes('tabiq') || msg.includes('volcan') || msg.includes('metalcon') || msg.includes('yeso') || msg.includes('plancha')) {
+    const planchasVolcanita = Math.ceil((m2 * 2) / 2.88); // 2 caras por tabique
+    const montantesMetalcon = Math.ceil(m2 / 1.2);
+    const solerasMetalcon = Math.ceil(m2 / 3);
+    const lanaAislante = Math.ceil(m2 / 10);
+    const costoVolcanita = planchasVolcanita * 6490;
+    const costoMetalcon = (montantesMetalcon + solerasMetalcon) * 4290;
+    const costoAislacion = lanaAislante * 18990;
+    const costoInsumos = 25000; // tornillos, masilla, cinta
+    const costoMateriales = costoVolcanita + costoMetalcon + costoAislacion + costoInsumos;
+    const manoObraM2 = 11000;
+    const totalManoObra = Math.round(m2 * manoObraM2);
+    const costoDirecto = costoMateriales + totalManoObra;
+    const precioTotalConIva = Math.round((costoDirecto * 1.15) * 1.30 * 1.19);
 
-Para un área de **${ancho} × ${largo} metros (${m2} m²)** en Chile:
+    return {
+      respuesta: `🧱 **CUBICACIÓN Y COSTOS: TABIQUERÍA METALCON & VOLCANITA (${m2} m²)**
+
+Para tabiquería divisoria de **${m2} m²** con estructura de acero galvanizado y aislamiento:
+
+• **Planchas Yeso-Cartón Volcanita 10mm:** **${planchasVolcanita} planchas (1.20×2.40m)** (~$${costoVolcanita.toLocaleString('es-CL')} CLP ambas caras).
+• **Perfiles Metalcon 60mm (Montantes y Soleras):** **${montantesMetalcon + solerasMetalcon} tiras de 3m** (~$${costoMetalcon.toLocaleString('es-CL')} CLP en *Construmart*).
+• **Aislamiento Térmico-Acústico (Lana de Vidrio 50mm):** **${lanaAislante} rollo(s)** (~$${costoAislacion.toLocaleString('es-CL')} CLP).
+• **Fijaciones:** Tornillos cabeza de lenteja, tornillos yeso-cartón, huincha de fibra y masilla base (~$${costoInsumos.toLocaleString('es-CL')} CLP).
+
+💰 **Costo Materiales:** **$${costoMateriales.toLocaleString('es-CL')} CLP**
+👷 **Mano de Obra Cuadrilla Tabiquera:** **$${totalManoObra.toLocaleString('es-CL')} CLP** ($11.000 CLP/m²).
+📊 **Precio Sugerido al Cliente con IVA:** **$${precioTotalConIva.toLocaleString('es-CL')} CLP**.`,
+      sugerencias: [
+        `Créame la obra de tabiquería de ${m2}m2`,
+        'Descargar cotización en PDF',
+        'Enviar propuesta por WhatsApp',
+      ],
+    };
+  }
+
+  // 7. TECHUMBRE / ESTRUCTURA DE TECHO / ZINC
+  if (msg.includes('tech') || msg.includes('zinc') || msg.includes('teja') || msg.includes('cubierta') || msg.includes('viga')) {
+    const planchasZinc = Math.ceil(m2 / 2.5);
+    const costaneras = Math.ceil(m2 / 1.5);
+    const fieltroAsfaltico = Math.ceil(m2 / 40);
+    const costoZinc = planchasZinc * 9490;
+    const costoCostaneras = costaneras * 3890;
+    const costoFieltro = fieltroAsfaltico * 16990;
+    const costoMateriales = costoZinc + costoCostaneras + costoFieltro + 30000; // caballetes, tornillos
+    const manoObraM2 = 15000;
+    const totalManoObra = Math.round(m2 * manoObraM2);
+    const costoDirecto = costoMateriales + totalManoObra;
+    const precioTotalConIva = Math.round((costoDirecto * 1.15) * 1.30 * 1.19);
+
+    return {
+      respuesta: `🏠 **CUBICACIÓN Y COSTOS: TECHUMBRE Y CUBIERTAS (${m2} m²)**
+
+Para la cubierta de techumbre de **${m2} m²** en Chile:
+
+• **Planchas de Zinc Acanalado / 5V 0.35mm (3.66m):** **${planchasZinc} planchas** (~$${costoZinc.toLocaleString('es-CL')} CLP en *Imperial Barracas*).
+• **Costaneras Pino Radiata 2×2 / Perfil Galvalume:** **${costaneras} tiras de 3.2m** (~$${costoCostaneras.toLocaleString('es-CL')} CLP).
+• **Barrera Hidrófuga (Fieltro Asfáltico 15 lbs):** **${fieltroAsfaltico} rollo(s)** (~$${costoFieltro.toLocaleString('es-CL')} CLP).
+• **Accesorios:** Caballetes galvanizados cumbrera y tornillos autoperforantes con golilla EPDM (~$30.000 CLP).
+
+💰 **Costo Materiales:** **$${costoMateriales.toLocaleString('es-CL')} CLP**
+👷 **Mano de Obra Maestro Techador:** **$${totalManoObra.toLocaleString('es-CL')} CLP** ($15.000 CLP/m²).
+📊 **Precio Sugerido al Cliente con IVA:** **$${precioTotalConIva.toLocaleString('es-CL')} CLP**.`,
+      sugerencias: [
+        `Créame la obra de techumbre de ${m2}m2`,
+        'Descargar cotización en PDF',
+        'Enviar propuesta por WhatsApp',
+      ],
+    };
+  }
+
+  // 8. INSTALACIÓN ELÉCTRICA
+  if (msg.includes('electr') || msg.includes('cable') || msg.includes('enchufe') || msg.includes('tablero') || msg.includes('luz')) {
+    const puntos = Math.max(6, Math.ceil(m2 / 5));
+    const costoMaterialesPunto = 12000;
+    const manoObraPunto = 18000;
+    const costoMateriales = puntos * costoMaterialesPunto + 45000; // tablero, disyuntor, diferencial
+    const totalManoObra = puntos * manoObraPunto;
+    const costoDirecto = costoMateriales + totalManoObra;
+    const precioTotalConIva = Math.round((costoDirecto * 1.15) * 1.30 * 1.19);
+
+    return {
+      respuesta: `⚡ **CUBICACIÓN Y COSTOS: INSTALACIÓN ELÉCTRICA (${puntos} puntos / centros)**
+
+Para normalización e instalación eléctrica de **${puntos} centros/enchufes** según norma SEC (RIC):
+
+• **Conductores Libres de Halógeno (EVA/H07Z1-K 2.5mm² y 1.5mm²):** 2 rollos de 100m.
+• **Canalización:** Tubería Conduit 20mm, cajas de derivación chuqui y módulos de enchufe/interruptor *Bticino / Schneider*.
+• **Protecciones en Tablero:** Interruptor general 25A, disyuntor 16A (fuerza), 10A (alumbrado) e Interruptor Diferencial 25A / 30mA.
+
+💰 **Costo Materiales Eléctricos:** **$${costoMateriales.toLocaleString('es-CL')} CLP**
+👷 **Mano de Obra Instalador Eléctrico Autorizado SEC:** **$${totalManoObra.toLocaleString('es-CL')} CLP** ($18.000 CLP por punto).
+📊 **Precio Sugerido al Cliente con IVA:** **$${precioTotalConIva.toLocaleString('es-CL')} CLP**.`,
+      sugerencias: [
+        `Créame la obra eléctrica de ${puntos} puntos`,
+        'Descargar cotización en PDF',
+        'Enviar propuesta por WhatsApp',
+      ],
+    };
+  }
+
+  // 9. INSTALACIÓN SANITARIA / GASFITERÍA / BAÑO
+  if (msg.includes('sanit') || msg.includes('gasfit') || msg.includes('pvc') || msg.includes('baño') || msg.includes('bano') || msg.includes('agua') || msg.includes('alcantarill')) {
+    const costoMateriales = 185000; // PVC 110/50mm, PPR/PEX, llaves de paso, pegamento
+    const totalManoObra = 220000; // gasfíter especialista
+    const costoDirecto = costoMateriales + totalManoObra;
+    const precioTotalConIva = Math.round((costoDirecto * 1.15) * 1.30 * 1.19);
+
+    return {
+      respuesta: `🚰 **CUBICACIÓN Y COSTOS: INSTALACIÓN SANITARIA Y GASFITERÍA**
+
+Para red de agua potable (fría/caliente) y alcantarillado sanitario en Chile:
+
+• **Desagües y Descargas:** Tuberías PVC Sanitario 110mm (WC) y 50mm/40mm (lavamanos/ducha) con codos a 45°, ramales y sifones.
+• **Agua Potable:** Cañerías PPR Termofusión o PEX 20mm/16mm con llaves de paso de corte rápido y terminales rosca he/hi.
+• **Insumos:** Adhesivo Vinilit PVC, teflón alta densidad y abrazaderas de fijación.
+
+💰 **Costo Materiales Sanitarios:** **$${costoMateriales.toLocaleString('es-CL')} CLP**
+👷 **Mano de Obra Maestro Gasfíter Calificado:** **$${totalManoObra.toLocaleString('es-CL')} CLP** (incluye pruebas de presión y estanqueidad).
+📊 **Precio Sugerido al Cliente con IVA:** **$${precioTotalConIva.toLocaleString('es-CL')} CLP**.`,
+      sugerencias: [
+        'Créame la obra de instalación sanitaria',
+        'Descargar cotización en PDF',
+        'Enviar propuesta por WhatsApp',
+      ],
+    };
+  }
+
+  // 10. QUINCHO / COBERTIZO / PÉRGOLA
+  if (msg.includes('quincho') || msg.includes('asador') || msg.includes('pergola') || msg.includes('pérgola') || msg.includes('cobertizo') || msg.includes('cobert')) {
+    const costoLadrillosRefractarios = 85000;
+    const costoCampana = 180000;
+    const costoMaderas = 160000; // vigas pino oregón
+    const costoMateriales = costoLadrillosRefractarios + costoCampana + costoMaderas + 95000; // cemento, fierro, mesón
+    const totalManoObra = 420000;
+    const costoDirecto = costoMateriales + totalManoObra;
+    const precioTotalConIva = Math.round((costoDirecto * 1.15) * 1.30 * 1.19);
+
+    return {
+      respuesta: `🔥 **CUBICACIÓN Y COSTOS: CONSTRUCCIÓN DE QUINCHO & COBERTIZO**
+
+Para un quincho tradicional completo con mesón de trabajo y parrilla en Chile:
+
+• **Zona de Fuego:** 120 Ladrillos refractarios + 4 sacos de cemento refractario + parrilla en ángulo en V con grasera de acero inoxidable.
+• **Campana y Ducto:** Campana de fierro 1.5mm con tiraje regulable y extractor eólico.
+• **Estructura Cobertizo:** Pilares y vigas en Pino Oregón 4×4 y 2×6 cepillado seco con barniz marino tinte roble.
+• **Mesón de Apoyo:** Estructura de hormigón armado revestido con porcelanato o granito.
+
+💰 **Costo Materiales:** **$${costoMateriales.toLocaleString('es-CL')} CLP**
+👷 **Mano de Obra Cuadrilla Especialista:** **$${totalManoObra.toLocaleString('es-CL')} CLP** (plazo estimado 7 a 9 días hábiles).
+📊 **Precio Sugerido al Cliente con IVA:** **$${precioTotalConIva.toLocaleString('es-CL')} CLP**.`,
+      sugerencias: [
+        'Créame la obra de quincho por $1.5M',
+        'Descargar cotización en PDF',
+        'Enviar propuesta por WhatsApp',
+      ],
+    };
+  }
+
+  // 11. PORCELANATO / CERÁMICAS / PISOS (Solo si explícitamente se consulta por pisos/porcelanato)
+  if (msg.includes('porcelan') || msg.includes('ceram') || msg.includes('piso') || msg.includes('azulejo') || msg.includes('ceramica') || msg.includes('cerámica')) {
+    const merma = 1.15;
+    const m2Material = Math.ceil(m2 * merma * 10) / 10;
+    const sacosBekron = Math.ceil(m2 / 4.5);
+    const kgFrague = Math.ceil(m2 * 0.22);
+    const cajasCrucetas = Math.ceil(m2 / 20);
+
+    const costoPorcelanatoM2 = 12990;
+    const costoTotalPorcelanato = Math.round(m2Material * costoPorcelanatoM2);
+    const costoBekron = sacosBekron * 7490;
+    const costoFrague = kgFrague * 2490;
+    const costoInsumos = 25000;
+    const totalMateriales = costoTotalPorcelanato + costoBekron + costoFrague + costoInsumos;
+
+    const manoObraM2 = 14000;
+    const totalManoObra = Math.round(m2 * manoObraM2);
+    const diasTrabajo = Math.max(3, Math.ceil(m2 / 12));
+
+    const costoDirecto = totalMateriales + totalManoObra;
+    const gastosGenerales = Math.round(costoDirecto * 0.1);
+    const imprevistos = Math.round(costoDirecto * 0.05);
+    const costoBase = costoDirecto + gastosGenerales + imprevistos;
+
+    const precioSugeridoNeto = Math.round(costoBase * 1.30);
+    const iva = Math.round(precioSugeridoNeto * 0.19);
+    const precioTotalConIva = precioSugeridoNeto + iva;
+    const precioMinimo = Math.round(costoBase * 1.15 * 1.19);
+    const precioPremium = Math.round(costoBase * 1.40 * 1.19);
+
+    return {
+      respuesta: `📐 **ANÁLISIS TÉCNICO Y PRESUPUESTO: INSTALACIÓN DE PORCELANATO (${m2} m²)**
+
+Para una superficie de **${m2} m²** en Chile:
 
 ---
 
@@ -490,10 +709,32 @@ Para un área de **${ancho} × ${largo} metros (${m2} m²)** en Chile:
 1. **40% al iniciar ($${Math.round(precioTotalConIva * 0.4).toLocaleString('es-CL')} CLP):** Compra y despacho de porcelanatos.
 2. **40% al terminar colocación ($${Math.round(precioTotalConIva * 0.4).toLocaleString('es-CL')} CLP):** Pago de avances.
 3. **20% contra entrega conforme ($${Math.round(precioTotalConIva * 0.2).toLocaleString('es-CL')} CLP):** Fraguado y limpieza final.`,
+      sugerencias: [
+        `Créame una obra de porcelanato de ${m2}m2`,
+        'Descargar cotización en PDF',
+        'Enviar presupuesto por WhatsApp',
+      ],
+    };
+  }
+
+  // 12. RESPUESTA DINÁMICA CONSULTIVA PARA CUALQUIER OTRA CONSULTA O REQUERIMIENTO
+  return {
+    respuesta: `👷‍♂️ **ANÁLISIS DE FAENA Y ASESORÍA TÉCNICA - OBRATRACK**
+
+Entendido tu requerimiento: *"${mensajeUsuario}"*.
+
+En el contexto de la construcción en Chile, te asesoro con los parámetros recomendados para esta faena:
+
+• 🧱 **Cubicación de Materiales:** Cotiza siempre considerando entre un **10% y 15% de merma** por cortes y despuntes en ferreterías con descuento constructor (*Construmart, Imperial Barracas o Sodimac*).
+• 👷 **Rendimiento de Cuadrilla:** Los jornales actuales de mercado en Chile son: **Maestro Mayor $50.000/día**, **Maestro Especialista $40.000/día** y **Ayudante $28.000/día**.
+• 💡 **Estructura de Cobro Rentable:** Para asegurar la rentabilidad de tu constructora, aplica la fórmula: **Costo Directo + 10% Gastos Generales + 5% Imprevistos + 30% Margen de Utilidad + IVA (19%)**.
+• 📝 **Forma de Pago:** Solicita **40% de anticipo** para compra de insumos, **30% a mitad de faena** y **30% contra recepción conforme**.
+
+¿Deseas que genere la cotización oficial en PDF o que cree esta obra en tu panel de Proyectos?`,
     sugerencias: [
-      `Créame una obra de porcelanato de ${m2}m2`,
       'Descargar cotización en PDF',
-      'Enviar presupuesto por WhatsApp',
+      'Créame esta obra en el menú de proyectos',
+      '¿Cuánto cobrar por mano de obra?',
     ],
   };
 }
@@ -531,7 +772,7 @@ ${clientesTexto}
 
 INSTRUCCIONES DE CONVERSACIÓN & ACCIONES AUTÓNOMAS:
 1. Eres el Copiloto Inteligente de ObraTrack y Asesor Experto de Faena en Chile.
-2. Responde de forma completamente natural, experta, analítica y directa a la consulta del usuario. PIENSA y asesora al usuario (por ejemplo: si pide instalar porcelanato en 5x7m, calcula los 35m2, el 15% de merma, sacos de Bekron DA, fragüe, jornales de ceramista y costos en ferreterías chilenas).
+2. Responde de forma completamente natural, experta, analítica y directa a la consulta específica del usuario. Responde EXACTAMENTE sobre el tema que te preguntan (si preguntan por pintura, habla de pintura; si preguntan por techos, habla de techos; si preguntan por radier, habla de radier; si preguntan por porcelanato, habla de porcelanato).
 3. REGLA ESTRICTA DE CONTEXTO: Tu dominio es única y exclusivamente la construcción, edificación, cubicación, ingeniería civil, materiales en Chile y agendamiento de faenas.
 
 4. CAPACIDAD DE CONTROLAR LA WEB (EJECUTAR ACCIONES EN VIVO):
