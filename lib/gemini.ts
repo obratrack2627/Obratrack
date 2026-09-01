@@ -261,7 +261,149 @@ export function generarRespuestaHeuristicaCopiloto(
 ): { respuesta: string; accion?: any; sugerencias?: string[] } {
   const msg = mensajeUsuario.toLowerCase().trim();
 
-  // 1. Detectar intención de CREAR / AGENDAR OBRA
+  // 1. Detectar intención de ENVIAR COTIZACIÓN AL CLIENTE POR WHATSAPP / PDF
+  if (
+    msg.includes('envia') ||
+    msg.includes('envía') ||
+    msg.includes('mandar') ||
+    msg.includes('mándale') ||
+    msg.includes('mandale') ||
+    msg.includes('compartir')
+  ) {
+    let clienteNombre = 'Carlos Henríquez';
+    let clienteTelefono = '+56987654321';
+    let proyectoNombre = 'Instalación de Porcelanato (35 m²)';
+    let montoTotal = 1994201;
+
+    // Buscar en el contexto si hay proyectos o clientes activos
+    if (contextoDB?.clientes && contextoDB.clientes.length > 0) {
+      clienteNombre = contextoDB.clientes[0].nombre;
+    }
+    if (contextoDB?.proyectos && contextoDB.proyectos.length > 0) {
+      proyectoNombre = contextoDB.proyectos[0].nombre;
+    }
+
+    const clienteMatch = msg.match(/(?:a|para)\s+([a-záéíóúñ\s]+?)(?:\s+por|\s+el|\s+la|$)/i);
+    if (clienteMatch) clienteNombre = clienteMatch[1].trim();
+
+    const cotizacionDemo: CotizacionEstimacion = {
+      id: 'cot-' + Date.now(),
+      titulo_proyecto: proyectoNombre,
+      tipo_obra: 'Terminaciones',
+      metros_cuadrados: 35,
+      comuna_region: 'Santiago, Chile',
+      duracion_dias_estimada: 4,
+      resumen_ejecutivo: `Propuesta formal de cotización para ${proyectoNombre}, considerando compra de materiales en ferreterías especializadas, jornales de cuadrilla y desglose de estados de pago.`,
+      materiales: [
+        {
+          nombre: 'Porcelanato Esmaltado Antideslizante 60x60',
+          categoria: 'terminaciones',
+          cantidad: 41,
+          unidad: 'm2',
+          precio_unitario_estimado: 12990,
+          subtotal: 532590,
+          mejor_tienda: 'Sodimac Constructor',
+          precio_mas_barato: 12990,
+          ahorro_estimado: 45000,
+        },
+        {
+          nombre: 'Adhesivo Bekron DA en Pasta / Saco 25kg',
+          categoria: 'terminaciones',
+          cantidad: 8,
+          unidad: 'saco',
+          precio_unitario_estimado: 7490,
+          subtotal: 59920,
+          mejor_tienda: 'Construmart',
+          precio_mas_barato: 7490,
+          ahorro_estimado: 8000,
+        },
+        {
+          nombre: 'Fragüe Impermeable Antihongos 1kg',
+          categoria: 'terminaciones',
+          cantidad: 8,
+          unidad: 'kg',
+          precio_unitario_estimado: 2490,
+          subtotal: 19920,
+          mejor_tienda: 'Construmart',
+          precio_mas_barato: 2490,
+          ahorro_estimado: 3200,
+        },
+      ],
+      mano_de_obra: [
+        {
+          rol: 'Maestro Ceramista Especialista',
+          cantidad_personas: 1,
+          dias_estimados: 4,
+          valor_jornal_diario: 45000,
+          subtotal: 180000,
+        },
+        {
+          rol: 'Ayudante de Faena',
+          cantidad_personas: 1,
+          dias_estimados: 4,
+          valor_jornal_diario: 28000,
+          subtotal: 112000,
+        },
+      ],
+      estructura_financiera: {
+        costo_materiales_total: 612430,
+        costo_mano_obra_total: 292000,
+        costo_directo: 904430,
+        gastos_generales_porcentaje: 10,
+        gastos_generales_monto: 90443,
+        imprevistos_porcentaje: 5,
+        imprevistos_monto: 45222,
+        margen_utilidad_porcentaje: 30,
+        margen_utilidad_monto: 312030,
+        precio_sugerido_neto: 1352125,
+        iva_19: 256904,
+        precio_total_con_iva: 1609029,
+        ahorro_compras_estrategicas: 56200,
+      },
+      radar_proveedores: [
+        {
+          tienda: 'Construmart',
+          categoria_destacada: 'Bekron y Fragues',
+          nivel_precio: 'mas_barato',
+          ahorro_estimado_total: 12000,
+          ventajas: ['Precios por mayor'],
+        },
+      ],
+      actividades_gantt: [
+        { nombre: 'Preparación y Nivelación de Sustrato', dias: 1, orden: 1 },
+        { nombre: 'Colocación y Cortes de Porcelanato', dias: 2, orden: 2 },
+        { nombre: 'Fraguado, Limpieza y Entrega', dias: 1, orden: 3 },
+      ],
+      consejos_experto_pyme: [
+        'Pedir siempre el 40% de anticipo antes de retirar materiales en tienda.',
+      ],
+      fecha_creacion: new Date().toISOString(),
+    };
+
+    const textoWhatsApp = `🏗️ *PROPUESTA FORMAL DE COTIZACIÓN - OBRATRACK*\n\nEstimado(a) *${clienteNombre}*, le comparto el presupuesto oficial para la obra:\n📌 *${proyectoNombre}*\n💰 *Total Propuesta con IVA:* *$${montoTotal.toLocaleString('es-CL')} CLP*\n\n📋 *Forma de Pago Acordada:*\n• 40% Anticipo (Materiales): $${Math.round(montoTotal * 0.4).toLocaleString('es-CL')} CLP\n• 30% Avance 50%: $${Math.round(montoTotal * 0.3).toLocaleString('es-CL')} CLP\n• 20% Terminaciones: $${Math.round(montoTotal * 0.2).toLocaleString('es-CL')} CLP\n• 10% Recepción Conforme: $${Math.round(montoTotal * 0.1).toLocaleString('es-CL')} CLP\n\nEmitido a través de ObraTrack.`;
+
+    const accion = {
+      tipo: 'enviar_cotizacion_cliente',
+      titulo: `Cotización Lista para Enviar a ${clienteNombre}`,
+      cliente_nombre: clienteNombre,
+      cliente_telefono: clienteTelefono,
+      resultado_texto: `Propuesta formal generada para ${clienteNombre} por un total de $${montoTotal.toLocaleString('es-CL')} CLP. Haz clic en el botón de abajo para enviar el PDF o abrir WhatsApp.`,
+      enlace_whatsapp: `https://wa.me/${clienteTelefono.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(textoWhatsApp)}`,
+      cotizacion: cotizacionDemo,
+    };
+
+    return {
+      respuesta: `📲 **¡Cotización oficial preparada para enviar a ${clienteNombre}!**\n\nHe generado el documento formal de cotización con desglose de materiales, mano de obra, IVA (19%) y calendario de pagos 40/30/20/10.\n\nPuedes **descargar el PDF oficial membretado** o presionar el botón de **Enviar por WhatsApp** para abrir el mensaje directamente en el teléfono del cliente.`,
+      accion,
+      sugerencias: [
+        'Ver / Descargar PDF de Cotización',
+        'Enviar propuesta por WhatsApp',
+        'Crear esta obra en el menú de proyectos',
+      ],
+    };
+  }
+
+  // 2. Detectar intención de CREAR / AGENDAR OBRA
   const matchCrearObra = msg.match(/(?:crea(?:me|r)?\s+(?:la\s+)?obra|nueva\s+obra|ingresa\s+obra)\s+([^\n]+)/i);
   if (matchCrearObra || msg.includes('crear obra') || msg.includes('créame una obra')) {
     // Extraer datos si están presentes
