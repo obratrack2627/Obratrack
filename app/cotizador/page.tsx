@@ -136,116 +136,159 @@ export default function CopilotoObreroPage() {
     showToast('✨ Conversación reiniciada para esta sesión.');
   };
 
-  // Abrir visor de Cotización en PDF
+  // Generar cotización dinámica a partir del texto del mensaje
+  const generarCotizacionDinamica = (texto: string, clienteNom: string = 'Carlos Henríquez'): CotizacionEstimacion => {
+    const msg = texto.toLowerCase();
+    const fechaIso = new Date().toISOString();
+
+    // Detectar m2 o medidas (ej: 5x7 o 40m2)
+    let m2 = 35;
+    const dimMatch = texto.match(/(\d+(?:[\.,]\d+)?)\s*(?:x|\*|por)\s*(\d+(?:[\.,]\d+)?)/i);
+    if (dimMatch) {
+      m2 = Math.round(parseFloat(dimMatch[1].replace(',', '.')) * parseFloat(dimMatch[2].replace(',', '.')) * 10) / 10;
+    } else {
+      const m2Match = texto.match(/(\d+(?:[\.,]\d+)?)\s*(?:m2|metros)/i);
+      if (m2Match) m2 = parseFloat(m2Match[1].replace(',', '.'));
+    }
+
+    if (msg.includes('radier') || msg.includes('hormig')) {
+      const sacosCemento = Math.ceil(m2 * 0.1 * 1.1 * 6.5);
+      const m3Aridos = Math.round(m2 * 0.1 * 1.15 * 10) / 10;
+      const mallas = Math.ceil(m2 / 12);
+      const costoMat = sacosCemento * 4490 + m3Aridos * 24000 + mallas * 19990 + 35000;
+      const costoMo = Math.round(m2 * 16000);
+      const costoDirecto = costoMat + costoMo;
+      const neto = Math.round(costoDirecto * 1.15 * 1.30);
+      const iva = Math.round(neto * 0.19);
+      const totalConIva = neto + iva;
+
+      return {
+        id: 'cot-' + Date.now(),
+        titulo_proyecto: `Construcción de Radier de Hormigón (${m2} m²)`,
+        tipo_obra: 'Obra Gruesa',
+        metros_cuadrados: m2,
+        comuna_region: 'Santiago, Chile',
+        duracion_dias_estimada: Math.max(3, Math.ceil(m2 / 15)),
+        resumen_ejecutivo: `Construcción de radier de ${m2} m² con 10 cm de espesor, cama de ripio compactada, polietileno 0.1 mm, malla Acma C-92 y hormigón H-20 dosificado en faena.`,
+        materiales: [
+          { nombre: 'Cemento Melón / Polpaico Especial 25kg', categoria: 'obra_gruesa', cantidad: sacosCemento, unidad: 'saco', precio_unitario_estimado: 4490, subtotal: sacosCemento * 4490, mejor_tienda: 'Construmart', precio_mas_barato: 4490, ahorro_estimado: 15000 },
+          { nombre: 'Árido Mezclado (Arena + Gravilla)', categoria: 'obra_gruesa', cantidad: m3Aridos, unidad: 'm3', precio_unitario_estimado: 24000, subtotal: Math.round(m3Aridos * 24000), mejor_tienda: 'Arenera Local', precio_mas_barato: 24000, ahorro_estimado: 20000 },
+          { nombre: 'Malla Acma C-92 (2.6x5.0m)', categoria: 'obra_gruesa', cantidad: mallas, unidad: 'plancha', precio_unitario_estimado: 19990, subtotal: mallas * 19990, mejor_tienda: 'Construmart', precio_mas_barato: 19990, ahorro_estimado: 8000 },
+          { nombre: 'Film Polietileno 0.1mm + Moldajes Pino 1x4', categoria: 'obra_gruesa', cantidad: 1, unidad: 'global', precio_unitario_estimado: 35000, subtotal: 35000, mejor_tienda: 'Imperial Barracas', precio_mas_barato: 35000, ahorro_estimado: 5000 },
+        ],
+        mano_de_obra: [
+          { rol: 'Maestro Mayor Albañil', cantidad_personas: 1, dias_estimados: Math.max(2, Math.ceil(m2 / 20)), valor_jornal_diario: 45000, subtotal: Math.max(2, Math.ceil(m2 / 20)) * 45000 },
+          { rol: 'Ayudantes de Concretería', cantidad_personas: 2, dias_estimados: Math.max(2, Math.ceil(m2 / 20)), valor_jornal_diario: 28000, subtotal: Math.max(2, Math.ceil(m2 / 20)) * 56000 },
+        ],
+        estructura_financiera: {
+          costo_materiales_total: costoMat,
+          costo_mano_obra_total: costoMo,
+          costo_directo: costoDirecto,
+          gastos_generales_porcentaje: 10,
+          gastos_generales_monto: Math.round(costoDirecto * 0.1),
+          imprevistos_porcentaje: 5,
+          imprevistos_monto: Math.round(costoDirecto * 0.05),
+          margen_utilidad_porcentaje: 30,
+          margen_utilidad_monto: Math.round(costoDirecto * 1.15 * 0.30),
+          precio_sugerido_neto: neto,
+          iva_19: iva,
+          precio_total_con_iva: totalConIva,
+          ahorro_compras_estrategicas: 43000,
+        },
+        radar_proveedores: [
+          { tienda: 'Construmart', categoria_destacada: 'Cemento y Mallas Acma', nivel_precio: 'mas_barato', descuentos_disponibles: 'Descuento Constructor 10%', ahorro_estimado_total: 23000, ventajas: ['Despacho directo a faena'] },
+        ],
+        actividades_gantt: [
+          { nombre: 'Trazado, Excavación y Nivelación de Terreno', dias: 1, orden: 1 },
+          { nombre: 'Instalación de Moldajes, Polietileno y Malla Acma', dias: 1, orden: 2 },
+          { nombre: 'Vaciado, Regleado y Fratasado de Hormigón', dias: 1, orden: 3 },
+        ],
+        consejos_experto_pyme: ['Curar el hormigón regando agua al menos 3 veces al día durante las primeras 72 horas.'],
+        fecha_creacion: fechaIso,
+      };
+    }
+
+    // Caso Porcelanato / Terminaciones (o General)
+    const m2Mat = Math.ceil(m2 * 1.15 * 10) / 10;
+    const sacosBekron = Math.ceil(m2 / 4.5);
+    const kgFrague = Math.ceil(m2 * 0.22);
+    const costoMat = m2Mat * 12990 + sacosBekron * 7490 + kgFrague * 2490 + 25000;
+    const costoMo = Math.round(m2 * 14000);
+    const costoDirecto = costoMat + costoMo;
+    const neto = Math.round(costoDirecto * 1.15 * 1.30);
+    const iva = Math.round(neto * 0.19);
+    const totalConIva = neto + iva;
+
+    return {
+      id: 'cot-' + Date.now(),
+      titulo_proyecto: `Instalación de Porcelanato (${m2} m²)`,
+      tipo_obra: 'Terminaciones',
+      metros_cuadrados: m2,
+      comuna_region: 'Santiago, Chile',
+      duracion_dias_estimada: Math.max(3, Math.ceil(m2 / 12)),
+      resumen_ejecutivo: `Instalación de porcelanato rectificado de alta resistencia en superficie de ${m2} m² (considera 15% de merma por cortes), adhesivo Bekron DA, fragüe impermeable y mano de obra calificada.`,
+      materiales: [
+        { nombre: `Porcelanato Esmaltado 60x60 Antideslizante (${m2Mat} m² con merma)`, categoria: 'terminaciones', cantidad: m2Mat, unidad: 'm2', precio_unitario_estimado: 12990, subtotal: Math.round(m2Mat * 12990), mejor_tienda: 'Sodimac Constructor', precio_mas_barato: 12990, ahorro_estimado: 45000 },
+        { nombre: 'Adhesivo Bekron DA Pasta / Saco 25kg', categoria: 'terminaciones', cantidad: sacosBekron, unidad: 'saco', precio_unitario_estimado: 7490, subtotal: sacosBekron * 7490, mejor_tienda: 'Construmart', precio_mas_barato: 7490, ahorro_estimado: 12000 },
+        { nombre: 'Fragüe Impermeable Antihongos 1kg', categoria: 'terminaciones', cantidad: kgFrague, unidad: 'kg', precio_unitario_estimado: 2490, subtotal: kgFrague * 2490, mejor_tienda: 'Construmart', precio_mas_barato: 2490, ahorro_estimado: 3500 },
+        { nombre: 'Crucetas 2mm + Cuñas Niveladoras', categoria: 'terminaciones', cantidad: Math.ceil(m2 / 20), unidad: 'bolsa', precio_unitario_estimado: 12500, subtotal: Math.ceil(m2 / 20) * 12500, mejor_tienda: 'Sodimac Constructor', precio_mas_barato: 12500, ahorro_estimado: 4000 },
+      ],
+      mano_de_obra: [
+        { rol: 'Maestro Ceramista Especialista', cantidad_personas: 1, dias_estimados: Math.max(3, Math.ceil(m2 / 12)), valor_jornal_diario: 45000, subtotal: Math.max(3, Math.ceil(m2 / 12)) * 45000 },
+        { rol: 'Ayudante de Faena', cantidad_personas: 1, dias_estimados: Math.max(3, Math.ceil(m2 / 12)), valor_jornal_diario: 28000, subtotal: Math.max(3, Math.ceil(m2 / 12)) * 28000 },
+      ],
+      estructura_financiera: {
+        costo_materiales_total: Math.round(costoMat),
+        costo_mano_obra_total: costoMo,
+        costo_directo: Math.round(costoDirecto),
+        gastos_generales_porcentaje: 10,
+        gastos_generales_monto: Math.round(costoDirecto * 0.1),
+        imprevistos_porcentaje: 5,
+        imprevistos_monto: Math.round(costoDirecto * 0.05),
+        margen_utilidad_porcentaje: 30,
+        margen_utilidad_monto: Math.round(costoDirecto * 1.15 * 0.30),
+        precio_sugerido_neto: neto,
+        iva_19: iva,
+        precio_total_con_iva: totalConIva,
+        ahorro_compras_estrategicas: 64500,
+      },
+      radar_proveedores: [
+        { tienda: 'Construmart', categoria_destacada: 'Bekron y Fragües', nivel_precio: 'mas_barato', descuentos_disponibles: 'Descuento Constructor 10%', ahorro_estimado_total: 15500, ventajas: ['Precios por mayor', 'Despacho a faena'] },
+      ],
+      actividades_gantt: [
+        { nombre: 'Preparación de Superficie y Nivelación', dias: 1, orden: 1 },
+        { nombre: 'Colocación de Porcelanatos y Cortes Finos', dias: Math.max(2, Math.ceil(m2 / 15)), orden: 2 },
+        { nombre: 'Fraguado, Limpieza y Entrega Conforme', dias: 1, orden: 3 },
+      ],
+      consejos_experto_pyme: ['Usar doble encolado si las palmetas de porcelanato superan los 60x60 cm para evitar piezas huecas.'],
+      fecha_creacion: fechaIso,
+    };
+  };
+
+  // Abrir visor de Cotización en PDF con generación dinámica según el contexto actual
   const handleOpenPdfCotizacion = (
     cot?: CotizacionEstimacion,
     clienteNom?: string,
-    clienteTel?: string
+    clienteTel?: string,
+    textoReferencia?: string
   ) => {
     if (cot) {
       setSelectedCotizacionPdf(cot);
     } else {
-      const demoCot: CotizacionEstimacion = {
-        id: 'cot-' + Date.now(),
-        titulo_proyecto: 'Instalación de Porcelanato (35 m²)',
-        tipo_obra: 'Terminaciones',
-        metros_cuadrados: 35,
-        comuna_region: 'Santiago, Chile',
-        duracion_dias_estimada: 4,
-        resumen_ejecutivo:
-          'Propuesta formal de cotización con cubicación de materiales en ferreterías chilenas, mano de obra calificada y desglose de IVA (19%).',
-        materiales: [
-          {
-            nombre: 'Porcelanato Esmaltado 60x60 Antideslizante',
-            categoria: 'terminaciones',
-            cantidad: 41,
-            unidad: 'm2',
-            precio_unitario_estimado: 12990,
-            subtotal: 532590,
-            mejor_tienda: 'Sodimac Constructor',
-            precio_mas_barato: 12990,
-            ahorro_estimado: 45000,
-          },
-          {
-            nombre: 'Adhesivo Bekron DA 25kg en Saco / Pasta',
-            categoria: 'terminaciones',
-            cantidad: 8,
-            unidad: 'saco',
-            precio_unitario_estimado: 7490,
-            subtotal: 59920,
-            mejor_tienda: 'Construmart',
-            precio_mas_barato: 7490,
-            ahorro_estimado: 8000,
-          },
-          {
-            nombre: 'Fragüe Impermeable Antihongos 1kg',
-            categoria: 'terminaciones',
-            cantidad: 8,
-            unidad: 'kg',
-            precio_unitario_estimado: 2490,
-            subtotal: 19920,
-            mejor_tienda: 'Construmart',
-            precio_mas_barato: 2490,
-            ahorro_estimado: 3200,
-          },
-        ],
-        mano_de_obra: [
-          {
-            rol: 'Maestro Ceramista Especialista',
-            cantidad_personas: 1,
-            dias_estimados: 4,
-            valor_jornal_diario: 45000,
-            subtotal: 180000,
-          },
-          {
-            rol: 'Ayudante de Faena',
-            cantidad_personas: 1,
-            dias_estimados: 4,
-            valor_jornal_diario: 28000,
-            subtotal: 112000,
-          },
-        ],
-        estructura_financiera: {
-          costo_materiales_total: 612430,
-          costo_mano_obra_total: 292000,
-          costo_directo: 904430,
-          gastos_generales_porcentaje: 10,
-          gastos_generales_monto: 90443,
-          imprevistos_porcentaje: 5,
-          imprevistos_monto: 45222,
-          margen_utilidad_porcentaje: 30,
-          margen_utilidad_monto: 312030,
-          precio_sugerido_neto: 1352125,
-          iva_19: 256904,
-          precio_total_con_iva: 1609029,
-          ahorro_compras_estrategicas: 56200,
-        },
-        radar_proveedores: [
-          {
-            tienda: 'Construmart',
-            categoria_destacada: 'Bekron y Fragües',
-            nivel_precio: 'mas_barato',
-            descuentos_disponibles: 'Descuento Constructor 10%',
-            ahorro_estimado_total: 12000,
-            ventajas: ['Precios por mayor', 'Despacho a faena'],
-          },
-        ],
-        actividades_gantt: [
-          { nombre: 'Preparación de Sustrato y Nivelación', dias: 1, orden: 1 },
-          { nombre: 'Colocación de Porcelanatos', dias: 2, orden: 2 },
-          { nombre: 'Fraguado y Limpieza Final', dias: 1, orden: 3 },
-        ],
-        consejos_experto_pyme: [
-          'Pedir siempre el 40% de anticipo para compra de porcelanatos.',
-        ],
-        fecha_creacion: new Date().toISOString(),
-      };
-      setSelectedCotizacionPdf(demoCot);
+      const textoParaCotizar =
+        textoReferencia ||
+        [...mensajesChat].reverse().find((m) => m.remitente === 'agente')?.texto ||
+        '';
+
+      const cotDinamica = generarCotizacionDinamica(textoParaCotizar, clienteNom);
+      setSelectedCotizacionPdf(cotDinamica);
     }
+
     if (clienteNom) setPdfClienteNombre(clienteNom);
     if (clienteTel) setPdfClienteTelefono(clienteTel);
     setIsPdfModalOpen(true);
   };
+
 
   // Enviar mensaje a Google Gemini y ejecutar acciones
   const handleSendChat = async (texto?: string) => {
@@ -565,7 +608,8 @@ export default function CopilotoObreroPage() {
                                 handleOpenPdfCotizacion(
                                   m.accion_ejecutada?.cotizacion,
                                   m.accion_ejecutada?.detalles?.cliente_nombre || 'Carlos Henríquez',
-                                  m.accion_ejecutada?.detalles?.cliente_telefono || '+56 9 8765 4321'
+                                  m.accion_ejecutada?.detalles?.cliente_telefono || '+56 9 8765 4321',
+                                  m.texto
                                 )
                               }
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-obra-orange hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
@@ -596,7 +640,7 @@ export default function CopilotoObreroPage() {
                         !m.accion_ejecutada && (
                           <div className="pt-2 border-t border-kraft-200 flex flex-wrap items-center gap-2">
                             <button
-                              onClick={() => handleOpenPdfCotizacion(undefined, 'Carlos Henríquez', '+56 9 8765 4321')}
+                              onClick={() => handleOpenPdfCotizacion(undefined, 'Carlos Henríquez', '+56 9 8765 4321', m.texto)}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-obra-orange hover:bg-orange-600 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs cursor-pointer"
                             >
                               <FileText className="w-3.5 h-3.5" />
