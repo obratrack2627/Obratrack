@@ -219,7 +219,7 @@ export interface ProveedorComparativa {
   tienda: string;
   categoria_destacada: string;
   nivel_precio: 'mas_barato' | 'promedio' | 'mas_caro' | string;
-  descuentos_disponibles: string;
+  descuentos_disponibles?: string;
   ahorro_estimado_total: number;
   ventajas: string[];
 }
