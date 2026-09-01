@@ -273,7 +273,7 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
 export function generarRespuestaHeuristicaCopiloto(
   mensajeUsuario: string,
   contextoDB?: {
-    proyectos?: { id: string; nombre: string; comuna?: string; estado?: string }[];
+    proyectos?: { id: string; nombre: string; comuna?: string; estado?: string; monto_cotizado?: number }[];
     trabajadores?: { id: string; nombre: string; rol?: string }[];
     clientes?: { id: string; nombre: string }[];
   }
@@ -746,7 +746,7 @@ export async function chatAsesorObrasGemini(
   historial: { rol: 'user' | 'model'; texto: string }[],
   mensajeUsuario: string,
   contextoDB?: {
-    proyectos?: { id: string; nombre: string; comuna?: string; estado?: string }[];
+    proyectos?: { id: string; nombre: string; comuna?: string; estado?: string; monto_cotizado?: number }[];
     trabajadores?: { id: string; nombre: string; rol?: string }[];
     clientes?: { id: string; nombre: string }[];
   }
