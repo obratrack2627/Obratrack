@@ -322,7 +322,8 @@ export type TipoAccionIA =
   | 'agendar_visita'
   | 'agendar_evento'
   | 'registrar_pago'
-  | 'crear_recordatorio';
+  | 'crear_recordatorio'
+  | 'enviar_cotizacion_cliente';
 
 export interface AccionAsistenteIA {
   tipo: TipoAccionIA;
@@ -331,6 +332,8 @@ export interface AccionAsistenteIA {
   resultado_texto: string;
   link_destino?: string;
   link_texto?: string;
+  enlace_whatsapp?: string;
+  cotizacion?: CotizacionEstimacion;
 }
 
 export interface MensajeChatCotizador {
@@ -340,5 +343,6 @@ export interface MensajeChatCotizador {
   timestamp: string;
   sugerencias?: string[];
   accion_ejecutada?: AccionAsistenteIA;
+  cotizacion_generada?: CotizacionEstimacion;
 }
 
