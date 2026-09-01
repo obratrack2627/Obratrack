@@ -365,8 +365,9 @@ export function generarRespuestaHeuristicaCopiloto(
           tienda: 'Construmart',
           categoria_destacada: 'Bekron y Fragues',
           nivel_precio: 'mas_barato',
+          descuentos_disponibles: 'Descuento Constructor 10%',
           ahorro_estimado_total: 12000,
-          ventajas: ['Precios por mayor'],
+          ventajas: ['Precios por mayor', 'Despacho a faena'],
         },
       ],
       actividades_gantt: [
