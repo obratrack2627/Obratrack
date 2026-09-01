@@ -28,6 +28,8 @@ import {
   Phone,
   MessageCircle,
   RotateCcw,
+  FileText,
+  Printer,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
@@ -39,11 +41,13 @@ import {
   EventoAgenda,
   SubscriptionPlanId,
   AccionAsistenteIA,
+  CotizacionEstimacion,
 } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
 import { getPlanDetails } from '@/lib/plans';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 import PlanLockOverlay from '@/components/PlanLockOverlay';
+import CotizacionPdfModal from '@/components/CotizacionPdfModal';
 
 const INITIAL_CHAT_MESSAGE: MensajeChatCotizador = {
   id: 'm-init',
@@ -73,6 +77,12 @@ export default function CopilotoObreroPage() {
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Estados de Cotización en PDF
+  const [selectedCotizacionPdf, setSelectedCotizacionPdf] = useState<CotizacionEstimacion | null>(null);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [pdfClienteNombre, setPdfClienteNombre] = useState<string>('Carlos Henríquez');
+  const [pdfClienteTelefono, setPdfClienteTelefono] = useState<string>('+56 9 8765 4321');
 
   // Mensajes de chat (Persistidos por sesión de usuario)
   const [mensajesChat, setMensajesChat] = useState<MensajeChatCotizador[]>([INITIAL_CHAT_MESSAGE]);
@@ -113,17 +123,114 @@ export default function CopilotoObreroPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Reiniciar conversación activa para empezar una nueva
-  const handleResetChat = () => {
-    dataService.clearChatSessionHistory();
-    const freshMessage: MensajeChatCotizador = {
-      ...INITIAL_CHAT_MESSAGE,
-      id: 'm-init-' + Date.now(),
-      timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
-    };
-    setMensajesChat([freshMessage]);
-    dataService.saveChatSessionHistory([freshMessage]);
-    showToast('✨ Conversación reiniciada para esta sesión.');
+  // Abrir visor de Cotización en PDF
+  const handleOpenPdfCotizacion = (
+    cot?: CotizacionEstimacion,
+    clienteNom?: string,
+    clienteTel?: string
+  ) => {
+    if (cot) {
+      setSelectedCotizacionPdf(cot);
+    } else {
+      const demoCot: CotizacionEstimacion = {
+        id: 'cot-' + Date.now(),
+        titulo_proyecto: 'Instalación de Porcelanato (35 m²)',
+        tipo_obra: 'Terminaciones',
+        metros_cuadrados: 35,
+        comuna_region: 'Santiago, Chile',
+        duracion_dias_estimada: 4,
+        resumen_ejecutivo:
+          'Propuesta formal de cotización con cubicación de materiales en ferreterías chilenas, mano de obra calificada y desglose de IVA (19%).',
+        materiales: [
+          {
+            nombre: 'Porcelanato Esmaltado 60x60 Antideslizante',
+            categoria: 'terminaciones',
+            cantidad: 41,
+            unidad: 'm2',
+            precio_unitario_estimado: 12990,
+            subtotal: 532590,
+            mejor_tienda: 'Sodimac Constructor',
+            precio_mas_barato: 12990,
+            ahorro_estimado: 45000,
+          },
+          {
+            nombre: 'Adhesivo Bekron DA 25kg en Saco / Pasta',
+            categoria: 'terminaciones',
+            cantidad: 8,
+            unidad: 'saco',
+            precio_unitario_estimado: 7490,
+            subtotal: 59920,
+            mejor_tienda: 'Construmart',
+            precio_mas_barato: 7490,
+            ahorro_estimado: 8000,
+          },
+          {
+            nombre: 'Fragüe Impermeable Antihongos 1kg',
+            categoria: 'terminaciones',
+            cantidad: 8,
+            unidad: 'kg',
+            precio_unitario_estimado: 2490,
+            subtotal: 19920,
+            mejor_tienda: 'Construmart',
+            precio_mas_barato: 2490,
+            ahorro_estimado: 3200,
+          },
+        ],
+        mano_de_obra: [
+          {
+            rol: 'Maestro Ceramista Especialista',
+            cantidad_personas: 1,
+            dias_estimados: 4,
+            valor_jornal_diario: 45000,
+            subtotal: 180000,
+          },
+          {
+            rol: 'Ayudante de Faena',
+            cantidad_personas: 1,
+            dias_estimados: 4,
+            valor_jornal_diario: 28000,
+            subtotal: 112000,
+          },
+        ],
+        estructura_financiera: {
+          costo_materiales_total: 612430,
+          costo_mano_obra_total: 292000,
+          costo_directo: 904430,
+          gastos_generales_porcentaje: 10,
+          gastos_generales_monto: 90443,
+          imprevistos_porcentaje: 5,
+          imprevistos_monto: 45222,
+          margen_utilidad_porcentaje: 30,
+          margen_utilidad_monto: 312030,
+          precio_sugerido_neto: 1352125,
+          iva_19: 256904,
+          precio_total_con_iva: 1609029,
+          ahorro_compras_estrategicas: 56200,
+        },
+        radar_proveedores: [
+          {
+            tienda: 'Construmart',
+            categoria_destacada: 'Bekron y Fragües',
+            nivel_precio: 'mas_barato',
+            ahorro_estimado_total: 12000,
+            ventajas: ['Precios por mayor'],
+          },
+        ],
+        actividades_gantt: [
+          { nombre: 'Preparación de Sustrato y Nivelación', dias: 1, orden: 1 },
+          { nombre: 'Colocación de Porcelanatos', dias: 2, orden: 2 },
+          { nombre: 'Fraguado y Limpieza Final', dias: 1, orden: 3 },
+        ],
+        consejos_experto_pyme: [
+          'Pedir siempre el 40% de anticipo para compra de porcelanatos.',
+        ],
+        fecha_creacion: new Date().toISOString(),
+      };
+      setSelectedCotizacionPdf(demoCot);
+    }
+    if (clienteNom) setPdfClienteNombre(clienteNom);
+    if (clienteTel) setPdfClienteTelefono(clienteTel);
+    setIsPdfModalOpen(true);
   };
 
   // Enviar mensaje a Google Gemini y ejecutar acciones
@@ -425,18 +532,75 @@ export default function CopilotoObreroPage() {
                           </h4>
                           <p className="text-xs text-gray-700">{m.accion_ejecutada.resultado_texto}</p>
 
-                          {m.accion_ejecutada.link_destino && (
-                            <div className="pt-2 border-t border-obra-orange/20 flex items-center justify-end">
+                          {/* Botones de Acción de la IA */}
+                          <div className="pt-2 border-t border-obra-orange/20 flex flex-wrap items-center gap-2 justify-end">
+                            {m.accion_ejecutada.enlace_whatsapp && (
+                              <a
+                                href={m.accion_ejecutada.enlace_whatsapp}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                                <span>📲 Enviar por WhatsApp</span>
+                              </a>
+                            )}
+
+                            <button
+                              onClick={() =>
+                                handleOpenPdfCotizacion(
+                                  m.accion_ejecutada?.cotizacion,
+                                  m.accion_ejecutada?.detalles?.cliente_nombre || 'Carlos Henríquez',
+                                  m.accion_ejecutada?.detalles?.cliente_telefono || '+56 9 8765 4321'
+                                )
+                              }
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-obra-orange hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>📄 Ver / Descargar PDF</span>
+                            </button>
+
+                            {m.accion_ejecutada.link_destino && (
                               <Link
                                 href={m.accion_ejecutada.link_destino}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
                               >
                                 <span>{m.accion_ejecutada.link_texto || 'Ver en la Web ➔'}</span>
                               </Link>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       )}
+
+                      {/* Botones de acción rápida para cualquier cotización del agente */}
+                      {m.remitente === 'agente' &&
+                        (m.texto.includes('CLP') ||
+                          m.texto.includes('Porcelanato') ||
+                          m.texto.includes('Radier') ||
+                          m.texto.includes('PRESUPUESTO') ||
+                          m.texto.includes('CUBICACIÓN')) &&
+                        !m.accion_ejecutada && (
+                          <div className="pt-2 border-t border-kraft-200 flex flex-wrap items-center gap-2">
+                            <button
+                              onClick={() => handleOpenPdfCotizacion(undefined, 'Carlos Henríquez', '+56 9 8765 4321')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-obra-orange hover:bg-orange-600 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>📄 Descargar Cotización en PDF</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                const cleanPhone = '56987654321';
+                                const text = `🏗️ *COTIZACIÓN OBRATRACK*\n\nEstimado cliente, le comparto el presupuesto oficial de su obra:\n\n${m.texto.slice(0, 350)}...\n\nEmitido por ObraTrack.`;
+                                window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              <span>📲 Enviar por WhatsApp</span>
+                            </button>
+                          </div>
+                        )}
                     </div>
 
                     {/* Sugerencias Rápidas */}
@@ -513,10 +677,9 @@ export default function CopilotoObreroPage() {
                     <p className="text-[11px] text-gray-400 italic">No hay obras creadas aún.</p>
                   ) : (
                     proyectos.slice(0, 4).map((p) => (
-                      <Link
+                      <div
                         key={p.id}
-                        href={`/proyectos/${p.id}/finanzas`}
-                        className="block bg-kraft-50/60 hover:bg-kraft-100/80 border border-kraft-200 p-2.5 rounded-xl transition-all"
+                        className="bg-kraft-50/60 hover:bg-kraft-100/80 border border-kraft-200 p-2.5 rounded-xl transition-all space-y-1.5"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-xs text-navy-900 truncate">{p.nombre}</span>
@@ -524,10 +687,31 @@ export default function CopilotoObreroPage() {
                             {formatCLP(p.monto_cotizado)}
                           </span>
                         </div>
-                        <span className="text-[10px] text-gray-500 block">
-                          📍 {p.comuna || 'Chile'} • {p.estado.toUpperCase()}
-                        </span>
-                      </Link>
+                        <div className="flex items-center justify-between text-[10px] text-gray-500">
+                          <span>📍 {p.comuna || 'Chile'} • {p.estado.toUpperCase()}</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() =>
+                                handleOpenPdfCotizacion(
+                                  undefined,
+                                  p.cliente?.nombre || 'Carlos Henríquez',
+                                  p.cliente?.telefono || '+56 9 8765 4321'
+                                )
+                              }
+                              className="px-2 py-0.5 rounded bg-orange-100 hover:bg-obra-orange text-obra-orange hover:text-white transition-all font-mono font-bold text-[9px] cursor-pointer"
+                              title="Generar PDF Oficial"
+                            >
+                              📄 PDF
+                            </button>
+                            <Link
+                              href={`/proyectos/${p.id}/finanzas`}
+                              className="px-2 py-0.5 rounded bg-navy-900 hover:bg-navy-800 text-white font-mono font-bold text-[9px]"
+                            >
+                              Ver ➔
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
                     ))
                   )}
                 </div>
@@ -638,6 +822,15 @@ export default function CopilotoObreroPage() {
           </div>
         </PlanLockOverlay>
       </div>
+
+      {/* Modal de Cotización PDF Oficial ObraTrack */}
+      <CotizacionPdfModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        cotizacion={selectedCotizacionPdf}
+        clienteNombre={pdfClienteNombre}
+        clienteTelefono={pdfClienteTelefono}
+      />
     </div>
   );
 }
