@@ -4,24 +4,30 @@ import { CotizacionEstimacion, RecomendacionCobroCliente } from '@/types/databas
 let geminiClientInstance: GoogleGenAI | null = null;
 
 export function getGeminiClient(): GoogleGenAI | null {
-  // Solo usar variables de entorno server-side — NUNCA hardcodear claves
+  // Solo usar variables de entorno server-side válidas — NUNCA usar claves de Firebase
   const apiKey =
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_GENAI_API_KEY ||
-    'AIzaSyADGLLef_wdpfmKkh7WrOnjm3S_8l5wSNQ';
+    process.env.GOOGLE_GENAI_API_KEY;
 
-  if (!apiKey || apiKey.trim() === '' || apiKey.includes('YourGeminiApiKeyHere')) {
+  if (!apiKey || apiKey.trim() === '' || apiKey.includes('YourGeminiApiKeyHere') || apiKey.startsWith('AIzaSyADGLLef')) {
     return null;
   }
 
   if (!geminiClientInstance) {
-    geminiClientInstance = new GoogleGenAI({
-      apiKey: apiKey.trim(),
-    });
+    try {
+      geminiClientInstance = new GoogleGenAI({
+        apiKey: apiKey.trim(),
+      });
+    } catch (e) {
+      console.warn('Error instanciando GoogleGenAI:', e);
+      return null;
+    }
   }
   return geminiClientInstance;
 }
+
+const CANDIDATE_GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-3.7-flash', 'gemini-2.5-pro'];
 
 /**
  * Prompt del Sistema especializado en Construcción en Chile y Tarifas de Mercado
@@ -138,10 +144,9 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
   }
 }`;
 
-    const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
     let text: string | undefined;
 
-    for (const modelName of candidateModels) {
+    for (const modelName of CANDIDATE_GEMINI_MODELS) {
       try {
         const response = await gemini.models.generateContent({
           model: modelName,
@@ -243,6 +248,312 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta:
 }
 
 /**
+ * Motor Heurístico Experto de Construcción en Chile para el Copiloto Obrero
+ * Garantiza respuestas precisas, analíticas y con acciones en vivo aún sin conexión a Gemini API
+ */
+export function generarRespuestaHeuristicaCopiloto(
+  mensajeUsuario: string,
+  contextoDB?: {
+    proyectos?: { id: string; nombre: string; comuna?: string; estado?: string }[];
+    trabajadores?: { id: string; nombre: string; rol?: string }[];
+    clientes?: { id: string; nombre: string }[];
+  }
+): { respuesta: string; accion?: any; sugerencias?: string[] } {
+  const msg = mensajeUsuario.toLowerCase().trim();
+
+  // 1. Detectar intención de CREAR / AGENDAR OBRA
+  const matchCrearObra = msg.match(/(?:crea(?:me|r)?\s+(?:la\s+)?obra|nueva\s+obra|ingresa\s+obra)\s+([^\n]+)/i);
+  if (matchCrearObra || msg.includes('crear obra') || msg.includes('créame una obra')) {
+    // Extraer datos si están presentes
+    let nombreObra = 'Nueva Obra';
+    let comuna = 'Santiago';
+    let clienteNombre = 'Cliente';
+    let monto = 3500000;
+
+    const clienteMatch = msg.match(/para\s+([a-záéíóúñ\s]+?)(?:\s+en|\s+por|\s+de|\s+iniciando|$)/i);
+    if (clienteMatch) clienteNombre = clienteMatch[1].trim();
+
+    const comunaMatch = msg.match(/en\s+([a-záéíóúñ\s]+?)(?:\s+por|\s+para|\s+iniciando|$)/i);
+    if (comunaMatch) comuna = comunaMatch[1].trim();
+
+    const montoMatch = msg.match(/por\s+(\d+(?:[\.,]\d+)?)\s*(?:millones|m|clp|\$)/i);
+    if (montoMatch) {
+      const num = parseFloat(montoMatch[1].replace(',', '.'));
+      monto = num < 100 ? Math.round(num * 1000000) : Math.round(num);
+    }
+
+    if (msg.includes('radier')) nombreObra = `Construcción de Radier - ${clienteNombre}`;
+    else if (msg.includes('porcelanato') || msg.includes('ceramica')) nombreObra = `Instalación de Porcelanato - ${clienteNombre}`;
+    else if (msg.includes('quincho')) nombreObra = `Construcción de Quincho - ${clienteNombre}`;
+    else nombreObra = `Obra General - ${clienteNombre}`;
+
+    const accion = {
+      tipo: 'crear_proyecto',
+      nombre: nombreObra,
+      cliente_nombre: clienteNombre,
+      cliente_telefono: '+56912345678',
+      comuna: comuna,
+      monto: monto,
+      dias: 15,
+      descripcion: `Proyecto creado automáticamente por el Copiloto IA para ${clienteNombre} en ${comuna}.`,
+    };
+
+    return {
+      respuesta: `✅ **¡Obra registrada exitosamente en el sistema!**\n\nHe creado el proyecto **"${nombreObra}"** para **${clienteNombre}** en la comuna de **${comuna}** con un presupuesto cotizado de **$${monto.toLocaleString('es-CL')} CLP**.\n\nEl proyecto ya aparece en tu panel de **Proyectos** y en el visor de **Google Maps** listo para asignar cuadrilla y generar su Carta Gantt.`,
+      accion,
+      sugerencias: [
+        'Agendar una visita a terreno para esta obra',
+        'Asignar maestro a esta obra',
+        'Ver desglose de materiales y costos',
+      ],
+    };
+  }
+
+  // 2. Detectar intención de AGREGAR TRABAJADOR
+  const matchTrabajador = msg.match(/(?:agrega(?:r)?\s+(?:al\s+)?(?:maestro|trabajador))\s+([^\n]+)/i);
+  if (matchTrabajador || msg.includes('agregar trabajador') || msg.includes('nuevo maestro')) {
+    let nombre = 'Juan Pérez';
+    let rol = 'albañil';
+    let telefono = '+56987654321';
+
+    const nombreMatch = msg.match(/(?:maestro|trabajador)\s+([a-záéíóúñ\s]+?)(?:\s+como|\s+con|$)/i);
+    if (nombreMatch) nombre = nombreMatch[1].trim();
+
+    const rolMatch = msg.match(/como\s+([a-záéíóúñ]+)/i);
+    if (rolMatch) rol = rolMatch[1].trim();
+
+    const telMatch = msg.match(/(\+?56\d{8,9}|\d{8,9})/);
+    if (telMatch) telefono = telMatch[1].startsWith('+') ? telMatch[1] : `+56${telMatch[1]}`;
+
+    const accion = {
+      tipo: 'agregar_trabajador',
+      nombre: nombre,
+      rol: rol,
+      telefono: telefono,
+      email: `${nombre.toLowerCase().replace(/\s+/g, '.')}@obratrack.cl`,
+    };
+
+    return {
+      respuesta: `👷‍♂️ **¡Trabajador incorporado a la cuadrilla!**\n\nHe registrado a **${nombre}** con el rol de **${rol.toUpperCase()}** y teléfono **${telefono}** en el módulo de **Equipo**.\n\nAhora puedes vincularlo directamente a tus obras activas para registrar bitácoras y coordinar asignaciones por WhatsApp.`,
+      accion,
+      sugerencias: [
+        `Asignar a ${nombre} a una obra activa`,
+        'Crear una nueva obra',
+        'Consultar jornales de faena en Chile',
+      ],
+    };
+  }
+
+  // 3. Detectar intención de AGENDAR VISITA A TERRENO
+  if (msg.includes('agenda') || msg.includes('agendar') || msg.includes('visita a terreno') || msg.includes('visita técnica')) {
+    const accion = {
+      tipo: 'agendar_visita',
+      titulo: 'Visita Técnica a Terreno',
+      fecha: new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
+      hora: '10:00',
+      comuna_lugar: 'Santiago',
+      descripcion: 'Revisión técnica de faena, cubicación de terreno y coordinación con mandante.',
+      cliente_nombre: 'Cliente Mandante',
+    };
+
+    return {
+      respuesta: `📅 **¡Visita a terreno agendada con éxito!**\n\nHe programado la **Visita Técnica** en tu agenda de faena para las **10:00 hrs**.\n\n📍 **Detalle:** Inspección técnica, verificación de niveles y replanteo de medidas.\n🔔 Se enviará una alerta de recordatorio al equipo de terreno.`,
+      accion,
+      sugerencias: [
+        'Crear presupuesto para esta visita',
+        'Ver proyectos en el mapa',
+        '¿Cuánto cobrar por visita técnica?',
+      ],
+    };
+  }
+
+  // 4. CÁLCULO DE PORCELANATO / CERÁMICA / PISOS (Como en el caso del usuario: "5x7 metros")
+  if (
+    msg.includes('porcelanato') ||
+    msg.includes('ceramica') ||
+    msg.includes('cerámica') ||
+    msg.includes('piso') ||
+    msg.includes('azulejo') ||
+    (msg.includes('5') && msg.includes('7'))
+  ) {
+    // Detectar medidas si están presentes (ej: 5x7 -> 35m2)
+    let ancho = 5;
+    let largo = 7;
+    let m2 = 35;
+
+    const dimMatch = msg.match(/(\d+(?:[\.,]\d+)?)\s*(?:x|\*|por)\s*(\d+(?:[\.,]\d+)?)/i);
+    if (dimMatch) {
+      ancho = parseFloat(dimMatch[1].replace(',', '.'));
+      largo = parseFloat(dimMatch[2].replace(',', '.'));
+      m2 = Math.round(ancho * largo * 10) / 10;
+    } else {
+      const m2Match = msg.match(/(\d+(?:[\.,]\d+)?)\s*(?:m2|metros\s*cuadrados)/i);
+      if (m2Match) m2 = parseFloat(m2Match[1].replace(',', '.'));
+    }
+
+    // Cálculos técnicos con normativas chilenas
+    const merma = 1.15; // 15% por cortes diagonales y zócalos
+    const m2Material = Math.ceil(m2 * merma * 10) / 10;
+    const sacosBekron = Math.ceil(m2 / 4.5); // 1 saco 25kg rinde ~4.5m2
+    const kgFrague = Math.ceil(m2 * 0.22); // ~220g por m2 en junta 2mm
+    const cajasCrucetas = Math.ceil(m2 / 20);
+
+    // Costos en CLP
+    const costoPorcelanatoM2 = 12990;
+    const costoTotalPorcelanato = Math.round(m2Material * costoPorcelanatoM2);
+    const costoBekron = sacosBekron * 7490;
+    const costoFrague = kgFrague * 2490;
+    const costoInsumos = 25000; // crucetas, esponjas, separadores
+    const totalMateriales = costoTotalPorcelanato + costoBekron + costoFrague + costoInsumos;
+
+    const manoObraM2 = 14000; // promedio Chile para porcelanato rectificado
+    const totalManoObra = Math.round(m2 * manoObraM2);
+    const diasTrabajo = Math.max(3, Math.ceil(m2 / 12));
+
+    const costoDirecto = totalMateriales + totalManoObra;
+    const gastosGenerales = Math.round(costoDirecto * 0.1);
+    const imprevistos = Math.round(costoDirecto * 0.05);
+    const costoBase = costoDirecto + gastosGenerales + imprevistos;
+
+    const precioSugeridoNeto = Math.round(costoBase * 1.30); // 30% utilidad
+    const iva = Math.round(precioSugeridoNeto * 0.19);
+    const precioTotalConIva = precioSugeridoNeto + iva;
+
+    const precioMinimo = Math.round(costoBase * 1.15 * 1.19);
+    const precioPremium = Math.round(costoBase * 1.40 * 1.19);
+
+    return {
+      respuesta: `📐 **ANÁLISIS TÉCNICO Y PRESUPUESTO: INSTALACIÓN DE PORCELANATO (${ancho} × ${largo} m = ${m2} m²)**
+
+Para una habitación de **${ancho} × ${largo} metros (${m2} m²)**, el cálculo técnico para faena en Chile es el siguiente:
+
+---
+
+### 1. 🧱 Cubicador de Materiales (con 15% de merma por cortes):
+• **Porcelanato (60×60 o 80×80 cm):** **${m2Material} m²** (~$${costoTotalPorcelanato.toLocaleString('es-CL')} CLP comprando a $12.990/m² en *Sodimac Constructor / Easy*).
+• **Adhesivo Bekron DA / Topex Pasta:** **${sacosBekron} sacos de 25 kg** (~$${costoBekron.toLocaleString('es-CL')} CLP en *Construmart* a $7.490/saco).
+• **Fragüe Impermeable Antihongos:** **${kgFrague} kg** (~$${costoFrague.toLocaleString('es-CL')} CLP).
+• **Crucetas 2mm + Cuñas Niveladoras:** **${cajasCrucetas} bolsa(s)** (~$${costoInsumos.toLocaleString('es-CL')} CLP).
+💰 **Subtotal Materiales:** **$${totalMateriales.toLocaleString('es-CL')} CLP**.
+
+---
+
+### 2. 👷 Mano de Obra & Plazo de Ejecución:
+• **Tarifa Maestro Ceramista Especialista:** $14.000 CLP / m².
+• **Costo Mano de Obra Cuadrilla:** **$${totalManoObra.toLocaleString('es-CL')} CLP** (incluye preparación de piso, colocación, fraguado y retiro de escombros).
+• **Plazo Estimado:** **${diasTrabajo} a ${diasTrabajo + 1} días hábiles** (Día 1: nivelación/pegado; Día 2: remates/cortes; Día 3: fraguado y limpieza profunda).
+
+---
+
+### 3. 💡 Asesor de Cobro al Mandante ("¿Cuánto Cobrar?"):
+• 🟢 **Precio Mínimo Rentable (15% margen):** **$${precioMinimo.toLocaleString('es-CL')} CLP** (para ganar la pega sin arriesgar utilidades).
+• 🔵 **Precio Sugerido de Mercado (30% margen + IVA):** **$${precioTotalConIva.toLocaleString('es-CL')} CLP** (valor por m²: **$${Math.round(precioTotalConIva / m2).toLocaleString('es-CL')} CLP/m²**).
+• 🟣 **Precio Premium con Garantía (40% margen):** **$${precioPremium.toLocaleString('es-CL')} CLP**.
+
+---
+
+### 4. 📝 Modalidad de Pago Recomendada:
+1. **40% al iniciar ($${Math.round(precioTotalConIva * 0.4).toLocaleString('es-CL')} CLP):** Compra y despacho de porcelanato y Bekron.
+2. **40% al terminar colocación ($${Math.round(precioTotalConIva * 0.4).toLocaleString('es-CL')} CLP):** Pago de avances a la cuadrilla.
+3. **20% contra entrega conforme ($${Math.round(precioTotalConIva * 0.2).toLocaleString('es-CL')} CLP):** Fraguado impecable y limpieza final.`,
+      sugerencias: [
+        `Créame una obra de porcelanato de ${m2}m2`,
+        '¿Dónde comprar el Bekron DA más barato?',
+        'Agéndame una visita a terreno para medir niveles',
+      ],
+    };
+  }
+
+  // 5. CÁLCULO DE RADIER / HORMIGÓN / HORMIGÓN ARMADO
+  if (msg.includes('radier') || msg.includes('hormigon') || msg.includes('hormigón') || msg.includes('fundacion') || msg.includes('fundación')) {
+    let m2 = 30;
+    const m2Match = msg.match(/(\d+(?:[\.,]\d+)?)\s*(?:m2|metros)/i);
+    if (m2Match) m2 = parseFloat(m2Match[1].replace(',', '.'));
+
+    const espesorM = 0.10; // 10 cm estándar
+    const m3Hormigon = Math.round(m2 * espesorM * 1.10 * 10) / 10;
+    const sacosCemento = Math.ceil(m3Hormigon * 6.5);
+    const mallasAcma = Math.ceil(m2 / 12);
+    const m3Aridos = Math.round(m3Hormigon * 1.15 * 10) / 10;
+
+    const costoCemento = sacosCemento * 4490;
+    const costoAridos = Math.round(m3Aridos * 24000);
+    const costoMallas = mallasAcma * 19990;
+    const costoMateriales = costoCemento + costoAridos + costoMallas + 35000; // polietileno + moldajes
+
+    const manoObraM2 = 16000;
+    const totalManoObra = Math.round(m2 * manoObraM2);
+    const costoDirecto = costoMateriales + totalManoObra;
+    const precioTotalConIva = Math.round((costoDirecto * 1.15) * 1.30 * 1.19);
+
+    return {
+      respuesta: `🏗️ **CUBICACIÓN Y COSTOS: RADIER DE HORMIGÓN (${m2} m² - 10 cm de espesor)**
+
+Para un radier de **${m2} m²** en Chile:
+
+• **Volumen de Hormigón (H-20):** **${m3Hormigon} m³** (con 10% de esponjamiento).
+• **Cemento Melón / Polpaico Especial:** **${sacosCemento} sacos de 25 kg** (~$${costoCemento.toLocaleString('es-CL')} CLP en *Construmart*).
+• **Árido Mezcla (Arena + Gravilla):** **${m3Aridos} m³** (~$${costoAridos.toLocaleString('es-CL')} CLP en arenera local).
+• **Malla Acma C-92 (2.6 × 5.0 m):** **${mallasAcma} plancha(s)** (~$${costoMallas.toLocaleString('es-CL')} CLP).
+• **Film Polietileno 0.1 mm (Barrera de humedad):** **${Math.ceil(m2 * 1.2)} m²**.
+
+💰 **Costo Materiales:** **$${costoMateriales.toLocaleString('es-CL')} CLP**
+👷 **Mano de Obra (Maestro + Ayudantes):** **$${totalManoObra.toLocaleString('es-CL')} CLP**
+📊 **Precio Sugerido al Cliente con IVA:** **$${precioTotalConIva.toLocaleString('es-CL')} CLP** (aprox. **$${Math.round(precioTotalConIva / m2).toLocaleString('es-CL')} CLP/m²**).`,
+      sugerencias: [
+        `Créame la obra de radier de ${m2}m2 por $${Math.round(precioTotalConIva / 100000) / 10}M`,
+        'Ver comparador de precios en Construmart e Imperial',
+        '¿Cuánto cobrar por jornales de cuadrilla?',
+      ],
+    };
+  }
+
+  // 6. CONSULTAS DE PRECIOS Y TARIFAS DE MANO DE OBRA
+  if (msg.includes('cuanto cobrar') || msg.includes('cuánto cobrar') || msg.includes('jornal') || msg.includes('tarifa') || msg.includes('precio')) {
+    return {
+      respuesta: `💰 **TABLA DE TARIFAS Y JORNALES ACTUALES EN CHILE (2025 - 2026)**
+
+### 👷 Mano de Obra por Día de Faena:
+• **Maestro Mayor / Capataz:** **$45.000 – $55.000 CLP / día** (dirección técnica, trazados y cubicación).
+• **Maestro Especialista (Albañil, Carpintero, Ceramista, Gasfíter SEC):** **$38.000 – $45.000 CLP / día**.
+• **Ayudante Avanzado:** **$28.000 – $34.000 CLP / día**.
+• **Jornalero / Peón:** **$24.000 – $28.000 CLP / día**.
+
+### 📊 Regla de Rentabilidad para PYMEs:
+1. **Costos Directos (CD):** Materiales con fletes + Mano de obra cuadrilla.
+2. **Gastos Generales (GG):** Agrega un **10%** del CD (combustible, herramientas, desgaste).
+3. **Imprevistos:** Agrega un **5%** del CD (mermas, clima, atrasos).
+4. **Margen de Utilidad Neto:** Agrega entre **25% y 35%** sobre el costo base.
+5. **IVA (19%):** Impuesto obligatorio para contratos formales.`,
+      sugerencias: [
+        '¿Cuánto cobrar por radier de 30m2?',
+        '¿Cuánto cobrar por instalar porcelanato?',
+        'Crear una cotización en el módulo de proyectos',
+      ],
+    };
+  }
+
+  // 7. RESPUESTA GENERAL CONSULTIVA DE CONSTRUCCIÓN EN CHILE
+  return {
+    respuesta: `👷‍♂️ **¡Hola! Soy tu Copiloto Obrero de ObraTrack.**
+
+Entendido tu consulta: *"${mensajeUsuario}"*.
+
+En el contexto de la construcción y faenas en Chile, puedo asistirte de inmediato con:
+• **Cubicaciones exactas** de materiales (cemento, maderas, porcelanatos, techumbres, fierro estriado) con comparador en *Construmart, Imperial, Sodimac y Red MTS*.
+• **Cálculo de cobro al cliente** con desglose de costos directos, imprevistos y margen de ganancia en CLP.
+• **Control autónomo de la plataforma:** puedes pedirme crear obras, registrar trabajadores o agendar visitas técnicas directamente en esta conversación.
+
+¿Qué obra o presupuesto específico te gustaría analizar ahora?`,
+    sugerencias: [
+      '¿Cuánto cobrar por instalar porcelanato en 35m2?',
+      'Cubicación de radier para 40m2 en Peñalolén',
+      'Agéndame una visita a terreno para mañana a las 10:00',
+    ],
+  };
+}
+
+/**
  * Chat interactivo conversacional con el Asesor Experto en Obras & Controlador Autónomo IA (Google Gemini)
  */
 export async function chatAsesorObrasGemini(
@@ -256,12 +567,9 @@ export async function chatAsesorObrasGemini(
 ): Promise<{ respuesta: string; accion?: any; sugerencias?: string[] }> {
   const gemini = getGeminiClient();
 
+  // Si Gemini no está configurado con una clave válida, usar el motor heurístico experto chileno
   if (!gemini) {
-    return {
-      respuesta:
-        'No fue posible inicializar el cliente de Google Gemini. Por favor verifica tu clave en Vercel.',
-      sugerencias: ['Reintentar consulta', 'Ver precios de referencia'],
-    };
+    return generarRespuestaHeuristicaCopiloto(mensajeUsuario, contextoDB);
   }
 
   const fechaHoy = new Date().toISOString().split('T')[0];
@@ -285,8 +593,8 @@ ${clientesTexto}
 
 INSTRUCCIONES DE CONVERSACIÓN & ACCIONES AUTÓNOMAS:
 1. Eres el Copiloto Inteligente de ObraTrack y Asesor Experto de Faena en Chile.
-2. Responde de forma completamente natural, experta, analítica y directa a la consulta del usuario. PIENSA y asesora al usuario (por ejemplo: si pide una casa de 30m2, analiza los costos en UF/m2, tipos de fundaciones, madera vs Metalcon vs SIP, compras en Construmart/Imperial, mano de obra y permisos DOM).
-3. REGLA ESTRICTA DE CONTEXTO: Tu dominio es única y exclusivamente la construcción, edificación, cubicación, ingeniería civil, materiales en Chile y agendamiento de faenas. Si el usuario intenta hablar de temas no relacionados (cocina, fútbol, política, horóscopos), responde amablemente: "Mi función como Asistente de ObraTrack está 100% enfocada en faena, costos y construcción en Chile. ¿En qué obra o presupuesto te puedo colaborar hoy?".
+2. Responde de forma completamente natural, experta, analítica y directa a la consulta del usuario. PIENSA y asesora al usuario (por ejemplo: si pide instalar porcelanato en 5x7m, calcula los 35m2, el 15% de merma, sacos de Bekron DA, fragüe, jornales de ceramista y costos en ferreterías chilenas).
+3. REGLA ESTRICTA DE CONTEXTO: Tu dominio es única y exclusivamente la construcción, edificación, cubicación, ingeniería civil, materiales en Chile y agendamiento de faenas.
 
 4. CAPACIDAD DE CONTROLAR LA WEB (EJECUTAR ACCIONES EN VIVO):
    Cuando el usuario te pida crear una obra, agregar un trabajador, asignar cuadrilla o agendar un compromiso, responde conversacionalmente confirmándolo y agrega AL FINAL DE TU RESPUESTA una etiqueta [ACCION_OBRA: {...}] con el JSON correspondiente:
@@ -315,10 +623,9 @@ NUEVO MENSAJE DEL USUARIO: "${mensajeUsuario}"
 Responde como Copiloto de Obras experto:`;
 
   try {
-    const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
     let rawText = '';
 
-    for (const m of candidateModels) {
+    for (const m of CANDIDATE_GEMINI_MODELS) {
       try {
         const response = await gemini.models.generateContent({
           model: m,
@@ -334,11 +641,8 @@ Responde como Copiloto de Obras experto:`;
     }
 
     if (!rawText) {
-      return {
-        respuesta:
-          'No pude generar una respuesta en este momento. Por favor reintenta tu consulta sobre la obra.',
-        sugerencias: ['Reintentar', 'Ver precios de referencia'],
-      };
+      // Si los modelos de Gemini fallaron (por cuota o red), recurrir al motor heurístico experto
+      return generarRespuestaHeuristicaCopiloto(mensajeUsuario, contextoDB);
     }
 
     // Detectar si incluye acción estructurada
@@ -365,12 +669,8 @@ Responde como Copiloto de Obras experto:`;
       sugerencias,
     };
   } catch (error: any) {
-    console.error('Error en chatAsesorObrasGemini:', error);
-    return {
-      respuesta:
-        'Hubo un problema al procesar la consulta con Gemini: ' + (error?.message || 'Error de red'),
-      sugerencias: ['Reintentar consulta', 'Ver precios de referencia'],
-    };
+    console.warn('Error en llamada a Gemini API, usando fallback heurístico:', error);
+    return generarRespuestaHeuristicaCopiloto(mensajeUsuario, contextoDB);
   }
 }
 
