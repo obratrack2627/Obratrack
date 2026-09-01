@@ -545,10 +545,10 @@ export default function CopilotoObreroPage() {
                 {mensajesChat.map((m) => (
                   <div
                     key={m.id}
-                    className={`flex flex-col ${m.remitente === 'usuario' ? 'items-end' : 'items-start'}`}
+                    className={`flex flex-col ${m.remitente === 'usuario' ? 'items-end' : 'items-start'} w-full`}
                   >
                     <div
-                      className={`max-w-[85%] rounded-2xl p-4 space-y-3 shadow-sm ${
+                      className={`w-full max-w-[95%] sm:max-w-[85%] rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-sm overflow-hidden break-words ${
                         m.remitente === 'usuario'
                           ? 'bg-navy-900 text-white rounded-br-xs'
                           : 'bg-white border border-kraft-200 text-navy-900 rounded-bl-xs'
@@ -695,7 +695,7 @@ export default function CopilotoObreroPage() {
                   onChange={(e) => setInputChat(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
                   placeholder="Escribe tu instrucción (ej: Créame una obra de radier para Carlos en Peñalolén por 3.5M)..."
-                  className="flex-1 text-xs bg-kraft-50 border border-kraft-200 rounded-2xl px-4 py-3 text-navy-900 focus:outline-none focus:border-obra-orange focus:bg-white transition-all shadow-inner"
+                  className="flex-1 min-w-0 text-xs bg-kraft-50 border border-kraft-200 rounded-2xl px-4 py-3 text-navy-900 focus:outline-none focus:border-obra-orange focus:bg-white transition-all shadow-inner"
                 />
                 <button
                   onClick={() => handleSendChat()}
