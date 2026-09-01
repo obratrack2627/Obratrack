@@ -327,8 +327,7 @@ export function generarRespuestaHeuristicaCopiloto(
   }
 
   // 2. Detectar intención de CREAR / AGENDAR OBRA
-  const matchCrearObra = msg.match(/(?:crea(?:me|r)?\s+(?:la\s+)?obra|nueva\s+obra|ingresa\s+obra)\s+([^
-]+)/i);
+  const matchCrearObra = msg.match(/(?:crea(?:me|r)?\s+(?:la\s+)?obra|nueva\s+obra|ingresa\s+obra)\s+([^\n\r]+)/i);
   if (matchCrearObra || msg.includes('crear obra') || msg.includes('créame una obra')) {
     let nombreObra = 'Nueva Obra';
     let comuna = 'Santiago';
