@@ -123,6 +123,19 @@ export default function CopilotoObreroPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  // Reiniciar conversación activa para empezar una nueva
+  const handleResetChat = () => {
+    dataService.clearChatSessionHistory();
+    const freshMessage: MensajeChatCotizador = {
+      ...INITIAL_CHAT_MESSAGE,
+      id: 'm-init-' + Date.now(),
+      timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+    };
+    setMensajesChat([freshMessage]);
+    dataService.saveChatSessionHistory([freshMessage]);
+    showToast('✨ Conversación reiniciada para esta sesión.');
+  };
+
   // Abrir visor de Cotización en PDF
   const handleOpenPdfCotizacion = (
     cot?: CotizacionEstimacion,
