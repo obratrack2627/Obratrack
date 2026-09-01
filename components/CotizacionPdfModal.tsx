@@ -4,435 +4,369 @@ import React, { useRef } from 'react';
 import {
   Printer,
   X,
-  Building2,
-  DollarSign,
-  FileText,
   MessageCircle,
-  HardHat,
+  User,
+  Briefcase,
+  FileText,
+  DollarSign,
+  MapPin,
+  Phone,
+  Mail,
+  Globe,
 } from 'lucide-react';
 import { CotizacionEstimacion } from '@/types/database';
+import Logo from './Logo';
 
 interface CotizacionPdfModalProps {
   isOpen: boolean;
   onClose: () => void;
   cotizacion: CotizacionEstimacion | null;
   clienteNombre?: string;
-  clienteRut?: string;
+  clienteContacto?: string;
+  clienteEmail?: string;
   clienteTelefono?: string;
-  contratistaEmpresa?: string;
-  contratistaRut?: string;
-  contratistaTelefono?: string;
 }
 
 export default function CotizacionPdfModal({
   isOpen,
   onClose,
   cotizacion,
-  clienteNombre = 'Carlos Henríquez',
-  clienteRut = '15.482.910-3',
-  clienteTelefono = '+56 9 8765 4321',
-  contratistaEmpresa = 'Constructora & Servicios SpA',
-  contratistaRut = '77.892.314-K',
-  contratistaTelefono = '+56 9 1234 5678',
+  clienteNombre = 'Constructora del Norte S.A.',
+  clienteContacto = 'Ing. Juan Pérez',
+  clienteEmail = 'juan.perez@constructora.com',
+  clienteTelefono = '+56 9 1234 5678',
 }: CotizacionPdfModalProps) {
   const printAreaRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen || !cotizacion) return null;
 
-  const fechaHoy = new Date().toLocaleDateString('es-CL', {
+  const fechaHoy = new Date();
+  const fechaEmision = fechaHoy.toLocaleDateString('es-CL', {
     day: '2-digit',
-    month: 'long',
+    month: '2-digit',
     year: 'numeric',
   });
 
-  const folio = cotizacion.id.replace('cot-', 'COT-').slice(0, 12).toUpperCase();
+  const fechaValidezObj = new Date(fechaHoy.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const fechaValidez = fechaValidezObj.toLocaleDateString('es-CL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 
-  const precioTotal = cotizacion.estructura_financiera?.precio_total_con_iva || 1500000;
-  const precioNeto = cotizacion.estructura_financiera?.precio_sugerido_neto || Math.round(precioTotal / 1.19);
-  const iva = cotizacion.estructura_financiera?.iva_19 || Math.round(precioNeto * 0.19);
-  const costoDirecto = cotizacion.estructura_financiera?.costo_directo || Math.round(precioNeto * 0.7);
-  const gastosGenerales = cotizacion.estructura_financiera?.gastos_generales_monto || Math.round(costoDirecto * 0.1);
-  const imprevistos = cotizacion.estructura_financiera?.imprevistos_monto || Math.round(costoDirecto * 0.05);
-  const utilidad = cotizacion.estructura_financiera?.margen_utilidad_monto || (precioNeto - costoDirecto - gastosGenerales - imprevistos);
+  const folioNum = cotizacion.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '000125';
+
+  const totalConIva = cotizacion.estructura_financiera?.precio_total_con_iva || 28908505;
+  const subtotalNeto = cotizacion.estructura_financiera?.precio_sugerido_neto || Math.round(totalConIva / 1.19);
+  const iva = cotizacion.estructura_financiera?.iva_19 || Math.round(subtotalNeto * 0.19);
+
+  // Unificar partidas combinando materiales y mano de obra
+  const partidasItems: Array<{
+    nombre: string;
+    descripcion: string;
+    unidad: string;
+    cantidad: number;
+    precioUnit: number;
+    total: number;
+  }> = [];
+
+  (cotizacion.materiales || []).forEach((mat) => {
+    partidasItems.push({
+      nombre: mat.nombre,
+      descripcion: mat.alternativa_economica || `Material certificado en ${mat.mejor_tienda || 'Ferretería Especializada'}`,
+      unidad: mat.unidad || 'un',
+      cantidad: mat.cantidad || 1,
+      precioUnit: mat.precio_mas_barato || mat.precio_unitario_estimado || 0,
+      total: mat.subtotal || 0,
+    });
+  });
+
+  (cotizacion.mano_de_obra || []).forEach((mo) => {
+    partidasItems.push({
+      nombre: `Mano de Obra: ${mo.rol}`,
+      descripcion: `Cuadrilla de ${mo.cantidad_personas} persona(s) por ${mo.dias_estimados} días`,
+      unidad: 'gl',
+      cantidad: 1,
+      precioUnit: mo.subtotal || 0,
+      total: mo.subtotal || 0,
+    });
+  });
+
+  // Si no hay partidas suficientes, rellenar con las partidas de la obra
+  if (partidasItems.length === 0) {
+    partidasItems.push({
+      nombre: cotizacion.titulo_proyecto,
+      descripcion: cotizacion.resumen_ejecutivo,
+      unidad: 'gl',
+      cantidad: 1,
+      precioUnit: subtotalNeto,
+      total: subtotalNeto,
+    });
+  }
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleShareWhatsApp = () => {
-    const resumenTexto = `🏗️ *PROPUESTA FORMAL DE COTIZACIÓN - OBRATRACK*
-📄 *Folio:* #${folio}
-📅 *Fecha:* ${fechaHoy}
-
-Estimado(a) *${clienteNombre}*, le comparto el presupuesto oficial para:
-📌 *Proyecto:* ${cotizacion.titulo_proyecto}
-📍 *Ubicación:* ${cotizacion.comuna_region || 'Chile'}
-⏱️ *Plazo Estimado:* ${cotizacion.duracion_dias_estimada} días hábiles
-
-💰 *RESUMEN COMERCIAL:*
-• Costo Materiales & Cubicaciones: $${(cotizacion.estructura_financiera?.costo_materiales_total || 0).toLocaleString('es-CL')} CLP
-• Mano de Obra Cuadrilla Especialista: $${(cotizacion.estructura_financiera?.costo_mano_obra_total || 0).toLocaleString('es-CL')} CLP
-• *TOTAL PROPUESTA CON IVA:* *$${precioTotal.toLocaleString('es-CL')} CLP*
-
-📋 *CALENDARIO DE PAGOS:*
-1️⃣ 40% Anticipo (Materiales e inicio de faena): $${Math.round(precioTotal * 0.4).toLocaleString('es-CL')} CLP
-2️⃣ 30% Avance 50% de obra: $${Math.round(precioTotal * 0.3).toLocaleString('es-CL')} CLP
-3️⃣ 20% Terminaciones: $${Math.round(precioTotal * 0.2).toLocaleString('es-CL')} CLP
-4️⃣ 10% Recepción y entrega conforme: $${Math.round(precioTotal * 0.1).toLocaleString('es-CL')} CLP
-
-Emitido por: *${contratistaEmpresa}* (Tel: ${contratistaTelefono})
-Sistema de Control y Trazabilidad ObraTrack.`;
-
     const cleanPhone = clienteTelefono.replace(/[^0-9]/g, '');
-    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(resumenTexto)}`;
-    window.open(url, '_blank');
+    const msg = `🏗️ *COTIZACIÓN OFICIAL OBRATRACK*\n📄 *N.°:* ${folioNum}\n📅 *Fecha:* ${fechaEmision}\n\nEstimado(a) *${clienteNombre}*,\nLe compartimos la propuesta formal para:\n📌 *${cotizacion.titulo_proyecto}*\n📍 *Ubicación:* ${cotizacion.comuna_region || 'Chile'}\n\n💰 *SUBTOTAL:* $${subtotalNeto.toLocaleString('es-CL')}\n🏛️ *IVA (19%):* $${iva.toLocaleString('es-CL')}\n🔥 *TOTAL:* *$${totalConIva.toLocaleString('es-CL')} CLP*\n\n📋 *Condiciones de pago:* 40% anticipo - 30% en ejecución - 30% contra entrega conforme.\n\nEmitido por ObraTrack.`;
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-navy-950/80 backdrop-blur-sm overflow-y-auto">
-      {/* Botones de acción flotantes superiores */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-navy-950/80 backdrop-blur-sm overflow-y-auto">
+      {/* Botones de acción flotantes (ocultos al imprimir) */}
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2 print:hidden">
         <button
           onClick={handleShareWhatsApp}
-          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-heading font-bold text-xs shadow-xl transition-all cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl font-heading font-bold text-xs shadow-lg transition-all cursor-pointer"
         >
           <MessageCircle className="w-4 h-4" />
-          <span>Enviar por WhatsApp</span>
+          <span className="hidden sm:inline">Enviar por WhatsApp</span>
         </button>
 
         <button
           onClick={handlePrint}
-          className="flex items-center gap-2 px-4 py-2.5 bg-obra-orange hover:bg-orange-600 text-white rounded-2xl font-heading font-bold text-xs shadow-xl transition-all cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-xl font-heading font-bold text-xs shadow-lg transition-all cursor-pointer"
         >
           <Printer className="w-4 h-4" />
-          <span>Imprimir / Descargar PDF</span>
+          <span>Imprimir / PDF</span>
         </button>
 
         <button
           onClick={onClose}
-          className="p-2.5 bg-white/90 hover:bg-white text-navy-900 rounded-2xl shadow-xl transition-all cursor-pointer"
+          className="p-2.5 bg-white/95 hover:bg-white text-gray-800 rounded-xl shadow-lg transition-all cursor-pointer"
+          title="Cerrar"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
       {/* ========================================================================= */}
-      {/* DOCUMENTO PDF / HOJA FORMAL MEMBRETADA (Formato Carta / A4) */}
+      {/* DOCUMENTO FORMAL DE COTIZACIÓN - IDENTIDAD VISUAL OFICIAL OBRATRACK */}
       {/* ========================================================================= */}
       <div
         ref={printAreaRef}
-        className="w-full max-w-4xl bg-white text-navy-900 rounded-3xl shadow-2xl overflow-hidden my-8 print:my-0 print:rounded-none print:shadow-none print:w-full print:max-w-none print:text-black font-sans text-xs border border-kraft-200"
+        className="w-full max-w-4xl bg-white text-gray-900 rounded-2xl shadow-2xl overflow-hidden my-6 p-6 sm:p-10 border border-gray-200 font-sans print:m-0 print:p-8 print:shadow-none print:w-full print:max-w-none print:rounded-none print:border-none"
       >
-        {/* Cabecera Membretada Oficial */}
-        <div className="bg-navy-900 text-white p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b-4 border-obra-orange print:bg-navy-900 print:text-white">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-obra-orange flex items-center justify-center text-white shadow-md font-heading font-black text-xl">
-              OT
-            </div>
-            <div>
-              <h1 className="font-heading font-black text-xl tracking-tight text-white flex items-center gap-2">
-                <span>OBRATRACK</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 text-orange-200 font-mono">
-                  SaaS Chile
-                </span>
-              </h1>
-              <p className="text-[11px] text-gray-300">
-                Plataforma de Control de Faenas & Cubicaciones con IA
-              </p>
-            </div>
+        {/* Encabezado: Logo ObraTrack a la izquierda | Folio & Fecha a la derecha */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-6 border-b border-gray-100">
+          <div className="flex-1">
+            <Logo variant="horizontal" withDescriptor={true} size="md" />
           </div>
 
-          <div className="text-left sm:text-right font-mono space-y-1">
-            <div className="text-[10px] text-obra-orange font-bold uppercase tracking-widest">
-              PROPUESTA OFICIAL DE COTIZACIÓN
+          <div className="border-l-2 border-[#FF6A00] pl-5 sm:pl-6 text-left sm:text-right min-w-[200px]">
+            <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-wide text-gray-900 uppercase">
+              COTIZACIÓN
+            </h1>
+            <div className="font-mono text-sm font-bold text-gray-900 mt-1">
+              <span className="text-[#FF6A00]">N.°</span> {folioNum}
             </div>
-            <div className="font-heading font-bold text-sm text-white">
-              FOLIO: #{folio}
+            <div className="font-mono text-[11px] text-gray-500 mt-0.5">
+              FECHA: <span className="text-gray-800 font-semibold">{fechaEmision}</span>
             </div>
-            <div className="text-[11px] text-gray-300">
-              Fecha de Emisión: {fechaHoy}
-            </div>
-            <div className="text-[10px] text-emerald-400 font-sans">
-              ✓ Validez de la oferta: 15 días corridos
+            <div className="font-mono text-[11px] text-gray-500">
+              VÁLIDA HASTA: <span className="text-gray-800 font-semibold">{fechaValidez}</span>
             </div>
           </div>
         </div>
 
-        <div className="p-6 sm:p-8 space-y-6">
-          {/* Bloque de Identificación de Partes */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-kraft-50 border border-kraft-200">
-            {/* Contratista / Emisor */}
-            <div className="space-y-1.5 border-b sm:border-b-0 sm:border-r border-kraft-200 pb-3 sm:pb-0 sm:pr-4">
-              <div className="text-[10px] font-mono font-bold uppercase text-obra-orange flex items-center gap-1">
-                <HardHat className="w-3.5 h-3.5" />
-                <span>DATOS DEL CONTRATISTA (EMISOR)</span>
-              </div>
-              <div className="font-heading font-bold text-sm text-navy-900">
-                {contratistaEmpresa}
-              </div>
-              <div className="text-gray-600 text-[11px] space-y-0.5 font-mono">
-                <p>RUT: {contratistaRut}</p>
-                <p>Teléfono: {contratistaTelefono}</p>
-                <p>Región: Metropolitana / Cobertura Nacional</p>
-              </div>
+        {/* Tarjetas de Cliente y Proyecto (2 Columnas con fondo suave) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          {/* Tarjeta CLIENTE */}
+          <div className="bg-[#FBFBFA] border border-gray-200/80 rounded-xl p-4 sm:p-5 space-y-2">
+            <div className="flex items-center gap-2 text-[#FF6A00] font-heading font-extrabold text-xs uppercase tracking-wider">
+              <User className="w-4 h-4" />
+              <span>CLIENTE</span>
             </div>
-
-            {/* Mandante / Cliente */}
-            <div className="space-y-1.5 sm:pl-2">
-              <div className="text-[10px] font-mono font-bold uppercase text-navy-700 flex items-center gap-1">
-                <Building2 className="w-3.5 h-3.5 text-obra-orange" />
-                <span>DATOS DEL MANDANTE (CLIENTE)</span>
+            <div className="text-xs space-y-1 text-gray-700 font-sans">
+              <div className="flex">
+                <span className="font-bold text-gray-900 w-20 shrink-0">Nombre:</span>
+                <span className="text-gray-800 font-medium truncate">{clienteNombre}</span>
               </div>
-              <div className="font-heading font-bold text-sm text-navy-900">
-                {clienteNombre}
+              <div className="flex">
+                <span className="font-bold text-gray-900 w-20 shrink-0">Contacto:</span>
+                <span className="text-gray-800 truncate">{clienteContacto}</span>
               </div>
-              <div className="text-gray-600 text-[11px] space-y-0.5 font-mono">
-                <p>RUT: {clienteRut}</p>
-                <p>Ubicación: {cotizacion.comuna_region || 'Santiago, Chile'}</p>
-                <p>Teléfono: {clienteTelefono}</p>
+              <div className="flex">
+                <span className="font-bold text-gray-900 w-20 shrink-0">Email:</span>
+                <span className="text-gray-800 truncate">{clienteEmail}</span>
+              </div>
+              <div className="flex">
+                <span className="font-bold text-gray-900 w-20 shrink-0">Teléfono:</span>
+                <span className="text-gray-800 font-mono">{clienteTelefono}</span>
               </div>
             </div>
           </div>
 
-          {/* Resumen del Proyecto */}
-          <div className="space-y-2">
-            <h2 className="font-heading font-bold text-sm text-navy-900 flex items-center gap-2 border-b border-kraft-200 pb-1">
-              <FileText className="w-4 h-4 text-obra-orange" />
-              <span>1. DESCRIPCIÓN & ALCANCE DE LOS TRABAJOS</span>
-            </h2>
-            <div className="bg-white p-3 rounded-xl border border-kraft-200 text-gray-700 leading-relaxed text-[11px]">
-              <p className="font-bold text-navy-900 mb-1">
-                Proyecto: {cotizacion.titulo_proyecto} ({cotizacion.metros_cuadrados || 0} m²)
+          {/* Tarjeta PROYECTO */}
+          <div className="bg-[#FBFBFA] border border-gray-200/80 rounded-xl p-4 sm:p-5 space-y-2">
+            <div className="flex items-center gap-2 text-[#FF6A00] font-heading font-extrabold text-xs uppercase tracking-wider">
+              <Briefcase className="w-4 h-4" />
+              <span>PROYECTO</span>
+            </div>
+            <div className="text-xs space-y-1 text-gray-700 font-sans">
+              <div className="flex">
+                <span className="font-bold text-gray-900 w-36 shrink-0">Nombre del proyecto:</span>
+                <span className="text-gray-800 font-bold truncate">{cotizacion.titulo_proyecto}</span>
+              </div>
+              <div className="flex">
+                <span className="font-bold text-gray-900 w-36 shrink-0">Ubicación:</span>
+                <span className="text-gray-800 truncate">{cotizacion.comuna_region || 'Santiago, Chile'}</span>
+              </div>
+              <div className="flex">
+                <span className="font-bold text-gray-900 w-36 shrink-0">Descripción:</span>
+                <span className="text-gray-800 line-clamp-2">
+                  {cotizacion.resumen_ejecutivo || `Ejecución de faena (${cotizacion.metros_cuadrados || 35} m²)`}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Texto introductorio */}
+        <p className="text-xs text-gray-600 mt-6 mb-3">
+          A continuación, presentamos nuestra cotización según los requerimientos del proyecto.
+        </p>
+
+        {/* Tabla Principal de Partidas e Ítems */}
+        <div className="w-full overflow-x-auto rounded-xl border border-gray-200 shadow-2xs">
+          <table className="w-full text-left border-collapse text-xs min-w-[620px]">
+            <thead>
+              <tr className="bg-[#1E1E1E] text-white font-heading font-bold text-[11px] uppercase tracking-wider">
+                <th className="py-3 px-3 text-center w-16">ÍTEM</th>
+                <th className="py-3 px-4">DESCRIPCIÓN</th>
+                <th className="py-3 px-3 text-center w-20">UNIDAD</th>
+                <th className="py-3 px-3 text-center w-20">CANT.</th>
+                <th className="py-3 px-4 text-right w-32">PRECIO UNIT.</th>
+                <th className="py-3 px-4 text-right w-36">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200/80 font-sans text-xs">
+              {partidasItems.map((item, idx) => (
+                <tr
+                  key={idx}
+                  className={idx % 2 === 0 ? 'bg-white hover:bg-gray-50/50' : 'bg-[#FAFAFA] hover:bg-gray-50/50'}
+                >
+                  <td className="py-3 px-3 text-center font-mono font-bold text-[#FF6A00]">
+                    {String(idx + 1).padStart(2, '0')}
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="font-bold text-gray-900">{item.nombre}</div>
+                    {item.descripcion && (
+                      <div className="text-[10px] text-gray-500 mt-0.5">{item.descripcion}</div>
+                    )}
+                  </td>
+                  <td className="py-3 px-3 text-center font-mono text-gray-600 font-medium">
+                    {item.unidad}
+                  </td>
+                  <td className="py-3 px-3 text-center font-mono font-bold text-gray-800">
+                    {typeof item.cantidad === 'number'
+                      ? item.cantidad.toLocaleString('es-CL')
+                      : item.cantidad}
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono text-gray-700">
+                    $ {Math.round(item.precioUnit).toLocaleString('es-CL')}
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono font-bold text-gray-900">
+                    $ {Math.round(item.total).toLocaleString('es-CL')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Sección Inferior: Observaciones & Condiciones (Izq) | Liquidación & Firma (Der) */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-6 items-start">
+          {/* Columna Izquierda (6 columnas): Observaciones y Condiciones de Pago */}
+          <div className="md:col-span-6 space-y-5">
+            {/* Observaciones */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[#FF6A00] font-heading font-extrabold text-xs uppercase tracking-wide">
+                <FileText className="w-4 h-4" />
+                <span>OBSERVACIONES</span>
+              </div>
+              <ul className="text-[11px] text-gray-600 space-y-1 pl-5 list-disc font-sans leading-relaxed">
+                <li>Los precios incluyen IVA y cotización de materiales con retiro o despacho.</li>
+                <li>
+                  Los plazos de ejecución serán definidos según el cronograma de obra (estimado en{' '}
+                  <strong>{cotizacion.duracion_dias_estimada || 15} días hábiles</strong>).
+                </li>
+              </ul>
+            </div>
+
+            {/* Condiciones de Pago */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 text-[#FF6A00] font-heading font-extrabold text-xs uppercase tracking-wide">
+                <DollarSign className="w-4 h-4" />
+                <span>CONDICIONES DE PAGO</span>
+              </div>
+              <p className="text-[11px] text-gray-700 font-sans">
+                40% de anticipo • 30% en ejecución de obra gruesa • 30% contra entrega conforme
               </p>
-              <p>{cotizacion.resumen_ejecutivo || 'Ejecución completa de faena según especificaciones técnicas, cubicación de materiales certificados en distribuidores oficiales y mano de obra calificada.'}</p>
-              <p className="mt-2 font-mono text-[10px] text-gray-500">
-                • Plazo de ejecución estimado: <strong>{cotizacion.duracion_dias_estimada} días hábiles</strong> a contar del pago de anticipo.
+              <p className="text-[10px] text-gray-500 font-mono">
+                Transferencia bancaria o estado de pago según contrato.
               </p>
             </div>
           </div>
 
-          {/* Tabla de Materiales */}
-          <div className="space-y-2">
-            <h2 className="font-heading font-bold text-sm text-navy-900 flex items-center justify-between border-b border-kraft-200 pb-1">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-obra-orange" />
-                <span>2. CUBICACIÓN Y PRESUPUESTO DE MATERIALES</span>
+          {/* Columna Derecha (6 columnas): Cuadro de Totales y Firma */}
+          <div className="md:col-span-6 space-y-6">
+            {/* Tabla de Subtotal, IVA y Banner Naranja de Total */}
+            <div className="border border-gray-200 rounded-xl overflow-hidden shadow-2xs">
+              <div className="flex justify-between items-center py-2.5 px-4 bg-white border-b border-gray-100 text-xs font-mono">
+                <span className="font-heading font-bold text-gray-700 uppercase">SUBTOTAL</span>
+                <span className="font-bold text-gray-900">$ {subtotalNeto.toLocaleString('es-CL')}</span>
               </div>
-              <span className="text-[10px] font-mono text-gray-500">
-                Radar ferreterías chilenas
-              </span>
-            </h2>
-
-            <div className="overflow-x-auto rounded-xl border border-kraft-200">
-              <table className="w-full text-left border-collapse text-[11px]">
-                <thead>
-                  <tr className="bg-navy-900 text-white font-mono text-[10px] uppercase">
-                    <th className="p-2.5">#</th>
-                    <th className="p-2.5">Material / Insumo Certificado</th>
-                    <th className="p-2.5 text-center">Cant.</th>
-                    <th className="p-2.5 text-center">Unidad</th>
-                    <th className="p-2.5 text-right">P. Unitario</th>
-                    <th className="p-2.5 text-right">Subtotal</th>
-                    <th className="p-2.5">Proveedor Sugerido</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-kraft-100 font-sans">
-                  {(cotizacion.materiales || []).map((mat, idx) => (
-                    <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-kraft-50/50'}>
-                      <td className="p-2 font-mono text-gray-400 text-center">{idx + 1}</td>
-                      <td className="p-2 font-medium text-navy-900">{mat.nombre}</td>
-                      <td className="p-2 text-center font-mono font-bold">{mat.cantidad}</td>
-                      <td className="p-2 text-center font-mono text-gray-600">{mat.unidad}</td>
-                      <td className="p-2 text-right font-mono text-gray-600">
-                        ${(mat.precio_mas_barato || mat.precio_unitario_estimado || 0).toLocaleString('es-CL')}
-                      </td>
-                      <td className="p-2 text-right font-mono font-bold text-navy-900">
-                        ${(mat.subtotal || 0).toLocaleString('es-CL')}
-                      </td>
-                      <td className="p-2 font-mono text-[10px] text-emerald-700">
-                        {mat.mejor_tienda || 'Ferretería Especializada'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-kraft-100 font-heading font-bold text-navy-900">
-                    <td colSpan={5} className="p-2.5 text-right font-mono text-xs">
-                      SUBTOTAL MATERIALES (NETO):
-                    </td>
-                    <td className="p-2.5 text-right font-mono text-xs text-navy-950">
-                      ${(cotizacion.estructura_financiera?.costo_materiales_total || 0).toLocaleString('es-CL')} CLP
-                    </td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
-          {/* Tabla de Mano de Obra */}
-          <div className="space-y-2">
-            <h2 className="font-heading font-bold text-sm text-navy-900 flex items-center justify-between border-b border-kraft-200 pb-1">
-              <div className="flex items-center gap-2">
-                <HardHat className="w-4 h-4 text-obra-orange" />
-                <span>3. MANO DE OBRA & CUADRILLA ESPECIALIZADA</span>
+              <div className="flex justify-between items-center py-2.5 px-4 bg-white border-b border-gray-100 text-xs font-mono">
+                <span className="font-heading font-bold text-gray-700 uppercase">IVA (19%)</span>
+                <span className="font-bold text-gray-900">$ {iva.toLocaleString('es-CL')}</span>
               </div>
-              <span className="text-[10px] font-mono text-gray-500">
-                Jornales de faena Chile
-              </span>
-            </h2>
-
-            <div className="overflow-x-auto rounded-xl border border-kraft-200">
-              <table className="w-full text-left border-collapse text-[11px]">
-                <thead>
-                  <tr className="bg-navy-900 text-white font-mono text-[10px] uppercase">
-                    <th className="p-2.5">#</th>
-                    <th className="p-2.5">Especialidad / Rol en Faena</th>
-                    <th className="p-2.5 text-center">Cuadrilla</th>
-                    <th className="p-2.5 text-center">Días Estimados</th>
-                    <th className="p-2.5 text-right">Valor Jornal</th>
-                    <th className="p-2.5 text-right">Subtotal Mano Obra</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-kraft-100 font-sans">
-                  {(cotizacion.mano_de_obra || []).map((mo, idx) => (
-                    <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-kraft-50/50'}>
-                      <td className="p-2 font-mono text-gray-400 text-center">{idx + 1}</td>
-                      <td className="p-2 font-medium text-navy-900">{mo.rol}</td>
-                      <td className="p-2 text-center font-mono font-bold">{mo.cantidad_personas} persona(s)</td>
-                      <td className="p-2 text-center font-mono text-gray-600">{mo.dias_estimados} días</td>
-                      <td className="p-2 text-right font-mono text-gray-600">
-                        ${(mo.valor_jornal_diario || 0).toLocaleString('es-CL')}
-                      </td>
-                      <td className="p-2 text-right font-mono font-bold text-navy-900">
-                        ${(mo.subtotal || 0).toLocaleString('es-CL')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-kraft-100 font-heading font-bold text-navy-900">
-                    <td colSpan={5} className="p-2.5 text-right font-mono text-xs">
-                      SUBTOTAL MANO DE OBRA (NETO):
-                    </td>
-                    <td className="p-2.5 text-right font-mono text-xs text-navy-950">
-                      ${(cotizacion.estructura_financiera?.costo_mano_obra_total || 0).toLocaleString('es-CL')} CLP
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
-          {/* Resumen Financiero y Liquidación */}
-          <div className="grid grid-cols-1 sm:grid-cols-12 gap-6 pt-2">
-            {/* Modalidad de Pago */}
-            <div className="sm:col-span-7 space-y-3">
-              <h3 className="font-heading font-bold text-xs text-navy-900 uppercase tracking-wider flex items-center gap-1.5">
-                <DollarSign className="w-3.5 h-3.5 text-obra-orange" />
-                <span>4. CALENDARIO DE PAGOS ACORDADO (40 / 30 / 20 / 10)</span>
-              </h3>
-
-              <div className="space-y-2 font-sans text-[11px]">
-                <div className="p-2.5 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-between">
-                  <div>
-                    <strong className="text-orange-950 block">1️⃣ 40% Anticipo Inicial:</strong>
-                    <span className="text-gray-600 text-[10px]">Compra de materiales y traslado de cuadrilla</span>
-                  </div>
-                  <span className="font-mono font-bold text-navy-900">
-                    ${Math.round(precioTotal * 0.4).toLocaleString('es-CL')} CLP
-                  </span>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-kraft-50 border border-kraft-200 flex items-center justify-between">
-                  <div>
-                    <strong className="text-navy-900 block">2️⃣ 30% Avance 50% Obra Gruesa:</strong>
-                    <span className="text-gray-600 text-[10px]">Término de estructura base o colocación</span>
-                  </div>
-                  <span className="font-mono font-bold text-navy-900">
-                    ${Math.round(precioTotal * 0.3).toLocaleString('es-CL')} CLP
-                  </span>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-kraft-50 border border-kraft-200 flex items-center justify-between">
-                  <div>
-                    <strong className="text-navy-900 block">3️⃣ 20% Terminaciones e Instalaciones:</strong>
-                    <span className="text-gray-600 text-[10px]">Fraguado, remates finos y pruebas</span>
-                  </div>
-                  <span className="font-mono font-bold text-navy-900">
-                    ${Math.round(precioTotal * 0.2).toLocaleString('es-CL')} CLP
-                  </span>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
-                  <div>
-                    <strong className="text-emerald-950 block">4️⃣ 10% Recepción Conforme:</strong>
-                    <span className="text-gray-600 text-[10px]">Entrega de llaves y conformidad del mandante</span>
-                  </div>
-                  <span className="font-mono font-bold text-emerald-900">
-                    ${Math.round(precioTotal * 0.1).toLocaleString('es-CL')} CLP
-                  </span>
-                </div>
+              {/* Banner Total Oficial Naranja */}
+              <div className="flex justify-between items-center py-3.5 px-5 bg-[#FF6A00] text-white font-heading font-black">
+                <span className="text-sm tracking-wider uppercase">TOTAL</span>
+                <span className="text-lg sm:text-xl font-mono tracking-tight">
+                  $ {totalConIva.toLocaleString('es-CL')}
+                </span>
               </div>
             </div>
 
-            {/* Cuadro de Liquidación Total */}
-            <div className="sm:col-span-5 bg-navy-900 text-white p-5 rounded-2xl space-y-3 font-mono text-[11px] print:bg-navy-900 print:text-white">
-              <h3 className="font-heading font-bold text-xs text-orange-300 uppercase tracking-widest border-b border-navy-700 pb-1.5">
-                LIQUIDACIÓN COMERCIAL
-              </h3>
-
-              <div className="space-y-1.5 text-gray-300">
-                <div className="flex justify-between">
-                  <span>Costos Directos:</span>
-                  <span className="text-white">${costoDirecto.toLocaleString('es-CL')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Gastos Generales (10%):</span>
-                  <span className="text-white">${gastosGenerales.toLocaleString('es-CL')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Imprevistos de Faena (5%):</span>
-                  <span className="text-white">${imprevistos.toLocaleString('es-CL')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Utilidad / Honorarios:</span>
-                  <span className="text-white">${utilidad.toLocaleString('es-CL')}</span>
-                </div>
-                <div className="flex justify-between pt-1.5 border-t border-navy-700 font-bold text-white">
-                  <span>VALOR NETO:</span>
-                  <span>${precioNeto.toLocaleString('es-CL')}</span>
-                </div>
-                <div className="flex justify-between text-gray-300">
-                  <span>I.V.A. (19%):</span>
-                  <span>${iva.toLocaleString('es-CL')}</span>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t-2 border-obra-orange flex items-center justify-between text-sm font-heading font-black text-white">
-                <span>TOTAL PROPUESTA:</span>
-                <span className="text-obra-orange text-base">${precioTotal.toLocaleString('es-CL')} CLP</span>
+            {/* Firma y Sello ObraTrack */}
+            <div className="pt-2 text-center">
+              <div className="w-56 mx-auto border-t border-gray-300 pt-2 space-y-0.5">
+                <p className="text-[11px] text-gray-600 font-sans">Firma y Sello</p>
+                <p className="font-heading font-extrabold text-xs text-[#FF6A00] tracking-wide">
+                  ObraTrack
+                </p>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Firmas de Aceptación */}
-          <div className="pt-10 grid grid-cols-2 gap-12 font-mono text-[10px] text-center print:pt-14">
-            <div className="border-t border-navy-900 pt-2 space-y-0.5">
-              <p className="font-bold text-navy-900">{contratistaEmpresa}</p>
-              <p className="text-gray-500">RUT: {contratistaRut} • Firma Contratista</p>
+        {/* Footer Membretado Oficial con Skyline Arquitectónico */}
+        <div className="border-t-2 border-[#FF6A00] pt-4 mt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-[10px] text-gray-500 font-sans relative">
+          <div className="flex items-center gap-2 text-left">
+            <div className="w-6 h-6 rounded-full bg-orange-50 border border-[#FF6A00]/30 flex items-center justify-center text-[#FF6A00] shrink-0">
+              <MapPin className="w-3.5 h-3.5" />
             </div>
-
-            <div className="border-t border-navy-900 pt-2 space-y-0.5">
-              <p className="font-bold text-navy-900">{clienteNombre}</p>
-              <p className="text-gray-500">RUT: {clienteRut} • Firma de Aceptación Mandante</p>
+            <div>
+              <strong className="text-gray-800 block">ObraTrack - Software de gestión para constructoras</strong>
+              <span>Santiago Centro, Región Metropolitana, Chile</span>
             </div>
           </div>
 
-          {/* Pie de página con verificación ObraTrack */}
-          <div className="pt-6 border-t border-kraft-200 flex items-center justify-between text-[9px] font-mono text-gray-400">
-            <span>Generado con ObraTrack Copiloto IA • Google Gemini 2.5/3.7 Engine</span>
-            <span>Folio: #{folio} • Validez 15 días</span>
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-4 gap-y-1 font-mono text-[10px]">
+            <span className="flex items-center gap-1 text-gray-700">
+              <Phone className="w-3 h-3 text-[#FF6A00]" /> +56 9 8765 4321
+            </span>
+            <span className="flex items-center gap-1 text-gray-700">
+              <Mail className="w-3 h-3 text-[#FF6A00]" /> contacto@obratrack.cl
+            </span>
+            <span className="flex items-center gap-1 text-gray-700">
+              <Globe className="w-3 h-3 text-[#FF6A00]" /> www.obratrack.cl
+            </span>
           </div>
         </div>
       </div>
