@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  Download,
   Printer,
   X,
   MessageCircle,
@@ -13,6 +14,7 @@ import {
   Phone,
   Mail,
   Globe,
+  Loader2,
 } from 'lucide-react';
 import { CotizacionEstimacion } from '@/types/database';
 import Logo from './Logo';
@@ -31,12 +33,13 @@ export default function CotizacionPdfModal({
   isOpen,
   onClose,
   cotizacion,
-  clienteNombre = 'Constructora del Norte S.A.',
+  clienteNombre = 'Carlos Henríquez',
   clienteContacto = 'Ing. Juan Pérez',
   clienteEmail = 'juan.perez@constructora.com',
-  clienteTelefono = '+56 9 1234 5678',
+  clienteTelefono = '+56 9 8765 4321',
 }: CotizacionPdfModalProps) {
   const printAreaRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   if (!isOpen || !cotizacion) return null;
 
@@ -54,9 +57,9 @@ export default function CotizacionPdfModal({
     year: 'numeric',
   });
 
-  const folioNum = cotizacion.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '000125';
+  const folioNum = cotizacion.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '298506';
 
-  const totalConIva = cotizacion.estructura_financiera?.precio_total_con_iva || 28908505;
+  const totalConIva = cotizacion.estructura_financiera?.precio_total_con_iva || 720818;
   const subtotalNeto = cotizacion.estructura_financiera?.precio_sugerido_neto || Math.round(totalConIva / 1.19);
   const iva = cotizacion.estructura_financiera?.iva_19 || Math.round(subtotalNeto * 0.19);
 
@@ -65,7 +68,7 @@ export default function CotizacionPdfModal({
     nombre: string;
     descripcion: string;
     unidad: string;
-    cantidad: number;
+    cantidad: number | string;
     precioUnit: number;
     total: number;
   }> = [];
@@ -73,7 +76,7 @@ export default function CotizacionPdfModal({
   (cotizacion.materiales || []).forEach((mat) => {
     partidasItems.push({
       nombre: mat.nombre,
-      descripcion: mat.alternativa_economica || `Material certificado en ${mat.mejor_tienda || 'Ferretería Especializada'}`,
+      descripcion: mat.alternativa_economica || `Material certificado en ${mat.mejor_tienda || 'Construmart'}`,
       unidad: mat.unidad || 'un',
       cantidad: mat.cantidad || 1,
       precioUnit: mat.precio_mas_barato || mat.precio_unitario_estimado || 0,
@@ -92,7 +95,7 @@ export default function CotizacionPdfModal({
     });
   });
 
-  // Si no hay partidas suficientes, rellenar con las partidas de la obra
+  // Si no hay partidas suficientes, poblar con las partidas de la cotización
   if (partidasItems.length === 0) {
     partidasItems.push({
       nombre: cotizacion.titulo_proyecto,
@@ -104,18 +107,86 @@ export default function CotizacionPdfModal({
     });
   }
 
+  // Carga dinámica de html2pdf.js desde CDN para exportar el PDF con exactitud visual 1:1
+  const loadHtml2Pdf = (): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if ((window as any).html2pdf) {
+        return resolve((window as any).html2pdf);
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      script.onload = () => resolve((window as any).html2pdf);
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  };
+
+  // Descarga directa del archivo PDF preservando todos los colores, logo y banner naranja
+  const handleDownloadPdf = async () => {
+    if (!printAreaRef.current) return;
+    setIsGeneratingPdf(true);
+
+    try {
+      const html2pdf = await loadHtml2Pdf();
+      const element = printAreaRef.current;
+      const opt = {
+        margin: [4, 4, 4, 4], // mm
+        filename: `Cotizacion_ObraTrack_${folioNum}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          letterRendering: true,
+          scrollY: 0,
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait',
+        },
+      };
+
+      await html2pdf().set(opt).from(element).save();
+    } catch (err) {
+      console.warn('html2pdf fallback to print dialog:', err);
+      window.print();
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
 
   const handleShareWhatsApp = () => {
     const cleanPhone = clienteTelefono.replace(/[^0-9]/g, '');
-    const msg = `🏗️ *COTIZACIÓN OFICIAL OBRATRACK*\n📄 *N.°:* ${folioNum}\n📅 *Fecha:* ${fechaEmision}\n\nEstimado(a) *${clienteNombre}*,\nLe compartimos la propuesta formal para:\n📌 *${cotizacion.titulo_proyecto}*\n📍 *Ubicación:* ${cotizacion.comuna_region || 'Chile'}\n\n💰 *SUBTOTAL:* $${subtotalNeto.toLocaleString('es-CL')}\n🏛️ *IVA (19%):* $${iva.toLocaleString('es-CL')}\n🔥 *TOTAL:* *$${totalConIva.toLocaleString('es-CL')} CLP*\n\n📋 *Condiciones de pago:* 40% anticipo - 30% en ejecución - 30% contra entrega conforme.\n\nEmitido por ObraTrack.`;
+    const msg = `🏗️ *COTIZACIÓN OFICIAL OBRATRACK*\n📄 *N.°:* ${folioNum}\n📅 *Fecha:* ${fechaEmision}\n\nEstimado(a) *${clienteNombre}*,\nLe compartimos la propuesta formal para:\n📌 *${cotizacion.titulo_proyecto}*\n📍 *Ubicación:* ${cotizacion.comuna_region || 'Santiago, Chile'}\n\n💰 *SUBTOTAL:* $${subtotalNeto.toLocaleString('es-CL')}\n🏛️ *IVA (19%):* $${iva.toLocaleString('es-CL')}\n🔥 *TOTAL:* *$${totalConIva.toLocaleString('es-CL')} CLP*\n\n📋 *Condiciones de pago:* 40% anticipo • 30% en ejecución • 30% contra entrega conforme.\n\nEmitido por ObraTrack.`;
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-navy-950/80 backdrop-blur-sm overflow-y-auto">
+      {/* Reglas de impresión para forzar colores y fondos exactos */}
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 6mm;
+          }
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            background: white !important;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
+
       {/* Botones de acción flotantes (ocultos al imprimir) */}
       <div className="fixed top-4 right-4 z-50 flex items-center gap-2 print:hidden">
         <button
@@ -127,11 +198,24 @@ export default function CotizacionPdfModal({
         </button>
 
         <button
+          onClick={handleDownloadPdf}
+          disabled={isGeneratingPdf}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-xl font-heading font-bold text-xs shadow-lg transition-all cursor-pointer disabled:opacity-75"
+        >
+          {isGeneratingPdf ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
+          <span>{isGeneratingPdf ? 'Generando PDF...' : 'Descargar PDF'}</span>
+        </button>
+
+        <button
           onClick={handlePrint}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-xl font-heading font-bold text-xs shadow-lg transition-all cursor-pointer"
+          className="hidden sm:flex items-center gap-2 px-3 py-2.5 bg-navy-800 hover:bg-navy-700 text-white rounded-xl font-heading font-bold text-xs shadow-lg transition-all cursor-pointer"
+          title="Imprimir"
         >
           <Printer className="w-4 h-4" />
-          <span>Imprimir / PDF</span>
         </button>
 
         <button
@@ -144,10 +228,11 @@ export default function CotizacionPdfModal({
       </div>
 
       {/* ========================================================================= */}
-      {/* DOCUMENTO FORMAL DE COTIZACIÓN - IDENTIDAD VISUAL OFICIAL OBRATRACK */}
+      {/* DOCUMENTO FORMAL DE COTIZACIÓN - IDENTIDAD VISUAL 1:1 OBRATRACK */}
       {/* ========================================================================= */}
       <div
         ref={printAreaRef}
+        id="obratrack-cotizacion-pdf"
         className="w-full max-w-4xl bg-white text-gray-900 rounded-2xl shadow-2xl overflow-hidden my-6 p-6 sm:p-10 border border-gray-200 font-sans print:m-0 print:p-8 print:shadow-none print:w-full print:max-w-none print:rounded-none print:border-none"
       >
         {/* Encabezado: Logo ObraTrack a la izquierda | Folio & Fecha a la derecha */}
@@ -218,7 +303,7 @@ export default function CotizacionPdfModal({
               <div className="flex">
                 <span className="font-bold text-gray-900 w-36 shrink-0">Descripción:</span>
                 <span className="text-gray-800 line-clamp-2">
-                  {cotizacion.resumen_ejecutivo || `Ejecución de faena (${cotizacion.metros_cuadrados || 35} m²)`}
+                  {cotizacion.resumen_ejecutivo || `Ejecución de faena (${cotizacion.metros_cuadrados || 15} m²)`}
                 </span>
               </div>
             </div>
@@ -292,7 +377,7 @@ export default function CotizacionPdfModal({
                 <li>Los precios incluyen IVA y cotización de materiales con retiro o despacho.</li>
                 <li>
                   Los plazos de ejecución serán definidos según el cronograma de obra (estimado en{' '}
-                  <strong>{cotizacion.duracion_dias_estimada || 15} días hábiles</strong>).
+                  <strong>{cotizacion.duracion_dias_estimada || 3} días hábiles</strong>).
                 </li>
               </ul>
             </div>
@@ -345,7 +430,7 @@ export default function CotizacionPdfModal({
           </div>
         </div>
 
-        {/* Footer Membretado Oficial con Skyline Arquitectónico */}
+        {/* Footer Membretado Oficial */}
         <div className="border-t-2 border-[#FF6A00] pt-4 mt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-[10px] text-gray-500 font-sans relative">
           <div className="flex items-center gap-2 text-left">
             <div className="w-6 h-6 rounded-full bg-orange-50 border border-[#FF6A00]/30 flex items-center justify-center text-[#FF6A00] shrink-0">
