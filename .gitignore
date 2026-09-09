@@ -36,3 +36,5 @@ next-env.d.ts
 
 google-service-account.json
 
+# sonarqube
+/.scannerwork/

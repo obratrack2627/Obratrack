@@ -1,4 +1,4 @@
-﻿import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFirebaseStorageService } from './config';
 
 export class StorageService {
@@ -12,7 +12,8 @@ export class StorageService {
   async uploadFile(file: File, folder: 'bitacora' | 'imprevistos' | 'pagos' | 'planos' = 'bitacora'): Promise<string> {
     try {
       const extension = file.name.split('.').pop() || 'jpg';
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${extension}`;
+      const randomSuffix = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Date.now().toString(36);
+      const fileName = `${Date.now()}_${randomSuffix}.${extension}`;
       const storageRef = ref(this.storage, `${folder}/${fileName}`);
       
       const snapshot = await uploadBytes(storageRef, file);

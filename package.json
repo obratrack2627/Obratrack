@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "sonar": "sonarqube-scanner"
   },
   "dependencies": {
     "@google/genai": "^2.19.0",
