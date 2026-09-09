@@ -26,6 +26,7 @@ import {
   CATALOGO_MATERIALES_CHILE,
 } from './mock-data';
 import { firestoreService } from './firebase/firestore';
+import { supabaseService } from './supabase/supabase-service';
 
 // Claves de almacenamiento local para persistencia limpia por usuario
 const KEYS = {
@@ -99,7 +100,8 @@ class DataService {
     };
     usuarios.push(newUsuario);
     this.setItem(KEYS.USUARIOS, usuarios);
-    firestoreService.saveUsuario(newUsuario).catch((err) => console.warn('Sync usuario:', err));
+    firestoreService.saveUsuario(newUsuario).catch(() => {});
+    supabaseService.saveUsuario(newUsuario).catch((err) => console.warn('Sync supabase usuario:', err));
     return newUsuario;
   }
 
@@ -109,7 +111,8 @@ class DataService {
     if (index === -1) return null;
     usuarios[index] = { ...usuarios[index], ...data };
     this.setItem(KEYS.USUARIOS, usuarios);
-    firestoreService.saveUsuario(usuarios[index]).catch((err) => console.warn('Sync usuario:', err));
+    firestoreService.saveUsuario(usuarios[index]).catch(() => {});
+    supabaseService.saveUsuario(usuarios[index]).catch((err) => console.warn('Sync supabase usuario:', err));
 
     // Si se editó el usuario activo, actualizar activeUser también
     const active = this.getActiveUser();
@@ -230,7 +233,8 @@ class DataService {
     };
     clientes.push(newCliente);
     this.setItem(KEYS.CLIENTES, clientes);
-    firestoreService.saveCliente(newCliente).catch((err) => console.warn('Sync cliente:', err));
+    firestoreService.saveCliente(newCliente).catch(() => {});
+    supabaseService.saveCliente(newCliente).catch((err) => console.warn('Sync supabase cliente:', err));
     return newCliente;
   }
 
@@ -240,7 +244,8 @@ class DataService {
     if (index === -1) return null;
     clientes[index] = { ...clientes[index], ...data };
     this.setItem(KEYS.CLIENTES, clientes);
-    firestoreService.saveCliente(clientes[index]).catch((err) => console.warn('Sync cliente:', err));
+    firestoreService.saveCliente(clientes[index]).catch(() => {});
+    supabaseService.saveCliente(clientes[index]).catch((err) => console.warn('Sync supabase cliente:', err));
     return clientes[index];
   }
 
@@ -248,7 +253,8 @@ class DataService {
     const clientes = this.getClientes();
     const filtered = clientes.filter((c) => c.id !== id);
     this.setItem(KEYS.CLIENTES, filtered);
-    firestoreService.deleteCliente(id).catch((err) => console.warn('Delete cliente:', err));
+    firestoreService.deleteCliente(id).catch(() => {});
+    supabaseService.deleteCliente(id).catch((err) => console.warn('Delete supabase cliente:', err));
     return true;
   }
 
@@ -453,7 +459,8 @@ class DataService {
       this.setItem(KEYS.ACTIVIDADES, allActs);
     }
 
-    firestoreService.saveProyecto(newProyecto).catch((err) => console.warn('Sync proyecto:', err));
+    firestoreService.saveProyecto(newProyecto).catch(() => {});
+    supabaseService.saveProyecto(newProyecto).catch((err) => console.warn('Sync supabase proyecto:', err));
     return newProyecto;
   }
 
@@ -481,7 +488,8 @@ class DataService {
       imprevistos.filter((imp) => imp.proyecto_id !== id)
     );
 
-    firestoreService.deleteProyecto(id).catch((err) => console.warn('Delete proyecto:', err));
+    firestoreService.deleteProyecto(id).catch(() => {});
+    supabaseService.deleteProyecto(id).catch((err) => console.warn('Delete supabase proyecto:', err));
     return true;
   }
 
@@ -495,7 +503,8 @@ class DataService {
       ...data,
     };
     this.setItem(KEYS.PROYECTOS, proyectos);
-    firestoreService.saveProyecto(proyectos[index]).catch((err) => console.warn('Sync proyecto:', err));
+    firestoreService.saveProyecto(proyectos[index]).catch(() => {});
+    supabaseService.saveProyecto(proyectos[index]).catch((err) => console.warn('Sync supabase proyecto:', err));
     return proyectos[index];
   }
 
@@ -515,14 +524,16 @@ class DataService {
     };
     all.push(newMat);
     this.setItem(KEYS.MATERIALES_PROYECTO, all);
-    firestoreService.saveMaterial(newMat).catch((err) => console.warn('Sync mat:', err));
+    firestoreService.saveMaterial(newMat).catch(() => {});
+    supabaseService.saveMaterial(newMat).catch((err) => console.warn('Sync supabase mat:', err));
     return newMat;
   }
 
   deleteMaterialProyecto(id: string): boolean {
     const all = this.getItem<MaterialProyecto[]>(KEYS.MATERIALES_PROYECTO, []);
     this.setItem(KEYS.MATERIALES_PROYECTO, all.filter((m) => m.id !== id));
-    firestoreService.deleteMaterial(id).catch((err) => console.warn('Delete mat:', err));
+    firestoreService.deleteMaterial(id).catch(() => {});
+    supabaseService.deleteMaterial(id).catch((err) => console.warn('Delete supabase mat:', err));
     return true;
   }
 
@@ -536,7 +547,8 @@ class DataService {
       subtotal: (data.cantidad ?? all[idx].cantidad) * (data.precio_unitario ?? all[idx].precio_unitario),
     };
     this.setItem(KEYS.MATERIALES_PROYECTO, all);
-    firestoreService.saveMaterial(all[idx]).catch((err) => console.warn('Sync mat:', err));
+    firestoreService.saveMaterial(all[idx]).catch(() => {});
+    supabaseService.saveMaterial(all[idx]).catch((err) => console.warn('Sync supabase mat:', err));
     return all[idx];
   }
 
@@ -556,7 +568,8 @@ class DataService {
     };
     all.unshift(newEntry);
     this.setItem(KEYS.BITACORA, all);
-    firestoreService.saveBitacoraEntrada(newEntry).catch((err) => console.warn('Sync bitacora:', err));
+    firestoreService.saveBitacoraEntrada(newEntry).catch(() => {});
+    supabaseService.saveBitacora(newEntry).catch((err) => console.warn('Sync supabase bitacora:', err));
     return newEntry;
   }
 
@@ -566,14 +579,16 @@ class DataService {
     if (index === -1) return null;
     all[index] = { ...all[index], ...data };
     this.setItem(KEYS.BITACORA, all);
-    firestoreService.saveBitacoraEntrada(all[index]).catch((err) => console.warn('Sync bitacora:', err));
+    firestoreService.saveBitacoraEntrada(all[index]).catch(() => {});
+    supabaseService.saveBitacora(all[index]).catch((err) => console.warn('Sync supabase bitacora:', err));
     return all[index];
   }
 
   deleteBitacoraEntrada(id: string): boolean {
     const all = this.getItem<BitacoraEntrada[]>(KEYS.BITACORA, []);
     this.setItem(KEYS.BITACORA, all.filter((b) => b.id !== id));
-    firestoreService.deleteBitacoraEntrada(id).catch((err) => console.warn('Delete bitacora:', err));
+    firestoreService.deleteBitacoraEntrada(id).catch(() => {});
+    supabaseService.deleteBitacora(id).catch((err) => console.warn('Delete supabase bitacora:', err));
     return true;
   }
 
@@ -599,7 +614,8 @@ class DataService {
     };
     all.push(newAct);
     this.setItem(KEYS.ACTIVIDADES, all);
-    firestoreService.saveActividad(newAct).catch((err) => console.warn('Sync act:', err));
+    firestoreService.saveActividad(newAct).catch(() => {});
+    supabaseService.saveActividad(newAct).catch((err) => console.warn('Sync supabase act:', err));
     return newAct;
   }
 
@@ -618,7 +634,8 @@ class DataService {
   deleteActividad(id: string): boolean {
     const all = this.getItem<Actividad[]>(KEYS.ACTIVIDADES, INITIAL_ACTIVIDADES);
     this.setItem(KEYS.ACTIVIDADES, all.filter((a) => a.id !== id));
-    firestoreService.deleteActividad(id).catch((err) => console.warn('Delete act:', err));
+    firestoreService.deleteActividad(id).catch(() => {});
+    supabaseService.deleteActividad(id).catch((err) => console.warn('Delete supabase act:', err));
     return true;
   }
 
@@ -637,7 +654,8 @@ class DataService {
     };
     all.unshift(newPago);
     this.setItem(KEYS.PAGOS, all);
-    firestoreService.savePago(newPago).catch((err) => console.warn('Sync pago:', err));
+    firestoreService.savePago(newPago).catch(() => {});
+    supabaseService.savePago(newPago).catch((err) => console.warn('Sync supabase pago:', err));
     return newPago;
   }
 
@@ -654,7 +672,8 @@ class DataService {
   deletePago(id: string): boolean {
     const all = this.getItem<Pago[]>(KEYS.PAGOS, INITIAL_PAGOS);
     this.setItem(KEYS.PAGOS, all.filter((p) => p.id !== id));
-    firestoreService.deletePago(id).catch((err) => console.warn('Delete pago:', err));
+    firestoreService.deletePago(id).catch(() => {});
+    supabaseService.deletePago(id).catch((err) => console.warn('Delete supabase pago:', err));
     return true;
   }
 
@@ -1011,6 +1030,75 @@ class DataService {
       this.setItem(KEYS.PROYECTOS, list);
     }
     return true;
+  }
+
+
+  // --- SINCRONIZACIÓN CON SUPABASE POSTGRESQL ---
+  async syncWithSupabase(): Promise<{ success: boolean; message: string; count?: number }> {
+    try {
+      const proyectos = this.getProyectos();
+      const actividades = this.getActividades();
+      const pagos = this.getPagos();
+      const imprevistos = this.getImprevistos();
+      const materiales = this.getMaterialesProyecto();
+      const bitacora = this.getBitacora();
+      const clientes = this.getClientes();
+      const usuarios = this.getUsuarios();
+
+      const result = await supabaseService.bulkSyncToSupabase({
+        proyectos,
+        actividades,
+        pagos,
+        imprevistos,
+        materiales,
+        bitacora,
+        clientes,
+        usuarios,
+      });
+
+      if (result.success) {
+        return {
+          success: true,
+          count: result.count,
+          message: `Sincronización exitosa con Supabase PostgreSQL (${result.count} registros).`,
+        };
+      } else {
+        return {
+          success: false,
+          message: result.error || 'Error al sincronizar con Supabase.',
+        };
+      }
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Error de sincronización con Supabase.' };
+    }
+  }
+
+  async pullFromSupabase(): Promise<{ success: boolean; message: string }> {
+    try {
+      const [projs, acts, pgs, clis, usrs, mats, bit, imps] = await Promise.all([
+        supabaseService.getProyectos(),
+        supabaseService.getActividades(),
+        supabaseService.getPagos(),
+        supabaseService.getClientes(),
+        supabaseService.getUsuarios(),
+        supabaseService.getMateriales(),
+        supabaseService.getBitacora(),
+        supabaseService.getImprevistos(),
+      ]);
+
+      if (projs.length > 0) this.setItem(KEYS.PROYECTOS, projs);
+      if (acts.length > 0) this.setItem(KEYS.ACTIVIDADES, acts);
+      if (pgs.length > 0) this.setItem(KEYS.PAGOS, pgs);
+      if (clis.length > 0) this.setItem(KEYS.CLIENTES, clis);
+      if (usrs.length > 0) this.setItem(KEYS.USUARIOS, usrs);
+      if (mats.length > 0) this.setItem(KEYS.MATERIALES_PROYECTO, mats);
+      if (bit.length > 0) this.setItem(KEYS.BITACORA, bit);
+      if (imps.length > 0) this.setItem(KEYS.IMPREVISTOS, imps);
+
+      return { success: true, message: 'Datos descargados exitosamente desde Supabase PostgreSQL.' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Error al obtener datos desde Supabase.' };
+    }
   }
 
   // --- SINCRONIZACIÓN CON FIREBASE CLOUD FIRESTORE ---

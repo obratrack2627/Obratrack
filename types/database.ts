@@ -146,10 +146,14 @@ export interface Actividad {
 export interface Pago {
   id: string;
   proyecto_id: string;
+  cliente_id?: string;
   monto: number;
   metodo: PaymentMethod;
+  estado?: 'pendiente' | 'completado' | 'anulado';
   fecha: string;
   nota?: string;
+  notas?: string;
+  comprobante_url?: string;
   created_at?: string;
 }
 
@@ -157,10 +161,14 @@ export interface Imprevisto {
   id: string;
   proyecto_id: string;
   actividad_id?: string;
+  titulo?: string;
   descripcion: string;
   monto: number;
+  monto_adicional?: number;
+  estado?: 'pendiente' | 'aprobado' | 'rechazado';
   foto_url?: string;
   fecha: string;
+  fecha_reporte?: string;
   origen: ImprevistoOrigin;
   created_at?: string;
 
