@@ -199,7 +199,8 @@ CREATE INDEX idx_reportes_whatsapp_proyecto ON public.reportes_whatsapp(proyecto
 -- ==============================================================================
 -- VISTA SQL RELACIONAL
 -- ==============================================================================
-CREATE OR REPLACE VIEW public.vista_resumen_proyectos AS
+CREATE OR REPLACE VIEW public.vista_resumen_proyectos 
+WITH (security_invoker = true) AS
 SELECT 
     p.id AS proyecto_id,
     p.nombre AS proyecto_nombre,
