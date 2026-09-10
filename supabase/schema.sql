@@ -25,6 +25,7 @@ CREATE TABLE public.empresas (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     rut VARCHAR(12) NOT NULL UNIQUE,
     nombre VARCHAR(150) NOT NULL,
+    plan_id VARCHAR(30) NOT NULL DEFAULT 'gratis',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -39,6 +40,7 @@ CREATE TABLE public.usuarios (
     email VARCHAR(100) UNIQUE,
     rol VARCHAR(20) NOT NULL CHECK (rol IN ('admin', 'supervisor', 'terreno')) DEFAULT 'terreno',
     telefono_whatsapp VARCHAR(20),
+    is_dev BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

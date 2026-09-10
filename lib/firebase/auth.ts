@@ -10,6 +10,9 @@ import {
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { getFirebaseAuth, getFirebaseFirestore } from './config';
 import { Usuario, UserRole } from '@/types/database';
+import { isDeveloperEmail } from '@/lib/auth-utils';
+import { supabaseService } from '@/lib/supabase/supabase-service';
+import { dataService } from '@/lib/data-service';
 
 export interface AuthResult {
   success: boolean;
@@ -42,7 +45,9 @@ function mapFirebaseAuthError(code: string): string {
 }
 
 /**
- * Registro de un nuevo Dueño / Contratista en Firebase Auth con validación de RUT y guardado de perfil en Firestore
+ * Registro de un nuevo Dueño / Contratista con aislamiento Multi-Tenant en Supabase
+ * Si es el correo del desarrollador (benja105.achavar@gmail.com) -> is_dev = true y plan pro_ia
+ * Si es cualquier otro correo nuevo -> is_dev = false y plan gratis
  */
 export async function signUpWithFirebase(
   email: string,
@@ -54,37 +59,57 @@ export async function signUpWithFirebase(
 ): Promise<AuthResult> {
   const auth = getFirebaseAuth();
   const db = getFirebaseFirestore();
+  const cleanEmail = email.trim().toLowerCase();
+  const isDev = isDeveloperEmail(cleanEmail);
 
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), pass);
+    const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
     const fbUser = userCredential.user;
 
     // Actualizar nombre visible en Firebase Auth
     await updateProfile(fbUser, { displayName: nombre.trim() });
 
+    // Multi-tenant: empresa única para nuevo usuario, o la base si es dev
+    const empresaId = isDev ? 'e1111111-1111-4111-a111-111111111111' : 'emp-' + Date.now();
+    const planId = isDev ? 'pro_ia' : 'gratis';
+
+    // 1. Crear empresa en Supabase
+    await supabaseService.saveEmpresa({
+      id: empresaId,
+      nombre: isDev ? 'Constructora ObraTrack SpA' : empresaNombre.trim(),
+      rut: isDev ? '76.123.456-7' : rut.trim(),
+      plan_id: planId,
+    });
+
     const usuario: Usuario = {
       id: fbUser.uid,
       nombre: nombre.trim(),
-      email: fbUser.email || email.trim().toLowerCase(),
-      rol: 'admin', // Cuentas creadas en la web son siempre Dueño / Contratista
+      email: cleanEmail,
+      rol: 'admin',
       telefono_whatsapp: telefono.trim(),
       rut: rut.trim(),
       empresa_nombre: empresaNombre.trim(),
-      empresa_id: '11111111-1111-1111-1111-111111111111',
+      empresa_id: empresaId,
       auth_user_id: fbUser.uid,
+      is_dev: isDev,
       created_at: new Date().toISOString(),
     };
 
-    // Guardar perfil en colección 'usuarios' de Firestore
+    // 2. Crear usuario en Supabase
+    await supabaseService.saveUsuario(usuario);
+
+    // 3. Respaldo en Firestore
     try {
       await setDoc(doc(db, 'usuarios', fbUser.uid), usuario, { merge: true });
     } catch (fsErr) {
       console.warn('Advertencia guardando perfil en Firestore:', fsErr);
     }
 
-    // Persistir usuario activo en localStorage
+    // 4. Activar usuario y cargar tenant en DataService
+    dataService.setActiveUser(usuario);
+    await dataService.loadTenantDataFromSupabase(empresaId);
+
     if (typeof window !== 'undefined') {
-      localStorage.setItem('obratrack_active_user_v6', JSON.stringify(usuario));
       document.cookie = `obratrack_auth_token=${fbUser.uid}; path=/; max-age=2592000; SameSite=Lax`;
     }
 
@@ -99,10 +124,7 @@ export async function signUpWithFirebase(
 }
 
 /**
- * Inicio de sesión con correo y contraseña en Firebase Auth
- */
-/**
- * Inicio de sesión con correo o RUT y contraseña en Firebase Auth / Base de Datos
+ * Inicio de sesión con correo o RUT y contraseña con verificación en Supabase
  */
 export async function signInWithFirebase(emailOrRut: string, pass: string): Promise<AuthResult> {
   const auth = getFirebaseAuth();
@@ -111,13 +133,12 @@ export async function signInWithFirebase(emailOrRut: string, pass: string): Prom
   const cleanInput = emailOrRut.trim().toLowerCase();
   let resolvedEmail = cleanInput;
 
-  // 1. Si el usuario ingresó un RUT (sin @), buscar el email registrado en usuarios
+  // 1. Si el usuario ingresó un RUT (sin @), buscar el email registrado
   if (!cleanInput.includes('@')) {
     const cleanDigits = cleanInput.replace(/[^a-z0-9]/g, '');
     if (typeof window !== 'undefined') {
       try {
-        const storedUsersRaw = localStorage.getItem('obratrack_usuarios_v6');
-        const storedUsers: Usuario[] = storedUsersRaw ? JSON.parse(storedUsersRaw) : [];
+        const storedUsers = dataService.getUsuarios();
         const match = storedUsers.find((u) => {
           const uRut = (u.rut || '').toLowerCase().replace(/[^a-z0-9]/g, '');
           return uRut.length >= 7 && uRut === cleanDigits;
@@ -134,45 +155,57 @@ export async function signInWithFirebase(emailOrRut: string, pass: string): Prom
   try {
     const userCredential = await signInWithEmailAndPassword(auth, resolvedEmail, pass);
     const fbUser = userCredential.user;
+    const isDev = isDeveloperEmail(resolvedEmail);
 
-    // Cargar perfil desde Firestore
-    let usuario: Usuario | null = null;
-    try {
-      const userDoc = await getDoc(doc(db, 'usuarios', fbUser.uid));
-      if (userDoc.exists()) {
-        usuario = userDoc.data() as Usuario;
+    // 1. Buscar en Supabase para obtener su empresa_id y rol real
+    let usuario = await supabaseService.getUsuarioByEmail(resolvedEmail);
+
+    if (!usuario) {
+      // Intentar leer desde Firestore si no estaba en Supabase aún
+      try {
+        const userDoc = await getDoc(doc(db, 'usuarios', fbUser.uid));
+        if (userDoc.exists()) {
+          usuario = userDoc.data() as Usuario;
+        }
+      } catch (fsErr) {
+        console.warn('No se pudo leer perfil desde Firestore:', fsErr);
       }
-    } catch (fsErr) {
-      console.warn('No se pudo leer perfil desde Firestore, usando datos de sesión:', fsErr);
     }
 
     if (!usuario) {
+      const empresaId = isDev ? 'e1111111-1111-4111-a111-111111111111' : 'emp-' + Date.now();
       usuario = {
         id: fbUser.uid,
         nombre: fbUser.displayName || resolvedEmail.split('@')[0],
         email: fbUser.email || resolvedEmail,
         rol: 'admin',
         telefono_whatsapp: '+56 9 ',
-        empresa_id: '11111111-1111-1111-1111-111111111111',
+        empresa_id: empresaId,
         auth_user_id: fbUser.uid,
+        is_dev: isDev,
         created_at: new Date().toISOString(),
       };
+      await supabaseService.saveUsuario(usuario);
+    } else {
+      if (isDev) {
+        usuario.is_dev = true;
+      }
     }
 
-    // Persistir usuario activo y cookie de sesión
+    // 2. Establecer usuario activo y cargar datos del inquilino desde Supabase
+    dataService.setActiveUser(usuario);
+    await dataService.loadTenantDataFromSupabase(usuario.empresa_id);
+
     if (typeof window !== 'undefined') {
-      localStorage.setItem('obratrack_active_user_v6', JSON.stringify(usuario));
       document.cookie = `obratrack_auth_token=${fbUser.uid}; path=/; max-age=2592000; SameSite=Lax`;
     }
 
-    return { success: true, user: usuario || undefined };
+    return { success: true, user: usuario };
   } catch (error: any) {
-    // 2. Si falla en Firebase Auth directo (ej: maestro de terreno creado por el dueño en el panel),
-    // verificar si existe en la base de datos de usuarios
+    // Fallback: usuarios locales o maestros de faena creados sin Firebase Auth
     if (typeof window !== 'undefined') {
       try {
-        const storedUsersRaw = localStorage.getItem('obratrack_usuarios_v6');
-        const storedUsers: Usuario[] = storedUsersRaw ? JSON.parse(storedUsersRaw) : [];
+        const storedUsers = dataService.getUsuarios();
         const cleanDigits = cleanInput.replace(/[^a-z0-9]/g, '');
 
         const localMatch = storedUsers.find((u) => {
@@ -182,7 +215,11 @@ export async function signInWithFirebase(emailOrRut: string, pass: string): Prom
         });
 
         if (localMatch) {
-          localStorage.setItem('obratrack_active_user_v6', JSON.stringify(localMatch));
+          if (isDeveloperEmail(localMatch.email)) {
+            localMatch.is_dev = true;
+          }
+          dataService.setActiveUser(localMatch);
+          await dataService.loadTenantDataFromSupabase(localMatch.empresa_id);
           document.cookie = `obratrack_auth_token=${localMatch.id}; path=/; max-age=2592000; SameSite=Lax`;
           return { success: true, user: localMatch };
         }
@@ -200,7 +237,7 @@ export async function signInWithFirebase(emailOrRut: string, pass: string): Prom
 }
 
 /**
- * Cerrar sesión en Firebase y limpiar cookies y localStorage
+ * Cerrar sesión y limpiar estado de sesión
  */
 export async function signOutFirebase(): Promise<void> {
   const auth = getFirebaseAuth();
@@ -208,39 +245,40 @@ export async function signOutFirebase(): Promise<void> {
     await signOut(auth);
   } catch (err) {
     console.warn('Error cerrando sesión en Firebase:', err);
-  }
-
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('obratrack_active_user_v5');
-    localStorage.removeItem('obratrack_chat_session_history_v5');
-    document.cookie = 'obratrack_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+  } finally {
+    dataService.clearActiveUser();
+    if (typeof window !== 'undefined') {
+      document.cookie = 'obratrack_auth_token=; path=/; max-age=0';
+    }
   }
 }
 
 /**
- * Enviar correo de restablecimiento de contraseña vía Firebase
+ * Envío de correo para restablecimiento de contraseña
  */
-export async function resetPasswordWithFirebase(email: string): Promise<{ success: boolean; message?: string }> {
+export async function resetPasswordWithFirebase(
+  email: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
   const auth = getFirebaseAuth();
   try {
     await sendPasswordResetEmail(auth, email.trim().toLowerCase());
     return {
       success: true,
-      message: 'Se ha enviado un enlace de recuperación a tu correo electrónico.',
+      message: 'Se ha enviado un correo con instrucciones para restablecer tu contraseña.',
     };
   } catch (error: any) {
     console.error('Error en resetPasswordWithFirebase:', error);
     return {
       success: false,
-      message: mapFirebaseAuthError(error.code || '') || error.message,
+      error: mapFirebaseAuthError(error.code || '') || error.message,
     };
   }
 }
 
 /**
- * Escuchar cambios en el estado de autenticación de Firebase
+ * Escuchar cambios en el estado de autenticación
  */
-export function onFirebaseAuthStateChanged(callback: (user: FirebaseUser | null) => void) {
+export function onAuthStateChange(callback: (user: FirebaseUser | null) => void) {
   const auth = getFirebaseAuth();
   return onAuthStateChanged(auth, callback);
 }

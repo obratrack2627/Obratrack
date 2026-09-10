@@ -85,7 +85,7 @@ export default function ClientesPage() {
     const activeUser = dataService.getActiveUser();
 
     dataService.createCliente({
-      empresa_id: activeUser?.empresa_id || 'emp-1',
+      empresa_id: activeUser?.empresa_id || 'e1111111-1111-4111-a111-111111111111',
       nombre: nombre.trim(),
       telefono: telefono.trim(),
       email: email.trim(),

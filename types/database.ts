@@ -35,6 +35,7 @@ export interface Empresa {
   id: string;
   nombre: string;
   rut: string;
+  plan_id?: SubscriptionPlanId;
   created_at?: string;
   updated_at?: string;
 }
@@ -49,17 +50,19 @@ export interface Usuario {
   telefono_whatsapp: string;
   rut?: string;
   empresa_nombre?: string;
+  is_dev?: boolean;
   created_at?: string;
 }
 
 export interface Cliente {
   id: string;
-  empresa_id: string;
+  empresa_id?: string;
   nombre: string;
   telefono?: string;
   email?: string;
   rut?: string;
   direccion?: string;
+  comuna?: string;
   created_at?: string;
 }
 
@@ -309,6 +312,8 @@ export type TipoEventoAgenda =
 
 export interface EventoAgenda {
   id: string;
+  empresa_id?: string;
+  usuario_id?: string;
   titulo: string;
   tipo: TipoEventoAgenda;
   fecha: string; // YYYY-MM-DD
@@ -320,7 +325,7 @@ export interface EventoAgenda {
   cliente_nombre?: string;
   completado: boolean;
   origen: 'asistente_ia' | 'manual';
-  created_at: string;
+  created_at?: string;
 }
 
 export type TipoAccionIA =

@@ -1,4 +1,4 @@
-﻿import {
+import {
   collection,
   doc,
   getDocs,
@@ -142,8 +142,16 @@ export class FirestoreService {
     await setDoc(doc(this.db, 'materiales', material.id), material, { merge: true });
   }
 
+  async saveMaterialProyecto(material: MaterialProyecto): Promise<void> {
+    return this.saveMaterial(material);
+  }
+
   async deleteMaterial(id: string): Promise<void> {
     await deleteDoc(doc(this.db, 'materiales', id));
+  }
+
+  async deleteMaterialProyecto(id: string): Promise<void> {
+    return this.deleteMaterial(id);
   }
 
   // --- BITÁCORA ---

@@ -100,7 +100,7 @@ export default function EquipoPage() {
     const currentActive = dataService.getActiveUser();
 
     const nuevoTrabajador = dataService.createUsuario({
-      empresa_id: currentActive?.empresa_id || '11111111-1111-1111-1111-111111111111',
+      empresa_id: currentActive?.empresa_id || 'e1111111-1111-4111-a111-111111111111',
       nombre: nombre.trim(),
       email: email.trim().toLowerCase(),
       telefono_whatsapp: telefono.trim(),

@@ -29,9 +29,11 @@ import { exportService } from '@/lib/export-service';
 import { PLANES_SUSCRIPCION, getPlanDetails } from '@/lib/plans';
 import { SubscriptionPlanId } from '@/types/database';
 import LegalTermsModal from '@/components/LegalTermsModal';
+import { isDeveloperUser } from '@/lib/auth-utils';
 
 export default function PlanesPage() {
-  const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
+  const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('gratis');
+  const [isDev, setIsDev] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
   const [legalModalTab, setLegalModalTab] = useState<'terminos' | 'privacidad' | 'ciberseguridad'>('terminos');
@@ -42,6 +44,7 @@ export default function PlanesPage() {
 
   useEffect(() => {
     const user = dataService.getActiveUser();
+    setIsDev(isDeveloperUser(user));
     if (user?.rol === 'terreno') {
       window.location.href = '/proyectos';
       return;
@@ -55,6 +58,7 @@ export default function PlanesPage() {
   }, []);
 
   const handleSelectPlan = (planId: SubscriptionPlanId) => {
+    if (!isDev) return;
     dataService.setActivePlan(planId);
     setActivePlan(planId);
     setSuccessToast(planId);
@@ -185,48 +189,63 @@ export default function PlanesPage() {
 
       <div className="p-6 max-w-7xl w-full mx-auto space-y-8">
         
-        {/* Banner de Simulación para Profesores / Evaluadores */}
+        {/* Banner de Simulación para Desarrollador / Planes para Usuario */}
         <div className="bg-[#1E1E1E] text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-[#2A2A2A] relative overflow-hidden">
           <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-[#FF6A00]/15 rounded-full blur-3xl pointer-events-none"></div>
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="max-w-2xl space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FF6A00] text-white text-[11px] font-mono font-bold uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Simulador de Planes para Demostración</span>
+                {isDev ? (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Modo Desarrollador: Control de Planes</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Planes Oficiales ObraTrack</span>
+                  </>
+                )}
               </div>
               <h2 className="text-2xl sm:text-3xl font-black font-heading tracking-tight">
-                Prueba cómo reacciona la plataforma según el plan contratado
+                {isDev
+                  ? 'Prueba cómo reacciona la plataforma según el plan contratado'
+                  : 'Escala tu constructora con el plan ideal'}
               </h2>
               <p className="text-xs sm:text-sm text-gray-300 font-sans">
-                Para demostrar la viabilidad comercial y el modelo de negocio ante la comisión evaluadora, puedes alternar entre planes en tiempo real. Cada plan desbloquea y bloquea módulos específicos en el sistema.
+                {isDev
+                  ? 'Como desarrollador autorizado, puedes alternar entre planes en tiempo real para verificar los límites y permisos de la plataforma tanto en la interfaz como en Supabase.'
+                  : 'Comienza con el Plan Gratis para ordenar tus primeras obras y da el salto a Pro o Pro IA cuando requieras cubicación con IA y automatizaciones.'}
               </p>
             </div>
 
-            {/* Quick Switcher Buttons in Banner */}
-            <div className="bg-[#2A2A2A] p-2 rounded-2xl border border-[#383838] flex flex-col sm:flex-row gap-2 shrink-0">
-              {PLANES_SUSCRIPCION.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => handleSelectPlan(p.id)}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-heading font-bold transition-all flex items-center justify-center gap-2 ${
-                    activePlan === p.id
-                      ? 'bg-[#FF6A00] text-white shadow-md shadow-[#FF6A00]/30'
-                      : 'text-gray-300 hover:text-white hover:bg-black/30'
-                  }`}
-                >
-                  <span>{p.nombre}</span>
-                  {activePlan === p.id && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-                </button>
-              ))}
-            </div>
+            {/* Quick Switcher Buttons (Solo visible para Desarrollador) */}
+            {isDev && (
+              <div className="bg-[#2A2A2A] p-2 rounded-2xl border border-[#383838] flex flex-col sm:flex-row gap-2 shrink-0">
+                {PLANES_SUSCRIPCION.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSelectPlan(p.id)}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-heading font-bold transition-all flex items-center justify-center gap-2 ${
+                      activePlan === p.id
+                        ? 'bg-[#FF6A00] text-white shadow-md shadow-[#FF6A00]/30'
+                        : 'text-gray-300 hover:text-white hover:bg-black/30'
+                    }`}
+                  >
+                    <span>{p.nombre}</span>
+                    {activePlan === p.id && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {successToast && (
             <div className="mt-4 py-2 px-4 bg-[#6B8F72]/20 border border-[#6B8F72] text-[#85C492] text-xs font-mono font-bold rounded-xl inline-flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
               <CheckCircle2 className="w-4 h-4 text-[#6B8F72]" />
               <span>
-                ¡Has activado el {getPlanDetails(successToast as SubscriptionPlanId).nombre}! Los límites y permisos han cambiado en toda la app.
+                ¡Has activado el {getPlanDetails(successToast as SubscriptionPlanId).nombre}! Los límites y permisos se actualizaron en la plataforma y en Supabase.
               </span>
             </div>
           )}
@@ -317,31 +336,54 @@ export default function PlanesPage() {
                 </div>
 
                 {/* Activation CTA */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectPlan(plan.id)}
-                  className={`mt-8 w-full py-3.5 px-6 rounded-2xl font-heading font-bold text-sm transition-all flex items-center justify-center gap-2 ${
-                    isSelected
-                      ? 'bg-[#1E1E1E] text-white cursor-default shadow-md'
-                      : plan.id === 'pro_ia'
-                      ? 'bg-[#6B8F72] hover:bg-[#55735B] text-white shadow-lg shadow-[#6B8F72]/30'
-                      : plan.id === 'pro'
-                      ? 'bg-[#FF6A00] hover:bg-[#E55F00] text-white shadow-lg shadow-[#FF6A00]/30'
-                      : 'bg-gray-200 hover:bg-gray-300 text-[#1E1E1E]'
-                  }`}
-                >
-                  {isSelected ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 text-[#6B8F72]" />
-                      <span>Plan Actual en Ejecución</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Activar este Plan en Demo</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
+                {isDev ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectPlan(plan.id)}
+                    className={`mt-8 w-full py-3.5 px-6 rounded-2xl font-heading font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                      isSelected
+                        ? 'bg-[#1E1E1E] text-white cursor-default shadow-md'
+                        : plan.id === 'pro_ia'
+                        ? 'bg-[#6B8F72] hover:bg-[#55735B] text-white shadow-lg shadow-[#6B8F72]/30'
+                        : plan.id === 'pro'
+                        ? 'bg-[#FF6A00] hover:bg-[#E55F00] text-white shadow-lg shadow-[#FF6A00]/30'
+                        : 'bg-gray-200 hover:bg-gray-300 text-[#1E1E1E]'
+                    }`}
+                  >
+                    {isSelected ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-[#6B8F72]" />
+                        <span>Plan Actual en Ejecución</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Activar este Plan en Demo</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <div className="mt-8">
+                    {isSelected ? (
+                      <div className="w-full py-3.5 px-6 rounded-2xl bg-[#6B8F72]/15 text-[#55735B] border border-[#6B8F72]/30 font-heading font-bold text-sm text-center flex items-center justify-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-[#6B8F72]" />
+                        <span>Tu Plan Activo</span>
+                      </div>
+                    ) : (
+                      <a
+                        href="mailto:soporte@obratrack.cl?subject=Solicitud%20de%20Mejora%20a%20Plan%20Pro"
+                        className={`w-full py-3.5 px-6 rounded-2xl font-heading font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                          plan.id === 'pro_ia'
+                            ? 'bg-[#6B8F72] hover:bg-[#55735B] text-white shadow-lg shadow-[#6B8F72]/30'
+                            : 'bg-[#FF6A00] hover:bg-[#E55F00] text-white shadow-lg shadow-[#FF6A00]/30'
+                        }`}
+                      >
+                        <Lock className="w-4 h-4" />
+                        <span>Contratar {plan.nombre}</span>
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

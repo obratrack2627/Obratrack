@@ -33,6 +33,7 @@ import {
   Camera,
   Upload,
   Image as ImageIcon,
+  Zap,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
@@ -54,6 +55,7 @@ export default function ProyectosPage() {
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [projectToDelete, setProjectToDelete] = useState<Proyecto | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [viewingMapsProject, setViewingMapsProject] = useState<Proyecto | null>(null);
 
   // Modal para que el Maestro suba Avances y Fotos
@@ -155,37 +157,42 @@ export default function ProyectosPage() {
 
     const activeUser = dataService.getActiveUser();
 
-    dataService.createProyecto(
-      {
-        empresa_id: activeUser?.empresa_id || 'emp-1',
-        cliente_id: clienteId || undefined,
-        nombre: nombre.trim(),
-        descripcion: descripcion.trim(),
-        direccion: direccion.trim(),
-        comuna: comuna.trim(),
-        region: region.trim(),
-        latitud,
-        longitud,
-        lugar_referencia: lugarReferencia.trim(),
-        fecha_inicio: fechaInicio,
-        fecha_termino_estimada: fechaTermino,
-        estado: 'activo',
-        monto_cotizado: parseThousands(montoCotizado),
-        trabajadores_ids: selectedTrabajadores,
-      },
-      initialActivities
-    );
+    try {
+      setCreateError(null);
+      dataService.createProyecto(
+        {
+          empresa_id: activeUser?.empresa_id || 'e1111111-1111-4111-a111-111111111111',
+          cliente_id: clienteId || undefined,
+          nombre: nombre.trim(),
+          descripcion: descripcion.trim(),
+          direccion: direccion.trim(),
+          comuna: comuna.trim(),
+          region: region.trim(),
+          latitud,
+          longitud,
+          lugar_referencia: lugarReferencia.trim(),
+          fecha_inicio: fechaInicio,
+          fecha_termino_estimada: fechaTermino,
+          estado: 'activo',
+          monto_cotizado: parseThousands(montoCotizado),
+          trabajadores_ids: selectedTrabajadores,
+        },
+        initialActivities
+      );
 
-    setIsModalOpen(false);
-    setNombre('');
-    setDescripcion('');
-    setDireccion('');
-    setLugarReferencia('');
-    setMontoCotizado('');
-    setSelectedTrabajadores([]);
-    setToastMessage(`Obra "${nombre.trim()}" creada con ubicación geográfica exitosamente.`);
-    loadData();
-    setTimeout(() => setToastMessage(null), 3000);
+      setIsModalOpen(false);
+      setNombre('');
+      setDescripcion('');
+      setDireccion('');
+      setLugarReferencia('');
+      setMontoCotizado('');
+      setSelectedTrabajadores([]);
+      setToastMessage(`Obra "${nombre.trim()}" creada con ubicación geográfica exitosamente.`);
+      loadData();
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err: any) {
+      setCreateError(err.message || 'Error al crear la obra.');
+    }
   };
 
   const handleOpenEdit = (proj: Proyecto) => {
@@ -836,6 +843,26 @@ export default function ProyectosPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {createError && (
+              <div className="mb-4 p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-900 dark:text-amber-200 text-xs space-y-2 animate-in fade-in">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="font-medium">{createError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setIsPlanModalOpen(true);
+                  }}
+                  className="w-full py-1.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-lg font-bold font-heading text-[11px] transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Ver Planes para Obras Ilimitadas</span>
+                </button>
+              </div>
+            )}
 
             <form onSubmit={handleCreateProject} className="space-y-4">
               <div>
