@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import ThemeProvider from '@/components/ThemeProvider';
 
+import GlobalCopilotFloatingWidget from '@/components/GlobalCopilotFloatingWidget';
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   // Tanto la raíz (/) como (/login) son vistas de autenticación que no muestran Sidebar ni Dashboard
@@ -24,6 +26,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {children}
             </div>
           </main>
+          {/* Copiloto Obrero IA Global en Botón Emergente */}
+          <GlobalCopilotFloatingWidget />
         </div>
       )}
     </ThemeProvider>

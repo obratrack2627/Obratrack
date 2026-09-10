@@ -911,3 +911,275 @@ Responde amablemente:`;
     return { respuesta: 'Hubo un error al procesar tu consulta por favor intenta más tarde.' };
   }
 }
+
+/**
+ * Asistente / Copiloto de IA Especializado para un Proyecto u Obra Específica
+ */
+export async function chatAgenteProyectoGemini(params: {
+  historial: { rol: 'user' | 'model'; texto: string }[];
+  mensajeUsuario: string;
+  contextoProyecto: {
+    id: string;
+    nombre: string;
+    comuna?: string;
+    direccion?: string;
+    estado: string;
+    fecha_inicio: string;
+    fecha_termino_estimada: string;
+    monto_cotizado: number;
+    total_pagado: number;
+    total_imprevistos: number;
+    total_materiales: number;
+    saldo_pendiente: number;
+    porcentaje_avance: number;
+    cliente?: { nombre: string; telefono?: string };
+    actividades?: Array<{
+      id: string;
+      nombre: string;
+      dias: number;
+      porcentaje_avance: number;
+      estado: string;
+      fecha_inicio: string;
+      fecha_termino: string;
+    }>;
+    materiales?: Array<{
+      id: string;
+      nombre: string;
+      cantidad: number;
+      unidad: string;
+      precio_unitario: number;
+      subtotal: number;
+    }>;
+    imprevistos?: Array<{
+      id: string;
+      descripcion: string;
+      monto: number;
+      fecha: string;
+    }>;
+    bitacora?: Array<{
+      id: string;
+      titulo: string;
+      nota: string;
+      fecha: string;
+      tipo: string;
+    }>;
+    trabajadores?: Array<{
+      id: string;
+      nombre: string;
+      rol?: string;
+    }>;
+  };
+}): Promise<{
+  respuesta: string;
+  accion?: any;
+  sugerencias?: string[];
+}> {
+  const p = params.contextoProyecto;
+  const msg = params.mensajeUsuario.toLowerCase().trim();
+
+  // Partidas formateadas
+  const partidasTexto = (p.actividades || [])
+    .map(
+      (a, idx) =>
+        `${idx + 1}. "${a.nombre}" (${a.porcentaje_avance}% avance, estado: ${a.estado}, fechas: ${a.fecha_inicio} a ${a.fecha_termino})`
+    )
+    .join('\n') || 'Sin partidas definidas en la Carta Gantt.';
+
+  // Insumos
+  const materialesTexto = (p.materiales || [])
+    .slice(0, 8)
+    .map((m) => `• ${m.nombre}: ${m.cantidad} ${m.unidad} a $${m.precio_unitario.toLocaleString('es-CL')} ($${m.subtotal.toLocaleString('es-CL')})`)
+    .join('\n') || 'Sin materiales registrados.';
+
+  // Bitácora reciente
+  const bitacoraTexto = (p.bitacora || [])
+    .slice(0, 5)
+    .map((b) => `• [${b.fecha} - ${b.tipo}]: ${b.titulo} ("${b.nota}")`)
+    .join('\n') || 'Sin entradas en la bitácora.';
+
+  // Cuadrilla
+  const cuadrillaTexto = (p.trabajadores || [])
+    .map((t) => `• ${t.nombre} (${t.rol || 'faena'})`)
+    .join('\n') || 'Sin trabajadores asignados a esta obra.';
+
+  const prompt = `${SYSTEM_PROMPT_CONSTRUCCION_CHILE}
+
+ERES EL ASISTENTE DE IA DEDICADO EXCLUSIVAMENTE A ESTA OBRA:
+======================================================
+• OBRA: "${p.nombre}" (ID: ${p.id})
+• MANDANTE / CLIENTE: ${p.cliente?.nombre || 'No asignado'} (Teléfono: ${p.cliente?.telefono || 'No registrado'})
+• UBICACIÓN: ${p.direccion || ''}, ${p.comuna || 'Chile'}
+• ESTADO DE LA OBRA: ${p.estado.toUpperCase()}
+• PLAZO: ${p.fecha_inicio} al ${p.fecha_termino_estimada}
+• AVANCE FÍSICO GENERAL PONDERADO: ${p.porcentaje_avance}%
+
+ESTADO FINANCIERO DE ESTA OBRA:
+• Monto Total Contratado: $${p.monto_cotizado.toLocaleString('es-CL')} CLP
+• Total Pagado por el Mandante: $${p.total_pagado.toLocaleString('es-CL')} CLP
+• Saldo Pendiente por Cobrar: $${p.saldo_pendiente.toLocaleString('es-CL')} CLP
+• Gastos en Materiales: $${p.total_materiales.toLocaleString('es-CL')} CLP
+• Gastos en Imprevistos: $${p.total_imprevistos.toLocaleString('es-CL')} CLP
+
+CRONOGRAMA (CARTA GANTT DE ESTA OBRA):
+${partidasTexto}
+
+MATERIALES E INSUMOS REGISTRADOS:
+${materialesTexto}
+
+BITÁCORA DE TERRENO RECIENTE:
+${bitacoraTexto}
+
+CUADRILLA ASIGNADA:
+${cuadrillaTexto}
+
+INSTRUCCIONES CLAVE:
+1. Conoces cada detalle de esta obra específica. Si el usuario te pregunta por el saldo, cronograma, materiales, imprevistos o mandante, responde con los datos reales precisos de la obra.
+2. ACCIONES AUTÓNOMAS DISPONIBLES: Si el usuario te pide modificar, agregar o registrar algo en esta obra, confirma amablemente y coloca al final de tu respuesta una etiqueta [ACCION_PROYECTO: {...}] con el JSON:
+   - Crear partida en Gantt: [ACCION_PROYECTO: {"tipo":"crear_actividad","nombre":"Nombre partida","dias":4}]
+   - Actualizar avance partida: [ACCION_PROYECTO: {"tipo":"actualizar_avance","nombre":"Nombre partida o id","porcentaje_avance":100}]
+   - Registrar imprevisto: [ACCION_PROYECTO: {"tipo":"registrar_imprevisto","descripcion":"Detalle del imprevisto","monto":120000}]
+   - Agregar material: [ACCION_PROYECTO: {"tipo":"agregar_material","nombre":"Nombre material","cantidad":10,"unidad":"saco","precio_unitario":4500}]
+   - Crear entrada bitácora: [ACCION_PROYECTO: {"tipo":"crear_bitacora","titulo":"Título","nota":"Detalle del día","subtipo":"avance"}]
+   - Redactar WhatsApp cliente: [ACCION_PROYECTO: {"tipo":"generar_mensaje_whatsapp","mensaje":"Texto para el cliente","telefono":"${p.cliente?.telefono || ''}"}]
+
+HISTORIAL DE CONVERSACIÓN DE ESTA OBRA:
+${params.historial.map((h) => `${h.rol === 'user' ? 'Constructor' : 'Agente Obra'}: ${h.texto}`).join('\n')}
+
+MENSAJE DEL CONSTRUCTOR: "${params.mensajeUsuario}"
+
+Responde como el Agente Especialista de esta Obra:`;
+
+  try {
+    let rawText = await llamarGeminiDirectoRest(prompt);
+    if (!rawText) {
+      const gemini = getGeminiClient();
+      if (gemini) {
+        for (const m of CANDIDATE_GEMINI_MODELS) {
+          try {
+            const resp = await gemini.models.generateContent({
+              model: m,
+              contents: prompt,
+            });
+            if (resp.text) {
+              rawText = resp.text;
+              break;
+            }
+          } catch (e) {
+            console.warn(`Error en SDK Gemini con ${m}:`, e);
+          }
+        }
+      }
+    }
+
+    if (!rawText) {
+      // Fallback heurístico si no hay conexión externa
+      return generarFallbackAgenteProyecto(msg, p);
+    }
+
+    let accion: any = null;
+    const actionMatch = rawText.match(/\[ACCION_PROYECTO:\s*(\{.*?\})\s*\]/);
+    if (actionMatch) {
+      try {
+        accion = JSON.parse(actionMatch[1]);
+        rawText = rawText.replace(actionMatch[0], '').trim();
+      } catch (err) {
+        console.warn('No se pudo parsear acción de proyecto:', err);
+      }
+    }
+
+    const sugerencias = [
+      '¿Cuánto saldo nos queda por cobrar?',
+      '¿Qué partidas tenemos pendientes en la Carta Gantt?',
+      'Redacta un mensaje de avance para el mandante',
+    ];
+
+    return {
+      respuesta: rawText,
+      accion,
+      sugerencias,
+    };
+  } catch (error) {
+    console.warn('Fallo en llamada Gemini para agente de obra, usando motor heurístico:', error);
+    return generarFallbackAgenteProyecto(msg, p);
+  }
+}
+
+function generarFallbackAgenteProyecto(msg: string, p: any) {
+  // 1. Pregunta sobre finanzas o saldo
+  if (msg.includes('saldo') || msg.includes('cobrar') || msg.includes('plata') || msg.includes('financ') || msg.includes('cuanto') || msg.includes('cuánto')) {
+    return {
+      respuesta: `💰 **ESTADO FINANCIERO DE LA OBRA "${p.nombre}"**
+      
+• **Monto Contratado Total:** $${p.monto_cotizado.toLocaleString('es-CL')} CLP
+• **Total Pagado a la Fecha:** $${p.total_pagado.toLocaleString('es-CL')} CLP
+• **Saldo Pendiente por Cobrar:** **$${p.saldo_pendiente.toLocaleString('es-CL')} CLP**
+• **Gastos en Materiales:** $${p.total_materiales.toLocaleString('es-CL')} CLP
+• **Imprevistos Registrados:** $${p.total_imprevistos.toLocaleString('es-CL')} CLP
+
+El cliente **${p.cliente?.nombre || 'Mandante'}** ha cancelado el **${p.monto_cotizado > 0 ? Math.round((p.total_pagado / p.monto_cotizado) * 100) : 0}%** del presupuesto acordado.`,
+      sugerencias: [
+        'Redactar cobro por WhatsApp para el cliente',
+        '¿Cómo va la Carta Gantt?',
+        'Registrar un imprevisto en la obra',
+      ],
+    };
+  }
+
+  // 2. Partidas / Cronograma / Avance
+  if (msg.includes('gantt') || msg.includes('partida') || msg.includes('avance') || msg.includes('cronograma')) {
+    return {
+      respuesta: `📊 **CRONOGRAMA & AVANCE FÍSICO: "${p.nombre}"**
+
+• **Avance General Estimado:** **${p.porcentaje_avance}%**
+• **Fecha de Término Comprometida:** ${p.fecha_termino_estimada}
+• **Total de Partidas:** ${(p.actividades || []).length} partidas planificadas.
+
+Puedes pedirme: *"Agrega partida Instalación de pisos de 4 días"* o *"Actualiza el avance de fundaciones al 100%"* y lo haré inmediatamente en tu Carta Gantt.`,
+      sugerencias: [
+        'Agrega una nueva partida',
+        'Redactar informe semanal',
+        '¿Cuánto saldo nos queda por cobrar?',
+      ],
+    };
+  }
+
+  // 3. Agregar partida
+  const matchPartida = msg.match(/(?:agrega|crea|nueva)\s+partida\s+['"]?([^'"]+?)['"]?(?:\s+de\s+(\d+)\s+d[ií]as)?$/i);
+  if (matchPartida) {
+    const nombre = matchPartida[1].trim();
+    const dias = matchPartida[2] ? Number(matchPartida[2]) : 5;
+    return {
+      respuesta: `🏗️ **¡Partida planificada para la Carta Gantt!**
+      
+Voy a incorporar **"${nombre}"** con una duración estimada de **${dias} días hábiles** en el cronograma de esta obra.`,
+      accion: {
+        tipo: 'crear_actividad',
+        nombre,
+        dias,
+      },
+      sugerencias: [
+        'Ver Carta Gantt',
+        '¿Cuánto presupuesto nos queda?',
+        'Registrar avance del 50%',
+      ],
+    };
+  }
+
+  // 4. Default
+  return {
+    respuesta: `👷‍♂️ **Copiloto Obrero: Faena "${p.nombre}"**
+
+Estoy a cargo de la gestión de esta obra. Puedo ayudarte a:
+1. **Controlar el presupuesto:** Saldo por cobrar a ${p.cliente?.nombre || 'mandante'}, gastos de materiales e imprevistos.
+2. **Modificar la Carta Gantt:** Agregar nuevas partidas o actualizar avances en vivo.
+3. **Control de terreno:** Registrar entradas a la bitácora o añadir materiales.
+4. **Comunicación:** Redactar mensajes de WhatsApp con estados de avance para el cliente.
+
+¿Qué necesitas gestionar en esta faena?`,
+    sugerencias: [
+      '¿Cuánto saldo nos queda por cobrar?',
+      '¿Cómo vamos con las partidas del Gantt?',
+      'Redacta un mensaje para el mandante',
+    ],
+  };
+}

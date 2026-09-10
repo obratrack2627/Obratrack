@@ -20,6 +20,7 @@ import {
   ShoppingBag,
   Store,
   MapPin,
+  Sparkles,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import Navbar from '@/components/Navbar';
@@ -362,6 +363,13 @@ export default function ProyectoFinanzasPage() {
             >
               <GanttChartSquare className="w-3.5 h-3.5 text-obra-orange" />
               <span>Ver Carta Gantt</span>
+            </Link>
+            <Link
+              href={`/proyectos/${proyecto.id}/ia`}
+              className="px-3 py-1.5 bg-gradient-to-r from-[#FF6A00]/20 to-purple-600/20 hover:from-[#FF6A00]/30 hover:to-purple-600/30 text-[#FF6A00] dark:text-[#FF8A33] border border-[#FF6A00]/40 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-heading shadow-sm"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#FF6A00]" />
+              <span>Copiloto IA</span>
             </Link>
             <Link
               href="/proyectos"

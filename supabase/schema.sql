@@ -182,6 +182,18 @@ CREATE TABLE public.agenda_eventos (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 13. TABLA: MENSAJES_CHAT_PROYECTO (Agente de IA por Obra)
+CREATE TABLE public.mensajes_chat_proyecto (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    proyecto_id TEXT NOT NULL REFERENCES public.proyectos(id) ON DELETE CASCADE,
+    empresa_id TEXT NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
+    remitente VARCHAR(20) NOT NULL CHECK (remitente IN ('usuario', 'agente')),
+    texto TEXT NOT NULL,
+    sugerencias JSONB,
+    accion_ejecutada JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ==============================================================================
 -- ÍNDICES DE RENDIMIENTO
 -- ==============================================================================

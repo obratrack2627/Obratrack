@@ -81,7 +81,16 @@ export default function Sidebar() {
 
   const isTerreno = activeUser?.rol === 'terreno';
 
-  const navItems = isTerreno
+  interface NavItem {
+    label: string;
+    href: string;
+    icon: any;
+    highlight?: boolean;
+    badge?: number | null;
+    planBadge?: string;
+  }
+
+  const navItems: NavItem[] = isTerreno
     ? [
         {
           label: 'Obras Asignadas',
@@ -105,12 +114,6 @@ export default function Sidebar() {
           label: 'Proyectos & Obras',
           href: '/proyectos',
           icon: Building,
-        },
-        {
-          label: 'Copiloto Obrero IA',
-          href: '/cotizador',
-          icon: Sparkles,
-          highlight: true,
         },
         {
           label: 'Reportes WhatsApp',

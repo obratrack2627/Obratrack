@@ -787,10 +787,10 @@ export default function ProyectosPage() {
                         </button>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-2 pt-3 border-t border-kraft-200">
+                      <div className="grid grid-cols-4 gap-1.5 pt-3 border-t border-kraft-200">
                         <Link
                           href={`/proyectos/${proj.id}/gantt`}
-                          className="py-2 px-1.5 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                          className="py-2 px-1 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
                           title="Carta Gantt & Partidas"
                         >
                           <GanttChartSquare className="w-3.5 h-3.5 text-obra-orange shrink-0" />
@@ -799,17 +799,26 @@ export default function ProyectosPage() {
 
                         <Link
                           href={`/proyectos/${proj.id}/finanzas`}
-                          className="py-2 px-1.5 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                          className="py-2 px-1 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
                           title="Control Financiero"
                         >
                           <Wallet className="w-3.5 h-3.5 text-navy-800 shrink-0" />
                           <span className="truncate">Finanzas</span>
                         </Link>
 
+                        <Link
+                          href={`/proyectos/${proj.id}/ia`}
+                          className="py-2 px-1 bg-gradient-to-r from-[#FF6A00]/15 to-purple-600/15 hover:from-[#FF6A00]/25 hover:to-purple-600/25 border border-[#FF6A00]/30 text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
+                          title="Copiloto IA de esta Obra"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
+                          <span className="truncate">IA</span>
+                        </Link>
+
                         <button
                           type="button"
                           onClick={() => setViewingMapsProject(proj)}
-                          className="py-2 px-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-[#1E1E1E] dark:text-white hover:text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
+                          className="py-2 px-1 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-[#1E1E1E] dark:text-white hover:text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
                           title="Ver ubicación en Google Maps"
                         >
                           <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />

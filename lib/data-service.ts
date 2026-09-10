@@ -13,6 +13,7 @@ import {
   BitacoraEntrada,
   EventoAgenda,
   MensajeChatCotizador,
+  MensajeChatProyecto,
 } from '@/types/database';
 import {
   INITIAL_PROYECTOS,
@@ -45,6 +46,7 @@ const KEYS = {
   BITACORA: 'obratrack_bitacora_v7',
   AGENDA: 'obratrack_agenda_eventos_v7',
   CHAT_SESSION: 'obratrack_chat_session_history_v7',
+  CHAT_PROYECTOS: 'obratrack_chat_proyectos_v7',
 };
 
 const DEMO_EMPRESA_ID = 'e1111111-1111-4111-a111-111111111111';
@@ -1047,6 +1049,148 @@ class DataService {
       trabajadores_ids: [...current, trabajadorId],
     });
     return true;
+  }
+
+  // --- CHAT DE AGENTE POR PROYECTO (HISTORIAL PERSISTENTE) ---
+  getProyectoChatHistorial(proyectoId: string): MensajeChatProyecto[] {
+    const key = this.getTenantKey(`${KEYS.CHAT_PROYECTOS}_${proyectoId}`);
+    return this.getItem<MensajeChatProyecto[]>(key, []);
+  }
+
+  saveProyectoMensajeChat(
+    mensaje: Omit<MensajeChatProyecto, 'id' | 'created_at'> & { id?: string; created_at?: string }
+  ): MensajeChatProyecto {
+    const key = this.getTenantKey(`${KEYS.CHAT_PROYECTOS}_${mensaje.proyecto_id}`);
+    const historial = this.getItem<MensajeChatProyecto[]>(key, []);
+    const fullMsg: MensajeChatProyecto = {
+      ...mensaje,
+      id: mensaje.id || 'msg-p-' + Date.now(),
+      created_at: mensaje.created_at || new Date().toISOString(),
+    };
+    historial.push(fullMsg);
+    this.setItem(key, historial);
+
+    // Sincronizar en segundo plano con Supabase
+    supabaseService.saveProyectoMensajeChat(fullMsg).catch((err) =>
+      console.warn('Sync chat proyecto en Supabase:', err)
+    );
+
+    return fullMsg;
+  }
+
+  clearProyectoChatHistorial(proyectoId: string): void {
+    const key = this.getTenantKey(`${KEYS.CHAT_PROYECTOS}_${proyectoId}`);
+    this.setItem(key, []);
+    supabaseService.clearProyectoChatHistorial(proyectoId).catch((err) =>
+      console.warn('Clear chat proyecto en Supabase:', err)
+    );
+  }
+
+  async loadProyectoChatFromSupabase(proyectoId: string): Promise<MensajeChatProyecto[]> {
+    try {
+      const active = this.getActiveUser();
+      const msgs = await supabaseService.getProyectoChatHistorial(proyectoId, active?.empresa_id);
+      if (msgs && msgs.length > 0) {
+        const key = this.getTenantKey(`${KEYS.CHAT_PROYECTOS}_${proyectoId}`);
+        this.setItem(key, msgs);
+        return msgs;
+      }
+    } catch (e) {
+      console.warn('Error cargando chat de proyecto desde Supabase:', e);
+    }
+    return this.getProyectoChatHistorial(proyectoId);
+  }
+
+  ejecutarAccionAgenteProyecto(proyectoId: string, accion: any): { exito: boolean; mensaje: string; datos?: any } {
+    const proyecto = this.getProyectoById(proyectoId);
+    if (!proyecto) return { exito: false, mensaje: 'Proyecto no encontrado' };
+
+    switch (accion.tipo) {
+      case 'crear_actividad': {
+        const dias = Number(accion.dias) || 5;
+        const acts = this.getActividades(proyectoId);
+        const lastAct = acts[acts.length - 1];
+        let startDate = new Date();
+        if (lastAct && lastAct.fecha_termino) {
+          startDate = new Date(lastAct.fecha_termino);
+        }
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + dias);
+
+        const nueva = this.createActividad({
+          proyecto_id: proyectoId,
+          nombre: accion.nombre || 'Nueva Partida',
+          fecha_inicio: startDate.toISOString().split('T')[0],
+          fecha_termino: endDate.toISOString().split('T')[0],
+          porcentaje_avance: 0,
+          estado: 'pendiente',
+          orden: acts.length + 1,
+        });
+        return { exito: true, mensaje: `Partida "${nueva.nombre}" agregada a la Carta Gantt.`, datos: nueva };
+      }
+
+      case 'actualizar_avance': {
+        const acts = this.getActividades(proyectoId);
+        const match = acts.find(
+          (a) =>
+            a.id === accion.actividad_id ||
+            (accion.nombre && a.nombre.toLowerCase().includes(accion.nombre.toLowerCase()))
+        );
+        if (match) {
+          const avance = Math.min(100, Math.max(0, Number(accion.porcentaje_avance) || 0));
+          const estado = avance === 100 ? 'terminada' : avance > 0 ? 'en_curso' : 'pendiente';
+          const updated = this.updateActividad(match.id, { porcentaje_avance: avance, estado });
+          return { exito: true, mensaje: `Partida "${match.nombre}" actualizada al ${avance}%.`, datos: updated };
+        }
+        return { exito: false, mensaje: 'No se encontró la partida especificada para actualizar.' };
+      }
+
+      case 'registrar_imprevisto': {
+        const monto = Number(accion.monto) || 0;
+        const imp = this.createImprevisto({
+          proyecto_id: proyectoId,
+          descripcion: accion.descripcion || 'Imprevisto detectado en faena',
+          monto,
+          estado: 'pendiente',
+          origen: 'whatsapp_ia',
+          fecha: new Date().toISOString().split('T')[0],
+        });
+        return { exito: true, mensaje: `Imprevisto de $${monto.toLocaleString('es-CL')} CLP registrado.`, datos: imp };
+      }
+
+      case 'agregar_material': {
+        const cant = Number(accion.cantidad) || 1;
+        const pu = Number(accion.precio_unitario) || 0;
+        const mat = this.createMaterialProyecto({
+          proyecto_id: proyectoId,
+          nombre: accion.nombre || 'Material de faena',
+          cantidad: cant,
+          unidad: accion.unidad || 'unidad',
+          precio_unitario: pu,
+          subtotal: cant * pu,
+          categoria: accion.categoria || 'General',
+          comprado: false,
+        });
+        return { exito: true, mensaje: `Material "${mat.nombre}" agregado al presupuesto.`, datos: mat };
+      }
+
+      case 'crear_bitacora': {
+        const active = this.getActiveUser();
+        const bit = this.createBitacoraEntrada({
+          proyecto_id: proyectoId,
+          usuario_id: active?.id || 'u-1',
+          autor_nombre: active?.nombre || 'Inspector de Obra',
+          titulo: accion.titulo || 'Registro de avance diario',
+          nota: accion.nota || accion.descripcion || 'Sin observaciones.',
+          tipo: accion.subtipo || 'avance',
+          fecha: new Date().toISOString().split('T')[0],
+        });
+        return { exito: true, mensaje: `Entrada de bitácora "${bit.titulo}" guardada.`, datos: bit };
+      }
+
+      default:
+        return { exito: true, mensaje: 'Acción informativa procesada.' };
+    }
   }
 
   // --- SINCRONIZACIÓN Y CARGA DESDE SUPABASE ---

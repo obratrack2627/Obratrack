@@ -20,6 +20,7 @@ import {
   Users,
   AlertTriangle,
   MapPin,
+  Sparkles,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import GanttChart from '@/components/GanttChart';
@@ -239,6 +240,13 @@ export default function ProyectoGanttPage() {
             >
               <Wallet className="w-3.5 h-3.5" />
               <span>Finanzas</span>
+            </Link>
+            <Link
+              href={`/proyectos/${proyecto.id}/ia`}
+              className="px-3 py-1.5 bg-gradient-to-r from-[#FF6A00]/20 to-purple-600/20 hover:from-[#FF6A00]/30 hover:to-purple-600/30 text-[#FF6A00] dark:text-[#FF8A33] border border-[#FF6A00]/40 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-heading shadow-sm"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#FF6A00]" />
+              <span>Copiloto IA</span>
             </Link>
             <Link
               href="/proyectos"

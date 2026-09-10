@@ -12,6 +12,7 @@ import {
   ReporteWhatsApp,
   Empresa,
   SubscriptionPlanId,
+  MensajeChatProyecto,
 } from '@/types/database';
 
 export class SupabaseService {
@@ -562,6 +563,60 @@ export class SupabaseService {
 
   async deleteEventoAgenda(id: string): Promise<void> {
     await this.client.from('agenda_eventos').delete().eq('id', id);
+  }
+
+  // --- CHAT DE AGENTE POR PROYECTO ---
+  async getProyectoChatHistorial(proyectoId: string, empresaId?: string): Promise<MensajeChatProyecto[]> {
+    try {
+      let q = this.client
+        .from('mensajes_chat_proyecto')
+        .select('*')
+        .eq('proyecto_id', proyectoId)
+        .order('created_at', { ascending: true });
+      if (empresaId) q = q.eq('empresa_id', empresaId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data || []).map((r) => ({
+        id: r.id,
+        proyecto_id: r.proyecto_id,
+        empresa_id: r.empresa_id,
+        remitente: r.remitente,
+        texto: r.texto,
+        sugerencias: r.sugerencias || undefined,
+        accion_ejecutada: r.accion_ejecutada || undefined,
+        created_at: r.created_at,
+      }));
+    } catch (err) {
+      console.warn('Error al cargar historial de chat de proyecto desde Supabase:', err);
+      return [];
+    }
+  }
+
+  async saveProyectoMensajeChat(msg: MensajeChatProyecto): Promise<void> {
+    try {
+      const payload = {
+        id: msg.id,
+        proyecto_id: msg.proyecto_id,
+        empresa_id: msg.empresa_id,
+        remitente: msg.remitente,
+        texto: msg.texto,
+        sugerencias: msg.sugerencias || null,
+        accion_ejecutada: msg.accion_ejecutada || null,
+        created_at: msg.created_at || new Date().toISOString(),
+      };
+      const { error } = await this.client.from('mensajes_chat_proyecto').upsert(payload, { onConflict: 'id' });
+      if (error) console.error('Error al guardar mensaje de chat en Supabase:', error);
+    } catch (err) {
+      console.warn('Error en saveProyectoMensajeChat:', err);
+    }
+  }
+
+  async clearProyectoChatHistorial(proyectoId: string): Promise<void> {
+    try {
+      await this.client.from('mensajes_chat_proyecto').delete().eq('proyecto_id', proyectoId);
+    } catch (err) {
+      console.warn('Error al borrar historial de chat de proyecto en Supabase:', err);
+    }
   }
 
   // --- STORAGE: SUBIDA DE FOTOS A BUCKET DE SUPABASE ---
