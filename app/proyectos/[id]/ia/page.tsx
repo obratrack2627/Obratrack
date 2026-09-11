@@ -45,6 +45,7 @@ import {
 import { formatCLP, formatDate } from '@/lib/utils';
 import { isDeveloperUser } from '@/lib/auth-utils';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
+import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 
 export default function ProyectoIAPage() {
   const params = useParams();
@@ -593,7 +594,10 @@ export default function ProyectoIAPage() {
                           : 'bg-gray-100 dark:bg-[#1A2230] text-navy-900 dark:text-gray-100 rounded-tl-none border border-gray-200 dark:border-[#263040]'
                       }`}
                     >
-                      <p className="whitespace-pre-line leading-relaxed">{m.texto}</p>
+                      <ChatMessageFormatter
+                        content={m.texto}
+                        isUser={m.remitente === 'usuario'}
+                      />
                       <span
                         className={`block text-[9px] mt-1.5 text-right ${
                           m.remitente === 'usuario' ? 'text-white/70' : 'text-gray-400'

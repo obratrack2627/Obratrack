@@ -24,6 +24,7 @@ import { dataService } from '@/lib/data-service';
 import { Usuario, SubscriptionPlanId, MensajeChatCotizador, AccionAsistenteIA } from '@/types/database';
 import { isDeveloperUser } from '@/lib/auth-utils';
 import { formatCLP, formatDate } from '@/lib/utils';
+import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 
 export default function GlobalCopilotFloatingWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -72,7 +73,7 @@ export default function GlobalCopilotFloatingWidget() {
           id: 'welcome-global',
           remitente: 'agente',
           texto:
-            '¡Hola! Soy tu **Copiloto Obrero IA Global**. Puedo ayudarte a gestionar todo el SaaS en segundos:\n\n• **Crear obras:** *"Créame una obra de radier de 30m2 en La Florida por $3.2M"*\n• **Gestionar cuadrillas:** *"Agrega al maestro albañil Carlos al equipo"*\n• **Agendar compromisos:** *"Agenda visita técnica mañana a las 10:00"*\n• **Cotizar y consultar precios de materiales en Chile**',
+            '¡Hola! Soy tu **Copiloto Obrero IA Global**. Puedo ayudarte a gestionar todo el SaaS en segundos:\n\n• **Crear obras:** "Créame una obra de radier de 30m2 en La Florida por $3.2M"\n• **Gestionar cuadrillas:** "Agrega al maestro albañil Carlos al equipo"\n• **Agendar compromisos:** "Agenda visita técnica mañana a las 10:00"\n• **Cotizar y consultar precios de materiales en Chile**',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           sugerencias: [
             'Crea una obra de radier en Maipú por $2.800.000',
@@ -418,7 +419,10 @@ export default function GlobalCopilotFloatingWidget() {
                                 : 'bg-gray-100 dark:bg-[#1A2230] text-navy-900 dark:text-gray-100 rounded-tl-none border border-gray-200 dark:border-[#263040]'
                             }`}
                           >
-                            <p className="whitespace-pre-line leading-relaxed">{m.texto}</p>
+                            <ChatMessageFormatter
+                              content={m.texto}
+                              isUser={m.remitente === 'usuario'}
+                            />
                             <span
                               className={`block text-[9px] mt-1 text-right ${
                                 m.remitente === 'usuario' ? 'text-white/70' : 'text-gray-400'

@@ -48,12 +48,13 @@ import { getPlanDetails } from '@/lib/plans';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 import PlanLockOverlay from '@/components/PlanLockOverlay';
 import CotizacionPdfModal from '@/components/CotizacionPdfModal';
+import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 
 const INITIAL_CHAT_MESSAGE: MensajeChatCotizador = {
   id: 'm-init',
   remitente: 'agente',
   texto:
-    '¡Hola! Soy tu **Copiloto Obrero IA de ObraTrack**, impulsado por **Google Gemini**.\n\nPuedo cotizar obras, asesorarte en costos de faena, y lo más importante: **controlar y actualizar la plataforma por ti**.\n\nPruébame pidiéndome cosas como:\n• *"Créame una obra de radier para Carlos Henríquez en Peñalolén por 3.5 millones iniciando este lunes"*\n• *"Agrega al maestro Juan Pérez como albañil con teléfono +56912345678"*\n• *"Agéndame una visita a terreno para el viernes a las 10:00 en Las Condes"*',
+    '¡Hola! Soy tu **Copiloto Obrero IA de ObraTrack**, impulsado por **Google Gemini**.\n\nPuedo cotizar obras, asesorarte en costos de faena, y lo más importante: **controlar y actualizar la plataforma por ti**.\n\nPruébame pidiéndome cosas como:\n• **Crear obras:** "Créame una obra de radier para Carlos Henríquez en Peñalolén por 3.5 millones iniciando este lunes"\n• **Gestionar cuadrillas:** "Agrega al maestro Juan Pérez como albañil con teléfono +56912345678"\n• **Agendar compromisos:** "Agéndame una visita a terreno para el viernes a las 10:00 en Las Condes"',
   timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
   sugerencias: [
     'Créame una obra de radier de 35m2 en Peñalolén por 3.2M',
@@ -564,10 +565,11 @@ export default function CopilotoObreroPage() {
                         <span className="ml-auto font-mono text-[9px]">{m.timestamp}</span>
                       </div>
 
-                      {/* Texto del Mensaje */}
-                      <div className="whitespace-pre-line leading-relaxed text-xs space-y-2">
-                        {m.texto}
-                      </div>
+                      {/* Texto del Mensaje con Formato Profesional */}
+                      <ChatMessageFormatter
+                        content={m.texto}
+                        isUser={m.remitente === 'usuario'}
+                      />
 
                       {/* ============================================================= */}
                       {/* TARJETA INTERACTIVA DE ACCIÓN EJECUTADA POR LA IA */}

@@ -97,7 +97,15 @@ Reglas del Mercado Chileno de Construcción (Valores en Pesos Chilenos CLP y UF/
    - Precio Mínimo Rentable: Cubre estrictamente costos directos + 10% gastos generales + 5% imprevistos + 15% utilidad mínima (para ganar licitaciones muy competidas sin perder dinero).
    - Precio Sugerido de Mercado: Costos directos + 10% gastos generales + 5% imprevistos + 25-30% de utilidad (el precio justo y estándar en Chile).
    - Precio Premium con Garantía: Para obras de alta exigencia con terminaciones de lujo, post-venta y póliza de garantía (35-40% de utilidad).
-   - Modalidad de Pago Recomendada: 40% anticipo al iniciar, 30% al 50% de avance (obra gruesa), 20% al terminar y 10% contra recepción conforme.`;
+   - Modalidad de Pago Recomendada: 40% anticipo al iniciar, 30% al 50% de avance (obra gruesa), 20% al terminar y 10% contra recepción conforme.
+
+4. Formato de Salida y Presentación Profesional:
+   - Responde siempre con redacción limpia, ejecutiva y fácil de leer para un constructor o jefe de obra.
+   - Usa viñetas con "• " para enumerar puntos, tareas o materiales.
+   - Usa títulos con "### " para separar secciones clave si la respuesta es detallada.
+   - Resalta cifras en pesos chilenos y términos técnicos en **negrita simple** (ej: **$3.500.000 CLP**, **radier H20**).
+   - NUNCA mezcles asteriscos con comillas (PROHIBIDO escribir *"ejemplo"* o **"ejemplo"** o *“ejemplo”*). Si citas una frase o ejemplo de orden, usa comillas normales directamente: "ejemplo".
+   - Mantén los párrafos concisos y bien espaciados.`;
 
 /**
  * Genera una cotización completa y recomendación de cobro al cliente con Google Gemini
