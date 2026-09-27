@@ -26,6 +26,9 @@ function mapSupabaseAuthError(message: string): string {
   if (lower.includes('invalid login credentials') || lower.includes('invalid credentials')) {
     return 'Correo o contraseña incorrectos. Verifica tus credenciales.';
   }
+  if (lower.includes('failed to fetch') || lower.includes('fetch failed') || lower.includes('networkerror')) {
+    return 'Error de conexión con el servicio de autenticación. Verifica tu conexión o intenta nuevamente.';
+  }
   if (lower.includes('user already registered') || lower.includes('already exists')) {
     return 'Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu clave.';
   }
@@ -178,11 +181,41 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
   }
 
   try {
+    const isDev = isDeveloperEmail(resolvedEmail);
+
     // 1. Iniciar sesión contra Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    let authData: any = null;
+    let authError: any = null;
+
+    const initialAttempt = await supabase.auth.signInWithPassword({
       email: resolvedEmail,
       password: pass,
     });
+    authData = initialAttempt.data;
+    authError = initialAttempt.error;
+
+    // Si es desarrollador y falló la contraseña o el usuario no estaba sincronizado, auto-sincronizar
+    if (authError && isDev) {
+      try {
+        const syncRes = await fetch('/api/auth/dev-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: resolvedEmail, password: pass }),
+        });
+        if (syncRes.ok) {
+          const retry = await supabase.auth.signInWithPassword({
+            email: resolvedEmail,
+            password: pass,
+          });
+          if (!retry.error) {
+            authData = retry.data;
+            authError = null;
+          }
+        }
+      } catch (syncErr) {
+        console.warn('Error en dev-sync fallback:', syncErr);
+      }
+    }
 
     if (authError) {
       return {
@@ -192,7 +225,6 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
     }
 
     const authUserId = authData.user?.id || 'usr-' + Date.now();
-    const isDev = isDeveloperEmail(resolvedEmail);
 
     // 2. Obtener perfil del usuario desde PostgreSQL en Supabase
     let usuario = await supabaseService.getUsuarioByEmail(resolvedEmail);
