@@ -140,6 +140,69 @@ export class SupabaseService {
     }
   }
 
+  async getUsuarioByRut(rut: string): Promise<Usuario | null> {
+    try {
+      const cleanDigits = rut.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      if (!cleanDigits) return null;
+
+      const { data, error } = await this.client.from('usuarios').select('*');
+      if (error) throw error;
+      if (!data) return null;
+
+      const matched = data.find((r) => {
+        const uRut = (r.rut || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+        return uRut.length >= 7 && uRut === cleanDigits;
+      });
+
+      if (!matched) return null;
+
+      return {
+        id: matched.id,
+        auth_user_id: matched.auth_user_id,
+        empresa_id: matched.empresa_id,
+        rut: matched.rut,
+        nombre: matched.nombre,
+        email: matched.email,
+        rol: matched.rol,
+        telefono_whatsapp: matched.telefono_whatsapp,
+        is_dev: Boolean(matched.is_dev),
+        created_at: matched.created_at,
+      };
+    } catch (err) {
+      console.warn('Error buscando usuario por RUT en Supabase:', err);
+      return null;
+    }
+  }
+
+  async getUsuarioById(id: string): Promise<Usuario | null> {
+    try {
+      const { data, error } = await this.client
+        .from('usuarios')
+        .select('*')
+        .or(`id.eq.${id},auth_user_id.eq.${id}`)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) return null;
+
+      return {
+        id: data.id,
+        auth_user_id: data.auth_user_id,
+        empresa_id: data.empresa_id,
+        rut: data.rut,
+        nombre: data.nombre,
+        email: data.email,
+        rol: data.rol,
+        telefono_whatsapp: data.telefono_whatsapp,
+        is_dev: Boolean(data.is_dev),
+        created_at: data.created_at,
+      };
+    } catch (err) {
+      console.warn('Error buscando usuario por ID en Supabase:', err);
+      return null;
+    }
+  }
+
   async saveUsuario(usuario: Usuario): Promise<void> {
     const payload = {
       id: usuario.id,
@@ -244,6 +307,41 @@ export class SupabaseService {
     } catch (err) {
       console.warn('Error al cargar proyectos desde Supabase:', err);
       return [];
+    }
+  }
+
+  async getProyectoById(id: string): Promise<Proyecto | null> {
+    try {
+      const { data, error } = await this.client
+        .from('proyectos')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) return null;
+
+      return {
+        id: data.id,
+        empresa_id: data.empresa_id,
+        cliente_id: data.cliente_id,
+        nombre: data.nombre,
+        descripcion: data.descripcion,
+        direccion: data.direccion,
+        comuna: data.comuna,
+        region: data.region,
+        latitud: data.latitud ? Number(data.latitud) : undefined,
+        longitud: data.longitud ? Number(data.longitud) : undefined,
+        lugar_referencia: data.lugar_referencia,
+        fecha_inicio: data.fecha_inicio,
+        fecha_termino_estimada: data.fecha_termino_estimada,
+        estado: data.estado,
+        monto_cotizado: Number(data.monto_cotizado || 0),
+        created_at: data.created_at,
+      };
+    } catch (err) {
+      console.warn('Error al obtener proyecto por ID desde Supabase:', err);
+      return null;
     }
   }
 
@@ -622,9 +720,17 @@ export class SupabaseService {
   // --- STORAGE: SUBIDA DE FOTOS A BUCKET DE SUPABASE ---
   async uploadFotoFaena(file: File | Blob, pathName: string): Promise<string | null> {
     try {
+      // Prevenir Path Traversal y forzar caracteres seguros
+      const cleanPath = pathName.replace(/\.\./g, '').replace(/[^\w\-\.\/]/gi, '');
+      const parts = cleanPath.split('.');
+      const ext = parts.length > 1 ? parts.pop()?.toLowerCase() : 'jpg';
+      const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+      const safeExt = allowedExts.includes(ext || '') ? ext : 'jpg';
+      const finalPath = `${parts.join('.')}.${safeExt}`;
+
       const { data, error } = await this.client.storage
         .from('bitacora-fotos')
-        .upload(pathName, file, { upsert: true });
+        .upload(finalPath, file, { upsert: true });
 
       if (error) throw error;
 

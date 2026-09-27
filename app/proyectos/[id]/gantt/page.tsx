@@ -34,6 +34,7 @@ export default function ProyectoGanttPage() {
   const projectId = params?.id as string;
 
   const [proyecto, setProyecto] = useState<Proyecto | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [bitacora, setBitacora] = useState<BitacoraEntrada[]>([]);
@@ -82,6 +83,7 @@ export default function ProyectoGanttPage() {
     setActividades(acts);
     setUsuarios(users);
     setBitacora(bits);
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -186,13 +188,25 @@ export default function ProyectoGanttPage() {
     loadData();
   };
 
-  if (!proyecto) {
+  if (isLoading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center min-h-screen text-gray-500 font-sans">
         <p>Cargando Carta Gantt...</p>
-        <Link href="/proyectos" className="mt-4 text-xs font-bold text-obra-orange hover:underline">
-          &larr; Volver al listado de proyectos
-        </Link>
+      </div>
+    );
+  }
+
+  if (!proyecto) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center min-h-screen text-gray-500 font-sans p-4">
+        <div className="bg-white dark:bg-[#141A23] p-8 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-lg text-center max-w-md w-full">
+          <AlertTriangle className="w-10 h-10 text-obra-orange mx-auto mb-3" />
+          <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">Obra no encontrada</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">El proyecto solicitado no existe o no pertenece a tu constructora.</p>
+          <Link href="/proyectos" className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 bg-obra-orange text-white rounded-xl text-xs font-bold hover:bg-obra-orange-hover shadow-md transition-colors">
+            &larr; Volver al listado de proyectos
+          </Link>
+        </div>
       </div>
     );
   }

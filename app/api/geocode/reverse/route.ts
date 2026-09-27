@@ -19,9 +19,9 @@ export async function GET(request: NextRequest) {
     const lat = parseFloat(latStr);
     const lng = parseFloat(lngStr);
 
-    if (isNaN(lat) || isNaN(lng)) {
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       return NextResponse.json(
-        { error: 'Coordenadas inválidas' },
+        { error: 'Coordenadas geográficas inválidas o fuera de rango (-90..90, -180..180)' },
         { status: 400 }
       );
     }

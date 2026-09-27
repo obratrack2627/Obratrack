@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Lock,
   Mail,
@@ -19,24 +19,27 @@ import {
   Send,
   Phone,
 } from 'lucide-react';
-import { UserRole } from '@/types/database';
 import Logo from '@/components/Logo';
 import ThemeToggle from '@/components/ThemeToggle';
 import LegalTermsModal from '@/components/LegalTermsModal';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
 import {
-  signInWithFirebase,
-  signUpWithFirebase,
-  resetPasswordWithFirebase,
-} from '@/lib/firebase/auth';
+  signInWithSupabase,
+  signUpWithSupabase,
+  resetPasswordWithSupabase,
+  resendConfirmationEmail,
+} from '@/lib/supabase/auth';
 import { dataService } from '@/lib/data-service';
 
-type AuthMode = 'signin' | 'signup' | 'forgot_password';
+type AuthMode = 'signin' | 'signup' | 'forgot_password' | 'confirm_email';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [mode, setMode] = useState<AuthMode>('signin');
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -63,6 +66,21 @@ export default function LoginPage() {
   // Recuperación
   const [forgotEmail, setForgotEmail] = useState('');
 
+  // Detección de parámetros URL (confirmación de cuenta o errores de enlace)
+  useEffect(() => {
+    const cuentaConfirmada = searchParams.get('cuenta_confirmada');
+    const errorParam = searchParams.get('error');
+
+    if (cuentaConfirmada === 'true') {
+      setSuccessMsg('¡Tu correo ha sido confirmado exitosamente! Ya puedes iniciar sesión con tu cuenta.');
+      setMode('signin');
+    } else if (errorParam === 'enlace_expirado') {
+      setErrorMsg('El enlace de confirmación o recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.');
+    } else if (errorParam === 'error_autenticacion') {
+      setErrorMsg('Ocurrió un problema al validar el enlace de autenticación. Por favor inicia sesión o recupera tu clave.');
+    }
+  }, [searchParams]);
+
   // Manejo de formateo de RUT en vivo
   const handleRutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -70,7 +88,7 @@ export default function LoginPage() {
     setRut(formatted);
   };
 
-  // Manejo de inicio de sesión en Firebase Auth
+  // Manejo de inicio de sesión en Supabase Auth
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -78,9 +96,9 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await signInWithFirebase(email, password);
+      const result = await signInWithSupabase(email, password);
       if (!result.success) {
-        setErrorMsg(result.error || 'Credenciales inválidas o cuenta no registrada en Firebase.');
+        setErrorMsg(result.error || 'Credenciales inválidas o cuenta no registrada en Supabase.');
         setIsLoading(false);
         return;
       }
@@ -97,9 +115,9 @@ export default function LoginPage() {
         let target = isTerreno ? '/proyectos' : '/dashboard';
         if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
-          const redirect = params.get('redirect');
-          if (redirect && redirect.startsWith('/')) {
-            target = isTerreno ? '/proyectos' : redirect;
+          const redirectParam = params.get('redirect');
+          if (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//') && !redirectParam.includes('://')) {
+            target = isTerreno ? '/proyectos' : redirectParam;
           }
         }
         router.replace(target);
@@ -110,7 +128,7 @@ export default function LoginPage() {
     }
   };
 
-  // Manejo de registro en Firebase Auth con validación estricta de RUT chileno
+  // Manejo de registro en Supabase Auth con validación estricta de RUT chileno
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -145,7 +163,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const result = await signUpWithFirebase(
+      const result = await signUpWithSupabase(
         signupEmail,
         signupPassword,
         nombre,
@@ -155,20 +173,27 @@ export default function LoginPage() {
       );
 
       if (!result.success) {
-        setErrorMsg(result.error || 'No se pudo crear la cuenta en Firebase.');
+        setErrorMsg(result.error || 'No se pudo crear la cuenta en Supabase.');
         setIsLoading(false);
         return;
       }
 
       setIsLoading(false);
+
+      if (result.emailConfirmationRequired) {
+        setMode('confirm_email');
+        setSuccessMsg(result.message || 'Te hemos enviado un correo de confirmación. Por favor revisa tu bandeja.');
+        return;
+      }
+
       setSuccessMsg('¡Cuenta de Dueño/Contratista verificada y creada con éxito! Ingresando...');
       setTimeout(() => {
         let target = '/dashboard';
         if (typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
-          const redirect = params.get('redirect');
-          if (redirect && redirect.startsWith('/')) {
-            target = redirect;
+          const redirectParam = params.get('redirect');
+          if (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//') && !redirectParam.includes('://')) {
+            target = redirectParam;
           }
         }
         router.replace(target);
@@ -183,13 +208,27 @@ export default function LoginPage() {
     e.preventDefault();
     if (!forgotEmail) return;
     setErrorMsg(null);
+    setSuccessMsg(null);
     setIsLoading(true);
-    const res = await resetPasswordWithFirebase(forgotEmail);
+    const res = await resetPasswordWithSupabase(forgotEmail);
     setIsLoading(false);
     if (res.success) {
-      setSuccessMsg(res.message || 'Correo de recuperación enviado.');
+      setSuccessMsg(res.message || 'Correo de recuperación enviado. Por favor revisa tu bandeja de entrada o spam.');
     } else {
-      setErrorMsg(res.message || 'No se pudo enviar el correo de recuperación.');
+      setErrorMsg(res.error || 'No se pudo enviar el correo de recuperación.');
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!signupEmail) return;
+    setIsResending(true);
+    setErrorMsg(null);
+    const res = await resendConfirmationEmail(signupEmail);
+    setIsResending(false);
+    if (res.success) {
+      setSuccessMsg(res.message || 'Correo de confirmación reenviado.');
+    } else {
+      setErrorMsg(res.error || 'No se pudo reenviar el correo.');
     }
   };
 
@@ -215,27 +254,20 @@ export default function LoginPage() {
       {/* FIGURA 1: Grúa Torre Isométrica y Cota de Nivel (Esquina Superior Izquierda) */}
       <div className="absolute top-6 left-6 sm:top-12 sm:left-12 opacity-40 dark:opacity-25 pointer-events-none select-none hidden md:block">
         <svg width="220" height="180" viewBox="0 0 220 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
-          {/* Torre vertical */}
           <line x1="40" y1="40" x2="40" y2="160" stroke="currentColor" strokeWidth="1.5" />
           <line x1="60" y1="40" x2="60" y2="160" stroke="currentColor" strokeWidth="1.5" />
-          {/* Enrejado torre */}
           <line x1="40" y1="60" x2="60" y2="80" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
           <line x1="60" y1="60" x2="40" y2="80" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
           <line x1="40" y1="100" x2="60" y2="120" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
           <line x1="60" y1="100" x2="40" y2="120" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
           <line x1="40" y1="140" x2="60" y2="160" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
-          {/* Cabina & Cúspide */}
           <polygon points="40,40 50,15 60,40" stroke="#FF6A00" strokeWidth="1.5" fill="none" />
-          {/* Pluma horizontal principal */}
           <line x1="10" y1="40" x2="200" y2="40" stroke="currentColor" strokeWidth="1.5" />
           <line x1="50" y1="15" x2="160" y2="40" stroke="#FF6A00" strokeWidth="1" strokeDasharray="3 2" />
           <line x1="50" y1="15" x2="20" y2="40" stroke="currentColor" strokeWidth="1" />
-          {/* Contrapeso */}
           <rect x="15" y="42" width="18" height="12" stroke="currentColor" strokeWidth="1" fill="#FF6A00" fillOpacity="0.2" />
-          {/* Carro y cable con gancho */}
           <line x1="140" y1="40" x2="140" y2="95" stroke="#FF6A00" strokeWidth="1" strokeDasharray="2 2" />
           <circle cx="140" cy="98" r="3" stroke="#FF6A00" strokeWidth="1.5" />
-          {/* Cotas técnicas */}
           <text x="68" y="30" fill="currentColor" className="text-[9px] font-mono font-bold tracking-widest opacity-80">+28.50m COTA GRÚA</text>
           <text x="68" y="150" fill="#FF6A00" className="text-[8px] font-mono font-semibold tracking-wider">OBRA.TRACK // 01</text>
         </svg>
@@ -244,23 +276,19 @@ export default function LoginPage() {
       {/* FIGURA 2: Celosía Estructural Warren & Cota Angular (Esquina Superior Derecha) */}
       <div className="absolute top-8 right-8 sm:top-14 sm:right-14 opacity-35 dark:opacity-20 pointer-events-none select-none hidden lg:block">
         <svg width="240" height="130" viewBox="0 0 240 130" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
-          {/* Cuerdas superior e inferior */}
           <line x1="10" y1="30" x2="230" y2="30" stroke="currentColor" strokeWidth="1.5" />
           <line x1="10" y1="90" x2="230" y2="90" stroke="currentColor" strokeWidth="1.5" />
-          {/* Diagonales y montantes */}
           <line x1="10" y1="90" x2="45" y2="30" stroke="currentColor" strokeWidth="1.2" />
           <line x1="45" y1="30" x2="80" y2="90" stroke="#FF6A00" strokeWidth="1.2" />
           <line x1="80" y1="90" x2="115" y2="30" stroke="currentColor" strokeWidth="1.2" />
           <line x1="115" y1="30" x2="150" y2="90" stroke="currentColor" strokeWidth="1.2" />
           <line x1="150" y1="90" x2="185" y2="30" stroke="#FF6A00" strokeWidth="1.2" />
           <line x1="185" y1="30" x2="220" y2="90" stroke="currentColor" strokeWidth="1.2" />
-          {/* Nodos circulares en uniones */}
           <circle cx="45" cy="30" r="3" fill="#FF6A00" />
           <circle cx="115" cy="30" r="3" fill="currentColor" />
           <circle cx="185" cy="30" r="3" fill="#FF6A00" />
           <circle cx="80" cy="90" r="3" fill="currentColor" />
           <circle cx="150" cy="90" r="3" fill="currentColor" />
-          {/* Medidas y Cota */}
           <line x1="10" y1="105" x2="230" y2="105" stroke="currentColor" strokeWidth="0.8" strokeDasharray="3 3" />
           <path d="M 10 101 L 10 109 M 230 101 L 230 109" stroke="currentColor" strokeWidth="1" />
           <text x="95" y="120" fill="currentColor" className="text-[9px] font-mono font-bold tracking-widest">L = 12.00 METROS</text>
@@ -270,19 +298,12 @@ export default function LoginPage() {
       {/* FIGURA 3: Cubo Isométrico & Estratigrafía de Cimentación (Esquina Inferior Izquierda) */}
       <div className="absolute bottom-8 left-8 sm:bottom-12 sm:left-12 opacity-40 dark:opacity-25 pointer-events-none select-none hidden md:block">
         <svg width="220" height="190" viewBox="0 0 220 190" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
-          {/* Cubo isométrico 3D alambre */}
-          {/* Cara Superior */}
           <polygon points="90,20 160,55 90,90 20,55" stroke="#FF6A00" strokeWidth="1.5" fill="#FF6A00" fillOpacity="0.06" />
-          {/* Cara Izquierda */}
           <polygon points="20,55 90,90 90,160 20,125" stroke="currentColor" strokeWidth="1.5" fill="none" />
-          {/* Cara Derecha */}
           <polygon points="90,90 160,55 160,125 90,160" stroke="currentColor" strokeWidth="1.5" fill="none" />
-          {/* Línea de nivel de cimentación */}
           <line x1="20" y1="90" x2="90" y2="125" stroke="#6B8F72" strokeWidth="1.2" strokeDasharray="3 2" />
           <line x1="90" y1="125" x2="160" y2="90" stroke="#6B8F72" strokeWidth="1.2" strokeDasharray="3 2" />
-          {/* Ejes x, y, z */}
           <line x1="90" y1="90" x2="90" y2="10" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" />
-          {/* Leyenda técnica */}
           <text x="100" y="15" fill="#FF6A00" className="text-[8px] font-mono font-bold">EJE Z [HORMIGÓN H-25]</text>
           <text x="15" y="180" fill="currentColor" className="text-[8.5px] font-mono tracking-wider opacity-80">RADIER 3D // SECCIÓN 04</text>
         </svg>
@@ -291,22 +312,16 @@ export default function LoginPage() {
       {/* FIGURA 4: Perfil Viga I / Doble T y Coordenadas Geodésicas (Esquina Inferior Derecha) */}
       <div className="absolute bottom-8 right-8 sm:bottom-12 sm:right-12 opacity-40 dark:opacity-25 pointer-events-none select-none hidden md:block">
         <svg width="220" height="180" viewBox="0 0 220 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
-          {/* Perfil I-Beam Isométrico */}
-          {/* Ala Superior */}
           <polygon points="80,30 180,60 160,70 60,40" stroke="currentColor" strokeWidth="1.5" fill="none" />
-          {/* Alma central */}
           <line x1="120" y1="50" x2="120" y2="120" stroke="#FF6A00" strokeWidth="2" />
           <line x1="110" y1="46" x2="110" y2="116" stroke="currentColor" strokeWidth="1.2" />
-          {/* Ala Inferior */}
           <polygon points="80,100 180,130 160,140 60,110" stroke="currentColor" strokeWidth="1.5" fill="#FF6A00" fillOpacity="0.08" />
-          {/* Roseta de Orientación / Norte de Obra */}
           <g transform="translate(160, 110)">
             <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" />
             <polygon points="20,6 24,20 20,17 16,20" fill="#FF6A00" />
             <polygon points="20,34 24,20 20,23 16,20" fill="currentColor" opacity="0.6" />
             <text x="17" y="3" fill="#FF6A00" className="text-[7px] font-mono font-bold">N</text>
           </g>
-          {/* Coordenadas de Obra */}
           <text x="35" y="165" fill="currentColor" className="text-[8.5px] font-mono tracking-widest font-semibold">COORD: 33°28'S 70°36'W</text>
         </svg>
       </div>
@@ -328,7 +343,7 @@ export default function LoginPage() {
         </div>
 
         {/* Selector de Modo: Iniciar Sesión / Crear Cuenta */}
-        {mode !== 'forgot_password' && (
+        {mode !== 'forgot_password' && mode !== 'confirm_email' && (
           <div className="grid grid-cols-2 p-1 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl mb-5">
             <button
               type="button"
@@ -445,7 +460,7 @@ export default function LoginPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verificando en Firebase...</span>
+                  <span>Verificando credenciales...</span>
                 </>
               ) : (
                 <>
@@ -464,7 +479,7 @@ export default function LoginPage() {
             <div className="p-3 bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/30 dark:border-amber-700/40 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
               <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-[#FF6A00]" />
               <p className="leading-snug">
-                <strong>Registro exclusivo para Dueño o Contratista General:</strong> Valida tu empresa con RUT chileno. Los trabajadores de terreno operan desde WhatsApp o vista móvil.
+                <strong>Registro exclusivo para Dueño o Contratista General:</strong> Valida tu empresa con RUT chileno. Supabase Auth enviará un correo de confirmación para activar tu acceso.
               </p>
             </div>
 
@@ -670,7 +685,7 @@ export default function LoginPage() {
               ) : (
                 <>
                   <UserPlus className="w-4 h-4" />
-                  <span>Registrar Empresa & Entrar</span>
+                  <span>Registrar Empresa & Crear Cuenta</span>
                 </>
               )}
             </button>
@@ -685,7 +700,7 @@ export default function LoginPage() {
                 Recuperar Contraseña
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Ingresa tu correo para recibir instrucciones de recuperación de Firebase.
+                Ingresa tu correo para recibir un enlace seguro de restablecimiento de contraseña vía Supabase Auth.
               </p>
             </div>
 
@@ -706,10 +721,19 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="flex-1 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Enviar Correo</span>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Enviando enlace...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Enviar Enlace</span>
+                    </>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -727,11 +751,70 @@ export default function LoginPage() {
           </div>
         )}
 
+        {/* 4. VISTA: CONFIRMAR CORREO ELECTRÓNICO */}
+        {mode === 'confirm_email' && (
+          <div className="space-y-4 animate-in fade-in text-center py-2">
+            <div className="w-14 h-14 bg-[#FF6A00]/10 dark:bg-[#FF6A00]/20 rounded-full flex items-center justify-center mx-auto text-[#FF6A00] animate-pulse">
+              <Mail className="w-7 h-7" />
+            </div>
+
+            <div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white font-heading">
+                ¡Confirma tu correo electrónico!
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-gray-300 mt-1.5 leading-relaxed">
+                Hemos enviado un correo de confirmación con un enlace de activación a:
+              </p>
+              <p className="text-xs font-mono font-bold text-[#FF6A00] mt-1.5 bg-amber-500/10 dark:bg-amber-950/30 py-1.5 px-3 rounded-xl inline-block border border-amber-500/20">
+                {signupEmail || 'tu correo'}
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">
+                Para proteger la información de tu constructora, haz clic en el botón del correo recibido (revisa también tu carpeta de spam) antes de iniciar sesión.
+              </p>
+            </div>
+
+            <div className="pt-2 space-y-2">
+              <button
+                type="button"
+                onClick={handleResendConfirmation}
+                disabled={isResending}
+                className="w-full py-2.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-900 dark:text-amber-200 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 font-heading"
+              >
+                {isResending ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Reenviando correo...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Reenviar correo de confirmación</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('signin');
+                  setEmail(signupEmail);
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className="w-full py-2.5 bg-[#1E1E1E] dark:bg-gray-800 hover:bg-black text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 font-heading"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Ya confirmé mi correo / Iniciar Sesión</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Footer Seguridad & Marco Legal */}
         <div className="mt-5 pt-3.5 border-t border-[#E5DFC9] dark:border-[#263040] flex flex-col items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 font-mono">
           <div className="flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-[#6B8F72]" />
-            <span>Protección de Datos & Firebase Auth (Chile)</span>
+            <span>Protección de Datos & Supabase Auth (PostgreSQL 17)</span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center">
             <button
@@ -777,5 +860,19 @@ export default function LoginPage() {
         initialTab={legalModalTab}
       />
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen w-full flex items-center justify-center bg-[#F5F0E6] dark:bg-[#06080C]">
+          <Loader2 className="w-8 h-8 animate-spin text-[#FF6A00]" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

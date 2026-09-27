@@ -1,6 +1,6 @@
 /**
  * ObraTrack - TypeScript Definitions
- * Interfaces para el modelo de datos de Firebase Cloud Firestore
+ * Interfaces para el modelo de datos de Supabase (PostgreSQL 17)
  */
 
 export type UserRole = 'admin' | 'supervisor' | 'terreno';

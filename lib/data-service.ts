@@ -26,7 +26,6 @@ import {
   INITIAL_COTIZACIONES,
   CATALOGO_MATERIALES_CHILE,
 } from './mock-data';
-import { firestoreService } from './firebase/firestore';
 import { supabaseService } from './supabase/supabase-service';
 import { isDeveloperUser, isDeveloperEmail } from './auth-utils';
 
@@ -119,7 +118,6 @@ class DataService {
     };
     usuarios.push(newUsuario);
     this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
-    firestoreService.saveUsuario(newUsuario).catch(() => {});
     supabaseService.saveUsuario(newUsuario).catch((err) => console.warn('Sync supabase usuario:', err));
     return newUsuario;
   }
@@ -130,7 +128,6 @@ class DataService {
     if (index === -1) return null;
     usuarios[index] = { ...usuarios[index], ...data };
     this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
-    firestoreService.saveUsuario(usuarios[index]).catch(() => {});
     supabaseService.saveUsuario(usuarios[index]).catch((err) => console.warn('Sync supabase usuario:', err));
 
     const active = this.getActiveUser();
@@ -150,7 +147,6 @@ class DataService {
     }
     const filtered = usuarios.filter((u) => u.id !== id);
     this.setItem(this.getTenantKey(KEYS.USUARIOS), filtered);
-    firestoreService.deleteUsuario(id).catch((err) => console.warn('Delete usuario:', err));
     supabaseService.deleteUsuario(id).catch((err) => console.warn('Delete supabase usuario:', err));
     return true;
   }
@@ -274,7 +270,6 @@ class DataService {
     };
     clientes.push(newCliente);
     this.setItem(this.getTenantKey(KEYS.CLIENTES), clientes);
-    firestoreService.saveCliente(newCliente).catch(() => {});
     supabaseService.saveCliente(newCliente).catch((err) => console.warn('Sync supabase cliente:', err));
     return newCliente;
   }
@@ -285,7 +280,6 @@ class DataService {
     if (index === -1) return null;
     clientes[index] = { ...clientes[index], ...data };
     this.setItem(this.getTenantKey(KEYS.CLIENTES), clientes);
-    firestoreService.saveCliente(clientes[index]).catch(() => {});
     supabaseService.saveCliente(clientes[index]).catch((err) => console.warn('Sync supabase cliente:', err));
     return clientes[index];
   }
@@ -294,7 +288,6 @@ class DataService {
     const clientes = this.getClientes();
     const filtered = clientes.filter((c) => c.id !== id);
     this.setItem(this.getTenantKey(KEYS.CLIENTES), filtered);
-    firestoreService.deleteCliente(id).catch(() => {});
     supabaseService.deleteCliente(id).catch((err) => console.warn('Delete supabase cliente:', err));
     return true;
   }
@@ -495,7 +488,6 @@ class DataService {
     proyectos.unshift(newProyecto);
     this.setItem(this.getTenantKey(KEYS.PROYECTOS), proyectos);
 
-    firestoreService.saveProyecto(newProyecto).catch(() => {});
     supabaseService.saveProyecto(newProyecto).catch((err) => console.warn('Sync supabase proyecto:', err));
 
     if (actividadesIniciales && actividadesIniciales.length > 0) {
@@ -525,7 +517,6 @@ class DataService {
     const filtered = proyectos.filter((p) => p.id !== id);
     this.setItem(this.getTenantKey(KEYS.PROYECTOS), filtered);
 
-    firestoreService.deleteProyecto(id).catch(() => {});
     supabaseService.deleteProyecto(id).catch((err) => console.warn('Delete supabase proyecto:', err));
     return true;
   }
@@ -538,7 +529,6 @@ class DataService {
 
     proyectos[index] = { ...proyectos[index], ...data };
     this.setItem(this.getTenantKey(KEYS.PROYECTOS), proyectos);
-    firestoreService.saveProyecto(proyectos[index]).catch(() => {});
     supabaseService.saveProyecto(proyectos[index]).catch((err) => console.warn('Update supabase proyecto:', err));
     return proyectos[index];
   }
@@ -561,7 +551,6 @@ class DataService {
     };
     all.push(newMat);
     this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all);
-    firestoreService.saveMaterialProyecto(newMat).catch(() => {});
     supabaseService.saveMaterial(newMat).catch((err) => console.warn('Sync supabase material:', err));
     return newMat;
   }
@@ -569,7 +558,6 @@ class DataService {
   deleteMaterialProyecto(id: string): boolean {
     const all = this.getItem<MaterialProyecto[]>(this.getTenantKey(KEYS.MATERIALES_PROYECTO), []);
     this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all.filter((m) => m.id !== id));
-    firestoreService.deleteMaterialProyecto(id).catch(() => {});
     supabaseService.deleteMaterial(id).catch((err) => console.warn('Delete supabase material:', err));
     return true;
   }
@@ -580,7 +568,6 @@ class DataService {
     if (index === -1) return null;
     all[index] = { ...all[index], ...data };
     this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all);
-    firestoreService.saveMaterialProyecto(all[index]).catch(() => {});
     supabaseService.saveMaterial(all[index]).catch((err) => console.warn('Sync supabase material:', err));
     return all[index];
   }
@@ -603,7 +590,6 @@ class DataService {
     };
     all.unshift(newEntry);
     this.setItem(this.getTenantKey(KEYS.BITACORA), all);
-    firestoreService.saveBitacoraEntrada(newEntry).catch(() => {});
     supabaseService.saveBitacora(newEntry).catch((err) => console.warn('Sync supabase bitacora:', err));
     return newEntry;
   }
@@ -614,7 +600,6 @@ class DataService {
     if (index === -1) return null;
     all[index] = { ...all[index], ...data };
     this.setItem(this.getTenantKey(KEYS.BITACORA), all);
-    firestoreService.saveBitacoraEntrada(all[index]).catch(() => {});
     supabaseService.saveBitacora(all[index]).catch((err) => console.warn('Sync supabase bitacora:', err));
     return all[index];
   }
@@ -622,7 +607,6 @@ class DataService {
   deleteBitacoraEntrada(id: string): boolean {
     const all = this.getItem<BitacoraEntrada[]>(this.getTenantKey(KEYS.BITACORA), []);
     this.setItem(this.getTenantKey(KEYS.BITACORA), all.filter((b) => b.id !== id));
-    firestoreService.deleteBitacoraEntrada(id).catch(() => {});
     supabaseService.deleteBitacora(id).catch((err) => console.warn('Delete supabase bitacora:', err));
     return true;
   }
@@ -651,7 +635,6 @@ class DataService {
     };
     actividades.push(newActividad);
     this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), actividades);
-    firestoreService.saveActividad(newActividad).catch(() => {});
     supabaseService.saveActividad(newActividad).catch((err) => console.warn('Sync supabase actividad:', err));
     return newActividad;
   }
@@ -664,7 +647,6 @@ class DataService {
 
     actividades[index] = { ...actividades[index], ...data };
     this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), actividades);
-    firestoreService.saveActividad(actividades[index]).catch(() => {});
     supabaseService.saveActividad(actividades[index]).catch((err) => console.warn('Sync supabase actividad:', err));
     return actividades[index];
   }
@@ -674,7 +656,6 @@ class DataService {
     const actividades = this.getItem<Actividad[]>(this.getTenantKey(KEYS.ACTIVIDADES), defaultActs);
     const filtered = actividades.filter((a) => a.id !== id);
     this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), filtered);
-    firestoreService.deleteActividad(id).catch(() => {});
     supabaseService.deleteActividad(id).catch((err) => console.warn('Delete supabase actividad:', err));
     return true;
   }
@@ -699,7 +680,6 @@ class DataService {
     };
     pagos.push(newPago);
     this.setItem(this.getTenantKey(KEYS.PAGOS), pagos);
-    firestoreService.savePago(newPago).catch(() => {});
     supabaseService.savePago(newPago).catch((err) => console.warn('Sync supabase pago:', err));
     return newPago;
   }
@@ -712,7 +692,6 @@ class DataService {
 
     pagos[index] = { ...pagos[index], ...data };
     this.setItem(this.getTenantKey(KEYS.PAGOS), pagos);
-    firestoreService.savePago(pagos[index]).catch(() => {});
     supabaseService.savePago(pagos[index]).catch((err) => console.warn('Sync supabase pago:', err));
     return pagos[index];
   }
@@ -722,7 +701,6 @@ class DataService {
     const pagos = this.getItem<Pago[]>(this.getTenantKey(KEYS.PAGOS), defaultPagos);
     const filtered = pagos.filter((p) => p.id !== id);
     this.setItem(this.getTenantKey(KEYS.PAGOS), filtered);
-    firestoreService.deletePago(id).catch(() => {});
     supabaseService.deletePago(id).catch((err) => console.warn('Delete supabase pago:', err));
     return true;
   }
@@ -747,7 +725,6 @@ class DataService {
     };
     imprevistos.push(newImprevisto);
     this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), imprevistos);
-    firestoreService.saveImprevisto(newImprevisto).catch(() => {});
     supabaseService.saveImprevisto(newImprevisto).catch((err) => console.warn('Sync supabase imprevisto:', err));
     return newImprevisto;
   }
@@ -760,7 +737,6 @@ class DataService {
 
     imprevistos[index] = { ...imprevistos[index], ...data };
     this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), imprevistos);
-    firestoreService.saveImprevisto(imprevistos[index]).catch(() => {});
     supabaseService.saveImprevisto(imprevistos[index]).catch((err) => console.warn('Sync supabase imprevisto:', err));
     return imprevistos[index];
   }
@@ -770,7 +746,6 @@ class DataService {
     const imprevistos = this.getItem<Imprevisto[]>(this.getTenantKey(KEYS.IMPREVISTOS), defaultImps);
     const filtered = imprevistos.filter((i) => i.id !== id);
     this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), filtered);
-    firestoreService.deleteImprevisto(id).catch(() => {});
     supabaseService.deleteImprevisto(id).catch((err) => console.warn('Delete supabase imprevisto:', err));
     return true;
   }
@@ -1287,79 +1262,6 @@ class DataService {
     return this.loadTenantDataFromSupabase();
   }
 
-  // --- SINCRONIZACIÓN CON FIREBASE CLOUD FIRESTORE (RESPALDO) ---
-  async syncWithFirestore(): Promise<{ success: boolean; message: string; count?: number }> {
-    try {
-      const { firestoreService } = await import('@/lib/firebase/firestore');
-      const proyectos = this.getProyectos();
-      const actividades = this.getActividades();
-      const pagos = this.getPagos();
-      const imprevistos = this.getImprevistos();
-      const materiales = this.getMaterialesProyecto();
-      const bitacora = this.getBitacora();
-      const clientes = this.getClientes();
-      const usuarios = this.getUsuarios();
-      const agenda = this.getEventosAgenda();
-
-      const result = await firestoreService.bulkSyncToFirestore({
-        proyectos,
-        actividades,
-        pagos,
-        imprevistos,
-        materiales,
-        bitacora,
-        clientes,
-        usuarios,
-        agenda,
-      });
-
-      if (result.success) {
-        return {
-          success: true,
-          count: result.count,
-          message: `Sincronización exitosa con Firebase Cloud Firestore (${result.count} documentos).`,
-        };
-      } else {
-        return {
-          success: false,
-          message: result.error || 'Error al sincronizar con Firebase Cloud Firestore.',
-        };
-      }
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Error de sincronización con Firebase.' };
-    }
-  }
-
-  async pullFromFirestore(): Promise<{ success: boolean; message: string }> {
-    try {
-      const { firestoreService } = await import('@/lib/firebase/firestore');
-      const [projs, acts, pgs, imps, mats, bit, clis, usrs, agn] = await Promise.all([
-        firestoreService.getProyectos(),
-        firestoreService.getActividades(),
-        firestoreService.getPagos(),
-        firestoreService.getImprevistos(),
-        firestoreService.getMateriales(),
-        firestoreService.getBitacora(),
-        firestoreService.getClientes(),
-        firestoreService.getUsuarios(),
-        firestoreService.getAgenda(),
-      ]);
-
-      if (projs.length > 0) this.setItem(this.getTenantKey(KEYS.PROYECTOS), projs);
-      if (acts.length > 0) this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), acts);
-      if (pgs.length > 0) this.setItem(this.getTenantKey(KEYS.PAGOS), pgs);
-      if (imps.length > 0) this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), imps);
-      if (mats.length > 0) this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), mats);
-      if (bit.length > 0) this.setItem(this.getTenantKey(KEYS.BITACORA), bit);
-      if (clis.length > 0) this.setItem(this.getTenantKey(KEYS.CLIENTES), clis);
-      if (usrs.length > 0) this.setItem(this.getTenantKey(KEYS.USUARIOS), usrs);
-      if (agn.length > 0) this.setItem(this.getTenantKey(KEYS.AGENDA), agn);
-
-      return { success: true, message: 'Datos descargados exitosamente desde Firebase Cloud Firestore.' };
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Error al obtener datos desde Firebase.' };
-    }
-  }
 }
 
 export const dataService = new DataService();

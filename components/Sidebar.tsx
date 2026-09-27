@@ -23,7 +23,7 @@ import { Usuario, UserRole, SubscriptionPlanId } from '@/types/database';
 import { getPlanDetails } from '@/lib/plans';
 import Logo from '@/components/Logo';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
-import { signOutFirebase } from '@/lib/firebase/auth';
+import { signOutSupabase } from '@/lib/supabase/auth';
 import ThemeToggle from '@/components/ThemeToggle';
 import { isDeveloperUser } from '@/lib/auth-utils';
 
@@ -54,7 +54,7 @@ export default function Sidebar() {
 
   const handleLogout = async () => {
     try {
-      await signOutFirebase();
+      await signOutSupabase();
     } catch (e) {
       console.error(e);
     }

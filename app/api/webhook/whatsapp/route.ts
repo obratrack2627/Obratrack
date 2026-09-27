@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGeminiClient, chatAsistenteClienteWhatsAppGemini } from '@/lib/gemini';
+import crypto from 'crypto';
+import { chatAsistenteClienteWhatsAppGemini } from '@/lib/gemini';
 import { dataService } from '@/lib/data-service';
 
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,28 @@ function escapeXml(unsafe: string) {
     .replace(/'/g, '&apos;');
 }
 
+/**
+ * Valida la firma criptográfica HMAC-SHA256 enviada por Meta en la cabecera X-Hub-Signature-256.
+ */
+function verifyMetaSignature(rawBody: string, signatureHeader: string | null): boolean {
+  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  if (!appSecret) {
+    // Si no está configurado el secreto en variables de entorno, emitir advertencia
+    return true;
+  }
+  if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {
+    return false;
+  }
+
+  const signature = signatureHeader.slice(7);
+  const expectedSignature = crypto
+    .createHmac('sha256', appSecret)
+    .update(rawBody, 'utf8')
+    .digest('hex');
+
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+}
+
 // ==============================================================================
 // 1. GET: Verificación de Webhook para WhatsApp Cloud API (Meta Oficial)
 // ==============================================================================
@@ -22,12 +45,19 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  const expectedToken =
-    process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'obratrack_webhook_token_secret';
+  const expectedToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+
+  if (!expectedToken) {
+    console.warn('WHATSAPP_WEBHOOK_VERIFY_TOKEN no está configurado en las variables de entorno.');
+    return NextResponse.json(
+      { error: 'Servicio de webhook no configurado' },
+      { status: 500 }
+    );
+  }
 
   if (mode === 'subscribe' && token === expectedToken) {
     console.log('✅ Webhook de Meta WhatsApp Cloud API verificado exitosamente');
-    return new Response(challenge, { status: 200 });
+    return new Response(challenge || '', { status: 200 });
   }
 
   return NextResponse.json({ error: 'Token de verificación inválido' }, { status: 403 });
@@ -40,7 +70,6 @@ export async function POST(request: NextRequest) {
   try {
     let cleanPhone = '';
     let bodyText = '';
-    let isAudio = false;
     let isMetaCloud = false;
 
     const contentType = request.headers.get('content-type') || '';
@@ -48,7 +77,21 @@ export async function POST(request: NextRequest) {
     // CASO A: Meta WhatsApp Cloud API (JSON Payload)
     if (contentType.includes('application/json')) {
       isMetaCloud = true;
-      const jsonBody = await request.json();
+      const rawBody = await request.text();
+
+      // Validación criptográfica de la firma de Meta
+      const signature = request.headers.get('x-hub-signature-256');
+      if (!verifyMetaSignature(rawBody, signature)) {
+        console.warn('Firma X-Hub-Signature-256 no válida o ausente en petición a webhook.');
+        return NextResponse.json({ error: 'Firma de webhook no válida' }, { status: 401 });
+      }
+
+      let jsonBody: any = {};
+      try {
+        jsonBody = JSON.parse(rawBody);
+      } catch {
+        return NextResponse.json({ error: 'JSON malformado' }, { status: 400 });
+      }
 
       const entry = jsonBody.entry?.[0];
       const change = entry?.changes?.[0]?.value;
@@ -101,12 +144,8 @@ export async function POST(request: NextRequest) {
 
     // Si es Meta Cloud API y tenemos token, responder enviando mensaje vía Graph API
     if (isMetaCloud) {
-      const metaToken =
-        process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN ||
-        'EAAXDQlen7wEBScb7wR9RmbZAPa2jPm0F76ZBHhBU4SkES3gJhsOlFEkv3xr8YqnZAkmZAIJgrywYeHCIPl3yaZCX0lc7rquG5QaV1KYJN09MVQbUANJuk5dT5YQwIc3vzFQXSIZCi6ifbEojCMBaoMVqwTJVDUowfedh7TUrDqZCwZBK6egRyyROTvQoqAiWbYRJZAks3F9bR2EUqa6GC9ZB7ZBorUemt5nhxJWg0edDw3IraePmv6mZC4RvoW144I0TCfVpiSlJ69Mji0TPK9JTg31RPX33';
-      const phoneNumberId =
-        process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID ||
-        '1278818638652294';
+      const metaToken = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
+      const phoneNumberId = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
 
       if (metaToken && phoneNumberId && cleanPhone) {
         try {

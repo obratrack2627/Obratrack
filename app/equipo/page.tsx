@@ -18,8 +18,10 @@ import {
   MessageSquare,
   BadgeCheck,
   UserCheck,
+  KeyRound,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import ChangePasswordModal from '@/components/ChangePasswordModal';
 import { dataService } from '@/lib/data-service';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
 import { Usuario, Proyecto, UserRole } from '@/types/database';
@@ -35,6 +37,7 @@ export default function EquipoPage() {
   const [userToDelete, setUserToDelete] = useState<Usuario | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; pass: string; nombre: string } | null>(null);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -78,7 +81,7 @@ export default function EquipoPage() {
     setRut(formatted);
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombre.trim()) return;
 
@@ -98,15 +101,43 @@ export default function EquipoPage() {
     }
 
     const currentActive = dataService.getActiveUser();
+    const empresaId = currentActive?.empresa_id || 'e1111111-1111-4111-a111-111111111111';
 
-    const nuevoTrabajador = dataService.createUsuario({
-      empresa_id: currentActive?.empresa_id || 'e1111111-1111-4111-a111-111111111111',
-      nombre: nombre.trim(),
-      email: email.trim().toLowerCase(),
-      telefono_whatsapp: telefono.trim(),
-      rut: rut.trim(),
-      rol,
-    });
+    try {
+      const res = await fetch('/api/equipo/crear-usuario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          rut: rut.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+          telefono: telefono.trim(),
+          rol,
+          empresa_id: empresaId,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) {
+        showToast(`⚠️ ${resData.error || 'No se pudo crear el usuario en Supabase.'}`);
+        return;
+      }
+
+      if (resData.user) {
+        dataService.createUsuario(resData.user);
+      }
+    } catch (err) {
+      console.warn('Error en api crear-usuario:', err);
+      dataService.createUsuario({
+        empresa_id: empresaId,
+        nombre: nombre.trim(),
+        email: email.trim().toLowerCase(),
+        telefono_whatsapp: telefono.trim(),
+        rut: rut.trim(),
+        rol,
+      });
+    }
 
     setCreatedCredentials({
       nombre: nombre.trim(),
@@ -122,7 +153,7 @@ export default function EquipoPage() {
     setTelefono('+56 9 ');
     setRol('terreno');
     loadData();
-    showToast(`✅ Cuenta creada para el maestro "${nombre.trim()}".`);
+    showToast(`✅ Cuenta creada en Supabase Auth para "${nombre.trim()}".`);
   };
 
   const handleOpenEdit = (user: Usuario) => {
@@ -196,13 +227,25 @@ export default function EquipoPage() {
         title="Equipo de Obra & Cuadrilla"
         subtitle="Gestión de trabajadores, maestros, roles y vinculación con WhatsApp para reportes de terreno"
         action={
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="px-4 py-2.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-sm font-semibold rounded-xl shadow-sm flex items-center gap-2 font-heading transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Agregar Trabajador</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsPasswordModalOpen(true)}
+              className="px-3.5 py-2 bg-white dark:bg-[#141A23] hover:bg-gray-50 dark:hover:bg-[#1A2230] text-[#1E1E1E] dark:text-white border border-[#E5DFC9] dark:border-[#263040] text-xs font-semibold rounded-xl shadow-sm flex items-center gap-1.5 font-heading transition-all"
+              title="Cambiar contraseña de mi cuenta"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-[#FF6A00]" />
+              <span>Seguridad & Clave</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="px-4 py-2 bg-obra-orange hover:bg-obra-orange-hover text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm flex items-center gap-1.5 font-heading transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Agregar Trabajador</span>
+            </button>
+          </div>
         }
       />
 
@@ -790,6 +833,14 @@ export default function EquipoPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de Cambio y Recuperación de Contraseña */}
+      <ChangePasswordModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+        userEmail={activeUser?.email}
+        onSuccess={() => showToast('¡Contraseña actualizada con éxito!')}
+      />
 
     </div>
   );

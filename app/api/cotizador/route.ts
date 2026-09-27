@@ -6,11 +6,11 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
-    // Validar token/cookie de autenticación
+    // Validar token/cookie de autenticación estricta
     const authToken = request.cookies.get('obratrack_auth_token')?.value;
-    if (!authToken && process.env.NODE_ENV === 'production') {
+    if (!authToken || authToken.trim().length < 8 || !/^[a-zA-Z0-9_\-\.]+$/.test(authToken.trim())) {
       return NextResponse.json(
-        { error: 'No autorizado. Inicia sesión para usar el cotizador.' },
+        { error: 'No autorizado. Se requiere iniciar sesión con una cuenta válida.' },
         { status: 401 }
       );
     }
@@ -25,21 +25,28 @@ export async function POST(request: NextRequest) {
       nivel_calidad = 'estandar',
     } = body;
 
-    if (!descripcion || typeof descripcion !== 'string') {
+    if (!descripcion || typeof descripcion !== 'string' || descripcion.trim().length === 0) {
       return NextResponse.json(
-        { error: 'Debe ingresar una descripción del proyecto a cotizar.' },
+        { error: 'Debe ingresar una descripción válida del proyecto a cotizar.' },
         { status: 400 }
       );
     }
 
+    // Sanitización y límites de entrada (Defensa en profundidad)
+    const cleanDescripcion = descripcion.trim().slice(0, 2000);
+    const validM2 = Math.min(100000, Math.max(1, Number(metros_cuadrados) || 20));
+    const validMargen = Math.min(200, Math.max(0, Number(margen_utilidad) || 30));
+    const cleanTipoObra = typeof tipo_obra === 'string' ? tipo_obra.slice(0, 100) : 'General';
+    const cleanComunaRegion = typeof comuna_region === 'string' ? comuna_region.slice(0, 100) : 'Santiago, Chile';
+
     // 1. Intentar generar con Google Gemini 2.5 Flash / Pro AI
     const cotizacionGemini = await generarCotizacionGemini({
-      descripcion,
-      tipo_obra,
-      metros_cuadrados: Number(metros_cuadrados),
-      comuna_region,
-      margen_utilidad: Number(margen_utilidad),
-      nivel_calidad,
+      descripcion: cleanDescripcion,
+      tipo_obra: cleanTipoObra,
+      metros_cuadrados: validM2,
+      comuna_region: cleanComunaRegion,
+      margen_utilidad: validMargen,
+      nivel_calidad: typeof nivel_calidad === 'string' ? nivel_calidad.slice(0, 50) : 'estandar',
     });
 
     if (cotizacionGemini) {

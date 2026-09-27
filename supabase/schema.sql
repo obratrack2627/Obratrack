@@ -232,7 +232,7 @@ LEFT JOIN public.bitacora_entradas b ON b.proyecto_id = p.id
 GROUP BY p.id, p.nombre, p.estado, p.comuna, p.monto_cotizado;
 
 -- ==============================================================================
--- ROW LEVEL SECURITY
+-- ROW LEVEL SECURITY (Aislamiento Multi-Inquilino Estricto por empresa_id)
 -- ==============================================================================
 ALTER TABLE public.empresas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
@@ -246,16 +246,128 @@ ALTER TABLE public.bitacora_entradas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.imprevistos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reportes_whatsapp ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.agenda_eventos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mensajes_chat_proyecto ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "p_all_empresas" ON public.empresas FOR ALL USING (true);
-CREATE POLICY "p_all_usuarios" ON public.usuarios FOR ALL USING (true);
-CREATE POLICY "p_all_clientes" ON public.clientes FOR ALL USING (true);
-CREATE POLICY "p_all_proyectos" ON public.proyectos FOR ALL USING (true);
-CREATE POLICY "p_all_pt" ON public.proyecto_trabajadores FOR ALL USING (true);
-CREATE POLICY "p_all_actividades" ON public.actividades FOR ALL USING (true);
-CREATE POLICY "p_all_pagos" ON public.pagos FOR ALL USING (true);
-CREATE POLICY "p_all_materiales" ON public.materiales_proyecto FOR ALL USING (true);
-CREATE POLICY "p_all_bitacora" ON public.bitacora_entradas FOR ALL USING (true);
-CREATE POLICY "p_all_imprevistos" ON public.imprevistos FOR ALL USING (true);
-CREATE POLICY "p_all_whatsapp" ON public.reportes_whatsapp FOR ALL USING (true);
-CREATE POLICY "p_all_agenda" ON public.agenda_eventos FOR ALL USING (true);
+-- Función de seguridad definer para obtener la empresa del usuario autenticado
+CREATE OR REPLACE FUNCTION public.get_auth_empresa_id()
+RETURNS TEXT AS $$
+  SELECT empresa_id 
+  FROM public.usuarios 
+  WHERE auth_user_id = auth.uid()::text OR id = auth.uid()::text 
+  LIMIT 1;
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+-- 1. EMPRESAS
+CREATE POLICY "rls_empresas_select" ON public.empresas
+    FOR SELECT USING (auth.role() = 'service_role' OR id = public.get_auth_empresa_id());
+CREATE POLICY "rls_empresas_insert" ON public.empresas
+    FOR INSERT WITH CHECK (auth.role() = 'service_role' OR auth.role() = 'authenticated');
+CREATE POLICY "rls_empresas_update" ON public.empresas
+    FOR UPDATE USING (auth.role() = 'service_role' OR id = public.get_auth_empresa_id());
+
+-- 2. USUARIOS
+CREATE POLICY "rls_usuarios_select" ON public.usuarios
+    FOR SELECT USING (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id());
+CREATE POLICY "rls_usuarios_insert" ON public.usuarios
+    FOR INSERT WITH CHECK (auth.role() = 'service_role' OR auth.uid()::text = auth_user_id OR auth.role() = 'authenticated');
+CREATE POLICY "rls_usuarios_update" ON public.usuarios
+    FOR UPDATE USING (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id());
+CREATE POLICY "rls_usuarios_delete" ON public.usuarios
+    FOR DELETE USING (auth.role() = 'service_role' OR (empresa_id = public.get_auth_empresa_id() AND rol <> 'admin'));
+
+-- 3. CLIENTES
+CREATE POLICY "rls_clientes_tenant" ON public.clientes
+    FOR ALL USING (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id())
+    WITH CHECK (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id());
+
+-- 4. PROYECTOS
+CREATE POLICY "rls_proyectos_tenant" ON public.proyectos
+    FOR ALL USING (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id())
+    WITH CHECK (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id());
+
+-- 5. PROYECTO_TRABAJADORES
+CREATE POLICY "rls_pt_tenant" ON public.proyecto_trabajadores
+    FOR ALL USING (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    )
+    WITH CHECK (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    );
+
+-- 6. ACTIVIDADES
+CREATE POLICY "rls_actividades_tenant" ON public.actividades
+    FOR ALL USING (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    )
+    WITH CHECK (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    );
+
+-- 7. PAGOS
+CREATE POLICY "rls_pagos_tenant" ON public.pagos
+    FOR ALL USING (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    )
+    WITH CHECK (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    );
+
+-- 8. MATERIALES
+CREATE POLICY "rls_materiales_tenant" ON public.materiales_proyecto
+    FOR ALL USING (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    )
+    WITH CHECK (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    );
+
+-- 9. BITACORA
+CREATE POLICY "rls_bitacora_tenant" ON public.bitacora_entradas
+    FOR ALL USING (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    )
+    WITH CHECK (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    );
+
+-- 10. IMPREVISTOS
+CREATE POLICY "rls_imprevistos_tenant" ON public.imprevistos
+    FOR ALL USING (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    )
+    WITH CHECK (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    );
+
+-- 11. REPORTES_WHATSAPP
+CREATE POLICY "rls_whatsapp_tenant" ON public.reportes_whatsapp
+    FOR ALL USING (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    )
+    WITH CHECK (
+        auth.role() = 'service_role' OR 
+        proyecto_id IN (SELECT id FROM public.proyectos WHERE empresa_id = public.get_auth_empresa_id())
+    );
+
+-- 12. AGENDA_EVENTOS
+CREATE POLICY "rls_agenda_tenant" ON public.agenda_eventos
+    FOR ALL USING (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id())
+    WITH CHECK (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id());
+
+-- 13. MENSAJES_CHAT_PROYECTO
+CREATE POLICY "rls_chat_tenant" ON public.mensajes_chat_proyecto
+    FOR ALL USING (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id())
+    WITH CHECK (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id());
