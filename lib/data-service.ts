@@ -93,7 +93,13 @@ class DataService {
     const defaultUsers = this.isDemoTenant() ? INITIAL_USUARIOS : (active ? [active] : []);
     let usuarios = this.getItem<Usuario[]>(this.getTenantKey(KEYS.USUARIOS), defaultUsers);
 
+    // Filtrar cuentas legacy o placeholder que no deben aparecer
+    usuarios = usuarios.filter((u) => u.email?.toLowerCase() !== 'benjamin@obratrack.cl');
+
     if (active) {
+      if (isDeveloperEmail(active.email)) {
+        active.is_dev = true;
+      }
       const existsIndex = usuarios.findIndex(
         (u) => u.id === active.id || (u.email && active.email && u.email.toLowerCase() === active.email.toLowerCase())
       );
@@ -101,7 +107,12 @@ class DataService {
         usuarios = [active, ...usuarios];
         this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
       } else {
-        usuarios[existsIndex] = { ...usuarios[existsIndex], ...active, rol: active.rol || 'admin' };
+        usuarios[existsIndex] = {
+          ...usuarios[existsIndex],
+          ...active,
+          rol: active.rol || 'admin',
+          is_dev: isDeveloperEmail(active.email),
+        };
       }
     }
     return usuarios;
@@ -127,6 +138,9 @@ class DataService {
     const index = usuarios.findIndex((u) => u.id === id);
     if (index === -1) return null;
     usuarios[index] = { ...usuarios[index], ...data };
+    if (isDeveloperEmail(usuarios[index].email)) {
+      usuarios[index].is_dev = true;
+    }
     this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
     supabaseService.saveUsuario(usuarios[index]).catch((err) => console.warn('Sync supabase usuario:', err));
 
@@ -141,7 +155,7 @@ class DataService {
   deleteUsuario(id: string): boolean {
     const usuarios = this.getUsuarios();
     const target = usuarios.find((u) => u.id === id);
-    if (target?.rol === 'admin') {
+    if (target?.rol === 'admin' && !isDeveloperEmail(target?.email)) {
       console.warn('El dueño / administrador de la constructora no se puede eliminar, solo editar.');
       return false;
     }
@@ -153,8 +167,8 @@ class DataService {
 
   getActiveUser(): Usuario | null {
     const user = this.getItem<Usuario | null>(KEYS.ACTIVE_USER, null);
-    if (user && isDeveloperEmail(user.email)) {
-      user.is_dev = true;
+    if (user) {
+      user.is_dev = isDeveloperEmail(user.email);
     }
     return user;
   }

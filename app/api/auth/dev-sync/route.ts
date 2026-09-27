@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
         password,
         email_confirm: true,
         user_metadata: {
-          display_name: 'Benjamín Achávar (Desarrollador)',
-          rut: '19.123.456-7',
+          display_name: 'Benjamín Achávar',
+          rut: '19.123.456-3',
           rol: 'admin',
           is_dev: true,
         },
@@ -71,6 +71,12 @@ export async function POST(request: NextRequest) {
         {
           password,
           email_confirm: true,
+          user_metadata: {
+            display_name: 'Benjamín Achávar',
+            rut: '19.123.456-3',
+            rol: 'admin',
+            is_dev: true,
+          },
         }
       );
 
@@ -86,9 +92,9 @@ export async function POST(request: NextRequest) {
     // 4. Asegurar que en la tabla relacional usuarios esté registrado con auth_user_id
     await supabaseAdmin.from('usuarios').upsert({
       id: authUserId,
-      nombre: 'Benjamín Achávar (Desarrollador)',
+      nombre: 'Benjamín Achávar',
       email: cleanEmail,
-      rut: '19.123.456-7',
+      rut: '19.123.456-3',
       rol: 'admin',
       is_dev: true,
       empresa_id: 'e1111111-1111-4111-a111-111111111111',

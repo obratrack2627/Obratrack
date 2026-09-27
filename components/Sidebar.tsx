@@ -322,9 +322,9 @@ export default function Sidebar() {
                   </p>
                   <p className="text-[10px] text-[#FF6A00] font-mono capitalize">
                     {isDeveloperUser(activeUser)
-                      ? 'Desarrollador / Admin'
+                      ? 'Desarrollador (DEV)'
                       : activeUser?.rol === 'admin'
-                      ? 'Dueño / Admin'
+                      ? 'Contratista / Admin'
                       : activeUser?.rol === 'supervisor'
                       ? 'Supervisor'
                       : 'Maestro Terreno'}

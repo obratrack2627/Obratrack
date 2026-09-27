@@ -17,13 +17,14 @@ import {
   AlertTriangle,
   MessageSquare,
   BadgeCheck,
-  UserCheck,
   KeyRound,
+  Terminal,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import ChangePasswordModal from '@/components/ChangePasswordModal';
 import { dataService } from '@/lib/data-service';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
+import { isDeveloperEmail } from '@/lib/auth-utils';
 import { Usuario, Proyecto, UserRole } from '@/types/database';
 
 export default function EquipoPage() {
@@ -169,9 +170,13 @@ export default function EquipoPage() {
     e.preventDefault();
     if (!editingUser || !editNombre.trim()) return;
 
-    if (editRut && !validarRutChileno(editRut)) {
-      showToast('⚠️ El RUT ingresado no es válido según el formato chileno.');
-      return;
+    const isDev = isDeveloperEmail(editingUser.email) || editingUser.is_dev;
+
+    if (editRut && editRut.trim()) {
+      if (!validarRutChileno(editRut) && !isDev) {
+        showToast('⚠️ El RUT ingresado no es válido según el formato chileno.');
+        return;
+      }
     }
 
     dataService.updateUsuario(editingUser.id, {
@@ -179,7 +184,8 @@ export default function EquipoPage() {
       rut: editRut.trim() || undefined,
       email: editEmail.trim(),
       telefono_whatsapp: editTelefono.trim(),
-      rol: editRol,
+      rol: isDev ? 'admin' : editRol,
+      is_dev: isDev ? true : editingUser.is_dev,
     });
 
     setEditingUser(null);
@@ -441,9 +447,16 @@ export default function EquipoPage() {
                           <h3 className="font-heading font-bold text-sm text-navy-900 truncate">
                             {user.nombre}
                           </h3>
-                          <span className={`inline-block text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md mt-0.5 ${roleBadge}`}>
-                            {user.rol === 'admin' ? '🛡️ Dueño / Admin' : user.rol === 'supervisor' ? '📋 Supervisor' : '👷 Maestro Terreno'}
-                          </span>
+                          {isDeveloperEmail(user.email) || user.is_dev ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md mt-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm border border-blue-400/40">
+                              <Terminal className="w-3 h-3 text-cyan-300" />
+                              <span>Desarrollador (DEV)</span>
+                            </span>
+                          ) : (
+                            <span className={`inline-block text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md mt-0.5 ${roleBadge}`}>
+                              {user.rol === 'admin' ? '🛡️ Contratista / Admin' : user.rol === 'supervisor' ? '📋 Supervisor' : '👷 Maestro Terreno'}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -739,6 +752,19 @@ export default function EquipoPage() {
 
               <div>
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  RUT Chileno (ej: 19.123.456-3)
+                </label>
+                <input
+                  type="text"
+                  value={editRut}
+                  onChange={(e) => setEditRut(formatRUT(e.target.value))}
+                  placeholder="19.123.456-3"
+                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
                   Teléfono WhatsApp (formato E.164) *
                 </label>
                 <input
@@ -771,9 +797,12 @@ export default function EquipoPage() {
                   onChange={(e) => setEditRol(e.target.value as UserRole)}
                   className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-mono"
                 >
-                  <option value="terreno">👷 Terreno (Maestro / Capataz - Reporta por WhatsApp)</option>
+                  {(isDeveloperEmail(editingUser?.email) || editingUser?.is_dev) && (
+                    <option value="admin">💻 Desarrollador (Control Total DEV Master)</option>
+                  )}
+                  <option value="admin">🛡️ Administrador / Contratista General</option>
                   <option value="supervisor">📋 Supervisor (Control de Gantt y Aprobación)</option>
-                  <option value="admin">🛡️ Administrador (Acceso Total y Finanzas)</option>
+                  <option value="terreno">👷 Terreno (Maestro / Capataz - Reporta por WhatsApp)</option>
                 </select>
               </div>
 
