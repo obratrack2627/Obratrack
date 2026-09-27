@@ -3,12 +3,15 @@ import { CotizacionEstimacion, RecomendacionCobroCliente } from '@/types/databas
 
 let geminiClientInstance: GoogleGenAI | null = null;
 
+export const DEFAULT_GEMINI_API_KEY = 'REDACTED_GEMINI_KEY';
+
 export function getGeminiApiKey(): string | null {
   const apiKey =
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
     process.env.GOOGLE_GENAI_API_KEY ||
-    process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+    process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+    DEFAULT_GEMINI_API_KEY;
 
   if (!apiKey || apiKey.trim() === '' || apiKey.includes('YourGeminiApiKeyHere')) {
     return null;
@@ -33,7 +36,7 @@ export function getGeminiClient(): GoogleGenAI | null {
   return geminiClientInstance;
 }
 
-const CANDIDATE_GEMINI_MODELS = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'];
+const CANDIDATE_GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.7-flash'];
 
 /**
  * Llamada directa a la API REST de Google Gemini (100% compatible en Vercel Serverless)
@@ -52,7 +55,8 @@ export async function llamarGeminiDirectoRest(prompt: string): Promise<string | 
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 2048,
+            maxOutputTokens: 3000,
+            thinkingConfig: { thinkingBudget: 0 },
           },
         }),
       });
@@ -64,7 +68,8 @@ export async function llamarGeminiDirectoRest(prompt: string): Promise<string | 
       }
 
       const data = await res.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const text = parts.map((p: any) => p.text || '').filter(Boolean).join('');
       if (text && text.trim().length > 0) {
         return text;
       }
@@ -908,7 +913,7 @@ Responde amablemente:`;
     let rawText = await llamarGeminiDirectoRest(prompt);
     if (!rawText) {
       const resp = await gemini.models.generateContent({
-        model: 'gemini-1.5-flash',
+        model: CANDIDATE_GEMINI_MODELS[0],
         contents: prompt,
       });
       rawText = resp.text || '';

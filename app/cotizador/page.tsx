@@ -482,7 +482,7 @@ export default function CopilotoObreroPage() {
       {/* Navbar Superior */}
       <Navbar
         title="Copiloto Obrero IA"
-        subtitle="Asistente de faena autónomo impulsado por Google Gemini 2.5 / 3.6 IA"
+        subtitle="Asistente de faena autónomo impulsado por Google Gemini 3.8 Flash IA"
         action={
           <div className="flex items-center gap-2">
             <button
@@ -499,7 +499,7 @@ export default function CopilotoObreroPage() {
       <div className="p-4 md:p-6 max-w-7xl w-full mx-auto">
         <PlanLockOverlay
           isLocked={activePlan !== 'pro_ia'}
-          featureName="Copiloto Obrero IA & Control Autónomo (Google Gemini)"
+          featureName="Copiloto Obrero IA & Control Autónomo (Google Gemini 3.8 Flash)"
           requiredPlan="pro_ia"
           description="Conversa con el asistente inteligente para cotizar obras, crear proyectos en el sistema, incorporar trabajadores y agendar visitas en tiempo real."
         >
@@ -521,7 +521,7 @@ export default function CopilotoObreroPage() {
                       <span>Copiloto de Faena & Asistente IA</span>
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold border border-emerald-500/30 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Gemini 3.6 Online
+                        Gemini 3.8 Flash Online
                       </span>
                     </h3>
                     <p className="text-[11px] text-gray-300">
