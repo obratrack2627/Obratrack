@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supabase Schema Visualizer - ObraTrack HD</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      user-select: none;
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    .grid-bg {
+      background-size: 32px 32px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    }
+    .table-card {
+      position: absolute;
+      width: 290px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+      cursor: grab;
+      transition: box-shadow 0.15s ease, border-color 0.15s ease;
+      touch-action: none;
+    }
+    .table-card:active {
+      cursor: grabbing;
+    }
+    .table-card.highlighted {
+      border-color: #3b82f6;
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+    }
+    .table-card.dimmed {
+      opacity: 0.25;
+    }
+    .relation-path {
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      transition: stroke-width 0.2s, stroke 0.2s, opacity 0.2s;
+    }
+    .relation-path.highlighted {
+      stroke-width: 3.5;
+      filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.8));
+    }
+    .relation-path.dimmed {
+      opacity: 0.1;
+    }
+  </style>
+</head>
+<body class="w-screen h-screen relative grid-bg flex flex-col font-sans">
+
+  <!-- BARRA DE HERRAMIENTAS SUPERIOR -->
+  <header class="z-30 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-6 py-3 flex items-center justify-between shadow-lg">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold shadow-md">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M4 7V4h16v3M4 12h16M4 17h7M16 19l2 2 4-4"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-sm font-bold text-white flex items-center gap-2">
+          <span>Supabase Schema Visualizer</span>
+          <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono border border-emerald-500/30">
+            13 Tablas • ObraTrack
+          </span>
+        </h1>
+        <p class="text-[11px] text-slate-400">Esquema público completo con relaciones organizadas sin solapamiento</p>
+      </div>
+    </div>
+
+    <!-- BOTONES DE ACCIÓN RÁPIDA -->
+    <div class="flex items-center gap-2">
+      <!-- Buscador -->
+      <div class="relative">
+        <input 
+          id="search-input" 
+          type="text" 
+          placeholder="Buscar tabla o campo..." 
+          class="bg-slate-800 text-xs text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 w-44 focus:w-56 transition-all focus:outline-none focus:border-blue-500 placeholder-slate-500"
+        />
+      </div>
+
+      <!-- Zoom y Centrado -->
+      <div class="flex items-center bg-slate-800 rounded-lg border border-slate-700 p-0.5">
+        <button id="btn-zoom-out" class="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white" title="Alejar (Zoom Out)">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+        </button>
+        <span id="zoom-text" class="text-[11px] font-mono px-2 text-slate-300 font-semibold min-w-[42px] text-center">75%</span>
+        <button id="btn-zoom-in" class="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white" title="Acercar (Zoom In)">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        </button>
+        <button id="btn-fit" class="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white border-l border-slate-700 ml-0.5" title="Ajustar a pantalla">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+        </button>
+        <button id="btn-reset" class="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white" title="Restablecer posiciones originales">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+      </div>
+
+      <!-- Exportar Descarga PNG HD -->
+      <button 
+        id="btn-download-png"
+        class="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+        title="Descargar diagrama completo en imagen PNG de alta resolución"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        <span>Descargar Foto HD (PNG)</span>
+      </button>
+
+      <!-- Exportar SVG Vectorial -->
+      <button 
+        id="btn-download-svg"
+        class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all"
+        title="Descargar diagrama en formato vectorial SVG para documentos y tesis"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <span>SVG Vector</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- LIENZO PRINCIPAL CON INTERACCIÓN PAN/ZOOM -->
+  <main id="viewport" class="flex-1 relative overflow-hidden cursor-default">
+    <div id="canvas" class="absolute inset-0 origin-top-left" style="transform: translate(40px, 30px) scale(0.72);">
+      
+      <!-- CAPA DE LÍNEAS SVG -->
+      <svg id="svg-layer" class="absolute top-0 left-0 w-[4200px] h-[2800px] pointer-events-none" style="z-index: 1;">
+        <defs>
+          <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#3b82f6" />
+          </marker>
+          <marker id="arrow-emerald" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+          </marker>
+          <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
+          </marker>
+          <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#a855f7" />
+          </marker>
+          <marker id="arrow-rose" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e" />
+          </marker>
+        </defs>
+        <!-- Las líneas bezier se renderizan aquí dinámicamente -->
+        <g id="connections-group"></g>
+      </svg>
+
+      <!-- CAPA DE TARJETAS DE TABLAS HTML -->
+      <div id="tables-layer" class="absolute top-0 left-0 w-[4200px] h-[2800px]" style="z-index: 2;">
+        <!-- Se insertan dinámicamente -->
+      </div>
+
+    </div>
+  </main>
+
+  <!-- LEYENDA INFERIOR -->
+  <footer class="z-20 bg-slate-900/90 backdrop-blur border-t border-slate-800 px-6 py-2.5 flex items-center justify-between text-xs text-slate-400">
+    <div class="flex items-center gap-6">
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded bg-purple-500 inline-block"></span>
+        <span class="text-slate-300">Multi-Empresa & Seguridad</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded bg-emerald-500 inline-block"></span>
+        <span class="text-slate-300">Proyectos & Cuadrilla</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded bg-amber-500 inline-block"></span>
+        <span class="text-slate-300">Operaciones (Gantt, APU, Bitácora)</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded bg-cyan-500 inline-block"></span>
+        <span class="text-slate-300">Finanzas, Agenda & IA</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-4 text-[11px] text-slate-400">
+      <span>💡 <strong>Tip:</strong> Puedes arrastrar cualquier tabla para ajustar su posición. La imagen descargada incluirá tu diseño exacto.</span>
+    </div>
+  </footer>
+
+  <script>
+    // DEFINICIÓN DE LAS 13 TABLAS EXTRAÍDAS DIRECTAMENTE DE SUPABASE
+    const SCHEMA_TABLES = [
+      // COLUMNA 1: Multi-Tenant & Clientes (X: 60)
+      {
+        id: "empresas",
+        name: "public.empresas",
+        category: "security",
+        color: "#a855f7",
+        x: 60,
+        y: 60,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "rut", type: "varchar", unique: true },
+          { name: "nombre", type: "varchar" },
+          { name: "plan_id", type: "varchar", default: "'gratis'" },
+          { name: "created_at", type: "timestamptz" },
+          { name: "updated_at", type: "timestamptz" }
+        ]
+      },
+      {
+        id: "usuarios",
+        name: "public.usuarios",
+        category: "security",
+        color: "#a855f7",
+        x: 60,
+        y: 350,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "auth_user_id", type: "text" },
+          { name: "empresa_id", type: "text", fk: "empresas.id" },
+          { name: "rut", type: "varchar", unique: true },
+          { name: "nombre", type: "varchar" },
+          { name: "email", type: "varchar", unique: true },
+          { name: "rol", type: "varchar", default: "'terreno'" },
+          { name: "telefono_whatsapp", type: "varchar" },
+          { name: "is_dev", type: "bool", default: "false" },
+          { name: "created_at", type: "timestamptz" }
+        ]
+      },
+      {
+        id: "clientes",
+        name: "public.clientes",
+        category: "security",
+        color: "#a855f7",
+        x: 60,
+        y: 770,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "empresa_id", type: "text", fk: "empresas.id" },
+          { name: "rut", type: "varchar" },
+          { name: "nombre", type: "varchar" },
+          { name: "telefono", type: "varchar" },
+          { name: "email", type: "varchar" },
+          { name: "direccion", type: "text" },
+          { name: "created_at", type: "timestamptz" }
+        ]
+      },
+
+      // COLUMNA 2: Proyectos & Asignaciones (X: 430)
+      {
+        id: "proyectos",
+        name: "public.proyectos",
+        category: "core",
+        color: "#10b981",
+        x: 430,
+        y: 120,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "empresa_id", type: "text", fk: "empresas.id" },
+          { name: "cliente_id", type: "text", fk: "clientes.id" },
+          { name: "nombre", type: "varchar" },
+          { name: "descripcion", type: "text" },
+          { name: "direccion", type: "text" },
+          { name: "comuna", type: "varchar" },
+          { name: "region", type: "varchar" },
+          { name: "latitud", type: "numeric" },
+          { name: "longitud", type: "numeric" },
+          { name: "fecha_inicio", type: "date" },
+          { name: "fecha_termino_estimada", type: "date" },
+          { name: "estado", type: "varchar", default: "'activo'" },
+          { name: "monto_cotizado", type: "numeric", default: "0" },
+          { name: "created_at", type: "timestamptz" },
+          { name: "updated_at", type: "timestamptz" }
+        ]
+      },
+      {
+        id: "proyecto_trabajadores",
+        name: "public.proyecto_trabajadores",
+        category: "core",
+        color: "#10b981",
+        x: 430,
+        y: 770,
+        columns: [
+          { name: "proyecto_id", type: "text", pk: true, fk: "proyectos.id" },
+          { name: "usuario_id", type: "text", pk: true, fk: "usuarios.id" },
+          { name: "asignado_el", type: "timestamptz" }
+        ]
+      },
+
+      // COLUMNA 3: Cronograma, Gantt & Bitácora (X: 800)
+      {
+        id: "actividades",
+        name: "public.actividades",
+        category: "operations",
+        color: "#f59e0b",
+        x: 800,
+        y: 60,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "proyecto_id", type: "text", fk: "proyectos.id" },
+          { name: "responsable_id", type: "text", fk: "usuarios.id" },
+          { name: "nombre", type: "varchar" },
+          { name: "fecha_inicio", type: "date" },
+          { name: "fecha_termino", type: "date" },
+          { name: "porcentaje_avance", type: "numeric", default: "0" },
+          { name: "estado", type: "varchar", default: "'pendiente'" },
+          { name: "orden", type: "int4", default: "1" },
+          { name: "created_at", type: "timestamptz" }
+        ]
+      },
+      {
+        id: "imprevistos",
+        name: "public.imprevistos",
+        category: "operations",
+        color: "#f59e0b",
+        x: 800,
+        y: 470,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "proyecto_id", type: "text", fk: "proyectos.id" },
+          { name: "actividad_id", type: "text", fk: "actividades.id" },
+          { name: "titulo", type: "varchar" },
+          { name: "descripcion", type: "text" },
+          { name: "monto_adicional", type: "numeric", default: "0" },
+          { name: "estado", type: "varchar", default: "'pendiente'" },
+          { name: "origen", type: "varchar", default: "'manual'" },
+          { name: "fecha_reporte", type: "date" },
+          { name: "created_at", type: "timestamptz" }
+        ]
+      },
+      {
+        id: "bitacora_entradas",
+        name: "public.bitacora_entradas",
+        category: "operations",
+        color: "#f59e0b",
+        x: 800,
+        y: 870,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "proyecto_id", type: "text", fk: "proyectos.id" },
+          { name: "usuario_id", type: "text", fk: "usuarios.id" },
+          { name: "autor_nombre", type: "varchar" },
+          { name: "titulo", type: "varchar" },
+          { name: "nota", type: "text" },
+          { name: "foto_url", type: "text" },
+          { name: "fecha", type: "timestamptz" },
+          { name: "tipo", type: "varchar", default: "'avance'" },
+          { name: "created_at", type: "timestamptz" }
+        ]
+      },
+
+      // COLUMNA 4: Materiales & Finanzas (X: 1170)
+      {
+        id: "materiales_proyecto",
+        name: "public.materiales_proyecto",
+        category: "operations",
+        color: "#f59e0b",
+        x: 1170,
+        y: 60,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "proyecto_id", type: "text", fk: "proyectos.id" },
+          { name: "nombre", type: "varchar" },
+          { name: "categoria", type: "varchar" },
+          { name: "cantidad", type: "numeric", default: "1" },
+          { name: "unidad", type: "varchar", default: "'unidad'" },
+          { name: "precio_unitario", type: "numeric", default: "0" },
+          { name: "subtotal", type: "numeric", default: "0" },
+          { name: "proveedor", type: "varchar" },
+          { name: "comprado", type: "bool", default: "false" },
+          { name: "created_at", type: "timestamptz" }
+        ]
+      },
+      {
+        id: "pagos",
+        name: "public.pagos",
+        category: "finance",
+        color: "#06b6d4",
+        x: 1170,
+        y: 520,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "proyecto_id", type: "text", fk: "proyectos.id" },
+          { name: "cliente_id", type: "text", fk: "clientes.id" },
+          { name: "monto", type: "numeric" },
+          { name: "metodo", type: "varchar", default: "'transferencia'" },
+          { name: "estado", type: "varchar", default: "'completado'" },
+          { name: "fecha", type: "date" },
+          { name: "notas", type: "text" },
+          { name: "comprobante_url", type: "text" },
+          { name: "created_at", type: "timestamptz" }
+        ]
+      },
+
+      // COLUMNA 5: Agenda, WhatsApp & Agente IA (X: 1540)
+      {
+        id: "agenda_eventos",
+        name: "public.agenda_eventos",
+        category: "finance",
+        color: "#06b6d4",
+        x: 1540,
+        y: 60,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "empresa_id", type: "text", fk: "empresas.id" },
+          { name: "proyecto_id", type: "text", fk: "proyectos.id" },
+          { name: "usuario_id", type: "text", fk: "usuarios.id" },
+          { name: "titulo", type: "varchar" },
+          { name: "fecha_inicio", type: "timestamptz" },
+          { name: "fecha_fin", type: "timestamptz" },
+          { name: "tipo", type: "varchar", default: "'hito'" },
+          { name: "created_at", type: "timestamptz" }
+        ]
+      },
+      {
+        id: "reportes_whatsapp",
+        name: "public.reportes_whatsapp",
+        category: "finance",
+        color: "#06b6d4",
+        x: 1540,
+        y: 470,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "proyecto_id", type: "text", fk: "proyectos.id" },
+          { name: "cliente_id", type: "text", fk: "clientes.id" },
+          { name: "telefono", type: "varchar" },
+          { name: "mensaje_recibido", type: "text" },
+          { name: "respuesta_enviada", type: "text" },
+          { name: "fecha_envio", type: "timestamptz" },
+          { name: "estado", type: "varchar", default: "'enviado'" },
+          { name: "created_at", type: "timestamptz" }
+        ]
+      },
+      {
+        id: "mensajes_chat_proyecto",
+        name: "public.mensajes_chat_proyecto",
+        category: "finance",
+        color: "#06b6d4",
+        x: 1540,
+        y: 870,
+        columns: [
+          { name: "id", type: "text", pk: true },
+          { name: "proyecto_id", type: "text", fk: "proyectos.id" },
+          { name: "empresa_id", type: "text", fk: "empresas.id" },
+          { name: "remitente", type: "varchar" },
+          { name: "texto", type: "text" },
+          { name: "sugerencias", type: "jsonb" },
+          { name: "accion_ejecutada", type: "jsonb" },
+          { name: "created_at", type: "timestamptz" }
+        ]
+      }
+    ];
+
+    // DEFINICIÓN DE RELACIONES EXTRAPOLADAS DEL ESQUEMA
+    const SCHEMA_RELATIONS = [
+      // Desde empresas
+      { from: "usuarios", fromCol: "empresa_id", to: "empresas", toCol: "id", color: "#a855f7", marker: "arrow-purple" },
+      { from: "clientes", fromCol: "empresa_id", to: "empresas", toCol: "id", color: "#a855f7", marker: "arrow-purple" },
+      { from: "proyectos", fromCol: "empresa_id", to: "empresas", toCol: "id", color: "#a855f7", marker: "arrow-purple" },
+      { from: "agenda_eventos", fromCol: "empresa_id", to: "empresas", toCol: "id", color: "#a855f7", marker: "arrow-purple" },
+      { from: "mensajes_chat_proyecto", fromCol: "empresa_id", to: "empresas", toCol: "id", color: "#a855f7", marker: "arrow-purple" },
+
+      // Desde clientes
+      { from: "proyectos", fromCol: "cliente_id", to: "clientes", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+      { from: "pagos", fromCol: "cliente_id", to: "clientes", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+      { from: "reportes_whatsapp", fromCol: "cliente_id", to: "clientes", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+
+      // Desde usuarios
+      { from: "proyecto_trabajadores", fromCol: "usuario_id", to: "usuarios", toCol: "id", color: "#a855f7", marker: "arrow-purple" },
+      { from: "actividades", fromCol: "responsable_id", to: "usuarios", toCol: "id", color: "#a855f7", marker: "arrow-purple" },
+      { from: "bitacora_entradas", fromCol: "usuario_id", to: "usuarios", toCol: "id", color: "#a855f7", marker: "arrow-purple" },
+      { from: "agenda_eventos", fromCol: "usuario_id", to: "usuarios", toCol: "id", color: "#a855f7", marker: "arrow-purple" },
+
+      // Desde proyectos
+      { from: "proyecto_trabajadores", fromCol: "proyecto_id", to: "proyectos", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+      { from: "actividades", fromCol: "proyecto_id", to: "proyectos", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+      { from: "pagos", fromCol: "proyecto_id", to: "proyectos", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+      { from: "materiales_proyecto", fromCol: "proyecto_id", to: "proyectos", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+      { from: "bitacora_entradas", fromCol: "proyecto_id", to: "proyectos", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+      { from: "imprevistos", fromCol: "proyecto_id", to: "proyectos", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+      { from: "agenda_eventos", fromCol: "proyecto_id", to: "proyectos", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+      { from: "reportes_whatsapp", fromCol: "proyecto_id", to: "proyectos", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+      { from: "mensajes_chat_proyecto", fromCol: "proyecto_id", to: "proyectos", toCol: "id", color: "#10b981", marker: "arrow-emerald" },
+
+      // Desde actividades
+      { from: "imprevistos", fromCol: "actividad_id", to: "actividades", toCol: "id", color: "#f59e0b", marker: "arrow-amber" }
+    ];
+
+    // ESTADO DEL LIENZO
+    let panX = 40;
+    let panY = 30;
+    let scale = 0.72;
+    let isPanning = false;
+    let startX = 0;
+    let startY = 0;
+    let activeDragTable = null;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    const tablesLayer = document.getElementById("tables-layer");
+    const connectionsGroup = document.getElementById("connections-group");
+    const canvas = document.getElementById("canvas");
+    const viewport = document.getElementById("viewport");
+    const zoomText = document.getElementById("zoom-text");
+
+    // RENDERIZAR TABLAS
+    function renderTables() {
+      tablesLayer.innerHTML = "";
+      SCHEMA_TABLES.forEach(table => {
+        const card = document.createElement("div");
+        card.id = `table-${table.id}`;
+        card.className = "table-card";
+        card.style.left = `${table.x}px`;
+        card.style.top = `${table.y}px`;
+
+        const badgeColor = 
+          table.category === 'security' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' :
+          table.category === 'core' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+          table.category === 'operations' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+          'bg-cyan-500/20 text-cyan-300 border-cyan-500/30';
+
+        const headerBg = 
+          table.category === 'security' ? 'from-purple-900/60 to-slate-900' :
+          table.category === 'core' ? 'from-emerald-900/60 to-slate-900' :
+          table.category === 'operations' ? 'from-amber-900/60 to-slate-900' :
+          'from-cyan-900/60 to-slate-900';
+
+        let columnsHtml = "";
+        table.columns.forEach(col => {
+          const isPk = col.pk;
+          const isFk = !!col.fk;
+          const icon = isPk ? "🔑" : isFk ? "🔗" : "";
+          const badge = isPk ? `<span class="text-[9px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded font-mono font-bold">PK</span>` :
+                        isFk ? `<span class="text-[9px] px-1.5 py-0.2 bg-blue-500/20 text-blue-300 rounded font-mono font-bold">FK</span>` : "";
+
+          columnsHtml += `
+            <div 
+              class="flex items-center justify-between px-3 py-1.5 border-b border-slate-800/80 text-[11px] hover:bg-slate-800/50 transition-colors"
+              id="col-${table.id}-${col.name}"
+            >
+              <div class="flex items-center gap-1.5 overflow-hidden">
+                <span class="w-3 text-center text-[10px] select-none">${icon}</span>
+                <span class="font-mono font-medium truncate ${isPk ? 'text-amber-200' : isFk ? 'text-blue-300' : 'text-slate-200'}">
+                  ${col.name}
+                </span>
+                ${badge}
+              </div>
+              <span class="text-[10px] font-mono text-slate-400 select-none">${col.type}</span>
+            </div>
+          `;
+        });
+
+        card.innerHTML = `
+          <div class="table-header bg-gradient-to-r ${headerBg} p-3 rounded-t-xl border-b border-slate-700/60 flex items-center justify-between cursor-grab">
+            <div class="flex items-center gap-2 overflow-hidden">
+              <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${table.color};"></span>
+              <span class="font-bold text-xs text-white truncate">${table.name}</span>
+            </div>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full border ${badgeColor}">
+              ${table.columns.length} col
+            </span>
+          </div>
+          <div class="divide-y divide-slate-800/50 py-1">
+            ${columnsHtml}
+          </div>
+        `;
+
+        // Eventos de arrastre para esta tarjeta
+        const header = card.querySelector(".table-header");
+        header.addEventListener("pointerdown", (e) => {
+          e.stopPropagation();
+          activeDragTable = table;
+          dragOffsetX = (e.clientX / scale) - table.x;
+          dragOffsetY = (e.clientY / scale) - table.y;
+          card.setPointerCapture(e.pointerId);
+          highlightTableConnections(table.id);
+        });
+
+        header.addEventListener("pointermove", (e) => {
+          if (activeDragTable === table) {
+            table.x = (e.clientX / scale) - dragOffsetX;
+            table.y = (e.clientY / scale) - dragOffsetY;
+            card.style.left = `${table.x}px`;
+            card.style.top = `${table.y}px`;
+            updateConnections();
+          }
+        });
+
+        header.addEventListener("pointerup", (e) => {
+          if (activeDragTable === table) {
+            activeDragTable = null;
+            card.releasePointerCapture(e.pointerId);
+            clearHighlightConnections();
+          }
+        });
+
+        // Hover para resaltar conexiones
+        card.addEventListener("mouseenter", () => highlightTableConnections(table.id));
+        card.addEventListener("mouseleave", () => {
+          if (!activeDragTable) clearHighlightConnections();
+        });
+
+        tablesLayer.appendChild(card);
+      });
+    }
+
+    // OBTENER COORDENADAS DE CONEXIÓN ENTRE TABLAS
+    function getCardAnchor(tableId, side) {
+      const table = SCHEMA_TABLES.find(t => t.id === tableId);
+      if (!table) return { x: 0, y: 0 };
+      const cardEl = document.getElementById(`table-${tableId}`);
+      const height = cardEl ? cardEl.offsetHeight : 240;
+      const width = 290;
+
+      if (side === "left") {
+        return { x: table.x, y: table.y + height / 2 };
+      } else if (side === "right") {
+        return { x: table.x + width, y: table.y + height / 2 };
+      } else if (side === "top") {
+        return { x: table.x + width / 2, y: table.y };
+      } else {
+        return { x: table.x + width / 2, y: table.y + height };
+      }
+    }
+
+    // ACTUALIZAR Y DIBUJAR LÍNEAS DE RELACIÓN
+    function updateConnections() {
+      connectionsGroup.innerHTML = "";
+
+      SCHEMA_RELATIONS.forEach((rel, index) => {
+        const fromTable = SCHEMA_TABLES.find(t => t.id === rel.from);
+        const toTable = SCHEMA_TABLES.find(t => t.id === rel.to);
+        if (!fromTable || !toTable) return;
+
+        // Determinar qué lado conectar según posiciones relativas
+        let fromSide = "left";
+        let toSide = "right";
+
+        if (fromTable.x > toTable.x + 150) {
+          fromSide = "left";
+          toSide = "right";
+        } else if (fromTable.x + 150 < toTable.x) {
+          fromSide = "right";
+          toSide = "left";
+        } else if (fromTable.y > toTable.y) {
+          fromSide = "top";
+          toSide = "bottom";
+        } else {
+          fromSide = "bottom";
+          toSide = "top";
+        }
+
+        const p1 = getCardAnchor(rel.from, fromSide);
+        const p2 = getCardAnchor(rel.to, toSide);
+
+        // Curva Bezier Suave
+        const dx = Math.abs(p2.x - p1.x) * 0.5;
+        let c1x = p1.x + (fromSide === "right" ? dx : fromSide === "left" ? -dx : 0);
+        let c1y = p1.y + (fromSide === "bottom" ? dx : fromSide === "top" ? -dx : 0);
+        let c2x = p2.x + (toSide === "right" ? dx : toSide === "left" ? -dx : 0);
+        let c2y = p2.y + (toSide === "bottom" ? dx : toSide === "top" ? -dx : 0);
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", `M ${p1.x} ${p1.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`);
+        path.setAttribute("class", "relation-path");
+        path.setAttribute("stroke", rel.color);
+        path.setAttribute("marker-end", `url(#${rel.marker})`);
+        path.setAttribute("data-from", rel.from);
+        path.setAttribute("data-to", rel.to);
+        path.id = `rel-${index}`;
+
+        connectionsGroup.appendChild(path);
+      });
+    }
+
+    // RESALTADO DE RELACIONES
+    function highlightTableConnections(tableId) {
+      const paths = document.querySelectorAll(".relation-path");
+      const cards = document.querySelectorAll(".table-card");
+
+      const connectedTableIds = new Set([tableId]);
+      paths.forEach(p => {
+        const from = p.getAttribute("data-from");
+        const to = p.getAttribute("data-to");
+        if (from === tableId || to === tableId) {
+          p.classList.add("highlighted");
+          p.classList.remove("dimmed");
+          connectedTableIds.add(from);
+          connectedTableIds.add(to);
+        } else {
+          p.classList.add("dimmed");
+          p.classList.remove("highlighted");
+        }
+      });
+
+      cards.forEach(c => {
+        const id = c.id.replace("table-", "");
+        if (connectedTableIds.has(id)) {
+          c.classList.add("highlighted");
+          c.classList.remove("dimmed");
+        } else {
+          c.classList.add("dimmed");
+          c.classList.remove("highlighted");
+        }
+      });
+    }
+
+    function clearHighlightConnections() {
+      document.querySelectorAll(".relation-path").forEach(p => {
+        p.classList.remove("highlighted", "dimmed");
+      });
+      document.querySelectorAll(".table-card").forEach(c => {
+        c.classList.remove("highlighted", "dimmed");
+      });
+    }
+
+    // CONTROL DE PAN & ZOOM
+    function applyTransform() {
+      canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+      zoomText.textContent = `${Math.round(scale * 100)}%`;
+    }
+
+    viewport.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".table-card")) return;
+      isPanning = true;
+      startX = e.clientX - panX;
+      startY = e.clientY - panY;
+      viewport.style.cursor = "grabbing";
+    });
+
+    window.addEventListener("pointermove", (e) => {
+      if (!isPanning) return;
+      panX = e.clientX - startX;
+      panY = e.clientY - startY;
+      applyTransform();
+    });
+
+    window.addEventListener("pointerup", () => {
+      isPanning = false;
+      viewport.style.cursor = "default";
+    });
+
+    viewport.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      const newScale = Math.min(Math.max(scale * zoomFactor, 0.2), 2.5);
+      
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+      panX = mouseX - (mouseX - panX) * (newScale / scale);
+      panY = mouseY - (mouseY - panY) * (newScale / scale);
+      scale = newScale;
+      applyTransform();
+    }, { passive: false });
+
+    // BOTONES DE ZOOM
+    document.getElementById("btn-zoom-in").addEventListener("click", () => {
+      scale = Math.min(scale * 1.2, 2.5);
+      applyTransform();
+    });
+
+    document.getElementById("btn-zoom-out").addEventListener("click", () => {
+      scale = Math.max(scale / 1.2, 0.2);
+      applyTransform();
+    });
+
+    document.getElementById("btn-fit").addEventListener("click", () => {
+      fitToScreen();
+    });
+
+    function fitToScreen() {
+      const vWidth = viewport.clientWidth;
+      const vHeight = viewport.clientHeight;
+      const totalWidth = 1950;
+      const totalHeight = 1250;
+
+      const scaleX = (vWidth - 80) / totalWidth;
+      const scaleY = (vHeight - 80) / totalHeight;
+      scale = Math.min(scaleX, scaleY, 1.0);
+      panX = (vWidth - totalWidth * scale) / 2;
+      panY = (vHeight - totalHeight * scale) / 2;
+      applyTransform();
+    }
+
+    // RESETEAR POSICIONES ORIGINALES
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      const originalCoords = [
+        { id: "empresas", x: 60, y: 60 },
+        { id: "usuarios", x: 60, y: 350 },
+        { id: "clientes", x: 60, y: 770 },
+        { id: "proyectos", x: 430, y: 120 },
+        { id: "proyecto_trabajadores", x: 430, y: 770 },
+        { id: "actividades", x: 800, y: 60 },
+        { id: "imprevistos", x: 800, y: 470 },
+        { id: "bitacora_entradas", x: 800, y: 870 },
+        { id: "materiales_proyecto", x: 1170, y: 60 },
+        { id: "pagos", x: 1170, y: 520 },
+        { id: "agenda_eventos", x: 1540, y: 60 },
+        { id: "reportes_whatsapp", x: 1540, y: 470 },
+        { id: "mensajes_chat_proyecto", x: 1540, y: 870 }
+      ];
+
+      originalCoords.forEach(pos => {
+        const table = SCHEMA_TABLES.find(t => t.id === pos.id);
+        if (table) {
+          table.x = pos.x;
+          table.y = pos.y;
+          const el = document.getElementById(`table-${table.id}`);
+          if (el) {
+            el.style.left = `${table.x}px`;
+            el.style.top = `${table.y}px`;
+          }
+        }
+      });
+      fitToScreen();
+      updateConnections();
+    });
+
+    // BUSCADOR EN VIVO
+    document.getElementById("search-input").addEventListener("input", (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      if (!q) {
+        clearHighlightConnections();
+        return;
+      }
+      SCHEMA_TABLES.forEach(table => {
+        const card = document.getElementById(`table-${table.id}`);
+        const matchName = table.name.toLowerCase().includes(q);
+        const matchCol = table.columns.some(c => c.name.toLowerCase().includes(q));
+        if (matchName || matchCol) {
+          card.classList.add("highlighted");
+          card.classList.remove("dimmed");
+        } else {
+          card.classList.add("dimmed");
+          card.classList.remove("highlighted");
+        }
+      });
+    });
+
+    // =========================================================================
+    // EXPORTADOR ULTRA HD (PNG 4K & SVG)
+    // =========================================================================
+    async function exportToPNG() {
+      const btn = document.getElementById("btn-download-png");
+      const originalText = btn.innerHTML;
+      btn.innerHTML = `<span>Generando HD...</span>`;
+      btn.disabled = true;
+
+      try {
+        // Calcular límites de todas las tablas
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        SCHEMA_TABLES.forEach(t => {
+          const el = document.getElementById(`table-${t.id}`);
+          const w = 290;
+          const h = el ? el.offsetHeight : 300;
+          minX = Math.min(minX, t.x);
+          minY = Math.min(minY, t.y);
+          maxX = Math.max(maxX, t.x + w);
+          maxY = Math.max(maxY, t.y + h);
+        });
+
+        const padding = 80;
+        const width = (maxX - minX) + padding * 2;
+        const height = (maxY - minY) + padding * 2;
+
+        // Construir SVG exportable completo
+        let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${minX - padding} ${minY - padding} ${width} ${height}">`;
+        svgContent += `
+          <style>
+            .grid { fill: #0f172a; }
+            .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+            .header-sec { fill: #581c87; }
+            .header-core { fill: #064e3b; }
+            .header-op { fill: #78350f; }
+            .header-fin { fill: #164e63; }
+            .title { fill: #ffffff; font-family: sans-serif; font-size: 13px; font-weight: bold; }
+            .col-name { fill: #e2e8f0; font-family: monospace; font-size: 11px; }
+            .col-type { fill: #94a3b8; font-family: monospace; font-size: 10px; }
+            .pk-text { fill: #fde047; font-weight: bold; }
+            .fk-text { fill: #93c5fd; }
+            .div-line { stroke: #334155; stroke-width: 1; }
+          </style>
+          <rect class="grid" x="${minX - padding}" y="${minY - padding}" width="${width}" height="${height}"/>
+          ${document.getElementById("svg-layer").innerHTML}
+        `;
+
+        // Renderizar cada tabla como grupo SVG
+        SCHEMA_TABLES.forEach(t => {
+          const el = document.getElementById(`table-${t.id}`);
+          const h = el ? el.offsetHeight : 300;
+          const w = 290;
+          const headerCls = 
+            t.category === 'security' ? 'header-sec' :
+            t.category === 'core' ? 'header-core' :
+            t.category === 'operations' ? 'header-op' : 'header-fin';
+
+          svgContent += `
+            <g transform="translate(${t.x}, ${t.y})">
+              <!-- Fondo de tarjeta -->
+              <rect class="card" width="${w}" height="${h}"/>
+              <!-- Header -->
+              <path d="M 0 12 Q 0 0 12 0 L ${w - 12} 0 Q ${w} 0 ${w} 12 L ${w} 42 L 0 42 Z" class="${headerCls}"/>
+              <circle cx="16" cy="21" r="5" fill="${t.color}"/>
+              <text x="28" y="25" class="title">${t.name}</text>
+          `;
+
+          let curY = 62;
+          t.columns.forEach(col => {
+            const isPk = col.pk;
+            const isFk = !!col.fk;
+            const icon = isPk ? "🔑 " : isFk ? "🔗 " : "   ";
+            const colCls = isPk ? "col-name pk-text" : isFk ? "col-name fk-text" : "col-name";
+
+            svgContent += `
+              <line x1="0" y1="${curY - 14}" x2="${w}" y2="${curY - 14}" class="div-line"/>
+              <text x="14" y="${curY}" class="${colCls}">${icon}${col.name}</text>
+              <text x="${w - 14}" y="${curY}" text-anchor="end" class="col-type">${col.type}</text>
+            `;
+            curY += 25;
+          });
+
+          svgContent += `</g>`;
+        });
+
+        svgContent += `</svg>`;
+
+        // Convertir SVG a Canvas de Alta Resolución
+        const img = new Image();
+        const svgBlob = new Blob([svgContent], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(svgBlob);
+
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const pixelRatio = 2; // Doble resolución para nitidez 4K
+          canvas.width = width * pixelRatio;
+          canvas.height = height * pixelRatio;
+          const ctx = canvas.getContext("2d");
+          ctx.scale(pixelRatio, pixelRatio);
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+
+          // Descarga directa PNG
+          const link = document.createElement("a");
+          link.download = `obratrack_schema_supabase_hd.png`;
+          link.href = canvas.toDataURL("image/png");
+          link.click();
+
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        };
+        img.src = url;
+      } catch (err) {
+        console.error("Error exportando imagen:", err);
+        alert("Hubo un error exportando la imagen: " + err.message);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    // EXPORTAR SVG VECTORIAL
+    function exportToSVG() {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      SCHEMA_TABLES.forEach(t => {
+        const el = document.getElementById(`table-${t.id}`);
+        const w = 290;
+        const h = el ? el.offsetHeight : 300;
+        minX = Math.min(minX, t.x);
+        minY = Math.min(minY, t.y);
+        maxX = Math.max(maxX, t.x + w);
+        maxY = Math.max(maxY, t.y + h);
+      });
+
+      const padding = 80;
+      const width = (maxX - minX) + padding * 2;
+      const height = (maxY - minY) + padding * 2;
+
+      let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${minX - padding} ${minY - padding} ${width} ${height}">`;
+      svg += `
+        <style>
+          .grid { fill: #0f172a; }
+          .card { fill: #1e293b; stroke: #334155; stroke-width: 1.5; rx: 12; }
+          .title { fill: #ffffff; font-family: sans-serif; font-size: 13px; font-weight: bold; }
+          .col-name { fill: #e2e8f0; font-family: monospace; font-size: 11px; }
+          .col-type { fill: #94a3b8; font-family: monospace; font-size: 10px; }
+          .pk-text { fill: #fde047; font-weight: bold; }
+          .fk-text { fill: #93c5fd; }
+          .div-line { stroke: #334155; stroke-width: 1; }
+        </style>
+        <rect class="grid" x="${minX - padding}" y="${minY - padding}" width="${width}" height="${height}"/>
+        ${document.getElementById("svg-layer").innerHTML}
+      `;
+
+      SCHEMA_TABLES.forEach(t => {
+        const el = document.getElementById(`table-${t.id}`);
+        const h = el ? el.offsetHeight : 300;
+        const w = 290;
+        svg += `
+          <g transform="translate(${t.x}, ${t.y})">
+            <rect class="card" width="${w}" height="${h}"/>
+            <path d="M 0 12 Q 0 0 12 0 L ${w - 12} 0 Q ${w} 0 ${w} 12 L ${w} 42 L 0 42 Z" fill="#334155"/>
+            <circle cx="16" cy="21" r="5" fill="${t.color}"/>
+            <text x="28" y="25" class="title">${t.name}</text>
+        `;
+        let curY = 62;
+        t.columns.forEach(col => {
+          svg += `
+            <line x1="0" y1="${curY - 14}" x2="${w}" y2="${curY - 14}" class="div-line"/>
+            <text x="14" y="${curY}" class="${col.pk ? 'col-name pk-text' : col.fk ? 'col-name fk-text' : 'col-name'}">${col.pk ? '🔑 ' : col.fk ? '🔗 ' : ''}${col.name}</text>
+            <text x="${w - 14}" y="${curY}" text-anchor="end" class="col-type">${col.type}</text>
+          `;
+          curY += 25;
+        });
+        svg += `</g>`;
+      });
+
+      svg += `</svg>`;
+
+      const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+      const link = document.createElement("a");
+      link.download = "obratrack_schema_supabase.svg";
+      link.href = URL.createObjectURL(blob);
+      link.click();
+    }
+
+    document.getElementById("btn-download-png").addEventListener("click", exportToPNG);
+    document.getElementById("btn-download-svg").addEventListener("click", exportToSVG);
+
+    // INICIALIZACIÓN
+    renderTables();
+    updateConnections();
+    setTimeout(() => {
+      fitToScreen();
+      updateConnections();
+    }, 100);
+
+    window.addEventListener("resize", () => {
+      updateConnections();
+    });
+  </script>
+</body>
+</html>
