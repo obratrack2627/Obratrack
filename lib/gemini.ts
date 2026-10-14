@@ -37,10 +37,10 @@ export function getGeminiClient(): GoogleGenAI | null {
 }
 
 const CANDIDATE_GEMINI_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
-  'gemini-2.5-pro',
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
+  'gemini-3.5-flash',
+  'gemini-flash-latest',
 ];
 
 /**
@@ -60,8 +60,7 @@ export async function llamarGeminiDirectoRest(prompt: string): Promise<string | 
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 3000,
-            thinkingConfig: { thinkingBudget: 0 },
+            maxOutputTokens: 3500,
           },
         }),
       });
@@ -69,6 +68,9 @@ export async function llamarGeminiDirectoRest(prompt: string): Promise<string | 
       if (!res.ok) {
         const errText = await res.text();
         console.warn(`[Gemini REST] Falló modelo ${model} (${res.status}):`, errText);
+        if (res.status === 503 || res.status === 429) {
+          await new Promise((r) => setTimeout(r, 400));
+        }
         continue;
       }
 
@@ -789,9 +791,12 @@ ${trabajadoresTexto}
 ${clientesTexto}
 
 INSTRUCCIONES DE CONVERSACIÓN & ACCIONES AUTÓNOMAS:
-1. Eres el Copiloto Inteligente de ObraTrack y Asesor Experto de Faena en Chile.
-2. Responde de forma completamente natural, experta, analítica y directa a la consulta específica del usuario. Responde EXACTAMENTE sobre el tema que te preguntan (si preguntan por pintura, habla de pintura; si preguntan por techos, habla de techos; si preguntan por radier, habla de radier; si preguntan por porcelanato, habla de porcelanato).
-3. REGLA ESTRICTA DE CONTEXTO: Tu dominio es única y exclusivamente la construcción, edificación, cubicación, ingeniería civil, materiales en Chile y agendamiento de faenas.
+1. Eres el Copiloto Obrero Inteligente de ObraTrack, un asesor técnico de faena en Chile, directo, cercano y altamente calificado.
+2. RAZONAMIENTO Y COMPRENSIÓN PROFUNDA: Piensa y analiza minuciosamente lo que el usuario te está escribiendo antes de generar tu respuesta:
+   • Si te saluda o conversa informalmente, saluda con simpatía y pregúntale en qué faena, obra o cálculo trabajarán hoy.
+   • Si plantea un problema de obra (suelo, humedad, fisuras, tiempos, cuadrilla), analiza la causa técnica chilena y propone soluciones concretas y viables.
+   • Si pide cotizar o calcular insumos, usa los datos específicos de su mensaje (m², materiales locales, rendimientos reales).
+3. PROHIBICIÓN TOTAL DE RESPUESTAS GENÉRICAS O PLANTILLAS: Queda estrictamente prohibido responder con textos cliché, plantillas fijas o listas genéricas que no correspondan a lo que el usuario preguntó. Cada una de tus respuestas debe ser única, personalizada y enfocada exclusivamente en lo que el usuario escribió.
 
 4. CAPACIDAD DE CONTROLAR LA WEB (EJECUTAR ACCIONES EN VIVO):
    Cuando el usuario te pida crear una obra, agregar un trabajador, asignar cuadrilla o agendar un compromiso, responde conversacionalmente confirmándolo y agrega AL FINAL DE TU RESPUESTA una etiqueta [ACCION_OBRA: {...}] con el JSON correspondiente:
