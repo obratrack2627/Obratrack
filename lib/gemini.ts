@@ -36,7 +36,12 @@ export function getGeminiClient(): GoogleGenAI | null {
   return geminiClientInstance;
 }
 
-const CANDIDATE_GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.7-flash'];
+const CANDIDATE_GEMINI_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.5-pro',
+];
 
 /**
  * Llamada directa a la API REST de Google Gemini (100% compatible en Vercel Serverless)

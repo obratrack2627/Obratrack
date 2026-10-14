@@ -15,6 +15,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "docx": "^9.7.1",
+    "exceljs": "^4.4.0",
     "frappe-gantt": "^0.6.1",
     "googleapis": "^176.0.0",
     "lucide-react": "^0.428.0",

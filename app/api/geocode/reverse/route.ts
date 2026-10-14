@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
         {
           headers: {
-            'User-Agent': 'ObraTrack-Chile-Construction-Platform/1.0 (benja105.achavar@gmail.com)',
+            'User-Agent': 'ObraTrack-Chile-Construction-Platform/1.0 (obratrack2627@gmail.com)',
             'Accept-Language': 'es',
           },
         }

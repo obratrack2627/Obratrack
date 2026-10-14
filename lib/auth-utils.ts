@@ -5,6 +5,7 @@ import { Usuario } from '@/types/database';
  * Tienen la capacidad de alternar planes libremente para demostraciones y pruebas.
  */
 export const DEVELOPER_EMAILS: readonly string[] = [
+  'obratrack2627@gmail.com',
   'benja105.achavar@gmail.com',
 ];
 

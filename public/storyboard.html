@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storyboard ObraTrack — El Copiloto Digital del Constructor</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            construction: {
+              50: '#fffbeb',
+              100: '#fef3c7',
+              200: '#fde68a',
+              300: '#fcd34d',
+              400: '#fbbf24',
+              500: '#f59e0b', // Amber principal
+              600: '#d97706',
+              700: '#b45309',
+              800: '#92400e',
+              900: '#78350f',
+            },
+            brand: {
+              navy: '#0f172a',
+              slate: '#1e293b',
+              accent: '#3b82f6',
+              emerald: '#10b981',
+              rose: '#f43f5e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @media print {
+      body {
+        background: white !important;
+        color: black !important;
+        padding: 0 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .panel-card {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        box-shadow: none !important;
+        border: 1px solid #cbd5e1 !important;
+        margin-bottom: 2rem !important;
+      }
+      .comic-grid {
+        display: block !important;
+      }
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #f59e0b;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-amber-500 selection:text-slate-950">
+
+  <!-- TOP HEADER / BADGE BAR -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-50 transition-all duration-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center text-slate-950 font-black font-display text-xl shadow-lg shadow-amber-500/20">
+          OT
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-display font-extrabold text-lg tracking-tight text-white">ObraTrack</span>
+            <span class="text-xs uppercase px-2 py-0.5 rounded-full font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">Storyboard UX v2.0</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">Tesis INACAP</span>
+          </div>
+          <p class="text-xs text-slate-400">User Journey Narrativo &middot; Diseño Centrado en el Usuario (DCU)</p>
+        </div>
+      </div>
+
+      <!-- VIEW MODE SELECTOR & ACTIONS -->
+      <div class="flex items-center gap-2 sm:gap-3 no-print">
+        <div class="bg-slate-800/80 p-1 rounded-xl border border-slate-700/80 flex items-center text-xs font-medium">
+          <button id="btnViewGrid" onclick="setViewMode('grid')" class="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-semibold transition-all flex items-center gap-1.5 shadow">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+            <span>Cómic (Grilla)</span>
+          </button>
+          <button id="btnViewSlides" onclick="setViewMode('slides')" class="px-3 py-1.5 rounded-lg text-slate-300 hover:text-white transition-all flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            <span>Presentación</span>
+          </button>
+          <button id="btnViewMatrix" onclick="setViewMode('matrix')" class="px-3 py-1.5 rounded-lg text-slate-300 hover:text-white transition-all flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <span>Matriz IEEE</span>
+          </button>
+        </div>
+
+        <a href="storyboard_obratrack_es.jpg" target="_blank" download="Storyboard_ObraTrack_Flujo_Espanol.jpg" class="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          <span class="hidden sm:inline">Descargar Ilustración HD (Español)</span>
+        </a>
+
+        <button onclick="window.print()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition">
+          <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+          <span class="hidden sm:inline">Imprimir / PDF</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO NARRATIVE SUMMARY -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 border-b border-slate-800">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      <div class="max-w-3xl">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-mono font-medium mb-3">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          CASO DE ESTUDIO: RADIER Y AMPLIACIÓN RESIDENCIAL (40 m²) EN SANTIAGO
+        </div>
+        <h1 class="text-3xl sm:text-4xl font-extrabold font-display tracking-tight text-white">
+          De la Pérdida Incierta al Control Digital con <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-500">ObraTrack</span>
+        </h1>
+        <p class="mt-2 text-slate-300 text-sm sm:text-base leading-relaxed">
+          Un viaje narrativo en 8 actos que ilustra la transformación operativa de un contratista chileno independiente (Don Carlos), desde la frustración de la cotización manual y los imprevistos no pagados, hasta la automatización con IA, sincronización offline en faena y transparencia total hacia la mandante.
+        </p>
+      </div>
+
+      <!-- PERSONAS MINI SUMMARY -->
+      <div class="grid grid-cols-2 gap-3 sm:w-auto w-full">
+        <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-xl">👷‍♂️</span>
+            <span class="font-display font-bold text-sm text-amber-400">Don Carlos (52)</span>
+          </div>
+          <p class="text-xs text-slate-400 font-medium">Contratista General Mipyme</p>
+          <p class="text-[11px] text-slate-500 mt-1">Dolor: Fuga del 20% de utilidades por extras no cobrados.</p>
+        </div>
+        <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-xl">👩‍💼</span>
+            <span class="font-display font-bold text-sm text-sky-400">Sra. Andrea (44)</span>
+          </div>
+          <p class="text-xs text-slate-400 font-medium">Mandante Residencial</p>
+          <p class="text-[11px] text-slate-500 mt-1">Dolor: Desconfianza, retrasos y sobrecostos sorpresa.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- JOURNEY EMOTION METRICS TIMELINE -->
+    <div class="mt-8 bg-slate-900/60 p-4 rounded-2xl border border-slate-800/80">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-mono uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+          Curva Emocional del Usuario a través de los 8 Paneles
+        </span>
+        <span class="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Transformación 100% Exitosa</span>
+      </div>
+      <div class="grid grid-cols-8 gap-1.5 text-center pt-2">
+        <div class="group relative">
+          <div class="h-10 bg-rose-950/60 border border-rose-800/50 rounded-lg flex items-end justify-center pb-1 text-[11px] font-mono text-rose-300">15%</div>
+          <span class="text-[10px] text-slate-400 mt-1 block truncate">1. Frustración</span>
+        </div>
+        <div class="group relative">
+          <div class="h-10 bg-amber-950/60 border border-amber-800/50 rounded-lg flex items-end justify-center pb-1 text-[11px] font-mono text-amber-300">30%</div>
+          <span class="text-[10px] text-slate-400 mt-1 block truncate">2. Presión</span>
+        </div>
+        <div class="group relative">
+          <div class="h-10 bg-yellow-950/60 border border-yellow-700/50 rounded-lg flex items-end justify-center pb-1 text-[11px] font-mono text-yellow-300">75%</div>
+          <span class="text-[10px] text-slate-400 mt-1 block truncate">3. Asombro IA</span>
+        </div>
+        <div class="group relative">
+          <div class="h-10 bg-blue-950/60 border border-blue-800/50 rounded-lg flex items-end justify-center pb-1 text-[11px] font-mono text-blue-300">85%</div>
+          <span class="text-[10px] text-slate-400 mt-1 block truncate">4. Adjudicado</span>
+        </div>
+        <div class="group relative">
+          <div class="h-10 bg-indigo-950/60 border border-indigo-800/50 rounded-lg flex items-end justify-center pb-1 text-[11px] font-mono text-indigo-300">80%</div>
+          <span class="text-[10px] text-slate-400 mt-1 block truncate">5. Resiliente</span>
+        </div>
+        <div class="group relative">
+          <div class="h-10 bg-teal-950/60 border border-teal-800/50 rounded-lg flex items-end justify-center pb-1 text-[11px] font-mono text-teal-300">90%</div>
+          <span class="text-[10px] text-slate-400 mt-1 block truncate">6. Aprobado</span>
+        </div>
+        <div class="group relative">
+          <div class="h-10 bg-sky-950/60 border border-sky-800/50 rounded-lg flex items-end justify-center pb-1 text-[11px] font-mono text-sky-300">95%</div>
+          <span class="text-[10px] text-slate-400 mt-1 block truncate">7. Transparente</span>
+        </div>
+        <div class="group relative">
+          <div class="h-10 bg-emerald-950/60 border border-emerald-700/50 rounded-lg flex items-end justify-center pb-1 text-[11px] font-mono font-bold text-emerald-300">100%</div>
+          <span class="text-[10px] text-slate-400 mt-1 block truncate">8. Victoria</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN CONTAINER FOR MODES -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+
+    <!-- ========================================== -->
+    <!-- VIEW MODE 1: COMIC GRID (ALL 8 PANELS)     -->
+    <!-- ========================================== -->
+    <div id="gridSection" class="comic-grid grid grid-cols-1 md:grid-cols-2 gap-8">
+
+      <!-- ==================== PANEL 1 ==================== -->
+      <article class="panel-card bg-slate-900 rounded-3xl border border-slate-800 p-6 flex flex-col justify-between shadow-xl hover:border-amber-500/40 transition-all duration-300 relative overflow-hidden group">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-rose-500/10 rounded-full blur-2xl group-hover:bg-rose-500/20 transition-all"></div>
+        
+        <div>
+          <!-- Header Card -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-400 font-mono font-bold flex items-center justify-center text-sm">#1</span>
+              <div>
+                <span class="text-xs uppercase font-mono tracking-wider text-rose-400 font-semibold block">Acto 1: El Caos Tradicional</span>
+                <h3 class="text-xl font-display font-bold text-white">La Noche en Vela del Contratista</h3>
+              </div>
+            </div>
+            <span class="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700">00:45 AM &middot; Comedor</span>
+          </div>
+
+          <!-- Illustrated Scene Visual Mockup -->
+          <div class="bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-5 mb-5 relative overflow-hidden">
+            <!-- Visual Graphic Representation -->
+            <div class="h-44 rounded-xl bg-slate-950/80 border border-dashed border-slate-800 flex flex-col items-center justify-center relative p-4 text-center">
+              <div class="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-3xl mb-2 animate-bounce">
+                😫
+              </div>
+              <div class="flex items-center gap-3 text-xs text-slate-400 font-mono">
+                <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">🧾 Boletas arrugadas</span>
+                <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">📓 Cuaderno manchado</span>
+                <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">☕ Café frío</span>
+              </div>
+              <p class="text-xs text-rose-300 font-mono mt-3">4 a 6 horas perdidas calculando a mano &middot; Alto riesgo de descalce</p>
+              
+              <!-- Floating stress indicators -->
+              <span class="absolute top-2 left-3 text-[10px] bg-rose-950/80 text-rose-300 px-2 py-0.5 rounded border border-rose-800/60 font-mono">
+                ⚠️ Margen incierto (-25%)
+              </span>
+              <span class="absolute top-2 right-3 text-[10px] bg-slate-800/80 text-slate-400 px-2 py-0.5 rounded border border-slate-700 font-mono">
+                Línea Base Cap. II
+              </span>
+            </div>
+          </div>
+
+          <!-- Description & Narrative -->
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            Don Carlos se toma la cabeza rodeado de apuntes ilegibles. Intenta presupuestar una ampliación y radier de 40 m². Teme errar en el cálculo de materiales y mano de obra: si cobra de menos pierde dinero; si infla el precio por miedo, el cliente elegirá a otro.
+          </p>
+
+          <!-- Dialogue Box -->
+          <div class="bg-slate-950/70 border-l-4 border-rose-500 p-3.5 rounded-r-xl text-xs italic text-slate-200 mb-5">
+            <span class="font-bold text-rose-400 not-italic block mb-1">Pensamiento de Don Carlos:</span>
+            "Son casi la una de la mañana... Si cobro muy barato tendré que poner plata de mi bolsillo para pagar los sueldos; si cobro muy caro, el cliente se irá con otro maestro."
+          </div>
+        </div>
+
+        <!-- Technical Traceability Footer -->
+        <div class="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">Línea Base</span>
+            <span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono text-[11px] border border-rose-500/30">Diagnóstico Tesis</span>
+          </div>
+          <div class="text-[11px] text-slate-400 font-mono">
+            Estado Emocional: <span class="text-rose-400 font-bold">Agotamiento y Frustración</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- ==================== PANEL 2 ==================== -->
+      <article class="panel-card bg-slate-900 rounded-3xl border border-slate-800 p-6 flex flex-col justify-between shadow-xl hover:border-amber-500/40 transition-all duration-300 relative overflow-hidden group">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all"></div>
+        
+        <div>
+          <!-- Header Card -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 font-mono font-bold flex items-center justify-center text-sm">#2</span>
+              <div>
+                <span class="text-xs uppercase font-mono tracking-wider text-amber-400 font-semibold block">Acto 2: El Desafío Comercial</span>
+                <h3 class="text-xl font-display font-bold text-white">La Presión en Terreno</h3>
+              </div>
+            </div>
+            <span class="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700">09:30 AM &middot; Faena Peñalolén</span>
+          </div>
+
+          <!-- Illustrated Scene Visual Mockup -->
+          <div class="bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-5 mb-5 relative overflow-hidden">
+            <div class="h-44 rounded-xl bg-slate-950/80 border border-dashed border-slate-800 flex flex-col items-center justify-center relative p-4 text-center">
+              <div class="flex items-center justify-center gap-4 text-3xl mb-2">
+                <span>👷‍♂️</span>
+                <span class="text-amber-400 font-mono font-bold text-lg">📏 40 m²</span>
+                <span>👩‍💼</span>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-slate-400 font-mono">
+                <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">⏱️ Plazo límite: 13:00 hrs</span>
+                <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">🏢 2 empresas compitiendo</span>
+              </div>
+              <p class="text-xs text-amber-300 font-mono mt-3">Exigencia de desglose técnico formal por partidas</p>
+              
+              <span class="absolute top-2 left-3 text-[10px] bg-amber-950/80 text-amber-300 px-2 py-0.5 rounded border border-amber-800/60 font-mono">
+                ⏳ Ventana de 3.5 hrs
+              </span>
+              <span class="absolute top-2 right-3 text-[10px] bg-slate-800/80 text-slate-400 px-2 py-0.5 rounded border border-slate-700 font-mono">
+                RF-01
+              </span>
+            </div>
+          </div>
+
+          <!-- Description & Narrative -->
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            En la visita a terreno, la Sra. Andrea exige un presupuesto formal y transparente antes del mediodía. Ha tenido malas experiencias previas con maestros informales y busca formalidad y certeza antes de transferir anticipos.
+          </p>
+
+          <!-- Dialogue Box -->
+          <div class="bg-slate-950/70 border-l-4 border-amber-500 p-3.5 rounded-r-xl text-xs italic text-slate-200 mb-5 space-y-1.5">
+            <div>
+              <span class="font-bold text-sky-400 not-italic">Sra. Andrea:</span>
+              "Don Carlos, necesito el presupuesto hoy antes de las 13:00 hrs con el desglose. Si no me llega a tiempo, tendré que adjudicar a otra empresa."
+            </div>
+            <div>
+              <span class="font-bold text-amber-400 not-italic">Don Carlos:</span>
+              "Pierda cuidado, señora Andrea. Hoy al mediodía tiene el desglose técnico en su teléfono."
+            </div>
+          </div>
+        </div>
+
+        <!-- Technical Traceability Footer -->
+        <div class="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">RF-01 (Proyectos)</span>
+            <span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[11px] border border-amber-500/30">ISO/IEC 25010</span>
+          </div>
+          <div class="text-[11px] text-slate-400 font-mono">
+            Estado Emocional: <span class="text-amber-400 font-bold">Urgencia y Presión</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- ==================== PANEL 3 ==================== -->
+      <article class="panel-card bg-slate-900 rounded-3xl border border-slate-800 p-6 flex flex-col justify-between shadow-xl hover:border-amber-500/40 transition-all duration-300 relative overflow-hidden group">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-yellow-500/10 rounded-full blur-2xl group-hover:bg-yellow-500/20 transition-all"></div>
+        
+        <div>
+          <!-- Header Card -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 font-mono font-bold flex items-center justify-center text-sm">#3</span>
+              <div>
+                <span class="text-xs uppercase font-mono tracking-wider text-yellow-400 font-semibold block">Acto 3: El Copiloto Obrero IA</span>
+                <h3 class="text-xl font-display font-bold text-white">Cubicación Rápida con Gemini</h3>
+              </div>
+            </div>
+            <span class="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700">09:45 AM &middot; Camioneta</span>
+          </div>
+
+          <!-- Illustrated Scene Visual Mockup -->
+          <div class="bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-5 mb-5 relative overflow-hidden">
+            <div class="h-44 rounded-xl bg-slate-950/80 border border-amber-500/30 flex flex-col items-center justify-between p-3.5 relative">
+              <div class="w-full flex items-center justify-between text-[11px] font-mono text-slate-400 border-b border-slate-800 pb-2">
+                <span class="flex items-center gap-1.5 text-amber-400 font-bold">
+                  <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                  ObraTrack IA &bull; Gemini 3.8 Flash
+                </span>
+                <span class="text-emerald-400 font-bold">$4.000.000 CLP</span>
+              </div>
+
+              <!-- Audio waveform and items -->
+              <div class="my-auto w-full px-3 py-2 bg-slate-900/90 rounded-lg border border-slate-800 flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-sm font-bold shadow">
+                  🎙️
+                </div>
+                <div class="text-[11px] text-slate-300 font-mono text-left truncate">
+                  "Radier 40m2 espesor 10cm, H20, malla C-92, Peñalolén..."
+                </div>
+              </div>
+
+              <div class="w-full grid grid-cols-3 gap-1.5 text-[10px] font-mono text-center">
+                <span class="bg-slate-800/80 text-slate-300 py-1 rounded border border-slate-700">38 sacos Melón</span>
+                <span class="bg-slate-800/80 text-slate-300 py-1 rounded border border-slate-700">Cuadrilla 3 días</span>
+                <span class="bg-emerald-950/80 text-emerald-300 py-1 rounded border border-emerald-800">30% Margen OK</span>
+              </div>
+
+              <span class="absolute -bottom-2.5 right-4 text-[10px] bg-emerald-500 text-slate-950 px-2 py-0.5 rounded-full font-bold shadow">
+                ⚡ Cotización lista en 90s
+              </span>
+            </div>
+          </div>
+
+          <!-- Description & Narrative -->
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            Don Carlos se sube a su camioneta y abre ObraTrack. Activa el micrófono del Copiloto Obrero IA con Google Gemini 3.8 Flash. Dicta los requerimientos por voz y el motor calcula volúmenes, materiales con precios de ferreterías chilenas, mano de obra y genera un presupuesto formal.
+          </p>
+
+          <!-- Dialogue Box -->
+          <div class="bg-slate-950/70 border-l-4 border-yellow-400 p-3.5 rounded-r-xl text-xs italic text-slate-200 mb-5">
+            <span class="font-bold text-yellow-400 not-italic block mb-1">Exclamación de Don Carlos:</span>
+            "¡No te puedo creer! En menos de dos minutos tengo la cotización lista con precios actualizados de Construmart, las leyes sociales y mi 30% de margen protegido."
+          </div>
+        </div>
+
+        <!-- Technical Traceability Footer -->
+        <div class="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-300 font-mono text-[11px] border border-yellow-500/30">RF-06 (IA Gemini)</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">RF-07 (Radar Precios)</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">RF-08 (PDF)</span>
+          </div>
+          <div class="text-[11px] text-slate-400 font-mono">
+            Estado Emocional: <span class="text-yellow-400 font-bold">Asombro y Empoderamiento</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- ==================== PANEL 4 ==================== -->
+      <article class="panel-card bg-slate-900 rounded-3xl border border-slate-800 p-6 flex flex-col justify-between shadow-xl hover:border-amber-500/40 transition-all duration-300 relative overflow-hidden group">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all"></div>
+        
+        <div>
+          <!-- Header Card -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 font-mono font-bold flex items-center justify-center text-sm">#4</span>
+              <div>
+                <span class="text-xs uppercase font-mono tracking-wider text-blue-400 font-semibold block">Acto 4: Adjudicación y Planificación</span>
+                <h3 class="text-xl font-display font-bold text-white">Adjudicación & Carta Gantt</h3>
+              </div>
+            </div>
+            <span class="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700">11:15 AM &middot; Oficina / Smartphone</span>
+          </div>
+
+          <!-- Illustrated Scene Visual Mockup -->
+          <div class="bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-5 mb-5 relative overflow-hidden">
+            <div class="h-44 rounded-xl bg-slate-950/80 border border-blue-500/30 flex flex-col justify-between p-3.5 relative">
+              <div class="flex items-center justify-between text-[11px] font-mono border-b border-slate-800 pb-2">
+                <span class="text-blue-400 font-bold flex items-center gap-1.5">
+                  <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                  Presupuesto Aprobado
+                </span>
+                <span class="text-slate-400">Carta Gantt Dinámica</span>
+              </div>
+
+              <!-- Gantt Chart Mockup Mini Bars -->
+              <div class="space-y-2 py-1 text-[10px] font-mono">
+                <div class="flex items-center gap-2">
+                  <span class="w-20 text-slate-400 truncate text-right">Escarpe</span>
+                  <div class="flex-1 bg-slate-800 h-3 rounded overflow-hidden">
+                    <div class="bg-blue-500 h-full w-1/4 rounded"></div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="w-20 text-slate-400 truncate text-right">Moldajes</span>
+                  <div class="flex-1 bg-slate-800 h-3 rounded overflow-hidden">
+                    <div class="bg-amber-500 h-full w-2/5 ml-[25%] rounded"></div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="w-20 text-slate-400 truncate text-right">Hormigonado</span>
+                  <div class="flex-1 bg-slate-800 h-3 rounded overflow-hidden">
+                    <div class="bg-emerald-500 h-full w-1/3 ml-[50%] rounded"></div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="w-20 text-slate-400 truncate text-right">Curado</span>
+                  <div class="flex-1 bg-slate-800 h-3 rounded overflow-hidden">
+                    <div class="bg-sky-400 h-full w-1/4 ml-[75%] rounded"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800">
+                <span>Cuadrilla: Mtro. Juan + 2 ayudantes</span>
+                <span class="text-blue-300 font-bold">1 Click &rarr; Obra Creada</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Description & Narrative -->
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            Andrea recibe el PDF profesional, queda gratamente sorprendida por la rapidez y claridad, y confirma la adjudicación. Con un solo clic, Don Carlos convierte la propuesta en obra activa y el sistema crea la Carta Gantt y asigna el equipo de trabajo.
+          </p>
+
+          <!-- Dialogue Box -->
+          <div class="bg-slate-950/70 border-l-4 border-blue-500 p-3.5 rounded-r-xl text-xs italic text-slate-200 mb-5 space-y-1.5">
+            <div>
+              <span class="font-bold text-sky-400 not-italic">Sra. Andrea (WhatsApp):</span>
+              "Don Carlos, impecable el detalle técnico y la claridad de costos. ¡Obra adjudicada! Partimos este lunes."
+            </div>
+            <div>
+              <span class="font-bold text-amber-400 not-italic">Don Carlos:</span>
+              "Obra creada y cuadrilla notificada al instante. Ahora sé exactamente qué comprar cada día."
+            </div>
+          </div>
+        </div>
+
+        <!-- Technical Traceability Footer -->
+        <div class="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono text-[11px] border border-blue-500/30">RF-02 (Carta Gantt)</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">RF-04 (Cuadrillas)</span>
+          </div>
+          <div class="text-[11px] text-slate-400 font-mono">
+            Estado Emocional: <span class="text-blue-400 font-bold">Certeza y Control</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- ==================== PANEL 5 ==================== -->
+      <article class="panel-card bg-slate-900 rounded-3xl border border-slate-800 p-6 flex flex-col justify-between shadow-xl hover:border-amber-500/40 transition-all duration-300 relative overflow-hidden group">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl group-hover:bg-indigo-500/20 transition-all"></div>
+        
+        <div>
+          <!-- Header Card -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-mono font-bold flex items-center justify-center text-sm">#5</span>
+              <div>
+                <span class="text-xs uppercase font-mono tracking-wider text-indigo-400 font-semibold block">Acto 5: Resiliencia en Terreno</span>
+                <h3 class="text-xl font-display font-bold text-white">El Imprevisto Offline</h3>
+              </div>
+            </div>
+            <span class="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700">Día 3 &middot; 14:20 hrs &middot; Zanja</span>
+          </div>
+
+          <!-- Illustrated Scene Visual Mockup -->
+          <div class="bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-5 mb-5 relative overflow-hidden">
+            <div class="h-44 rounded-xl bg-slate-950/80 border border-indigo-500/30 flex flex-col items-center justify-between p-3.5 relative">
+              <div class="w-full flex items-center justify-between text-[11px] font-mono border-b border-slate-800 pb-2">
+                <span class="text-rose-400 font-bold flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                  Cañería de Agua Rota
+                </span>
+                <span class="text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 flex items-center gap-1">
+                  📡 MODO OFFLINE ACTIVO
+                </span>
+              </div>
+
+              <!-- Graphic in trench -->
+              <div class="my-auto text-center">
+                <div class="text-3xl mb-1">🪨 💧 📱</div>
+                <p class="text-xs text-indigo-300 font-mono">Service Worker + IndexedDB PWA</p>
+                <p class="text-[11px] text-slate-400 mt-0.5">2 Fotos HD y nota de voz guardadas localmente</p>
+              </div>
+
+              <div class="w-full flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800">
+                <span>Maestro Juan en zanja</span>
+                <span class="text-emerald-400">Cola de Sincronización Lista</span>
+              </div>
+
+              <span class="absolute top-2 left-3 text-[10px] bg-slate-800/90 text-slate-300 px-2 py-0.5 rounded font-mono border border-slate-700">
+                RNF-04 Tolerancia a Fallos
+              </span>
+            </div>
+          </div>
+
+          <!-- Description & Narrative -->
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            Durante la excavación en el patio trasero profundo, se rompe una matriz subterránea no catastrada. No hay señal celular en el foso. Juan abre la PWA de ObraTrack: la app no se congela, captura la foto georreferenciada y la encola localmente en IndexedDB.
+          </p>
+
+          <!-- Dialogue Box -->
+          <div class="bg-slate-950/70 border-l-4 border-indigo-500 p-3.5 rounded-r-xl text-xs italic text-slate-200 mb-5">
+            <span class="font-bold text-indigo-400 not-italic block mb-1">Maestro Juan en faena:</span>
+            "Mala suerte con esta cañería vieja, pero queda todo registrado con foto y hora en la bitácora del celular, aunque no tengamos señal en el patio."
+          </div>
+        </div>
+
+        <!-- Technical Traceability Footer -->
+        <div class="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[11px] border border-indigo-500/30">RF-09 (Bitácora)</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">RF-10 (Offline PWA)</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">RNF-04 (Resiliencia)</span>
+          </div>
+          <div class="text-[11px] text-slate-400 font-mono">
+            Estado Emocional: <span class="text-indigo-400 font-bold">Confianza y Respaldo</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- ==================== PANEL 6 ==================== -->
+      <article class="panel-card bg-slate-900 rounded-3xl border border-slate-800 p-6 flex flex-col justify-between shadow-xl hover:border-amber-500/40 transition-all duration-300 relative overflow-hidden group">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-teal-500/10 rounded-full blur-2xl group-hover:bg-teal-500/20 transition-all"></div>
+        
+        <div>
+          <!-- Header Card -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-400 font-mono font-bold flex items-center justify-center text-sm">#6</span>
+              <div>
+                <span class="text-xs uppercase font-mono tracking-wider text-teal-400 font-semibold block">Acto 6: Comunicación Omnicanal</span>
+                <h3 class="text-xl font-display font-bold text-white">Aprobación por WhatsApp</h3>
+              </div>
+            </div>
+            <span class="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700">14:35 hrs &middot; Meta Cloud API</span>
+          </div>
+
+          <!-- Illustrated Scene Visual Mockup -->
+          <div class="bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-5 mb-5 relative overflow-hidden">
+            <div class="h-44 rounded-xl bg-slate-950/80 border border-teal-500/30 flex flex-col justify-between p-3.5 relative">
+              <!-- WhatsApp Message Bubble Simulation -->
+              <div class="bg-emerald-950/70 border border-emerald-700/60 rounded-2xl p-3 text-left space-y-2">
+                <div class="flex items-center justify-between text-[10px] text-emerald-300 font-mono">
+                  <span class="font-bold flex items-center gap-1">
+                    <span class="text-xs">🟢</span> ObraTrack Notificaciones
+                  </span>
+                  <span>14:35</span>
+                </div>
+                <p class="text-xs text-slate-200">
+                  ⚠️ <strong>Alerta de Faena:</strong> Se detectó cañería rota. Adicional por materiales y gasfitería: <strong>$85.000 CLP</strong>.
+                </p>
+                <div class="pt-1 flex items-center gap-2">
+                  <button class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 shadow">
+                    ✓ APROBAR TRABAJO EXTRA
+                  </button>
+                  <span class="text-[10px] text-emerald-400 font-mono">Pulsado por Andrea</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1">
+                <span>Webhook Meta Business API</span>
+                <span class="text-teal-300 font-bold">Blindaje Legal Inmutable</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Description & Narrative -->
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            Al recuperar conexión 4G, ObraTrack sincroniza los datos con Supabase Storage y envía una plantilla de WhatsApp a la Sra. Andrea con las fotos de la rotura y el valor del arreglo. Andrea pulsa el botón interactivo de aprobación de inmediato.
+          </p>
+
+          <!-- Dialogue Box -->
+          <div class="bg-slate-950/70 border-l-4 border-teal-500 p-3.5 rounded-r-xl text-xs italic text-slate-200 mb-5">
+            <span class="font-bold text-teal-400 not-italic block mb-1">Efecto Operativo:</span>
+            "El extra queda documentado digitalmente con firma y fecha. Se erradica por completo la típica disputa al final de la obra: 'Yo jamás le pedí que arreglara eso'."
+          </div>
+        </div>
+
+        <!-- Technical Traceability Footer -->
+        <div class="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 font-mono text-[11px] border border-teal-500/30">RF-11 (Imprevistos)</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">RF-12 (WhatsApp API)</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">Ley 21.719</span>
+          </div>
+          <div class="text-[11px] text-slate-400 font-mono">
+            Estado Emocional: <span class="text-teal-400 font-bold">Seguridad y Eficiencia</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- ==================== PANEL 7 ==================== -->
+      <article class="panel-card bg-slate-900 rounded-3xl border border-slate-800 p-6 flex flex-col justify-between shadow-xl hover:border-amber-500/40 transition-all duration-300 relative overflow-hidden group">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl group-hover:bg-sky-500/20 transition-all"></div>
+        
+        <div>
+          <!-- Header Card -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-sky-500/20 border border-sky-500/30 text-sky-400 font-mono font-bold flex items-center justify-center text-sm">#7</span>
+              <div>
+                <span class="text-xs uppercase font-mono tracking-wider text-sky-400 font-semibold block">Acto 7: Transparencia y Autonomía</span>
+                <h3 class="text-xl font-display font-bold text-white">Portal Mandante por RUT</h3>
+              </div>
+            </div>
+            <span class="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700">Domingo 18:00 &middot; Hogar Mandante</span>
+          </div>
+
+          <!-- Illustrated Scene Visual Mockup -->
+          <div class="bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-5 mb-5 relative overflow-hidden">
+            <div class="h-44 rounded-xl bg-slate-950/80 border border-sky-500/30 flex flex-col justify-between p-3.5 relative">
+              <div class="flex items-center justify-between text-[11px] font-mono border-b border-slate-800 pb-2">
+                <span class="text-sky-400 font-bold flex items-center gap-1.5">
+                  🔑 Portal Mandante &bull; RUT 14.892.xxx-x
+                </span>
+                <span class="text-emerald-400 font-bold">65% Completado</span>
+              </div>
+
+              <!-- Progress bar & metrics -->
+              <div class="space-y-2 py-1">
+                <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden">
+                  <div class="bg-sky-400 h-full w-[65%] rounded-full"></div>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-[10px] font-mono text-center">
+                  <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+                    <span class="text-slate-400 block text-[9px]">Pactado</span>
+                    <span class="text-slate-200 font-bold">$4.000.000</span>
+                  </div>
+                  <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+                    <span class="text-amber-400 block text-[9px]">Adicionales</span>
+                    <span class="text-amber-300 font-bold">+$85.000</span>
+                  </div>
+                  <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+                    <span class="text-emerald-400 block text-[9px]">Fotos Faena</span>
+                    <span class="text-emerald-300 font-bold">14 verificadas</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800">
+                <span>Acceso sin clave &middot; Solo RUT</span>
+                <span class="text-sky-300 font-semibold">Cero llamadas de interrupción</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Description & Narrative -->
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            En su día de descanso, Andrea desea conocer el avance de su hogar. En lugar de interrumpir a Don Carlos con llamadas de fin de semana, ingresa al portal de ObraTrack con su RUT y visualiza el avance físico, galería de fotos y estado financiero.
+          </p>
+
+          <!-- Dialogue Box -->
+          <div class="bg-slate-950/70 border-l-4 border-sky-500 p-3.5 rounded-r-xl text-xs italic text-slate-200 mb-5">
+            <span class="font-bold text-sky-400 not-italic block mb-1">Reflexión de Sra. Andrea:</span>
+            "Qué tranquilidad da ver exactamente cómo avanza la casa sin tener que perseguir a nadie. La plataforma demuestra una seriedad que nunca había visto en una obra menor."
+          </div>
+        </div>
+
+        <!-- Technical Traceability Footer -->
+        <div class="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[11px] border border-sky-500/30">RF-13 (Portal Mandante)</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">Supabase RLS</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">Ley 21.663</span>
+          </div>
+          <div class="text-[11px] text-slate-400 font-mono">
+            Estado Emocional: <span class="text-sky-400 font-bold">Tranquilidad y Transparencia</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- ==================== PANEL 8 ==================== -->
+      <article class="panel-card bg-slate-900 rounded-3xl border border-slate-800 p-6 flex flex-col justify-between shadow-xl hover:border-amber-500/40 transition-all duration-300 relative overflow-hidden group">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all"></div>
+        
+        <div>
+          <!-- Header Card -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-mono font-bold flex items-center justify-center text-sm">#8</span>
+              <div>
+                <span class="text-xs uppercase font-mono tracking-wider text-emerald-400 font-semibold block">Acto 8: Victoria y Cierre</span>
+                <h3 class="text-xl font-display font-bold text-white">Cierre Exitoso & Rentabilidad</h3>
+              </div>
+            </div>
+            <span class="text-xs font-mono text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-700">Día Final &middot; 17:00 hrs &middot; Entrega</span>
+          </div>
+
+          <!-- Illustrated Scene Visual Mockup -->
+          <div class="bg-gradient-to-b from-slate-950 to-slate-900 border border-slate-800 rounded-2xl p-5 mb-5 relative overflow-hidden">
+            <div class="h-44 rounded-xl bg-slate-950/80 border border-emerald-500/30 flex flex-col justify-between p-3.5 relative">
+              <div class="flex items-center justify-between text-[11px] font-mono border-b border-slate-800 pb-2">
+                <span class="text-emerald-400 font-bold flex items-center gap-1.5">
+                  🏆 Obra Entregada &bull; Recepción Conforme
+                </span>
+                <span class="text-emerald-300 font-bold">CPI = 1.02</span>
+              </div>
+
+              <!-- Metrics highlight -->
+              <div class="grid grid-cols-3 gap-2 text-center py-2">
+                <div class="bg-emerald-950/50 border border-emerald-800/50 p-2 rounded-xl">
+                  <span class="text-[10px] text-emerald-400 font-mono block">Margen Neto</span>
+                  <span class="text-lg font-bold font-mono text-emerald-300">31.5%</span>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 p-2 rounded-xl">
+                  <span class="text-[10px] text-slate-400 font-mono block">Extras Cobrados</span>
+                  <span class="text-lg font-bold font-mono text-white">100%</span>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 p-2 rounded-xl">
+                  <span class="text-[10px] text-slate-400 font-mono block">Litigios</span>
+                  <span class="text-lg font-bold font-mono text-emerald-400">0</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-1 border-t border-slate-800">
+                <span>Pago final transferido en el acto</span>
+                <span class="text-emerald-400 font-bold">Relación Comercial Blindada</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Description & Narrative -->
+          <p class="text-sm text-slate-300 leading-relaxed mb-4">
+            Radier impecable y entrega conforme. Andrea transfiere el saldo restante con total confianza y recomienda a Don Carlos. El contratista revisa sus balances en ObraTrack: cero desvíos presupuestarios y utilidades intactas.
+          </p>
+
+          <!-- Dialogue Box -->
+          <div class="bg-slate-950/70 border-l-4 border-emerald-500 p-3.5 rounded-r-xl text-xs italic text-slate-200 mb-5 space-y-1.5">
+            <div>
+              <span class="font-bold text-sky-400 not-italic">Sra. Andrea:</span>
+              "Don Carlos, un 7 su trabajo. Todo ordenado, con fotos y cuentas claras. Lo recomendaré con todos mis vecinos."
+            </div>
+            <div>
+              <span class="font-bold text-amber-400 not-italic">Don Carlos:</span>
+              "Gracias a ObraTrack dejé de perder plata en las faenas y recuperé mis noches de descanso con mi familia."
+            </div>
+          </div>
+        </div>
+
+        <!-- Technical Traceability Footer -->
+        <div class="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[11px] border border-emerald-500/30">RF-03 (Control Financiero)</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">RF-05 (Estados de Pago)</span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700">KPI-N01 / KPI-N02</span>
+          </div>
+          <div class="text-[11px] text-slate-400 font-mono">
+            Estado Emocional: <span class="text-emerald-400 font-bold">Victoria y Plenitud</span>
+          </div>
+        </div>
+      </article>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW MODE 2: SLIDESHOW / PRESENTER MODE    -->
+    <!-- ========================================== -->
+    <div id="slidesSection" class="hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl relative">
+        <div class="flex items-center justify-between pb-6 border-b border-slate-800">
+          <div class="flex items-center gap-3">
+            <span id="slideBadge" class="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 font-mono font-bold flex items-center justify-center text-lg">#1</span>
+            <div>
+              <span id="slideCategory" class="text-xs uppercase font-mono tracking-wider text-amber-400 font-semibold block">Acto 1</span>
+              <h2 id="slideTitle" class="text-2xl sm:text-3xl font-display font-bold text-white">Título de la Diapositiva</h2>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="slideTime" class="text-xs font-mono text-slate-400 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">00:45 AM</span>
+          </div>
+        </div>
+
+        <!-- Slide Body Container -->
+        <div class="py-8 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+          <div id="slideVisual" class="bg-slate-950 border border-slate-800 rounded-2xl p-6 min-h-[300px] flex flex-col justify-center items-center text-center">
+            <!-- Injected dynamically -->
+          </div>
+          <div class="space-y-6">
+            <div>
+              <h4 class="text-xs uppercase font-mono tracking-wider text-slate-400 font-semibold mb-2">Narrativa y Contexto Operativo</h4>
+              <p id="slideDesc" class="text-base text-slate-200 leading-relaxed"></p>
+            </div>
+            
+            <div id="slideDialogueBox" class="bg-slate-950/80 border-l-4 border-amber-500 p-4 rounded-r-2xl text-sm italic text-slate-300">
+              <!-- Injected dynamically -->
+            </div>
+
+            <div class="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div>
+                <span class="text-slate-400 font-mono block text-[11px] mb-1">Módulos & Estándares IEEE:</span>
+                <div id="slideTags" class="flex flex-wrap gap-1.5"></div>
+              </div>
+              <div>
+                <span class="text-slate-400 font-mono block text-[11px] mb-1">Estado Emocional:</span>
+                <span id="slideEmotion" class="font-bold text-amber-400 font-mono text-sm"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide Nav Footer -->
+        <div class="pt-6 border-t border-slate-800 flex items-center justify-between">
+          <button onclick="prevSlide()" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-sm flex items-center gap-2 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            Anterior
+          </button>
+          
+          <div class="flex items-center gap-1.5 font-mono text-xs text-slate-400">
+            <span id="currentSlideIndex" class="text-white font-bold text-sm">1</span> de 8
+          </div>
+
+          <button onclick="nextSlide()" class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm flex items-center gap-2 transition shadow-lg shadow-amber-500/20">
+            Siguiente
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW MODE 3: TRACEABILITY MATRIX IEEE 830  -->
+    <!-- ========================================== -->
+    <div id="matrixSection" class="hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl">
+        <div class="mb-6">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono font-medium mb-2">
+            INGENIERÍA DE REQUERIMIENTOS &middot; IEEE STD 830-1998
+          </div>
+          <h2 class="text-2xl font-display font-bold text-white">Matriz de Trazabilidad: Storyboard vs. Arquitectura de Software</h2>
+          <p class="text-sm text-slate-400 mt-1">
+            Cada panel del guión gráfico valida un requerimiento funcional específico y su componente tecnológico implementado en el stack Cloud-Native de ObraTrack.
+          </p>
+        </div>
+
+        <div class="overflow-x-auto custom-scrollbar border border-slate-800 rounded-2xl">
+          <table class="w-full text-left text-xs font-sans">
+            <thead class="bg-slate-950 text-slate-300 font-mono uppercase text-[11px] border-b border-slate-800">
+              <tr>
+                <th class="p-3.5 font-semibold">Panel</th>
+                <th class="p-3.5 font-semibold">Escena Narrativa</th>
+                <th class="p-3.5 font-semibold">Requerimiento IEEE 830</th>
+                <th class="p-3.5 font-semibold">Stack Tecnológico</th>
+                <th class="p-3.5 font-semibold">Estándar / Marco Regulatorio</th>
+                <th class="p-3.5 font-semibold">Impacto en Tesis</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60 text-slate-300">
+              <tr class="hover:bg-slate-800/30 transition">
+                <td class="p-3.5 font-mono text-rose-400 font-bold">#1</td>
+                <td class="p-3.5 font-medium text-white">El Caos Tradicional</td>
+                <td class="p-3.5 font-mono">Diagnóstico Línea Base</td>
+                <td class="p-3.5">Cuadernos, papel, Excel desarticulado</td>
+                <td class="p-3.5 font-mono text-slate-400">Estudios CDT / CChC</td>
+                <td class="p-3.5 text-rose-300">Demuestra la justificación del problema (Cap. II).</td>
+              </tr>
+              <tr class="hover:bg-slate-800/30 transition">
+                <td class="p-3.5 font-mono text-amber-400 font-bold">#2</td>
+                <td class="p-3.5 font-medium text-white">Presión en Terreno</td>
+                <td class="p-3.5 font-mono text-amber-300">RF-01 (Gestión de Obras)</td>
+                <td class="p-3.5">Next.js 14 App Router + Tailwind</td>
+                <td class="p-3.5 font-mono text-slate-400">ISO/IEC 25010 (Usabilidad)</td>
+                <td class="p-3.5">Valida el levantamiento ágil sin fricción en terreno.</td>
+              </tr>
+              <tr class="hover:bg-slate-800/30 transition">
+                <td class="p-3.5 font-mono text-yellow-400 font-bold">#3</td>
+                <td class="p-3.5 font-medium text-white">Cubicación Gemini IA</td>
+                <td class="p-3.5 font-mono text-yellow-300">RF-06, RF-07, RF-08</td>
+                <td class="p-3.5">Google Gemini 3.8 Flash + Web Speech API + PDFKit</td>
+                <td class="p-3.5 font-mono text-slate-400">Ley 19.496 (Transparencia)</td>
+                <td class="p-3.5 text-emerald-300">Reducción del 93% en tiempo de presupuestación (2 min).</td>
+              </tr>
+              <tr class="hover:bg-slate-800/30 transition">
+                <td class="p-3.5 font-mono text-blue-400 font-bold">#4</td>
+                <td class="p-3.5 font-medium text-white">Adjudicación & Gantt</td>
+                <td class="p-3.5 font-mono text-blue-300">RF-02, RF-04</td>
+                <td class="p-3.5">Gantt interactivo SVG + Supabase Realtime</td>
+                <td class="p-3.5 font-mono text-slate-400">XP / Extreme Programming</td>
+                <td class="p-3.5">Conversión en 1 clic de presupuesto a cronograma operativo.</td>
+              </tr>
+              <tr class="hover:bg-slate-800/30 transition">
+                <td class="p-3.5 font-mono text-indigo-400 font-bold">#5</td>
+                <td class="p-3.5 font-medium text-white">Imprevisto Offline</td>
+                <td class="p-3.5 font-mono text-indigo-300">RF-09, RF-10, RNF-04</td>
+                <td class="p-3.5">PWA + Service Worker Workbox + IndexedDB</td>
+                <td class="p-3.5 font-mono text-slate-400">ISO/IEC 25010 (Fiabilidad)</td>
+                <td class="p-3.5 text-indigo-300">Resiliencia ante pérdida de red en zanjas y subterráneos.</td>
+              </tr>
+              <tr class="hover:bg-slate-800/30 transition">
+                <td class="p-3.5 font-mono text-teal-400 font-bold">#6</td>
+                <td class="p-3.5 font-medium text-white">Aprobación WhatsApp</td>
+                <td class="p-3.5 font-mono text-teal-300">RF-11, RF-12</td>
+                <td class="p-3.5">Meta WhatsApp Business Cloud API + Webhooks</td>
+                <td class="p-3.5 font-mono text-slate-400">Ley 21.719 (Protección Datos)</td>
+                <td class="p-3.5 text-emerald-300">Elimina el 100% de litigios por trabajos extras no autorizados.</td>
+              </tr>
+              <tr class="hover:bg-slate-800/30 transition">
+                <td class="p-3.5 font-mono text-sky-400 font-bold">#7</td>
+                <td class="p-3.5 font-medium text-white">Portal Mandante RUT</td>
+                <td class="p-3.5 font-mono text-sky-300">RF-13, RNF-01</td>
+                <td class="p-3.5">Next.js SSR + Supabase Row Level Security (RLS)</td>
+                <td class="p-3.5 font-mono text-slate-400">Ley 21.663 / ISO 27001</td>
+                <td class="p-3.5">Acceso transparente sin contraseñas para el cliente residencial.</td>
+              </tr>
+              <tr class="hover:bg-slate-800/30 transition">
+                <td class="p-3.5 font-mono text-emerald-400 font-bold">#8</td>
+                <td class="p-3.5 font-medium text-white">Cierre & Rentabilidad</td>
+                <td class="p-3.5 font-mono text-emerald-300">RF-03, RF-05</td>
+                <td class="p-3.5">Dashboard Financiero Recharts + KPIs de Desvío</td>
+                <td class="p-3.5 font-mono text-slate-400">ITIL 4 / Gestión de Valor</td>
+                <td class="p-3.5 text-emerald-400 font-bold">Rescate del 20% del margen de utilidad para el contratista.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-8 bg-slate-950 p-5 rounded-2xl border border-slate-800">
+          <h4 class="font-display font-bold text-white text-sm mb-2 flex items-center gap-2">
+            <span>🎓</span> Argumento Clave para la Comisión Evaluadora (Defensa de Tesis)
+          </h4>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            "Este Storyboard demuestra empíricamente que ObraTrack no impone una carga de aprendizaje artificial al maestro de la construcción chileno. El usuario interactúa por voz con Inteligencia Artificial generativa adaptada a insumos locales, trabaja sin depender de señal celular gracias a la arquitectura PWA, y formaliza acuerdos mediante WhatsApp y validación de RUT. Con ello, se cierra la histórica brecha de productividad del sector de obras menores."
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- JAVASCRIPT LOGIC FOR VIEWS AND SLIDES -->
+  <script>
+    const panelsData = [
+      {
+        num: 1,
+        category: "Acto 1: El Caos Tradicional",
+        title: "La Noche en Vela del Contratista",
+        time: "00:45 AM · Hogar de Don Carlos",
+        desc: "Don Carlos se toma la cabeza rodeado de apuntes ilegibles y boletas arrugadas. Intenta presupuestar una ampliación y radier de 40 m². Teme errar en el cálculo: si cobra de menos pierde utilidades; si infla el precio, el cliente elegirá a otro competidor.",
+        dialogueSpeaker: "Don Carlos (en soledad):",
+        dialogueText: "\"Son casi la una de la mañana... Si cobro muy barato tendré que poner plata de mi bolsillo para pagar los jornales; si cobro muy caro, el cliente se irá con otro maestro.\"",
+        tags: ["Línea Base", "Diagnóstico Cap. II", "CDT/CChC"],
+        emotion: "Agotamiento y Frustración (15%)",
+        visualHtml: `
+          <div class="text-4xl mb-3">😫 📓 🧾 ☕</div>
+          <div class="text-xs font-mono text-rose-400 font-bold mb-1">Pérdida de 4 a 6 horas por cotización</div>
+          <p class="text-xs text-slate-400">Cálculos manuales en papel vulnerable a extravíos y errores de cálculo</p>
+        `
+      },
+      {
+        num: 2,
+        category: "Acto 2: El Desafío Comercial",
+        title: "La Presión en Terreno",
+        time: "09:30 AM · Faena Peñalolén",
+        desc: "En la visita técnica, la Sra. Andrea exige un presupuesto formal y transparente antes del mediodía. Ha tenido malas experiencias previas con maestros informales y busca formalidad y certeza antes de transferir cualquier anticipo.",
+        dialogueSpeaker: "Sra. Andrea & Don Carlos:",
+        dialogueText: "\"Sra. Andrea: Don Carlos, necesito el presupuesto hoy antes de las 13:00 hrs con el desglose. Si no me llega a tiempo, no podré esperarlo.\"\n\"Don Carlos: Pierda cuidado, hoy al mediodía tiene el desglose técnico en su teléfono.\"",
+        tags: ["RF-01 Proyectos", "ISO/IEC 25010 Usabilidad"],
+        emotion: "Urgencia y Presión Comercial (30%)",
+        visualHtml: `
+          <div class="text-4xl mb-3">👷‍♂️ 📏 👩‍💼 ⏱️</div>
+          <div class="text-xs font-mono text-amber-400 font-bold mb-1">Ventana crítica de 3.5 horas</div>
+          <p class="text-xs text-slate-400">Competencia con dos contratistas más que cotizan en paralelo</p>
+        `
+      },
+      {
+        num: 3,
+        category: "Acto 3: El Copiloto Obrero IA",
+        title: "Cubicación Rápida con Gemini",
+        time: "09:45 AM · Interior Camioneta",
+        desc: "Don Carlos abre ObraTrack y presiona el micrófono del Copiloto IA con Gemini 3.8 Flash. Dicta por voz los requerimientos de la obra. El sistema calcula dosificaciones H20, materiales con precios chilenos, mano de obra y genera el presupuesto PDF en 90 segundos.",
+        dialogueSpeaker: "Don Carlos (asombrado):",
+        dialogueText: "\"¡No te puedo creer! En menos de dos minutos tengo la cotización lista con precios actualizados de Construmart, leyes sociales y mi 30% de margen protegido.\"",
+        tags: ["RF-06 IA Gemini", "RF-07 Radar Ferretero", "RF-08 Generador PDF"],
+        emotion: "Asombro y Empoderamiento (75%)",
+        visualHtml: `
+          <div class="text-4xl mb-3">🎙️ 🤖 📄 ⚡</div>
+          <div class="text-xs font-mono text-yellow-400 font-bold mb-1">Presupuesto generado en 90 segundos</div>
+          <p class="text-xs text-slate-400">Google Gemini 3.8 Flash + Radar de Precios de Ferreterías Nacionales</p>
+        `
+      },
+      {
+        num: 4,
+        category: "Acto 4: Adjudicación y Planificación",
+        title: "Adjudicación & Carta Gantt",
+        time: "11:15 AM · Aprobación Inmediata",
+        desc: "Andrea recibe el PDF profesional, queda asombrada por la prolijidad técnica y aprueba. Con un solo clic, Don Carlos convierte la propuesta en obra activa y el sistema crea la Carta Gantt automática con cuadrilla asignada.",
+        dialogueSpeaker: "Sra. Andrea & Don Carlos:",
+        dialogueText: "\"Sra. Andrea: Don Carlos, impecable el detalle técnico y la claridad de costos. ¡Obra adjudicada! Partimos este lunes.\"\n\"Don Carlos: Obra creada y cuadrilla notificada al instante. Ahora sé exactamente qué comprar cada día.\"",
+        tags: ["RF-02 Carta Gantt", "RF-04 Asignación Cuadrillas"],
+        emotion: "Certeza y Control Operativo (85%)",
+        visualHtml: `
+          <div class="text-4xl mb-3">📊 📅 👷‍♂️ 🏗️</div>
+          <div class="text-xs font-mono text-blue-400 font-bold mb-1">De Cotización a Gantt en 1 Clic</div>
+          <p class="text-xs text-slate-400">Escarpe, Moldajes, Hormigonado y Curado programados automáticamente</p>
+        `
+      },
+      {
+        num: 5,
+        category: "Acto 5: Resiliencia en Terreno",
+        title: "El Imprevisto Offline",
+        time: "Día 3 · 14:20 hrs · Foso de Excavación",
+        desc: "En una zanja profunda sin señal celular se quiebra una cañería matriz vieja. La PWA de ObraTrack permite a Juan capturar las fotos y notas de voz sin congelarse, persistiendo la bitácora en IndexedDB localmente.",
+        dialogueSpeaker: "Maestro Juan en faena:",
+        dialogueText: "\"Mala suerte con esta cañería vieja, pero queda todo registrado con foto y hora en la bitácora del celular, aunque no tengamos señal en el patio.\"",
+        tags: ["RF-09 Bitácora", "RF-10 Offline PWA", "RNF-04 Resiliencia"],
+        emotion: "Confianza y Respaldo Técnico (80%)",
+        visualHtml: `
+          <div class="text-4xl mb-3">🪨 💧 📱 💾</div>
+          <div class="text-xs font-mono text-indigo-400 font-bold mb-1">PWA 100% Funcional sin Internet</div>
+          <p class="text-xs text-slate-400">Service Workers y almacenamiento local en IndexedDB con geolocalización</p>
+        `
+      },
+      {
+        num: 6,
+        category: "Acto 6: Comunicación Omnicanal",
+        title: "Aprobación por WhatsApp",
+        time: "14:35 hrs · Meta WhatsApp Cloud API",
+        desc: "Al recuperar 4G, ObraTrack sincroniza la evidencia a Supabase y dispara un mensaje interactivo de WhatsApp a Andrea con fotos y el adicional de $85.000 CLP. La clienta pulsa el botón de aprobación en segundos.",
+        dialogueSpeaker: "Efecto Operativo:",
+        dialogueText: "\"El extra queda formalizado y registrado legalmente antes de ejecutar el gasto. Se erradica por completo la típica disputa al final de la faena: 'Yo no le pedí ese arreglo'.\"",
+        tags: ["RF-11 Imprevistos", "RF-12 WhatsApp Cloud API", "Ley 21.719"],
+        emotion: "Seguridad y Eficiencia Omnicanal (90%)",
+        visualHtml: `
+          <div class="text-4xl mb-3">💬 🟢 📸 💰</div>
+          <div class="text-xs font-mono text-teal-400 font-bold mb-1">Aprobación de Extra en 1 Toque</div>
+          <p class="text-xs text-slate-400">Meta WhatsApp Business API con botones interactivos y registro legal</p>
+        `
+      },
+      {
+        num: 7,
+        category: "Acto 7: Transparencia y Autonomía",
+        title: "Portal Mandante por RUT",
+        time: "Domingo 18:00 hrs · Hogar de la Mandante",
+        desc: "Andrea quiere revisar el estado de la obra el fin de semana. En vez de llamar a Don Carlos durante su descanso, ingresa a ObraTrack con su RUT y ve el 65% de avance, fotos del hormigonado y balance financiero al día.",
+        dialogueSpeaker: "Reflexión de Sra. Andrea:",
+        dialogueText: "\"Qué tranquilidad da ver exactamente cómo avanza la casa sin tener que perseguir a nadie. La plataforma demuestra una seriedad que nunca había visto en una obra menor.\"",
+        tags: ["RF-13 Portal Mandante", "Supabase RLS", "Ley 21.663"],
+        emotion: "Tranquilidad y Transparencia (95%)",
+        visualHtml: `
+          <div class="text-4xl mb-3">👩‍💼 💻 📈 🔐</div>
+          <div class="text-xs font-mono text-sky-400 font-bold mb-1">Trazabilidad en Tiempo Real con RUT</div>
+          <p class="text-xs text-slate-400">Sin contraseñas complicadas: seguridad Row Level Security (RLS) en Supabase</p>
+        `
+      },
+      {
+        num: 8,
+        category: "Acto 8: Victoria y Cierre",
+        title: "Cierre Exitoso & Rentabilidad",
+        time: "Día Final · 17:00 hrs · Entrega Conforme",
+        desc: "Radier impecable y recepción conforme. Andrea transfiere el saldo final y promete recomendaciones. Don Carlos mira sus métricas: 31.5% de utilidad neta libre, 100% de extras cobrados y cero disputas.",
+        dialogueSpeaker: "Don Carlos & Andrea:",
+        dialogueText: "\"Sra. Andrea: Don Carlos, un 7 su trabajo. Todo ordenado, con fotos y cuentas claras. Lo recomendaré con todos mis vecinos.\"\n\"Don Carlos: Gracias a ObraTrack dejé de perder plata en las faenas y recuperé mis noches de descanso con mi familia.\"",
+        tags: ["RF-03 Control Financiero", "RF-05 Estados Pago", "KPI-N01 / KPI-N02"],
+        emotion: "Victoria y Plenitud Empresarial (100%)",
+        visualHtml: `
+          <div class="text-4xl mb-3">🤝 🏆 💵 🌟</div>
+          <div class="text-xs font-mono text-emerald-400 font-bold mb-1">31.5% Utilidad Libre & Cero Litigios</div>
+          <p class="text-xs text-slate-400">Transformación completa de la microempresa hacia la formalidad y rentabilidad</p>
+        `
+      }
+    ];
+
+    let currentSlide = 0;
+
+    function setViewMode(mode) {
+      const gridSec = document.getElementById('gridSection');
+      const slidesSec = document.getElementById('slidesSection');
+      const matrixSec = document.getElementById('matrixSection');
+      const btnGrid = document.getElementById('btnViewGrid');
+      const btnSlides = document.getElementById('btnViewSlides');
+      const btnMatrix = document.getElementById('btnViewMatrix');
+
+      // Reset buttons
+      [btnGrid, btnSlides, btnMatrix].forEach(btn => {
+        btn.className = "px-3 py-1.5 rounded-lg text-slate-300 hover:text-white transition-all flex items-center gap-1.5";
+      });
+
+      gridSec.classList.add('hidden');
+      slidesSec.classList.add('hidden');
+      matrixSec.classList.add('hidden');
+
+      if (mode === 'grid') {
+        gridSec.classList.remove('hidden');
+        btnGrid.className = "px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-semibold transition-all flex items-center gap-1.5 shadow";
+      } else if (mode === 'slides') {
+        slidesSec.classList.remove('hidden');
+        btnSlides.className = "px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-semibold transition-all flex items-center gap-1.5 shadow";
+        renderSlide(currentSlide);
+      } else if (mode === 'matrix') {
+        matrixSec.classList.remove('hidden');
+        btnMatrix.className = "px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-semibold transition-all flex items-center gap-1.5 shadow";
+      }
+    }
+
+    function renderSlide(index) {
+      const data = panelsData[index];
+      document.getElementById('slideBadge').innerText = `#${data.num}`;
+      document.getElementById('slideCategory').innerText = data.category;
+      document.getElementById('slideTitle').innerText = data.title;
+      document.getElementById('slideTime').innerText = data.time;
+      document.getElementById('slideDesc').innerText = data.desc;
+      document.getElementById('slideEmotion').innerText = data.emotion;
+      document.getElementById('slideVisual').innerHTML = data.visualHtml;
+      document.getElementById('currentSlideIndex').innerText = data.num;
+
+      // Dialogue Box
+      document.getElementById('slideDialogueBox').innerHTML = `
+        <span class="font-bold text-amber-400 not-italic block mb-1">${data.dialogueSpeaker}</span>
+        ${data.dialogueText.replace(/\\n/g, '<br/>')}
+      `;
+
+      // Tags
+      const tagsContainer = document.getElementById('slideTags');
+      tagsContainer.innerHTML = '';
+      data.tags.forEach(t => {
+        const span = document.createElement('span');
+        span.className = "px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[11px] border border-slate-700";
+        span.innerText = t;
+        tagsContainer.appendChild(span);
+      });
+    }
+
+    function nextSlide() {
+      if (currentSlide < panelsData.length - 1) {
+        currentSlide++;
+        renderSlide(currentSlide);
+      } else {
+        currentSlide = 0;
+        renderSlide(currentSlide);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        currentSlide--;
+        renderSlide(currentSlide);
+      } else {
+        currentSlide = panelsData.length - 1;
+        renderSlide(currentSlide);
+      }
+    }
+
+    // Keyboard navigation for presentation mode
+    window.addEventListener('keydown', (e) => {
+      const slidesSec = document.getElementById('slidesSection');
+      if (!slidesSec.classList.contains('hidden')) {
+        if (e.key === 'ArrowRight' || e.key === ' ') {
+          nextSlide();
+        } else if (e.key === 'ArrowLeft') {
+          prevSlide();
+        }
+      }
+    });
+  </script>
+</body>
+</html>
