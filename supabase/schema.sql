@@ -371,3 +371,36 @@ CREATE POLICY "rls_agenda_tenant" ON public.agenda_eventos
 CREATE POLICY "rls_chat_tenant" ON public.mensajes_chat_proyecto
     FOR ALL USING (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id())
     WITH CHECK (auth.role() = 'service_role' OR empresa_id = public.get_auth_empresa_id());
+
+-- ==============================================================================
+-- 14. CONFIGURACIÓN DE STORAGE (BUCKET PARA FOTOS DE FAENA)
+-- ==============================================================================
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('bitacora-fotos', 'bitacora-fotos', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Public Access Bitacora Fotos" ON storage.objects;
+CREATE POLICY "Public Access Bitacora Fotos" 
+ON storage.objects FOR SELECT 
+USING (bucket_id = 'bitacora-fotos');
+
+DROP POLICY IF EXISTS "Allow Upload Bitacora Fotos" ON storage.objects;
+CREATE POLICY "Allow Upload Bitacora Fotos" 
+ON storage.objects FOR INSERT 
+WITH CHECK (bucket_id = 'bitacora-fotos');
+
+DROP POLICY IF EXISTS "Allow Delete Bitacora Fotos" ON storage.objects;
+CREATE POLICY "Allow Delete Bitacora Fotos" 
+ON storage.objects FOR DELETE 
+USING (bucket_id = 'bitacora-fotos');
+
+-- ==============================================================================
+-- 15. SEED INICIAL: EMPRESA Y USUARIO DESARROLLADOR MASTER
+-- ==============================================================================
+INSERT INTO public.empresas (id, rut, nombre, plan_id)
+VALUES ('empresa-dev-master', '76.000.000-0', 'ObraTrack Dev Studio', 'ilimitado')
+ON CONFLICT (rut) DO UPDATE SET plan_id = 'ilimitado';
+
+INSERT INTO public.usuarios (id, empresa_id, rut, nombre, email, rol, is_dev)
+VALUES ('user-dev-master-01', 'empresa-dev-master', '11.111.111-1', 'Desarrollador ObraTrack', 'obratrack2627@gmail.com', 'admin', true)
+ON CONFLICT (email) DO UPDATE SET is_dev = true, rol = 'admin';
