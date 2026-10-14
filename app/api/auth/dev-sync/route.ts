@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { isDeveloperEmail } from '@/lib/auth-utils';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://guouimnywtmnfzgocksr.supabase.co';
-const DEFAULT_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1b3VpbW55d3RtbmZ6Z29ja3NyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODkyNDkyNSwiZXhwIjoyMTA0NTAwOTI1fQ.XxLB5RRMrXHzvaMZB7noUWwrcwM0hgWLKjF_WP5VGMQ';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || DEFAULT_SERVICE_ROLE_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,9 +25,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!serviceRoleKey) {
+    if (!serviceRoleKey || !supabaseUrl) {
       return NextResponse.json(
-        { error: 'Falta serviceRoleKey en el servidor.' },
+        { error: 'Falta configuración de Supabase en el servidor.' },
         { status: 500 }
       );
     }
@@ -36,6 +35,11 @@ export async function POST(request: NextRequest) {
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    const isObratrackTeam = cleanEmail.includes('obratrack');
+    const devName = isObratrackTeam ? 'Desarrollador ObraTrack' : 'Benjamín Achávar';
+    const devRut = isObratrackTeam ? '11.111.111-1' : '19.123.456-3';
+    const devEmpresaId = isObratrackTeam ? 'empresa-dev-master' : 'e1111111-1111-4111-a111-111111111111';
 
     // 1. Buscar si el usuario ya existe en auth.users
     const { data: userList } = await supabaseAdmin.auth.admin.listUsers();
@@ -50,8 +54,8 @@ export async function POST(request: NextRequest) {
         password,
         email_confirm: true,
         user_metadata: {
-          display_name: 'Benjamín Achávar',
-          rut: '19.123.456-3',
+          display_name: devName,
+          rut: devRut,
           rol: 'admin',
           is_dev: true,
         },
@@ -72,8 +76,8 @@ export async function POST(request: NextRequest) {
           password,
           email_confirm: true,
           user_metadata: {
-            display_name: 'Benjamín Achávar',
-            rut: '19.123.456-3',
+            display_name: devName,
+            rut: devRut,
             rol: 'admin',
             is_dev: true,
           },
@@ -92,15 +96,14 @@ export async function POST(request: NextRequest) {
     // 4. Asegurar que en la tabla relacional usuarios esté registrado con auth_user_id
     await supabaseAdmin.from('usuarios').upsert({
       id: authUserId,
-      nombre: 'Benjamín Achávar',
+      nombre: devName,
       email: cleanEmail,
-      rut: '19.123.456-3',
+      rut: devRut,
       rol: 'admin',
       is_dev: true,
-      empresa_id: 'e1111111-1111-4111-a111-111111111111',
+      empresa_id: devEmpresaId,
       auth_user_id: authUserId,
-      created_at: new Date().toISOString(),
-    });
+    }, { onConflict: 'email' });
 
     return NextResponse.json({ success: true, email: cleanEmail });
   } catch (err: any) {
