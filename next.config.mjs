@@ -2,17 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   env: {
-    NEXT_PUBLIC_SUPABASE_URL:
-      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://guouimnywtmnfzgocksr.supabase.co',
-    NEXT_PUBLIC_SUPABASE_ANON_KEY:
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1b3VpbW55d3RtbmZ6Z29ja3NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5MjQ5MjUsImV4cCI6MjEwNDUwMDkyNX0.PZTxOfJs0MBCC3ZtPMIwaKSZUwBoQ4Q_XvtyMV6ae2I',
-    GEMINI_API_KEY:
-      process.env.GEMINI_API_KEY ||
-      'REDACTED_GEMINI_KEY',
-    GOOGLE_API_KEY:
-      process.env.GOOGLE_API_KEY ||
-      'REDACTED_GEMINI_KEY',
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+    GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || '',
   },
   images: {
     remotePatterns: [

@@ -3,7 +3,7 @@ import { CotizacionEstimacion, RecomendacionCobroCliente } from '@/types/databas
 
 let geminiClientInstance: GoogleGenAI | null = null;
 
-export const DEFAULT_GEMINI_API_KEY = 'REDACTED_GEMINI_KEY';
+export const DEFAULT_GEMINI_API_KEY = '';
 
 export function getGeminiApiKey(): string | null {
   const apiKey =
@@ -11,7 +11,7 @@ export function getGeminiApiKey(): string | null {
     process.env.GOOGLE_API_KEY ||
     process.env.GOOGLE_GENAI_API_KEY ||
     process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
-    DEFAULT_GEMINI_API_KEY;
+    '';
 
   if (!apiKey || apiKey.trim() === '' || apiKey.includes('YourGeminiApiKeyHere')) {
     return null;
