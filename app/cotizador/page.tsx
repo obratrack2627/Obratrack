@@ -318,15 +318,23 @@ export default function CopilotoObreroPage() {
           nombre: p.nombre,
           comuna: p.comuna,
           estado: p.estado,
+          monto_cotizado: p.monto_cotizado,
+          total_pagado: p.total_pagado,
+          saldo_pendiente: p.saldo_pendiente,
+          porcentaje_avance: p.porcentaje_avance_ponderado,
+          trabajadores_count: (p.trabajadores_ids || []).length,
         })),
         trabajadores: dataService.getUsuarios().map((u) => ({
           id: u.id,
           nombre: u.nombre,
           rol: u.rol,
+          telefono: u.telefono_whatsapp,
         })),
         clientes: dataService.getClientes().map((c) => ({
           id: c.id,
           nombre: c.nombre,
+          telefono: c.telefono,
+          comuna: c.comuna,
         })),
       };
 
@@ -344,86 +352,18 @@ export default function CopilotoObreroPage() {
 
       let accionEjecutada: AccionAsistenteIA | undefined = undefined;
 
-      // Ejecución autónoma de la acción detectada por Gemini
+      // Ejecución autónoma universal de la acción detectada por Gemini
       if (data.accion) {
-        const acc = data.accion;
-
-        if (acc.tipo === 'crear_proyecto') {
-          const nuevoProj = dataService.crearProyectoDesdeIA({
-            nombre: acc.nombre || 'Nueva Obra',
-            cliente_nombre: acc.cliente_nombre,
-            cliente_telefono: acc.cliente_telefono,
-            comuna: acc.comuna,
-            direccion: acc.direccion,
-            monto: acc.monto,
-            dias: acc.dias,
-            descripcion: acc.descripcion,
-            partidas: acc.partidas,
-          });
-          reloadData();
-          accionEjecutada = {
-            tipo: 'crear_proyecto',
-            titulo: `Obra Creada: ${nuevoProj.nombre}`,
-            detalles: nuevoProj,
-            resultado_texto: `Monto: $${nuevoProj.monto_cotizado.toLocaleString('es-CL')} CLP • Ubicación: ${nuevoProj.comuna || 'Chile'} • Fecha inicio: ${formatDate(nuevoProj.fecha_inicio)}`,
-            link_destino: `/proyectos/${nuevoProj.id}/gantt`,
-            link_texto: 'Ver Obra & Carta Gantt ➔',
-          };
-          showToast(`🏗️ ¡Obra "${nuevoProj.nombre}" creada en el menú de Proyectos!`);
-        } else if (acc.tipo === 'agregar_trabajador') {
-          const nuevoUser = dataService.agregarTrabajadorDesdeIA({
-            nombre: acc.nombre || 'Nuevo Trabajador',
-            rol: acc.rol || 'terreno',
-            telefono: acc.telefono,
-            email: acc.email,
-          });
-          reloadData();
-          accionEjecutada = {
-            tipo: 'agregar_trabajador',
-            titulo: `Trabajador Incorporado: ${nuevoUser.nombre}`,
-            detalles: nuevoUser,
-            resultado_texto: `Rol: ${nuevoUser.rol.toUpperCase()} • WhatsApp: ${nuevoUser.telefono_whatsapp}`,
-            link_destino: `/equipo`,
-            link_texto: 'Ver Equipo ➔',
-          };
-          showToast(`👷‍♂️ ¡Trabajador "${nuevoUser.nombre}" agregado al equipo!`);
-        } else if (acc.tipo === 'asignar_trabajador') {
-          const ok = dataService.asignarTrabajadorAProyecto(
-            acc.trabajador_nombre || '',
-            acc.proyecto_nombre || ''
-          );
-          reloadData();
-          accionEjecutada = {
-            tipo: 'asignar_trabajador',
-            titulo: `Cuadrilla Asignada`,
-            detalles: acc,
-            resultado_texto: ok
-              ? `${acc.trabajador_nombre} fue asignado a la obra ${acc.proyecto_nombre}.`
-              : `Se registró la asignación para ${acc.trabajador_nombre}.`,
-            link_destino: `/proyectos`,
-            link_texto: 'Ver Proyectos ➔',
-          };
-          showToast(`🔨 ¡Cuadrilla actualizada!`);
-        } else if (acc.tipo === 'agendar_visita' || acc.tipo === 'agendar_evento') {
-          const nuevoEvt = dataService.saveEventoAgenda({
-            titulo: acc.titulo || 'Visita a Terreno',
-            tipo: acc.tipo_evento || 'visita_terreno',
-            fecha: acc.fecha || new Date(Date.now() + 86400000).toISOString().split('T')[0],
-            hora: acc.hora || '10:00',
-            comuna_lugar: acc.comuna_lugar || 'Santiago, Chile',
-            descripcion: acc.descripcion || msgToSend,
-            cliente_nombre: acc.cliente_nombre || 'Mandante',
-            completado: false,
-            origen: 'asistente_ia',
-          });
-          reloadData();
-          accionEjecutada = {
-            tipo: 'agendar_visita',
-            titulo: `Visita Agendada: ${nuevoEvt.titulo}`,
-            detalles: nuevoEvt,
-            resultado_texto: `Fecha: ${formatDate(nuevoEvt.fecha)} a las ${nuevoEvt.hora} hrs • Lugar: ${nuevoEvt.comuna_lugar}`,
-          };
-          showToast(`📅 ¡Visita agendada en tu calendario de faena!`);
+        try {
+          const resultado = dataService.ejecutarAccionGlobalIA(data.accion);
+          if (resultado) {
+            accionEjecutada = resultado;
+            reloadData();
+            showToast(`⚡ ${resultado.titulo}`);
+          }
+        } catch (actErr: any) {
+          console.warn('Error ejecutando acción de IA:', actErr);
+          showToast(`⚠️ ${actErr?.message || 'Error al ejecutar acción'}`);
         }
       }
 

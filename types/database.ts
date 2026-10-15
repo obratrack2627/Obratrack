@@ -330,8 +330,14 @@ export interface EventoAgenda {
 
 export type TipoAccionIA =
   | 'crear_proyecto'
+  | 'crear_proyecto_completo'
+  | 'actualizar_proyecto'
+  | 'eliminar_proyecto'
+  | 'crear_cliente'
+  | 'actualizar_cliente'
   | 'agregar_trabajador'
   | 'asignar_trabajador'
+  | 'desasignar_trabajador'
   | 'agendar_visita'
   | 'agendar_evento'
   | 'registrar_pago'
@@ -341,8 +347,11 @@ export type TipoAccionIA =
   | 'actualizar_avance'
   | 'registrar_imprevisto'
   | 'agregar_material'
+  | 'agregar_materiales'
   | 'crear_bitacora'
-  | 'generar_mensaje_whatsapp';
+  | 'generar_reporte'
+  | 'generar_mensaje_whatsapp'
+  | 'lote_acciones';
 
 export interface AccionAsistenteIA {
   tipo: TipoAccionIA;

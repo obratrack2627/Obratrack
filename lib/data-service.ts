@@ -14,6 +14,8 @@ import {
   EventoAgenda,
   MensajeChatCotizador,
   MensajeChatProyecto,
+  AccionAsistenteIA,
+  PaymentMethod,
 } from '@/types/database';
 import {
   INITIAL_PROYECTOS,
@@ -955,10 +957,16 @@ class DataService {
     monto?: number;
     dias_estimados?: number;
     dias?: number;
-    partidas?: Array<{ nombre: string; dias: number }>;
+    partidas?: Array<{ nombre: string; dias?: number; porcentaje_avance?: number }>;
+    materiales?: Array<{ nombre: string; cantidad: number; unidad?: string; precio_unitario: number; categoria?: string }>;
+    trabajadores_nombres?: string[];
     cliente_id?: string;
     cliente_nombre?: string;
     cliente_telefono?: string;
+    cliente_email?: string;
+    cliente_rut?: string;
+    imprevistos?: Array<{ descripcion: string; monto: number }>;
+    bitacora?: Array<{ titulo: string; nota: string; tipo?: string }>;
   }): Proyecto {
     let finalClienteId = datos.cliente_id;
     if (!finalClienteId && datos.cliente_nombre) {
@@ -969,7 +977,8 @@ class DataService {
         const nuevoCli = this.createCliente({
           nombre: datos.cliente_nombre,
           telefono: datos.cliente_telefono || '+56900000000',
-          email: `${datos.cliente_nombre.toLowerCase().replace(/\s+/g, '.')}@cliente.cl`,
+          email: datos.cliente_email || `${datos.cliente_nombre.toLowerCase().replace(/\s+/g, '.')}@cliente.cl`,
+          rut: datos.cliente_rut,
           comuna: datos.comuna || 'Santiago',
           direccion: datos.direccion || '',
         });
@@ -984,7 +993,12 @@ class DataService {
     const fechaTermino = fechaFinDate.toISOString().split('T')[0];
     const monto = datos.monto_cotizado ?? datos.monto ?? 0;
 
-    return this.createProyecto(
+    const partidasFormateadas = (datos.partidas || []).map((p) => ({
+      nombre: p.nombre,
+      dias: Number(p.dias) || 5,
+    }));
+
+    const nuevoProyecto = this.createProyecto(
       {
         nombre: datos.nombre,
         descripcion: datos.descripcion || 'Creado automáticamente mediante copiloto de IA.',
@@ -997,8 +1011,67 @@ class DataService {
         cliente_id: finalClienteId,
         empresa_id: this.getActiveUser()?.empresa_id || DEMO_EMPRESA_ID,
       },
-      datos.partidas
+      partidasFormateadas.length > 0 ? partidasFormateadas : undefined
     );
+
+    // Crear materiales vinculados al proyecto
+    if (Array.isArray(datos.materiales) && datos.materiales.length > 0) {
+      datos.materiales.forEach((m) => {
+        const cant = Number(m.cantidad) || 1;
+        const pu = Number(m.precio_unitario) || 0;
+        this.createMaterialProyecto({
+          proyecto_id: nuevoProyecto.id,
+          nombre: m.nombre || 'Material',
+          cantidad: cant,
+          unidad: m.unidad || 'unidad',
+          precio_unitario: pu,
+          subtotal: cant * pu,
+          categoria: m.categoria || 'General',
+          comprado: false,
+        });
+      });
+    }
+
+    // Asignar cuadrilla de trabajadores a la obra
+    if (Array.isArray(datos.trabajadores_nombres) && datos.trabajadores_nombres.length > 0) {
+      datos.trabajadores_nombres.forEach((tNom) => {
+        this.asignarTrabajadorAProyecto(tNom, nuevoProyecto.id);
+      });
+    }
+
+    // Registrar imprevistos iniciales
+    if (Array.isArray(datos.imprevistos) && datos.imprevistos.length > 0) {
+      datos.imprevistos.forEach((imp) => {
+        this.createImprevisto({
+          proyecto_id: nuevoProyecto.id,
+          descripcion: imp.descripcion || 'Imprevisto inicial',
+          monto: Number(imp.monto) || 0,
+          estado: 'pendiente',
+          origen: 'whatsapp_ia',
+          fecha: fechaInicio,
+        });
+      });
+    }
+
+    // Registrar notas de bitácora iniciales
+    if (Array.isArray(datos.bitacora) && datos.bitacora.length > 0) {
+      const active = this.getActiveUser();
+      datos.bitacora.forEach((b) => {
+        this.createBitacoraEntrada({
+          proyecto_id: nuevoProyecto.id,
+          usuario_id: active?.id || 'u-1',
+          autor_nombre: active?.nombre || 'Inspector de Obra',
+          titulo: b.titulo || 'Inicio de Faena',
+          nota: b.nota || 'Apertura de obra e instalación de faena.',
+          tipo: (['avance', 'incidente', 'clima', 'entrega_material'].includes(b.tipo || '')
+            ? b.tipo
+            : 'avance') as 'avance' | 'incidente' | 'clima' | 'entrega_material',
+          fecha: fechaInicio,
+        });
+      });
+    }
+
+    return nuevoProyecto;
   }
 
   agregarTrabajadorDesdeIA(datos: {
@@ -1027,10 +1100,20 @@ class DataService {
     if (!proyecto) return false;
 
     const usuarios = this.getUsuarios();
-    const trabajador =
+    let trabajador =
       usuarios.find((u) => u.id === trabajadorIdent) ||
       usuarios.find((u) => u.nombre.toLowerCase().includes(trabajadorIdent.toLowerCase()));
-    const trabajadorId = trabajador ? trabajador.id : trabajadorIdent;
+
+    // Si el trabajador mencionado no existe en el equipo, crearlo automáticamente
+    if (!trabajador && trabajadorIdent.trim().length > 0) {
+      trabajador = this.agregarTrabajadorDesdeIA({
+        nombre: trabajadorIdent.trim(),
+        rol: 'terreno',
+      });
+    }
+
+    if (!trabajador) return false;
+    const trabajadorId = trabajador.id;
 
     const current = proyecto.trabajadores_ids || [];
     if (current.includes(trabajadorId)) return true;
@@ -1038,6 +1121,440 @@ class DataService {
       trabajadores_ids: [...current, trabajadorId],
     });
     return true;
+  }
+
+  /**
+   * Motor Universal de Ejecución de Acciones de IA sobre toda la plataforma
+   */
+  ejecutarAccionGlobalIA(accion: any, contextProyectoId?: string): AccionAsistenteIA | null {
+    if (!accion || !accion.tipo) return null;
+
+    // Helper para resolver id de proyecto por id o por nombre
+    const resolverProyecto = (ident?: string): Proyecto | null => {
+      const projs = this.getProyectos();
+      if (ident && typeof ident === 'string') {
+        const clean = ident.trim().toLowerCase();
+        const found = projs.find(
+          (p) =>
+            p.id.toLowerCase() === clean ||
+            p.nombre.toLowerCase().includes(clean) ||
+            clean.includes(p.nombre.toLowerCase())
+        );
+        if (found) return found;
+      }
+      if (contextProyectoId) {
+        return projs.find((p) => p.id === contextProyectoId) || null;
+      }
+      return projs[0] || null;
+    };
+
+    switch (accion.tipo) {
+      case 'crear_proyecto':
+      case 'crear_proyecto_completo': {
+        const nuevo = this.crearProyectoDesdeIA(accion);
+        const mats = accion.materiales || [];
+        const parts = accion.partidas || [];
+        const totalMats = mats.reduce(
+          (s: number, m: any) => s + Number(m.cantidad || 1) * Number(m.precio_unitario || 0),
+          0
+        );
+        return {
+          tipo: 'crear_proyecto',
+          titulo: `Obra Creada: ${nuevo.nombre}`,
+          detalles: nuevo,
+          resultado_texto: `Presupuesto: $${nuevo.monto_cotizado.toLocaleString('es-CL')} CLP • ${parts.length} partidas en Gantt • ${mats.length} materiales presupuestados ($${totalMats.toLocaleString('es-CL')}) • Comuna: ${nuevo.comuna || 'Chile'}`,
+          link_destino: `/proyectos/${nuevo.id}/gantt`,
+          link_texto: 'Ver Obra & Carta Gantt ➔',
+        };
+      }
+
+      case 'actualizar_proyecto': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre || accion.nombre);
+        if (!proj) return null;
+        const updates: Partial<Proyecto> = {};
+        if (accion.estado) updates.estado = accion.estado;
+        if (accion.monto || accion.monto_cotizado) updates.monto_cotizado = Number(accion.monto || accion.monto_cotizado);
+        if (accion.fecha_termino_estimada) updates.fecha_termino_estimada = accion.fecha_termino_estimada;
+        if (accion.descripcion) updates.descripcion = accion.descripcion;
+        const updated = this.updateProyecto(proj.id, updates);
+        return {
+          tipo: 'actualizar_proyecto',
+          titulo: `Obra Actualizada: ${proj.nombre}`,
+          detalles: updated || proj,
+          resultado_texto: `Estado: ${(updated?.estado || proj.estado).toUpperCase()} • Monto: $${(updated?.monto_cotizado || proj.monto_cotizado).toLocaleString('es-CL')} CLP`,
+          link_destino: `/proyectos/${proj.id}/gantt`,
+          link_texto: 'Ver Obra ➔',
+        };
+      }
+
+      case 'eliminar_proyecto': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre || accion.nombre);
+        if (!proj) return null;
+        this.deleteProyecto(proj.id);
+        return {
+          tipo: 'eliminar_proyecto',
+          titulo: `Obra Eliminada`,
+          detalles: { id: proj.id, nombre: proj.nombre },
+          resultado_texto: `La obra "${proj.nombre}" ha sido eliminada del sistema.`,
+          link_destino: `/proyectos`,
+          link_texto: 'Ver Listado de Obras ➔',
+        };
+      }
+
+      case 'crear_cliente': {
+        const nuevoCli = this.createCliente({
+          nombre: accion.nombre || 'Nuevo Cliente',
+          telefono: accion.telefono || '+56900000000',
+          email: accion.email || `${(accion.nombre || 'cliente').toLowerCase().replace(/\s+/g, '.')}@cliente.cl`,
+          rut: accion.rut,
+          comuna: accion.comuna || 'Santiago',
+          direccion: accion.direccion || '',
+        });
+        return {
+          tipo: 'crear_cliente',
+          titulo: `Cliente Registrado: ${nuevoCli.nombre}`,
+          detalles: nuevoCli,
+          resultado_texto: `Teléfono: ${nuevoCli.telefono} • Email: ${nuevoCli.email} • Comuna: ${nuevoCli.comuna}`,
+          link_destino: `/clientes`,
+          link_texto: 'Ver Directorio de Clientes ➔',
+        };
+      }
+
+      case 'actualizar_cliente': {
+        const clis = this.getClientes();
+        const cli = clis.find(
+          (c) =>
+            c.id === accion.cliente_id ||
+            (accion.nombre && c.nombre.toLowerCase().includes(accion.nombre.toLowerCase()))
+        );
+        if (!cli) return null;
+        const updated = this.updateCliente(cli.id, {
+          telefono: accion.telefono ?? cli.telefono,
+          email: accion.email ?? cli.email,
+          comuna: accion.comuna ?? cli.comuna,
+          direccion: accion.direccion ?? cli.direccion,
+        });
+        return {
+          tipo: 'actualizar_cliente',
+          titulo: `Cliente Actualizado: ${cli.nombre}`,
+          detalles: updated || cli,
+          resultado_texto: `Contacto actualizado: ${updated?.telefono || cli.telefono}`,
+          link_destino: `/clientes`,
+          link_texto: 'Ver Clientes ➔',
+        };
+      }
+
+      case 'agregar_trabajador': {
+        const nuevoUser = this.agregarTrabajadorDesdeIA({
+          nombre: accion.nombre || 'Nuevo Trabajador',
+          rol: accion.rol || 'terreno',
+          telefono: accion.telefono || accion.telefono_whatsapp,
+          email: accion.email,
+          rut: accion.rut,
+        });
+        return {
+          tipo: 'agregar_trabajador',
+          titulo: `Trabajador Incorporado: ${nuevoUser.nombre}`,
+          detalles: nuevoUser,
+          resultado_texto: `Rol: ${nuevoUser.rol.toUpperCase()} • Contacto: ${nuevoUser.telefono_whatsapp}`,
+          link_destino: `/equipo`,
+          link_texto: 'Ver Equipo ➔',
+        };
+      }
+
+      case 'asignar_trabajador': {
+        const proj = resolverProyecto(accion.proyecto_nombre || accion.proyecto_id);
+        const ok = proj
+          ? this.asignarTrabajadorAProyecto(accion.trabajador_nombre || '', proj.id)
+          : false;
+        return {
+          tipo: 'asignar_trabajador',
+          titulo: `Cuadrilla Asignada`,
+          detalles: accion,
+          resultado_texto: ok
+            ? `${accion.trabajador_nombre} fue incorporado a la faena "${proj?.nombre}".`
+            : `Trabajador coordinado en el equipo.`,
+          link_destino: proj ? `/proyectos/${proj.id}/gantt` : `/equipo`,
+          link_texto: 'Ver Faena ➔',
+        };
+      }
+
+      case 'desasignar_trabajador': {
+        const proj = resolverProyecto(accion.proyecto_nombre || accion.proyecto_id);
+        if (proj) {
+          const usuarios = this.getUsuarios();
+          const u = usuarios.find(
+            (user) =>
+              user.id === accion.trabajador_nombre ||
+              user.nombre.toLowerCase().includes((accion.trabajador_nombre || '').toLowerCase())
+          );
+          if (u) {
+            const filtered = (proj.trabajadores_ids || []).filter((id) => id !== u.id);
+            this.updateProyecto(proj.id, { trabajadores_ids: filtered });
+          }
+        }
+        return {
+          tipo: 'desasignar_trabajador',
+          titulo: `Trabajador Desasignado`,
+          detalles: accion,
+          resultado_texto: `${accion.trabajador_nombre} fue retirado de la cuadrilla de la obra.`,
+          link_destino: `/equipo`,
+          link_texto: 'Ver Equipo ➔',
+        };
+      }
+
+      case 'crear_actividad': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        if (!proj) return null;
+        const dias = Number(accion.dias) || 5;
+        const acts = this.getActividades(proj.id);
+        const lastAct = acts[acts.length - 1];
+        let startDate = new Date();
+        if (lastAct && lastAct.fecha_termino) {
+          startDate = new Date(lastAct.fecha_termino);
+        }
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + dias);
+
+        const nueva = this.createActividad({
+          proyecto_id: proj.id,
+          nombre: accion.nombre || 'Nueva Partida',
+          fecha_inicio: startDate.toISOString().split('T')[0],
+          fecha_termino: endDate.toISOString().split('T')[0],
+          porcentaje_avance: 0,
+          estado: 'pendiente',
+          orden: acts.length + 1,
+        });
+        return {
+          tipo: 'crear_actividad',
+          titulo: `Partida Creada: ${nueva.nombre}`,
+          detalles: nueva,
+          resultado_texto: `Duración: ${dias} días • Fechas: ${nueva.fecha_inicio} al ${nueva.fecha_termino}`,
+          link_destino: `/proyectos/${proj.id}/gantt`,
+          link_texto: 'Ver en Carta Gantt ➔',
+        };
+      }
+
+      case 'actualizar_avance': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        if (!proj) return null;
+        const acts = this.getActividades(proj.id);
+        const match = acts.find(
+          (a) =>
+            a.id === accion.actividad_id ||
+            (accion.nombre && a.nombre.toLowerCase().includes(accion.nombre.toLowerCase()))
+        );
+        if (match) {
+          const avance = Math.min(100, Math.max(0, Number(accion.porcentaje_avance) || 0));
+          const estado = avance === 100 ? 'terminada' : avance > 0 ? 'en_curso' : 'pendiente';
+          const updated = this.updateActividad(match.id, { porcentaje_avance: avance, estado });
+          return {
+            tipo: 'actualizar_avance',
+            titulo: `Avance Actualizado`,
+            detalles: updated || match,
+            resultado_texto: `Partida "${match.nombre}" actualizada al ${avance}% (${estado}).`,
+            link_destino: `/proyectos/${proj.id}/gantt`,
+            link_texto: 'Ver Carta Gantt ➔',
+          };
+        }
+        return null;
+      }
+
+      case 'agregar_material':
+      case 'agregar_materiales': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        if (!proj) return null;
+
+        const lista = Array.isArray(accion.materiales)
+          ? accion.materiales
+          : [
+              {
+                nombre: accion.nombre || 'Material de faena',
+                cantidad: Number(accion.cantidad) || 1,
+                unidad: accion.unidad || 'unidad',
+                precio_unitario: Number(accion.precio_unitario) || 0,
+                categoria: accion.categoria || 'General',
+              },
+            ];
+
+        let totalGasto = 0;
+        lista.forEach((m: any) => {
+          const cant = Number(m.cantidad) || 1;
+          const pu = Number(m.precio_unitario) || 0;
+          totalGasto += cant * pu;
+          this.createMaterialProyecto({
+            proyecto_id: proj.id,
+            nombre: m.nombre || 'Material',
+            cantidad: cant,
+            unidad: m.unidad || 'unidad',
+            precio_unitario: pu,
+            subtotal: cant * pu,
+            categoria: m.categoria || 'General',
+            comprado: false,
+          });
+        });
+
+        return {
+          tipo: 'agregar_material',
+          titulo: `${lista.length} Material(es) Presupuestado(s)`,
+          detalles: { materiales: lista, total: totalGasto },
+          resultado_texto: `${lista.map((m: any) => `${m.nombre} (${m.cantidad} ${m.unidad || 'u'})`).join(', ')} • Total: $${totalGasto.toLocaleString('es-CL')} CLP`,
+          link_destino: `/proyectos/${proj.id}/finanzas`,
+          link_texto: 'Ver Finanzas & Materiales ➔',
+        };
+      }
+
+      case 'registrar_imprevisto': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        if (!proj) return null;
+        const monto = Number(accion.monto) || 0;
+        const imp = this.createImprevisto({
+          proyecto_id: proj.id,
+          descripcion: accion.descripcion || 'Imprevisto detectado en faena',
+          monto,
+          estado: 'pendiente',
+          origen: 'whatsapp_ia',
+          fecha: new Date().toISOString().split('T')[0],
+        });
+        return {
+          tipo: 'registrar_imprevisto',
+          titulo: `Imprevisto Registrado`,
+          detalles: imp,
+          resultado_texto: `"${imp.descripcion}" • Monto: $${monto.toLocaleString('es-CL')} CLP`,
+          link_destino: `/proyectos/${proj.id}/finanzas`,
+          link_texto: 'Ver Finanzas ➔',
+        };
+      }
+
+      case 'registrar_pago': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        if (!proj) return null;
+        const monto = Number(accion.monto) || 0;
+        const pago = this.createPago({
+          proyecto_id: proj.id,
+          monto,
+          fecha: new Date().toISOString().split('T')[0],
+          metodo: (['transferencia', 'efectivo', 'debito'].includes(accion.metodo || '')
+            ? accion.metodo
+            : 'transferencia') as PaymentMethod,
+          estado: 'completado',
+          comprobante_url: '',
+        });
+        return {
+          tipo: 'registrar_pago',
+          titulo: `Abono/Pago Recibido`,
+          detalles: pago,
+          resultado_texto: `Monto recibido: $${monto.toLocaleString('es-CL')} CLP para la obra "${proj.nombre}".`,
+          link_destino: `/proyectos/${proj.id}/finanzas`,
+          link_texto: 'Ver Finanzas ➔',
+        };
+      }
+
+      case 'crear_bitacora': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        if (!proj) return null;
+        const active = this.getActiveUser();
+        const bit = this.createBitacoraEntrada({
+          proyecto_id: proj.id,
+          usuario_id: active?.id || 'u-1',
+          autor_nombre: active?.nombre || 'Inspector de Obra',
+          titulo: accion.titulo || 'Registro de terreno',
+          nota: accion.nota || accion.descripcion || 'Sin observaciones.',
+          tipo: (['avance', 'incidente', 'clima', 'entrega_material'].includes(accion.subtipo || accion.tipo_bitacora || '')
+            ? (accion.subtipo || accion.tipo_bitacora)
+            : 'avance') as 'avance' | 'incidente' | 'clima' | 'entrega_material',
+          fecha: new Date().toISOString().split('T')[0],
+        });
+        return {
+          tipo: 'crear_bitacora',
+          titulo: `Entrada en Bitácora Guardada`,
+          detalles: bit,
+          resultado_texto: `"${bit.titulo}": ${bit.nota.slice(0, 80)}...`,
+          link_destino: `/proyectos/${proj.id}/gantt`,
+          link_texto: 'Ver Bitácora ➔',
+        };
+      }
+
+      case 'generar_reporte': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        const rep = this.createReporte({
+          proyecto_id: proj?.id,
+          mensaje_original: accion.resumen || accion.contenido || `Reporte de Avance para ${proj?.nombre || 'General'}`,
+          transcripcion: accion.titulo || `Informe de Avance: ${proj?.nombre || 'Faena'}`,
+          extraccion_ia: {
+            actividad_detectada: accion.actividad || 'Seguimiento general',
+            avance_porcentaje: proj?.porcentaje_avance_ponderado ?? 50,
+            tiene_imprevisto: false,
+          },
+          estado: 'aprobado',
+          fecha: new Date().toISOString().split('T')[0],
+        });
+        return {
+          tipo: 'generar_reporte',
+          titulo: `Reporte Generado: ${proj?.nombre || 'Obra'}`,
+          detalles: rep,
+          resultado_texto: `Reporte oficial generado para "${proj?.nombre || 'General'}". Disponible en la sección de Reportes.`,
+          link_destino: `/reportes`,
+          link_texto: 'Ver Reportes ➔',
+        };
+      }
+
+      case 'agendar_visita':
+      case 'agendar_evento': {
+        const nuevoEvt = this.saveEventoAgenda({
+          titulo: accion.titulo || 'Visita a Terreno',
+          tipo: accion.tipo_evento || 'visita_terreno',
+          fecha: accion.fecha || new Date(Date.now() + 86400000).toISOString().split('T')[0],
+          hora: accion.hora || '10:00',
+          comuna_lugar: accion.comuna_lugar || 'Santiago, Chile',
+          descripcion: accion.descripcion || 'Visita de inspección coordinada por IA.',
+          cliente_nombre: accion.cliente_nombre || 'Mandante',
+          completado: false,
+          origen: 'asistente_ia',
+        });
+        return {
+          tipo: 'agendar_visita',
+          titulo: `Compromiso Agendado: ${nuevoEvt.titulo}`,
+          detalles: nuevoEvt,
+          resultado_texto: `Fecha: ${nuevoEvt.fecha} a las ${nuevoEvt.hora} hrs • ${nuevoEvt.comuna_lugar}`,
+        };
+      }
+
+      case 'generar_mensaje_whatsapp': {
+        const tel = (accion.telefono || '').replace(/[^0-9]/g, '');
+        const waLink = tel
+          ? `https://wa.me/${tel}?text=${encodeURIComponent(accion.mensaje || '')}`
+          : undefined;
+        return {
+          tipo: 'generar_mensaje_whatsapp',
+          titulo: `Mensaje de WhatsApp Preparado`,
+          detalles: accion,
+          resultado_texto: `Mensaje: "${(accion.mensaje || '').slice(0, 100)}..."`,
+          enlace_whatsapp: waLink,
+          link_texto: waLink ? 'Enviar por WhatsApp Ahora ➔' : undefined,
+        };
+      }
+
+      case 'lote_acciones': {
+        const lista = Array.isArray(accion.acciones) ? accion.acciones : [];
+        const resultados: AccionAsistenteIA[] = [];
+        for (const sub of lista) {
+          const res = this.ejecutarAccionGlobalIA(sub, contextProyectoId);
+          if (res) resultados.push(res);
+        }
+        return {
+          tipo: 'lote_acciones',
+          titulo: `${resultados.length} Acciones Ejecutadas`,
+          detalles: { acciones: resultados },
+          resultado_texto: resultados.map((r) => r.titulo).join(' • '),
+          link_destino: resultados[0]?.link_destino || '/proyectos',
+          link_texto: 'Ver Cambios en la Plataforma ➔',
+        };
+      }
+
+      default:
+        return null;
+    }
   }
 
   // --- CHAT DE AGENTE POR PROYECTO (HISTORIAL PERSISTENTE) ---
@@ -1091,95 +1608,15 @@ class DataService {
   }
 
   ejecutarAccionAgenteProyecto(proyectoId: string, accion: any): { exito: boolean; mensaje: string; datos?: any } {
-    const proyecto = this.getProyectoById(proyectoId);
-    if (!proyecto) return { exito: false, mensaje: 'Proyecto no encontrado' };
-
-    switch (accion.tipo) {
-      case 'crear_actividad': {
-        const dias = Number(accion.dias) || 5;
-        const acts = this.getActividades(proyectoId);
-        const lastAct = acts[acts.length - 1];
-        let startDate = new Date();
-        if (lastAct && lastAct.fecha_termino) {
-          startDate = new Date(lastAct.fecha_termino);
-        }
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + dias);
-
-        const nueva = this.createActividad({
-          proyecto_id: proyectoId,
-          nombre: accion.nombre || 'Nueva Partida',
-          fecha_inicio: startDate.toISOString().split('T')[0],
-          fecha_termino: endDate.toISOString().split('T')[0],
-          porcentaje_avance: 0,
-          estado: 'pendiente',
-          orden: acts.length + 1,
-        });
-        return { exito: true, mensaje: `Partida "${nueva.nombre}" agregada a la Carta Gantt.`, datos: nueva };
-      }
-
-      case 'actualizar_avance': {
-        const acts = this.getActividades(proyectoId);
-        const match = acts.find(
-          (a) =>
-            a.id === accion.actividad_id ||
-            (accion.nombre && a.nombre.toLowerCase().includes(accion.nombre.toLowerCase()))
-        );
-        if (match) {
-          const avance = Math.min(100, Math.max(0, Number(accion.porcentaje_avance) || 0));
-          const estado = avance === 100 ? 'terminada' : avance > 0 ? 'en_curso' : 'pendiente';
-          const updated = this.updateActividad(match.id, { porcentaje_avance: avance, estado });
-          return { exito: true, mensaje: `Partida "${match.nombre}" actualizada al ${avance}%.`, datos: updated };
-        }
-        return { exito: false, mensaje: 'No se encontró la partida especificada para actualizar.' };
-      }
-
-      case 'registrar_imprevisto': {
-        const monto = Number(accion.monto) || 0;
-        const imp = this.createImprevisto({
-          proyecto_id: proyectoId,
-          descripcion: accion.descripcion || 'Imprevisto detectado en faena',
-          monto,
-          estado: 'pendiente',
-          origen: 'whatsapp_ia',
-          fecha: new Date().toISOString().split('T')[0],
-        });
-        return { exito: true, mensaje: `Imprevisto de $${monto.toLocaleString('es-CL')} CLP registrado.`, datos: imp };
-      }
-
-      case 'agregar_material': {
-        const cant = Number(accion.cantidad) || 1;
-        const pu = Number(accion.precio_unitario) || 0;
-        const mat = this.createMaterialProyecto({
-          proyecto_id: proyectoId,
-          nombre: accion.nombre || 'Material de faena',
-          cantidad: cant,
-          unidad: accion.unidad || 'unidad',
-          precio_unitario: pu,
-          subtotal: cant * pu,
-          categoria: accion.categoria || 'General',
-          comprado: false,
-        });
-        return { exito: true, mensaje: `Material "${mat.nombre}" agregado al presupuesto.`, datos: mat };
-      }
-
-      case 'crear_bitacora': {
-        const active = this.getActiveUser();
-        const bit = this.createBitacoraEntrada({
-          proyecto_id: proyectoId,
-          usuario_id: active?.id || 'u-1',
-          autor_nombre: active?.nombre || 'Inspector de Obra',
-          titulo: accion.titulo || 'Registro de avance diario',
-          nota: accion.nota || accion.descripcion || 'Sin observaciones.',
-          tipo: accion.subtipo || 'avance',
-          fecha: new Date().toISOString().split('T')[0],
-        });
-        return { exito: true, mensaje: `Entrada de bitácora "${bit.titulo}" guardada.`, datos: bit };
-      }
-
-      default:
-        return { exito: true, mensaje: 'Acción informativa procesada.' };
+    const res = this.ejecutarAccionGlobalIA(accion, proyectoId);
+    if (res) {
+      return {
+        exito: true,
+        mensaje: res.resultado_texto,
+        datos: res.detalles,
+      };
     }
+    return { exito: true, mensaje: 'Acción procesada correctamente.' };
   }
 
   // --- SINCRONIZACIÓN Y CARGA DESDE SUPABASE ---

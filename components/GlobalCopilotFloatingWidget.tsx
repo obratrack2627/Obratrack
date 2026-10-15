@@ -109,15 +109,22 @@ export default function GlobalCopilotFloatingWidget() {
           comuna: p.comuna,
           estado: p.estado,
           monto_cotizado: p.monto_cotizado,
+          total_pagado: p.total_pagado,
+          saldo_pendiente: p.saldo_pendiente,
+          porcentaje_avance: p.porcentaje_avance_ponderado,
+          trabajadores_count: (p.trabajadores_ids || []).length,
         })),
         trabajadores: dataService.getUsuarios().map((u) => ({
           id: u.id,
           nombre: u.nombre,
           rol: u.rol,
+          telefono: u.telefono_whatsapp,
         })),
         clientes: dataService.getClientes().map((c) => ({
           id: c.id,
           nombre: c.nombre,
+          telefono: c.telefono,
+          comuna: c.comuna,
         })),
       };
 
@@ -136,83 +143,15 @@ export default function GlobalCopilotFloatingWidget() {
       let accionEjecutada: AccionAsistenteIA | undefined = undefined;
 
       if (data.accion) {
-        const acc = data.accion;
-        if (acc.tipo === 'crear_proyecto') {
-          try {
-            const nuevoProj = dataService.crearProyectoDesdeIA({
-              nombre: acc.nombre || 'Nueva Obra',
-              cliente_nombre: acc.cliente_nombre,
-              cliente_telefono: acc.cliente_telefono,
-              comuna: acc.comuna,
-              direccion: acc.direccion,
-              monto: acc.monto,
-              dias: acc.dias,
-              descripcion: acc.descripcion,
-              partidas: acc.partidas,
-            });
-            accionEjecutada = {
-              tipo: 'crear_proyecto',
-              titulo: `Obra Creada: ${nuevoProj.nombre}`,
-              detalles: nuevoProj,
-              resultado_texto: `Presupuesto: $${nuevoProj.monto_cotizado.toLocaleString('es-CL')} CLP • Comuna: ${nuevoProj.comuna || 'Chile'}`,
-              link_destino: `/proyectos/${nuevoProj.id}/gantt`,
-              link_texto: 'Ver Obra & Carta Gantt ➔',
-            };
-            showToast(`🏗️ ¡Obra "${nuevoProj.nombre}" creada en Proyectos!`);
-          } catch (limErr: any) {
-            showToast(`⚠️ ${limErr.message}`);
+        try {
+          const resultado = dataService.ejecutarAccionGlobalIA(data.accion);
+          if (resultado) {
+            accionEjecutada = resultado;
+            showToast(`⚡ ${resultado.titulo}`);
           }
-        } else if (acc.tipo === 'agregar_trabajador') {
-          const nuevoUser = dataService.agregarTrabajadorDesdeIA({
-            nombre: acc.nombre || 'Nuevo Trabajador',
-            rol: acc.rol || 'terreno',
-            telefono: acc.telefono,
-            email: acc.email,
-          });
-          accionEjecutada = {
-            tipo: 'agregar_trabajador',
-            titulo: `Trabajador Incorporado: ${nuevoUser.nombre}`,
-            detalles: nuevoUser,
-            resultado_texto: `Rol: ${nuevoUser.rol.toUpperCase()} • Contacto: ${nuevoUser.telefono_whatsapp}`,
-            link_destino: `/equipo`,
-            link_texto: 'Ver Equipo ➔',
-          };
-          showToast(`👷‍♂️ ¡${nuevoUser.nombre} agregado al equipo!`);
-        } else if (acc.tipo === 'asignar_trabajador') {
-          const ok = dataService.asignarTrabajadorAProyecto(
-            acc.trabajador_nombre || '',
-            acc.proyecto_nombre || ''
-          );
-          accionEjecutada = {
-            tipo: 'asignar_trabajador',
-            titulo: `Cuadrilla Asignada`,
-            detalles: acc,
-            resultado_texto: ok
-              ? `${acc.trabajador_nombre} fue asignado a la faena ${acc.proyecto_nombre}.`
-              : `Se coordinó la cuadrilla.`,
-            link_destino: `/proyectos`,
-            link_texto: 'Ver Obras ➔',
-          };
-          showToast(`🔨 ¡Cuadrilla actualizada!`);
-        } else if (acc.tipo === 'agendar_visita' || acc.tipo === 'agendar_evento') {
-          const nuevoEvt = dataService.saveEventoAgenda({
-            titulo: acc.titulo || 'Visita a Terreno',
-            tipo: acc.tipo_evento || 'visita_terreno',
-            fecha: acc.fecha || new Date(Date.now() + 86400000).toISOString().split('T')[0],
-            hora: acc.hora || '10:00',
-            comuna_lugar: acc.comuna_lugar || 'Santiago, Chile',
-            descripcion: acc.descripcion || query,
-            cliente_nombre: acc.cliente_nombre || 'Mandante',
-            completado: false,
-            origen: 'asistente_ia',
-          });
-          accionEjecutada = {
-            tipo: 'agendar_visita',
-            titulo: `Compromiso Agendado: ${nuevoEvt.titulo}`,
-            detalles: nuevoEvt,
-            resultado_texto: `Fecha: ${formatDate(nuevoEvt.fecha)} a las ${nuevoEvt.hora} hrs`,
-          };
-          showToast(`📅 ¡Visita agendada en faena!`);
+        } catch (actErr: any) {
+          console.warn('Error ejecutando acción de IA:', actErr);
+          showToast(`⚠️ ${actErr?.message || 'Error al ejecutar acción'}`);
         }
       }
 
@@ -442,7 +381,7 @@ export default function GlobalCopilotFloatingWidget() {
                               <p className="text-[10px] text-gray-600 dark:text-gray-300">
                                 {m.accion_ejecutada.resultado_texto}
                               </p>
-                              {m.accion_ejecutada.link_destino && (
+                               {m.accion_ejecutada.link_destino && (
                                 <Link
                                   href={m.accion_ejecutada.link_destino}
                                   onClick={() => setIsOpen(false)}
@@ -450,6 +389,16 @@ export default function GlobalCopilotFloatingWidget() {
                                 >
                                   {m.accion_ejecutada.link_texto || 'Ver detalles ➔'}
                                 </Link>
+                              )}
+                              {m.accion_ejecutada.enlace_whatsapp && (
+                                <a
+                                  href={m.accion_ejecutada.enlace_whatsapp}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-block mt-1 ml-2 text-[11px] font-bold text-emerald-600 hover:underline"
+                                >
+                                  {m.accion_ejecutada.link_texto || 'Enviar por WhatsApp Ahora ➔'}
+                                </a>
                               )}
                             </div>
                           )}

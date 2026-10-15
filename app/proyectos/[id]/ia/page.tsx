@@ -259,79 +259,18 @@ export default function ProyectoIAPage() {
 
       // Ejecutar acción autónoma sobre el proyecto
       if (data.accion) {
-        const acc = data.accion;
-        const resultadoAccion = dataService.ejecutarAccionAgenteProyecto(projectId, acc);
-
-        if (acc.tipo === 'crear_actividad') {
-          accionEjecutada = {
-            tipo: 'crear_actividad',
-            titulo: `Partida Creada: ${acc.nombre}`,
-            detalles: resultadoAccion.datos || acc,
-            resultado_texto: resultadoAccion.mensaje,
-            link_destino: `/proyectos/${projectId}/gantt`,
-            link_texto: 'Ver en Carta Gantt ➔',
-          };
-          showToast(`🏗️ Partida "${acc.nombre}" añadida a la obra.`);
-        } else if (acc.tipo === 'actualizar_avance') {
-          accionEjecutada = {
-            tipo: 'actualizar_avance',
-            titulo: `Avance Actualizado`,
-            detalles: resultadoAccion.datos || acc,
-            resultado_texto: resultadoAccion.mensaje,
-            link_destino: `/proyectos/${projectId}/gantt`,
-            link_texto: 'Ver Carta Gantt ➔',
-          };
-          showToast(`📈 Avance de partida actualizado.`);
-        } else if (acc.tipo === 'registrar_imprevisto') {
-          accionEjecutada = {
-            tipo: 'registrar_imprevisto',
-            titulo: `Imprevisto Registrado`,
-            detalles: resultadoAccion.datos || acc,
-            resultado_texto: resultadoAccion.mensaje,
-            link_destino: `/proyectos/${projectId}/finanzas`,
-            link_texto: 'Ver Finanzas ➔',
-          };
-          showToast(`⚠️ Imprevisto registrado en finanzas.`);
-        } else if (acc.tipo === 'agregar_material') {
-          accionEjecutada = {
-            tipo: 'agregar_material',
-            titulo: `Material Presupuestado`,
-            detalles: resultadoAccion.datos || acc,
-            resultado_texto: resultadoAccion.mensaje,
-            link_destino: `/proyectos/${projectId}/finanzas`,
-            link_texto: 'Ver Materiales ➔',
-          };
-          showToast(`📦 Material añadido al listado.`);
-        } else if (acc.tipo === 'crear_bitacora') {
-          accionEjecutada = {
-            tipo: 'crear_bitacora',
-            titulo: `Entrada en Bitácora Guardada`,
-            detalles: resultadoAccion.datos || acc,
-            resultado_texto: resultadoAccion.mensaje,
-            link_destino: `/proyectos/${projectId}/gantt`,
-            link_texto: 'Ver Bitácora ➔',
-          };
-          showToast(`📝 Nota agregada a la bitácora.`);
-        } else if (acc.tipo === 'generar_mensaje_whatsapp') {
-          const tel = acc.telefono || cliente?.telefono || '';
-          const cleanTel = tel.replace(/[^0-9]/g, '');
-          const waLink = cleanTel
-            ? `https://wa.me/${cleanTel}?text=${encodeURIComponent(acc.mensaje)}`
-            : undefined;
-
-          accionEjecutada = {
-            tipo: 'generar_mensaje_whatsapp',
-            titulo: `Mensaje de WhatsApp Preparado`,
-            detalles: acc,
-            resultado_texto: `Mensaje listo para ${cliente?.nombre || 'el mandante'}: "${acc.mensaje.slice(0, 100)}..."`,
-            enlace_whatsapp: waLink,
-            link_texto: waLink ? 'Enviar por WhatsApp Ahora ➔' : undefined,
-          };
-          showToast(`💬 Mensaje listo para enviar por WhatsApp.`);
+        try {
+          const resultado = dataService.ejecutarAccionGlobalIA(data.accion, projectId);
+          if (resultado) {
+            accionEjecutada = resultado;
+            showToast(`⚡ ${resultado.titulo}`);
+          }
+          // Recargar datos actualizados del proyecto
+          loadData();
+        } catch (actErr: any) {
+          console.warn('Error ejecutando acción de IA en proyecto:', actErr);
+          showToast(`⚠️ ${actErr?.message || 'Error al ejecutar acción'}`);
         }
-
-        // Recargar datos actualizados del proyecto
-        loadData();
       }
 
       const agenteMsg: MensajeChatProyecto = {

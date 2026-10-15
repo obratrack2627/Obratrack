@@ -798,20 +798,56 @@ INSTRUCCIONES DE CONVERSACIÓN & ACCIONES AUTÓNOMAS:
    • Si pide cotizar o calcular insumos, usa los datos específicos de su mensaje (m², materiales locales, rendimientos reales).
 3. PROHIBICIÓN TOTAL DE RESPUESTAS GENÉRICAS O PLANTILLAS: Queda estrictamente prohibido responder con textos cliché, plantillas fijas o listas genéricas que no correspondan a lo que el usuario preguntó. Cada una de tus respuestas debe ser única, personalizada y enfocada exclusivamente en lo que el usuario escribió.
 
-4. CAPACIDAD DE CONTROLAR LA WEB (EJECUTAR ACCIONES EN VIVO):
-   Cuando el usuario te pida crear una obra, agregar un trabajador, asignar cuadrilla o agendar un compromiso, responde conversacionalmente confirmándolo y agrega AL FINAL DE TU RESPUESTA una etiqueta [ACCION_OBRA: {...}] con el JSON correspondiente:
+4. CONTROL TOTAL DE LA PLATAFORMA (EJECUCIÓN DE ACCIONES AUTÓNOMAS EN VIVO):
+   Cuando el constructor te pida crear, modificar, calcular o gestionar cualquier aspecto de su empresa, responde confirmando de manera profesional y añade AL FINAL DE TU RESPUESTA una etiqueta [ACCION_OBRA: {...}] con el JSON correspondiente:
 
-   A) CREAR / AGENDAR NUEVA OBRA EN EL MENÚ DE PROYECTOS:
-      [ACCION_OBRA: {"tipo":"crear_proyecto","nombre":"Nombre de la Obra","cliente_nombre":"Nombre Cliente","cliente_telefono":"+56912345678","comuna":"Comuna","monto":3500000,"dias":20,"descripcion":"Detalle de la obra"}]
+   A) CREAR OBRA COMPLETA (CON TAREAS DE GANTT, MATERIALES, PRECIOS, CLIENTE Y CUADRILLA EN UN SOLO PASO):
+      [ACCION_OBRA: {
+        "tipo": "crear_proyecto",
+        "nombre": "Remodelación Casa Las Condes",
+        "cliente_nombre": "Juan Pérez",
+        "cliente_telefono": "+56912345678",
+        "comuna": "Las Condes",
+        "direccion": "Av. Las Condes 1234",
+        "monto": 8500000,
+        "dias": 25,
+        "descripcion": "Remodelación completa de cocina y living",
+        "partidas": [
+          {"nombre": "Demolición y despeje", "dias": 3},
+          {"nombre": "Instalación sanitaria y eléctrica", "dias": 7},
+          {"nombre": "Tabiquería y volcanita", "dias": 5},
+          {"nombre": "Pintura y terminaciones", "dias": 10}
+        ],
+        "materiales": [
+          {"nombre": "Sacos Cemento Polpaico", "cantidad": 20, "unidad": "saco", "precio_unitario": 4800},
+          {"nombre": "Planchas Volcanita 10mm", "cantidad": 15, "unidad": "plancha", "precio_unitario": 8200},
+          {"nombre": "Esmalte al agua blanco", "cantidad": 5, "unidad": "galon", "precio_unitario": 28000}
+        ],
+        "trabajadores_nombres": ["Carlos Maestro", "Pedro Jornal"]
+      }]
 
-   B) AGREGAR NUEVO TRABAJADOR AL EQUIPO:
-      [ACCION_OBRA: {"tipo":"agregar_trabajador","nombre":"Juan Pérez","rol":"albañil","telefono":"+56987654321","email":"juan.perez@obratrack.cl"}]
+   B) GESTIÓN DE CUADRILLA Y EQUIPO:
+      - Agregar trabajador: [ACCION_OBRA: {"tipo":"agregar_trabajador","nombre":"Juan Pérez","rol":"albañil","telefono":"+56987654321","email":"juan.perez@obratrack.cl"}]
+      - Asignar a obra: [ACCION_OBRA: {"tipo":"asignar_trabajador","trabajador_nombre":"Juan Pérez","proyecto_nombre":"Nombre de la Obra"}]
+      - Desasignar de obra: [ACCION_OBRA: {"tipo":"desasignar_trabajador","trabajador_nombre":"Juan Pérez","proyecto_nombre":"Nombre de la Obra"}]
 
-   C) ASIGNAR TRABAJADOR A OBRA:
-      [ACCION_OBRA: {"tipo":"asignar_trabajador","trabajador_nombre":"Juan Pérez","proyecto_nombre":"Peñalolén"}]
+   C) GESTIÓN DE CLIENTES:
+      - Crear cliente: [ACCION_OBRA: {"tipo":"crear_cliente","nombre":"Constructora del Sur","telefono":"+56999887766","email":"contacto@delsur.cl","comuna":"Providencia"}]
+      - Actualizar cliente: [ACCION_OBRA: {"tipo":"actualizar_cliente","nombre":"Nombre Cliente","telefono":"+56912345678","email":"nuevo@email.cl"}]
 
-   D) AGENDAR VISITA A TERRENO:
-      [ACCION_OBRA: {"tipo":"agendar_visita","titulo":"Visita a Terreno","fecha":"YYYY-MM-DD","hora":"10:00","comuna_lugar":"Peñalolén","descripcion":"Revisión de obra","cliente_nombre":"Don Carlos"}]
+   D) PARTIDAS Y CARTA GANTT EN OBRAS EXISTENTES:
+      - Crear partida: [ACCION_OBRA: {"tipo":"crear_actividad","proyecto_nombre":"Nombre Obra","nombre":"Instalación de Cerámicos","dias":4}]
+      - Actualizar avance: [ACCION_OBRA: {"tipo":"actualizar_avance","proyecto_nombre":"Nombre Obra","nombre":"Fundaciones","porcentaje_avance":100}]
+
+   E) MATERIALES Y FINANZAS EN OBRAS EXISTENTES:
+      - Agregar materiales: [ACCION_OBRA: {"tipo":"agregar_materiales","proyecto_nombre":"Nombre Obra","materiales":[{"nombre":"Arena gruesa","cantidad":3,"unidad":"m3","precio_unitario":25000}]}]
+      - Registrar imprevisto: [ACCION_OBRA: {"tipo":"registrar_imprevisto","proyecto_nombre":"Nombre Obra","descripcion":"Reparación de cañería rota","monto":85000}]
+      - Registrar pago / abono: [ACCION_OBRA: {"tipo":"registrar_pago","proyecto_nombre":"Nombre Obra","monto":2000000,"metodo":"transferencia"}]
+
+   F) REPORTES Y COMUNICACIÓN POR WHATSAPP:
+      - Generar reporte de obra: [ACCION_OBRA: {"tipo":"generar_reporte","proyecto_nombre":"Nombre Obra","titulo":"Reporte Semanal de Faena","resumen":"Detalle de partidas ejecutadas y estado financiero"}]
+      - Redactar WhatsApp cliente: [ACCION_OBRA: {"tipo":"generar_mensaje_whatsapp","telefono":"+56912345678","mensaje":"Estimado don Carlos, adjunto informe de avance..."}]
+      - Agendar visita o hito: [ACCION_OBRA: {"tipo":"agendar_visita","titulo":"Inspección ITO","fecha":"YYYY-MM-DD","hora":"10:00","comuna_lugar":"Comuna","cliente_nombre":"Don Carlos"}]
 
 HISTORIAL DE LA CONVERSACIÓN:
 ${historial.map((h) => `${h.rol === 'user' ? 'Usuario' : 'Copiloto'}: ${h.texto}`).join('\n')}
@@ -847,12 +883,13 @@ Responde como Copiloto de Obras experto:`;
       return generarRespuestaHeuristicaCopiloto(mensajeUsuario, contextoDB);
     }
 
-    // Detectar si incluye acción estructurada
+    // Detectar si incluye acción estructurada (soporte multilínea y arrays de acciones)
     let accion: any = null;
-    const actionMatch = rawText.match(/\[ACCION_OBRA:\s*(\{.*?\})\s*\]/);
+    const actionMatch = rawText.match(/\[(?:ACCION_OBRA|ACCIONES_OBRA):\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*\]/);
     if (actionMatch) {
       try {
-        accion = JSON.parse(actionMatch[1]);
+        const parsed = JSON.parse(actionMatch[1]);
+        accion = Array.isArray(parsed) ? { tipo: 'lote_acciones', acciones: parsed } : parsed;
         rawText = rawText.replace(actionMatch[0], '').trim();
       } catch (err) {
         console.warn('No se pudo parsear acción de obra:', err);
@@ -1110,10 +1147,11 @@ Responde como el Asistente Especialista de esta Obra:`;
     }
 
     let accion: any = null;
-    const actionMatch = rawText.match(/\[ACCION_PROYECTO:\s*(\{.*?\})\s*\]/);
+    const actionMatch = rawText.match(/\[(?:ACCION_PROYECTO|ACCION_OBRA|ACCIONES_OBRA):\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*\]/);
     if (actionMatch) {
       try {
-        accion = JSON.parse(actionMatch[1]);
+        const parsed = JSON.parse(actionMatch[1]);
+        accion = Array.isArray(parsed) ? { tipo: 'lote_acciones', acciones: parsed } : parsed;
         rawText = rawText.replace(actionMatch[0], '').trim();
       } catch (err) {
         console.warn('No se pudo parsear acción de proyecto:', err);
