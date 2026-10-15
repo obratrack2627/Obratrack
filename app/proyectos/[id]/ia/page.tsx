@@ -28,6 +28,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import { dataService } from '@/lib/data-service';
 import {
   Proyecto,
@@ -379,50 +380,10 @@ export default function ProyectoIAPage() {
         proyecto={proyecto}
       />
 
-      <Navbar
-        title={`Copiloto IA: ${proyecto.nombre}`}
-        subtitle={`Agente dedicado exclusivamente a esta faena • Control financiero, avance y cuadrilla`}
-        action={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsMapsModalOpen(true)}
-              className="px-3 py-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
-              title="Ver ubicación en Google Maps"
-            >
-              <MapPin className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>Maps</span>
-            </button>
-            <Link
-              href={`/proyectos/${proyecto.id}/gantt`}
-              className="px-3 py-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
-            >
-              <GanttChartSquare className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>Carta Gantt</span>
-            </Link>
-            <Link
-              href={`/proyectos/${proyecto.id}/finanzas`}
-              className="px-3 py-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
-            >
-              <Wallet className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>Finanzas</span>
-            </Link>
-            <button
-              onClick={handleLimpiarHistorial}
-              className="px-3 py-1.5 bg-gray-100 dark:bg-[#1A2230] hover:bg-rose-500/10 hover:text-rose-500 border border-transparent hover:border-rose-500/30 text-gray-500 dark:text-gray-400 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-heading transition-colors"
-              title="Reiniciar conversación de esta obra"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Limpiar Chat</span>
-            </button>
-            <Link
-              href="/proyectos"
-              className="px-3 py-1.5 bg-gray-100 dark:bg-[#1A2230] hover:bg-gray-200 dark:hover:bg-[#222C3D] text-navy-900 dark:text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 font-heading"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Volver</span>
-            </Link>
-          </div>
-        }
+      <ProjectTabsHeader
+        proyecto={proyecto}
+        cliente={cliente}
+        onOpenMaps={() => setIsMapsModalOpen(true)}
       />
 
       <div className="p-6 max-w-6xl w-full mx-auto space-y-6 flex-1 flex flex-col">
@@ -525,9 +486,20 @@ export default function ProyectoIAPage() {
                 </div>
               </div>
 
-              <span className="text-[10px] font-mono text-gray-400">
-                {mensajes.length} mensaje(s) en historial
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-gray-400 hidden sm:inline">
+                  {mensajes.length} mensaje(s)
+                </span>
+                <button
+                  type="button"
+                  onClick={handleLimpiarHistorial}
+                  className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-rose-500/20 hover:text-rose-400 text-gray-300 text-[11px] font-medium flex items-center gap-1 transition-all"
+                  title="Reiniciar conversación de esta obra"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Limpiar Chat</span>
+                </button>
+              </div>
             </div>
 
             {/* Mensajes */}

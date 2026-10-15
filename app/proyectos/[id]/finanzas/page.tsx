@@ -25,8 +25,9 @@ import {
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import Navbar from '@/components/Navbar';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
+import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import { dataService } from '@/lib/data-service';
-import { Proyecto, Pago, Imprevisto, PaymentMethod, MaterialProyecto } from '@/types/database';
+import { Proyecto, Pago, Imprevisto, PaymentMethod, MaterialProyecto, Cliente } from '@/types/database';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 
 export default function ProyectoFinanzasPage() {
@@ -34,6 +35,7 @@ export default function ProyectoFinanzasPage() {
   const projectId = params?.id as string;
 
   const [proyecto, setProyecto] = useState<Proyecto | null>(null);
+  const [cliente, setCliente] = useState<Cliente | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [imprevistos, setImprevistos] = useState<Imprevisto[]>([]);
@@ -100,11 +102,13 @@ export default function ProyectoFinanzasPage() {
   const loadData = () => {
     if (!projectId) return;
     const proj = dataService.getProyectoById(projectId);
+    const cli = proj?.cliente_id ? dataService.getClienteById(proj.cliente_id) : null;
     const pays = dataService.getPagos(projectId);
     const imps = dataService.getImprevistos(projectId);
     const mats = dataService.getMaterialesProyecto(projectId);
 
     setProyecto(proj);
+    setCliente(cli || null);
     setPagos(pays);
     setImprevistos(imps);
     setMateriales(mats);
@@ -340,6 +344,10 @@ export default function ProyectoFinanzasPage() {
   const saldoPendiente = Math.max(0, montoCotizado - totalPagado);
   const porcentajePagado = montoCotizado > 0 ? Math.min(100, Math.round((totalPagado / montoCotizado) * 100)) : 0;
 
+  const totalCostosDirectos = totalMateriales + totalImprevistos;
+  const margenEstimadoCLP = Math.max(0, montoCotizado - totalCostosDirectos);
+  const margenEstimadoPorcentaje = montoCotizado > 0 ? Math.round((margenEstimadoCLP / montoCotizado) * 100) : 0;
+
   const chartData = [
     { name: 'Pagado', value: totalPagado, color: '#6B8F72' },
     { name: 'Por Cobrar', value: saldoPendiente, color: '#FF6A00' },
@@ -358,70 +366,76 @@ export default function ProyectoFinanzasPage() {
         </div>
       )}
 
-      <Navbar
-        title={`Finanzas: ${proyecto.nombre}`}
-        subtitle={`Control de pagos, flujo de caja, materiales e imprevistos`}
-        action={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsMapsModalOpen(true)}
-              className="px-3 py-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
-              title="Ver ubicación en Google Maps"
-            >
-              <MapPin className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>Maps</span>
-            </button>
-            <Link
-              href={`/proyectos/${proyecto.id}/gantt`}
-              className="px-3 py-1.5 bg-white border border-kraft-200 hover:bg-kraft-50 text-navy-900 text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
-            >
-              <GanttChartSquare className="w-3.5 h-3.5 text-obra-orange" />
-              <span>Ver Carta Gantt</span>
-            </Link>
-            <Link
-              href={`/proyectos/${proyecto.id}/ia`}
-              className="px-3 py-1.5 bg-gradient-to-r from-[#FF6A00]/20 to-purple-600/20 hover:from-[#FF6A00]/30 hover:to-purple-600/30 text-[#FF6A00] dark:text-[#FF8A33] border border-[#FF6A00]/40 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-heading shadow-sm"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>Copiloto IA</span>
-            </Link>
-            <Link
-              href="/proyectos"
-              className="px-3 py-1.5 bg-kraft-100 hover:bg-kraft-200 text-navy-900 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-heading"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Volver</span>
-            </Link>
-          </div>
-        }
+      <ProjectTabsHeader
+        proyecto={proyecto}
+        cliente={cliente}
+        onOpenMaps={() => setIsMapsModalOpen(true)}
       />
 
-      <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
+      <div className="p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
         
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm">
+        {/* KPI Cards & Semáforo de Rentabilidad Real */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
             <p className="text-xs font-mono font-semibold uppercase text-gray-500">Monto Cotizado (Total)</p>
-            <h3 className="text-2xl font-bold font-mono text-navy-900 mt-1">{formatCLP(montoCotizado)}</h3>
-            <p className="text-[11px] text-gray-500 font-sans mt-0.5">Presupuesto acordado con el cliente</p>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white mt-1">{formatCLP(montoCotizado)}</h3>
+            <p className="text-[11px] text-gray-500 font-sans mt-0.5">Presupuesto acordado</p>
           </div>
 
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
             <p className="text-xs font-mono font-semibold uppercase text-gray-500">Total Recaudado</p>
-            <h3 className="text-2xl font-bold font-mono text-obra-green mt-1">{formatCLP(totalPagado)}</h3>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#6B8F72] mt-1">{formatCLP(totalPagado)}</h3>
             <p className="text-[11px] text-gray-500 font-sans mt-0.5">{porcentajePagado}% del total presupuestado</p>
           </div>
 
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
             <p className="text-xs font-mono font-semibold uppercase text-gray-500">Saldo Por Cobrar</p>
-            <h3 className="text-2xl font-bold font-mono text-obra-orange mt-1">{formatCLP(saldoPendiente)}</h3>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#FF6A00] mt-1">{formatCLP(saldoPendiente)}</h3>
             <p className="text-[11px] text-gray-500 font-sans mt-0.5">Estados de pago pendientes</p>
           </div>
 
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm">
-            <p className="text-xs font-mono font-semibold uppercase text-gray-500">Materiales & Gastos</p>
-            <h3 className="text-2xl font-bold font-mono text-[#1E1E1E] mt-1">{formatCLP(totalMateriales)}</h3>
-            <p className="text-[11px] text-gray-500 font-sans mt-0.5">{formatCLP(totalMaterialesComprados)} comprados</p>
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
+            <p className="text-xs font-mono font-semibold uppercase text-gray-500">Gastos Directos</p>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-gray-200 mt-1">{formatCLP(totalCostosDirectos)}</h3>
+            <p className="text-[11px] text-gray-500 font-sans mt-0.5">Insumos + Imprevistos</p>
+          </div>
+
+          {/* Tarjeta de Margen Real y Semáforo */}
+          <div className={`rounded-xl p-4 sm:p-5 shadow-sm border ${
+            margenEstimadoPorcentaje >= 25
+              ? 'bg-[#6B8F72]/10 border-[#6B8F72]/40 text-navy-900 dark:text-white'
+              : margenEstimadoPorcentaje >= 10
+              ? 'bg-amber-500/10 border-amber-500/40 text-navy-900 dark:text-white'
+              : 'bg-red-500/10 border-red-500/40 text-navy-900 dark:text-white'
+          }`}>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400">Margen Real</p>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                margenEstimadoPorcentaje >= 25
+                  ? 'bg-[#6B8F72] text-white'
+                  : margenEstimadoPorcentaje >= 10
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-red-500 text-white'
+              }`}>
+                {margenEstimadoPorcentaje}%
+              </span>
+            </div>
+            <h3 className={`text-xl sm:text-2xl font-bold font-mono mt-1 ${
+              margenEstimadoPorcentaje >= 25
+                ? 'text-[#6B8F72]'
+                : margenEstimadoPorcentaje >= 10
+                ? 'text-amber-500'
+                : 'text-red-500'
+            }`}>
+              {formatCLP(margenEstimadoCLP)}
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-0.5">
+              {margenEstimadoPorcentaje >= 25
+                ? 'Rentabilidad Saludable'
+                : margenEstimadoPorcentaje >= 10
+                ? 'Margen Ajustado'
+                : 'Alerta: Costos Elevados'}
+            </p>
           </div>
         </div>
 

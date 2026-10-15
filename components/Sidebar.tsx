@@ -103,12 +103,24 @@ export default function Sidebar() {
           icon: MessageSquareShare,
           badge: pendingReportsCount > 0 ? pendingReportsCount : null,
         },
+        {
+          label: 'Copiloto IA Faena',
+          href: '/cotizador',
+          icon: Sparkles,
+          highlight: true,
+        },
       ]
     : [
         {
           label: 'Centro de Mando',
           href: '/dashboard',
           icon: LayoutDashboard,
+        },
+        {
+          label: 'Copiloto Obrero IA',
+          href: '/cotizador',
+          icon: Sparkles,
+          highlight: true,
         },
         {
           label: 'Proyectos & Obras',
@@ -202,7 +214,7 @@ export default function Sidebar() {
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive =
-                pathname === item.href || (item.href !== '/proyectos' && pathname?.startsWith(item.href));
+                pathname === item.href || (item.href !== '/dashboard' && pathname?.startsWith(item.href));
 
               return (
                 <Link

@@ -25,8 +25,9 @@ import {
 import Navbar from '@/components/Navbar';
 import GanttChart from '@/components/GanttChart';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
+import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import { dataService } from '@/lib/data-service';
-import { Proyecto, Actividad, Usuario, BitacoraEntrada } from '@/types/database';
+import { Proyecto, Actividad, Usuario, BitacoraEntrada, Cliente } from '@/types/database';
 import { formatDate } from '@/lib/utils';
 
 export default function ProyectoGanttPage() {
@@ -34,6 +35,7 @@ export default function ProyectoGanttPage() {
   const projectId = params?.id as string;
 
   const [proyecto, setProyecto] = useState<Proyecto | null>(null);
+  const [cliente, setCliente] = useState<Cliente | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -75,11 +77,13 @@ export default function ProyectoGanttPage() {
   const loadData = () => {
     if (!projectId) return;
     const proj = dataService.getProyectoById(projectId);
+    const cli = proj?.cliente_id ? dataService.getClienteById(proj.cliente_id) : null;
     const acts = dataService.getActividades(projectId);
     const users = dataService.getUsuarios();
     const bits = dataService.getBitacora(projectId);
 
     setProyecto(proj);
+    setCliente(cli || null);
     setActividades(acts);
     setUsuarios(users);
     setBitacora(bits);
@@ -221,56 +225,10 @@ export default function ProyectoGanttPage() {
         </div>
       )}
 
-      <Navbar
-        title={`Carta Gantt: ${proyecto.nombre}`}
-        subtitle={`Planificación semanal, asignación de cuadrillas y bitácora de obra`}
-        action={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsMapsModalOpen(true)}
-              className="px-3 py-1.5 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
-              title="Ver ubicación en Google Maps"
-            >
-              <MapPin className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>Maps</span>
-            </button>
-            <button
-              onClick={() => setIsBitacoraModalOpen(true)}
-              className="px-3 py-1.5 bg-white border border-kraft-200 hover:bg-kraft-50 text-navy-900 text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
-            >
-              <BookOpen className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>+ Bitácora</span>
-            </button>
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="px-3.5 py-1.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 font-heading"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ Partida</span>
-            </button>
-            <Link
-              href={`/proyectos/${proyecto.id}/finanzas`}
-              className="px-3 py-1.5 bg-kraft-100 hover:bg-kraft-200 text-navy-900 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-heading"
-            >
-              <Wallet className="w-3.5 h-3.5" />
-              <span>Finanzas</span>
-            </Link>
-            <Link
-              href={`/proyectos/${proyecto.id}/ia`}
-              className="px-3 py-1.5 bg-gradient-to-r from-[#FF6A00]/20 to-purple-600/20 hover:from-[#FF6A00]/30 hover:to-purple-600/30 text-[#FF6A00] dark:text-[#FF8A33] border border-[#FF6A00]/40 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-heading shadow-sm"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>Copiloto IA</span>
-            </Link>
-            <Link
-              href="/proyectos"
-              className="px-3 py-1.5 bg-kraft-100 hover:bg-kraft-200 text-navy-900 text-xs font-semibold rounded-lg flex items-center gap-1.5 font-heading"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Volver</span>
-            </Link>
-          </div>
-        }
+      <ProjectTabsHeader
+        proyecto={proyecto}
+        cliente={cliente}
+        onOpenMaps={() => setIsMapsModalOpen(true)}
       />
 
       <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
