@@ -758,6 +758,57 @@ En el contexto de la construcción en Chile, te asesoro con los parámetros reco
     ],
   };
 }
+ 
+/**
+ * Extrae todas las etiquetas de acción ([ACCION_OBRA:...], [ACCION_PROYECTO:...], [ACCIONES_OBRA:...])
+ * del texto generado por Gemini.
+ * Si hay múltiples etiquetas o si alguna acción contiene un array o lote de acciones,
+ * las unifica en un único objeto { tipo: 'lote_acciones', acciones: [...] } para que el sistema
+ * ejecute TODO DE UNA SOLA VEZ ("nada de 1 en 1").
+ */
+export function extraerAccionesDeTexto(rawText: string): { textoLimpio: string; accion: any } {
+  let textoLimpio = rawText;
+  const accionesEncontradas: any[] = [];
+
+  // Expresión regular global para capturar todas las etiquetas de acción
+  const tagRegex = /\[(?:ACCION_OBRA|ACCIONES_OBRA|ACCION_PROYECTO):\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*\]/g;
+
+  let match: RegExpExecArray | null;
+  while ((match = tagRegex.exec(rawText)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (Array.isArray(parsed)) {
+        accionesEncontradas.push(...parsed);
+      } else if (parsed && parsed.tipo === 'lote_acciones' && Array.isArray(parsed.acciones)) {
+        accionesEncontradas.push(...parsed.acciones);
+      } else if (parsed) {
+        accionesEncontradas.push(parsed);
+      }
+    } catch (err) {
+      console.warn('Error al parsear bloque JSON de acción:', err);
+    }
+    // Eliminar la etiqueta del texto limpio que verá el usuario
+    textoLimpio = textoLimpio.replace(match[0], '');
+  }
+
+  textoLimpio = textoLimpio.trim();
+
+  if (accionesEncontradas.length === 0) {
+    return { textoLimpio, accion: null };
+  }
+
+  if (accionesEncontradas.length === 1) {
+    return { textoLimpio, accion: accionesEncontradas[0] };
+  }
+
+  return {
+    textoLimpio,
+    accion: {
+      tipo: 'lote_acciones',
+      acciones: accionesEncontradas,
+    },
+  };
+}
 
 /**
  * Chat interactivo conversacional con el Asesor Experto en Obras & Controlador Autónomo IA (Google Gemini)
@@ -799,7 +850,14 @@ INSTRUCCIONES DE CONVERSACIÓN & ACCIONES AUTÓNOMAS:
 3. PROHIBICIÓN TOTAL DE RESPUESTAS GENÉRICAS O PLANTILLAS: Queda estrictamente prohibido responder con textos cliché, plantillas fijas o listas genéricas que no correspondan a lo que el usuario preguntó. Cada una de tus respuestas debe ser única, personalizada y enfocada exclusivamente en lo que el usuario escribió.
 
 4. CONTROL TOTAL DE LA PLATAFORMA (EJECUCIÓN DE ACCIONES AUTÓNOMAS EN VIVO):
-   Cuando el constructor te pida crear, modificar, calcular o gestionar cualquier aspecto de su empresa, responde confirmando de manera profesional y añade AL FINAL DE TU RESPUESTA una etiqueta [ACCION_OBRA: {...}] con el JSON correspondiente:
+   Cuando el constructor te pida crear, modificar, calcular o gestionar cualquier aspecto de su empresa, responde confirmando de manera profesional y añade AL FINAL DE TU RESPUESTA una o más etiquetas [ACCION_OBRA: {...}] con el JSON correspondiente.
+
+   ⚠️ REGLA CRÍTICA Y OBLIGATORIA: AGREGA Y EJECUTA TODO DE UNA SOLA VEZ ("NADA DE UNO EN UNO"):
+   - Si el usuario te pide crear una obra con sus tareas, materiales, precios, cliente o cuadrilla, INCLÚYELOS TODOS en la misma acción "crear_proyecto" (usando los arrays "partidas", "materiales" y "trabajadores_nombres").
+   - Si el usuario te pide agregar múltiples materiales, inclúyelos TODOS en el array "materiales" de una sola acción "agregar_materiales", o emite múltiples etiquetas [ACCION_OBRA: ...] consecutivas.
+   - Si el usuario te pide agregar varias partidas a la Carta Gantt, inclúyelas TODAS en el array "partidas" de una sola acción "crear_actividad": {"tipo":"crear_actividad","proyecto_nombre":"...","partidas":[{"nombre":"A","dias":2},{"nombre":"B","dias":4},...]}.
+   - Si el usuario te pide agregar o asignar trabajadores, inclúyelos TODOS de una sola vez ("agregar_trabajadores" o lista en "asignar_trabajadores").
+   - NUNCA agregues un solo ítem y obligues al usuario a volver a pedirte el siguiente. ¡AGREGA TODO EL CONJUNTO DE UNA SOLA VEZ!
 
    A) CREAR OBRA COMPLETA (CON TAREAS DE GANTT, MATERIALES, PRECIOS, CLIENTE Y CUADRILLA EN UN SOLO PASO):
       [ACCION_OBRA: {
@@ -883,18 +941,8 @@ Responde como Copiloto de Obras experto:`;
       return generarRespuestaHeuristicaCopiloto(mensajeUsuario, contextoDB);
     }
 
-    // Detectar si incluye acción estructurada (soporte multilínea y arrays de acciones)
-    let accion: any = null;
-    const actionMatch = rawText.match(/\[(?:ACCION_OBRA|ACCIONES_OBRA):\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*\]/);
-    if (actionMatch) {
-      try {
-        const parsed = JSON.parse(actionMatch[1]);
-        accion = Array.isArray(parsed) ? { tipo: 'lote_acciones', acciones: parsed } : parsed;
-        rawText = rawText.replace(actionMatch[0], '').trim();
-      } catch (err) {
-        console.warn('No se pudo parsear acción de obra:', err);
-      }
-    }
+    // Extraer todas las acciones estructuradas de forma unificada en un solo lote
+    const { textoLimpio, accion } = extraerAccionesDeTexto(rawText);
 
     const sugerencias = [
       '¿Cuánto cobrar por metro cuadrado en este trabajo?',
@@ -903,7 +951,7 @@ Responde como Copiloto de Obras experto:`;
     ];
 
     return {
-      respuesta: rawText,
+      respuesta: textoLimpio,
       accion,
       sugerencias,
     };
@@ -1104,11 +1152,20 @@ INSTRUCCIONES CLAVE DE CONVERSACIÓN & ACCIONES AUTÓNOMAS:
    • Queda estrictamente prohibido responder con textos cliché, saludos vacíos, respuestas enlatadas o listas genéricas que no correspondan a lo que el usuario preguntó.
    • JAMÁS respondas simplemente "Listo." ni confirmaciones escuetas. Cada una de tus respuestas debe ser sustanciosa, inteligente y adaptada con exactitud a lo que el usuario escribió.
 4. CONTROL Y EJECUCIÓN DE ACCIONES AUTÓNOMAS EN VIVO:
-   Si el constructor te pide modificar, agregar o registrar algo en esta obra, responde conversacionalmente confirmando los detalles técnicos y añade AL FINAL DE TU RESPUESTA una etiqueta [ACCION_PROYECTO: {...}] con el JSON:
-   - Crear partida en Gantt: [ACCION_PROYECTO: {"tipo":"crear_actividad","nombre":"Nombre partida","dias":4}]
+   Si el constructor te pide modificar, agregar o registrar algo en esta obra, responde conversacionalmente confirmando los detalles técnicos y añade AL FINAL DE TU RESPUESTA una o más etiquetas [ACCION_PROYECTO: {...}] con el JSON:
+
+   ⚠️ REGLA CRÍTICA Y OBLIGATORIA: AGREGA Y EJECUTA TODO DE UNA SOLA VEZ ("NADA DE UNO EN UNO"):
+   - Si el constructor te pide agregar varios materiales, agrégalos TODOS juntos en una sola acción:
+     [ACCION_PROYECTO: {"tipo":"agregar_materiales","materiales":[{"nombre":"Cemento Polpaico","cantidad":20,"unidad":"saco","precio_unitario":4800},{"nombre":"Arena Gruesa","cantidad":4,"unidad":"m3","precio_unitario":25000}]}]
+   - Si te pide agregar varias partidas a la Carta Gantt, agrégalas TODAS juntas en una sola acción:
+     [ACCION_PROYECTO: {"tipo":"crear_actividad","partidas":[{"nombre":"Fundaciones","dias":5},{"nombre":"Sobrecimientos","dias":4},{"nombre":"Radier H20","dias":3}]}]
+   - Si son múltiples acciones distintas (ej: agregar materiales y registrar una bitácora), emite ambas etiquetas [ACCION_PROYECTO: ...] consecutivas en la misma respuesta.
+   - Queda ESTRICTAMENTE PROHIBIDO agregar elementos 1 por 1 o pedir confirmaciones intermedias para continuar. ¡AGREGA TODO EN ESTA MISMA RESPUESTA!
+
+   - Crear partida(s) en Gantt: [ACCION_PROYECTO: {"tipo":"crear_actividad","nombre":"Nombre partida","dias":4}] o con array "partidas": [{"nombre":"A","dias":3},{"nombre":"B","dias":5}]
    - Actualizar avance partida: [ACCION_PROYECTO: {"tipo":"actualizar_avance","nombre":"Nombre partida o id","porcentaje_avance":100}]
    - Registrar imprevisto: [ACCION_PROYECTO: {"tipo":"registrar_imprevisto","descripcion":"Detalle del imprevisto","monto":120000}]
-   - Agregar material: [ACCION_PROYECTO: {"tipo":"agregar_material","nombre":"Nombre material","cantidad":10,"unidad":"saco","precio_unitario":4500}]
+   - Agregar material(es): [ACCION_PROYECTO: {"tipo":"agregar_materiales","materiales":[{"nombre":"Nombre material","cantidad":10,"unidad":"saco","precio_unitario":4500}]}]
    - Crear entrada bitácora: [ACCION_PROYECTO: {"tipo":"crear_bitacora","titulo":"Título","nota":"Detalle del día","subtipo":"avance"}]
    - Redactar WhatsApp cliente: [ACCION_PROYECTO: {"tipo":"generar_mensaje_whatsapp","mensaje":"Texto redactado para el cliente","telefono":"${p.cliente?.telefono || ''}"}]
 
@@ -1146,17 +1203,8 @@ Responde como el Asistente Especialista de esta Obra:`;
       return generarFallbackAgenteProyecto(msg, p);
     }
 
-    let accion: any = null;
-    const actionMatch = rawText.match(/\[(?:ACCION_PROYECTO|ACCION_OBRA|ACCIONES_OBRA):\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*\]/);
-    if (actionMatch) {
-      try {
-        const parsed = JSON.parse(actionMatch[1]);
-        accion = Array.isArray(parsed) ? { tipo: 'lote_acciones', acciones: parsed } : parsed;
-        rawText = rawText.replace(actionMatch[0], '').trim();
-      } catch (err) {
-        console.warn('No se pudo parsear acción de proyecto:', err);
-      }
-    }
+    // Extraer todas las acciones de forma unificada en un solo lote
+    const { textoLimpio, accion } = extraerAccionesDeTexto(rawText);
 
     const sugerencias = [
       '¿Cuánto saldo nos queda por cobrar?',
@@ -1165,7 +1213,7 @@ Responde como el Asistente Especialista de esta Obra:`;
     ];
 
     return {
-      respuesta: rawText,
+      respuesta: textoLimpio,
       accion,
       sugerencias,
     };

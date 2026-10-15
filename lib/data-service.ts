@@ -1244,36 +1244,70 @@ class DataService {
         };
       }
 
-      case 'agregar_trabajador': {
-        const nuevoUser = this.agregarTrabajadorDesdeIA({
-          nombre: accion.nombre || 'Nuevo Trabajador',
-          rol: accion.rol || 'terreno',
-          telefono: accion.telefono || accion.telefono_whatsapp,
-          email: accion.email,
-          rut: accion.rut,
+      case 'agregar_trabajador':
+      case 'agregar_trabajadores': {
+        const lista = Array.isArray(accion.trabajadores)
+          ? accion.trabajadores
+          : [
+              {
+                nombre: accion.nombre || 'Nuevo Trabajador',
+                rol: accion.rol || 'terreno',
+                telefono: accion.telefono || accion.telefono_whatsapp,
+                email: accion.email,
+                rut: accion.rut,
+              },
+            ];
+
+        const creados: any[] = [];
+        lista.forEach((t: any) => {
+          if (!t.nombre) return;
+          const u = this.agregarTrabajadorDesdeIA({
+            nombre: t.nombre,
+            rol: t.rol || 'terreno',
+            telefono: t.telefono || t.telefono_whatsapp,
+            email: t.email,
+            rut: t.rut,
+          });
+          creados.push(u);
         });
+
         return {
           tipo: 'agregar_trabajador',
-          titulo: `Trabajador Incorporado: ${nuevoUser.nombre}`,
-          detalles: nuevoUser,
-          resultado_texto: `Rol: ${nuevoUser.rol.toUpperCase()} • Contacto: ${nuevoUser.telefono_whatsapp}`,
+          titulo: `${creados.length} Trabajador(es) Incorporado(s): ${creados.map((u) => u.nombre).join(', ')}`,
+          detalles: { trabajadores: creados },
+          resultado_texto: `${creados.map((u) => `${u.nombre} (${(u.rol || 'faena').toUpperCase()})`).join(', ')} incorporados al equipo.`,
           link_destino: `/equipo`,
           link_texto: 'Ver Equipo ➔',
         };
       }
 
-      case 'asignar_trabajador': {
+      case 'asignar_trabajador':
+      case 'asignar_trabajadores': {
         const proj = resolverProyecto(accion.proyecto_nombre || accion.proyecto_id);
-        const ok = proj
-          ? this.asignarTrabajadorAProyecto(accion.trabajador_nombre || '', proj.id)
-          : false;
+        const nombres: string[] = Array.isArray(accion.trabajadores_nombres)
+          ? accion.trabajadores_nombres
+          : Array.isArray(accion.trabajadores)
+          ? accion.trabajadores.map((t: any) => (typeof t === 'string' ? t : t.nombre))
+          : accion.trabajador_nombre
+          ? [accion.trabajador_nombre]
+          : [];
+
+        let asignadosCount = 0;
+        if (proj) {
+          nombres.forEach((nombre) => {
+            if (this.asignarTrabajadorAProyecto(nombre, proj.id)) {
+              asignadosCount++;
+            }
+          });
+        }
+
         return {
           tipo: 'asignar_trabajador',
-          titulo: `Cuadrilla Asignada`,
-          detalles: accion,
-          resultado_texto: ok
-            ? `${accion.trabajador_nombre} fue incorporado a la faena "${proj?.nombre}".`
-            : `Trabajador coordinado en el equipo.`,
+          titulo: `${nombres.length} Miembro(s) de Cuadrilla Asignado(s)`,
+          detalles: { nombres, proyecto: proj?.nombre },
+          resultado_texto: proj
+            ? `${nombres.join(', ')} fueron incorporados a la faena "${proj.nombre}".`
+            : `Trabajadores coordinados en el equipo.`,
           link_destino: proj ? `/proyectos/${proj.id}/gantt` : `/equipo`,
           link_texto: 'Ver Faena ➔',
         };
@@ -1306,30 +1340,45 @@ class DataService {
       case 'crear_actividad': {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;
-        const dias = Number(accion.dias) || 5;
-        const acts = this.getActividades(proj.id);
-        const lastAct = acts[acts.length - 1];
-        let startDate = new Date();
-        if (lastAct && lastAct.fecha_termino) {
-          startDate = new Date(lastAct.fecha_termino);
-        }
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + dias);
 
-        const nueva = this.createActividad({
-          proyecto_id: proj.id,
-          nombre: accion.nombre || 'Nueva Partida',
-          fecha_inicio: startDate.toISOString().split('T')[0],
-          fecha_termino: endDate.toISOString().split('T')[0],
-          porcentaje_avance: 0,
-          estado: 'pendiente',
-          orden: acts.length + 1,
+        const listaPartidas = Array.isArray(accion.partidas)
+          ? accion.partidas
+          : Array.isArray(accion.actividades)
+          ? accion.actividades
+          : [{ nombre: accion.nombre || 'Nueva Partida', dias: Number(accion.dias) || 5 }];
+
+        const acts = this.getActividades(proj.id);
+        let lastEndDate = new Date();
+        const lastAct = acts[acts.length - 1];
+        if (lastAct && lastAct.fecha_termino) {
+          lastEndDate = new Date(lastAct.fecha_termino);
+        }
+
+        const creadas: Actividad[] = [];
+        listaPartidas.forEach((p: any, idx: number) => {
+          const dias = Number(p.dias) || 5;
+          const start = new Date(lastEndDate);
+          const end = new Date(start);
+          end.setDate(end.getDate() + dias);
+          lastEndDate = new Date(end);
+
+          const nueva = this.createActividad({
+            proyecto_id: proj.id,
+            nombre: p.nombre || `Partida ${acts.length + idx + 1}`,
+            fecha_inicio: start.toISOString().split('T')[0],
+            fecha_termino: end.toISOString().split('T')[0],
+            porcentaje_avance: Number(p.porcentaje_avance) || 0,
+            estado: 'pendiente',
+            orden: acts.length + idx + 1,
+          });
+          creadas.push(nueva);
         });
+
         return {
           tipo: 'crear_actividad',
-          titulo: `Partida Creada: ${nueva.nombre}`,
-          detalles: nueva,
-          resultado_texto: `Duración: ${dias} días • Fechas: ${nueva.fecha_inicio} al ${nueva.fecha_termino}`,
+          titulo: `${creadas.length} Partida(s) Creada(s): ${creadas.map((c) => c.nombre).join(', ')}`,
+          detalles: { partidas: creadas },
+          resultado_texto: `Se agregaron ${creadas.length} partidas a la Carta Gantt de "${proj.nombre}".`,
           link_destino: `/proyectos/${proj.id}/gantt`,
           link_texto: 'Ver en Carta Gantt ➔',
         };
@@ -1540,13 +1589,19 @@ class DataService {
         const resultados: AccionAsistenteIA[] = [];
         for (const sub of lista) {
           const res = this.ejecutarAccionGlobalIA(sub, contextProyectoId);
-          if (res) resultados.push(res);
+          if (res) {
+            if (res.tipo === 'lote_acciones' && res.detalles?.acciones) {
+              resultados.push(...res.detalles.acciones);
+            } else {
+              resultados.push(res);
+            }
+          }
         }
         return {
           tipo: 'lote_acciones',
-          titulo: `${resultados.length} Acciones Ejecutadas`,
+          titulo: `¡${resultados.length} Acciones Ejecutadas de una Sola Vez!`,
           detalles: { acciones: resultados },
-          resultado_texto: resultados.map((r) => r.titulo).join(' • '),
+          resultado_texto: resultados.map((r, i) => `${i + 1}. ${r.titulo}: ${r.resultado_texto}`).join(' • '),
           link_destino: resultados[0]?.link_destino || '/proyectos',
           link_texto: 'Ver Cambios en la Plataforma ➔',
         };
