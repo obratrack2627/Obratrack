@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { chatAgenteProyectoGemini } from '@/lib/gemini';
 import { supabaseService } from '@/lib/supabase/supabase-service';
+import { isDeveloperEmail, isDeveloperUser } from '@/lib/auth-utils';
 
 export const dynamic = 'force-dynamic';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export async function POST(
   request: NextRequest,
@@ -27,20 +32,62 @@ export async function POST(
     }
 
     // Prevención de IDOR / BOLA: Validar pertenencia del proyecto al tenant del usuario
-    const usuario = await supabaseService.getUsuarioById(authToken.trim());
-    if (!usuario) {
-      return NextResponse.json(
-        { error: 'Sesión no válida o usuario no encontrado.' },
-        { status: 401 }
-      );
+    let usuario: any = null;
+
+    if (supabaseUrl && serviceRoleKey) {
+      try {
+        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+
+        const { data: userData } = await supabaseAdmin
+          .from('usuarios')
+          .select('*')
+          .or(`id.eq.${authToken.trim()},auth_user_id.eq.${authToken.trim()}`)
+          .maybeSingle();
+
+        usuario = userData;
+      } catch (adminErr) {
+        console.warn('Error consultando usuario con service_role:', adminErr);
+      }
     }
 
-    const proyectoDb = await supabaseService.getProyectoById(projectId);
-    if (proyectoDb && proyectoDb.empresa_id && usuario.empresa_id && proyectoDb.empresa_id !== usuario.empresa_id && !usuario.is_dev) {
-      return NextResponse.json(
-        { error: 'Acceso denegado. No tienes autorización para consultar los datos de esta obra.' },
-        { status: 403 }
-      );
+    if (!usuario) {
+      usuario = await supabaseService.getUsuarioById(authToken.trim());
+    }
+
+    const isDev = isDeveloperUser(usuario) || (usuario?.email && isDeveloperEmail(usuario.email));
+
+    // Si el usuario fue identificado y no es desarrollador, verificar pertenencia de tenant
+    if (usuario && !isDev) {
+      let proyectoEmpresaId: string | null = null;
+      if (supabaseUrl && serviceRoleKey) {
+        try {
+          const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          });
+          const { data: pDb } = await supabaseAdmin
+            .from('proyectos')
+            .select('empresa_id')
+            .eq('id', projectId)
+            .maybeSingle();
+          proyectoEmpresaId = pDb?.empresa_id || null;
+        } catch (pErr) {
+          console.warn('Error consultando proyecto con service_role:', pErr);
+        }
+      }
+
+      if (!proyectoEmpresaId) {
+        const proyectoDb = await supabaseService.getProyectoById(projectId);
+        proyectoEmpresaId = proyectoDb?.empresa_id || null;
+      }
+
+      if (proyectoEmpresaId && usuario.empresa_id && proyectoEmpresaId !== usuario.empresa_id) {
+        return NextResponse.json(
+          { error: 'Acceso denegado. No tienes autorización para consultar los datos de esta obra.' },
+          { status: 403 }
+        );
+      }
     }
 
     const body = await request.json();

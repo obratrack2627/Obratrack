@@ -251,6 +251,10 @@ export default function ProyectoIAPage() {
 
       const data = await res.json();
 
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `Error ${res.status}: Falló la respuesta del asistente.`);
+      }
+
       let accionEjecutada: AccionAsistenteIA | undefined = undefined;
 
       // Ejecutar acción autónoma sobre el proyecto
@@ -335,7 +339,7 @@ export default function ProyectoIAPage() {
         proyecto_id: projectId,
         empresa_id: proyecto.empresa_id,
         remitente: 'agente',
-        texto: data.respuesta || 'Listo.',
+        texto: data.respuesta || 'He revisado tu consulta sobre la faena.',
         created_at: new Date().toISOString(),
         sugerencias: data.sugerencias,
         accion_ejecutada: accionEjecutada,
@@ -343,9 +347,23 @@ export default function ProyectoIAPage() {
 
       dataService.saveProyectoMensajeChat(agenteMsg);
       setMensajes((prev) => [...prev, agenteMsg]);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      showToast('Error de comunicación con el asistente.');
+      const errorMsg = err?.message || 'Error de comunicación con el asistente.';
+      showToast(errorMsg);
+      const agenteErrorMsg: MensajeChatProyecto = {
+        id: 'agt-err-' + Date.now(),
+        proyecto_id: projectId,
+        empresa_id: proyecto?.empresa_id,
+        remitente: 'agente',
+        texto: `⚠️ No pude procesar tu mensaje: ${errorMsg}. Por favor intenta nuevamente.`,
+        created_at: new Date().toISOString(),
+        sugerencias: [
+          '¿Cuánto saldo nos queda por cobrar?',
+          '¿Cómo vamos con la Carta Gantt?',
+        ],
+      };
+      setMensajes((prev) => [...prev, agenteErrorMsg]);
     } finally {
       setCargando(false);
     }
