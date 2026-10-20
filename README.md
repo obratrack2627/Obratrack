@@ -10,7 +10,7 @@ Reemplaza las planillas Excel, los chats desordenados de WhatsApp y las notas en
 - **Reportes automáticos de terreno vía WhatsApp Cloud API**.
 
 ## 🌐 Despliegue en Vivo
-- **URL Oficial en Vercel**: [`https://obra-track-ruddy.vercel.app/`](https://obra-track-ruddy.vercel.app/)
+- **URL Oficial en Vercel**: 
 
 ---
 
