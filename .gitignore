@@ -38,7 +38,3 @@ google-service-account.json
 
 # sonarqube
 /.scannerwork/
-
-# browser tests
-/test-results/
-/playwright-report/

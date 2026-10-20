@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import ThemeProvider from '@/components/ThemeProvider';
 
-
+import GlobalCopilotFloatingWidget from '@/components/GlobalCopilotFloatingWidget';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -26,7 +26,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {children}
             </div>
           </main>
-
+          {/* Copiloto Obrero IA Global en Botón Emergente */}
+          <GlobalCopilotFloatingWidget />
         </div>
       )}
     </ThemeProvider>

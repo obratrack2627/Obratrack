@@ -7,14 +7,6 @@ Reemplaza los registros informales en papel, las notas sueltas en chats de Whats
 
 ---
 
-## Flujo operativo de construcción
-
-La plataforma incorpora cotizaciones manuales por partidas, aprobación y conversión a obra, gastos, jornadas, estados de pago, adicionales, bitácora fotográfica y cierre con rentabilidad. El avance físico se calcula separado del dinero cobrado; la IA queda disponible como apoyo.
-
-**Antes de usar las nuevas pantallas, aplica la migración aditiva `supabase/migrations/20261020_flujo_constructor.sql` al proyecto Supabase de destino.** No ejecutes `supabase/schema.sql` sobre una base con datos, porque elimina tablas. El despliegue en Vercel no aplica esta migración automáticamente.
-
-Consulta [la guía del flujo, instalación, cálculos y validación](docs/FLUJO_CONSTRUCTOR.md). Las verificaciones se ejecutan con `npm test`, `npx tsc --noEmit`, `npm run build` y `npm run test:e2e`.
-
 ## 🚀 Funcionalidades Principales
 
 - **Copiloto Obrero & Cotizador Inteligente IA (Google Gemini API)**:

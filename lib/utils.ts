@@ -19,7 +19,7 @@ export function formatCLP(amount: number | null | undefined): string {
 // Formateador de fechas en español de Chile (Ej: "15 de Ago, 2026")
 export function formatDate(dateString: string | null | undefined): string {
   if (!dateString) return 'S/F';
-  const date = new Date(dateString.slice(0, 10) + 'T00:00:00');
+  const date = new Date(dateString + 'T00:00:00');
   if (isNaN(date.getTime())) return dateString;
 
   return date.toLocaleDateString('es-CL', {

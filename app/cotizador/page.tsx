@@ -421,8 +421,8 @@ export default function CopilotoObreroPage() {
 
       {/* Navbar Superior */}
       <Navbar
-        title="Asistente IA"
-        subtitle="Apoyo para planificar y resolver dudas."
+        title="Copiloto Obrero IA"
+        subtitle="Asistente de faena autónomo impulsado por Google Gemini 3.8 Flash IA"
         action={
           <div className="flex items-center gap-2">
             <button
@@ -636,7 +636,7 @@ export default function CopilotoObreroPage() {
                   value={inputChat}
                   onChange={(e) => setInputChat(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                  placeholder="¿En qué necesitas ayuda?"
+                  placeholder="Escribe tu instrucción (ej: Créame una obra de radier para Carlos en Peñalolén por 3.5M)..."
                   className="flex-1 min-w-0 text-xs bg-kraft-50 border border-kraft-200 rounded-2xl px-4 py-3 text-navy-900 focus:outline-none focus:border-obra-orange focus:bg-white transition-all shadow-inner"
                 />
                 <button

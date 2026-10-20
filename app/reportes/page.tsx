@@ -246,8 +246,8 @@ _Puede consultar avances y fotos 24/7 respondiendo a este WhatsApp._`;
 
       {/* Navbar Superior */}
       <Navbar
-        title="Reportes de clientes"
-        subtitle="Consulta avances y pagos por WhatsApp."
+        title="Seguimiento WhatsApp Clientes"
+        subtitle="Asistente de IA para que los mandantes consulten estado de obra, fotos y pagos por WhatsApp"
         action={
           <div className="flex items-center gap-2">
             <button
@@ -422,7 +422,7 @@ _Puede consultar avances y fotos 24/7 respondiendo a este WhatsApp._`;
                       value={inputTexto}
                       onChange={(e) => setInputTexto(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleEnviarMensaje()}
-                      placeholder="Escribe tu consulta"
+                      placeholder="Escribe como mandante (ej: Mi RUT es 15.432.890-1)..."
                       className="flex-1 bg-[#2A3942] text-white placeholder-gray-400 text-xs px-4 py-2.5 rounded-full focus:outline-none focus:ring-1 focus:ring-[#25D366]"
                     />
                     <button

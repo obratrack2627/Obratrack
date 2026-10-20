@@ -22,9 +22,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ObraTrack | Gestión de obras',
+  title: 'ObraTrack | El copiloto digital del constructor',
   description:
-    'Clientes, cotizaciones, obras, avances y rentabilidad para pequeñas constructoras en Chile.',
+    'Control, Cotizaciones, Costos, Pagos, Avances y Georreferenciación con Inteligencia Artificial (Google Gemini), Google Maps y WhatsApp para constructoras en Chile.',
 };
 
 export default function RootLayout({
