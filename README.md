@@ -18,7 +18,6 @@ Reemplaza las planillas Excel, los chats desordenados de WhatsApp y las notas en
 
 - **Frontend & Backend**: Next.js 14 (App Router), TypeScript, React Server Components.
 - **Estilos & UI**: Tailwind CSS, Lucide Icons, paleta de diseño técnico chileno.
-- **Base de Datos & Auth**: Google Firebase (Cloud Firestore Native Mode + Firebase Auth + Firebase Storage).
 - **Carta Gantt**: Gantt interactivo semanal con seguimiento de partidas en terreno y soporte táctil móvil.
 - **Gráficos Financieros**: Recharts (desglose de cotizaciones, cobros e imprevistos).
 - **Inteligencia Artificial (Google Gemini 3.6 / 3.7 / 2.5 Flash)**:
