@@ -32,7 +32,7 @@ Reemplaza los registros informales en papel, las notas sueltas en chats de Whats
 ---
 
 ## 🌐 Despliegue en Vivo
-- **URL Oficial en Vercel**: https://obra-track-ruddy.vercel.app/
+- **URL Oficial en Vercel**: https://obratrack-5zwn.vercel.app/
 
 ---
 
