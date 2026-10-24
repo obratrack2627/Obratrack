@@ -16,6 +16,7 @@ import {
   CreditCard,
   Zap,
   LogOut,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { dataService } from '@/lib/data-service';
@@ -65,11 +66,22 @@ export default function Sidebar() {
   useEffect(() => {
     loadSidebarData();
 
+    // Sincronizar con Supabase Cloud en segundo plano para reflejar mensajes de WhatsApp en vivo
+    dataService.pullFromCloudServer().then((res) => {
+      if (res.updated) loadSidebarData();
+    });
+
     const planChangeHandler = (e: any) => {
       if (e.detail) setActivePlan(e.detail);
     };
+    const syncHandler = () => loadSidebarData();
+
     window.addEventListener('obratrack_plan_changed', planChangeHandler);
-    return () => window.removeEventListener('obratrack_plan_changed', planChangeHandler);
+    window.addEventListener('obratrack_cloud_synced', syncHandler);
+    return () => {
+      window.removeEventListener('obratrack_plan_changed', planChangeHandler);
+      window.removeEventListener('obratrack_cloud_synced', syncHandler);
+    };
   }, [pathname]);
 
   const handleRoleChange = (newRole: UserRole) => {
@@ -98,7 +110,12 @@ export default function Sidebar() {
           icon: Building,
         },
         {
-          label: 'Reportes & Avances',
+          label: 'Control Asistencia',
+          href: '/asistencia',
+          icon: ClipboardCheck,
+        },
+        {
+          label: 'WhatsApp & Reportes',
           href: '/reportes',
           icon: MessageSquareShare,
           badge: pendingReportsCount > 0 ? pendingReportsCount : null,
@@ -128,7 +145,12 @@ export default function Sidebar() {
           icon: Building,
         },
         {
-          label: 'Reportes WhatsApp',
+          label: 'Control Asistencia',
+          href: '/asistencia',
+          icon: ClipboardCheck,
+        },
+        {
+          label: 'WhatsApp IA (Obra)',
           href: '/reportes',
           icon: MessageSquareShare,
           badge: pendingReportsCount > 0 ? pendingReportsCount : null,

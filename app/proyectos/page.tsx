@@ -34,6 +34,8 @@ import {
   Upload,
   Image as ImageIcon,
   Zap,
+  FolderOpen,
+  ClipboardCheck,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
@@ -787,43 +789,74 @@ export default function ProyectosPage() {
                         </button>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-4 gap-1.5 pt-3 border-t border-kraft-200">
-                        <Link
-                          href={`/proyectos/${proj.id}/gantt`}
-                          className="py-2 px-1 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
-                          title="Carta Gantt & Partidas"
-                        >
-                          <GanttChartSquare className="w-3.5 h-3.5 text-obra-orange shrink-0" />
-                          <span className="truncate">Gantt</span>
-                        </Link>
+                      <div className="space-y-1.5 pt-3 border-t border-kraft-200">
+                        <div className="grid grid-cols-4 gap-1.5">
+                          <Link
+                            href={`/proyectos/${proj.id}/gantt`}
+                            className="py-2 px-1 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                            title="Carta Gantt & Partidas"
+                          >
+                            <GanttChartSquare className="w-3.5 h-3.5 text-obra-orange shrink-0" />
+                            <span className="truncate">Gantt</span>
+                          </Link>
 
-                        <Link
-                          href={`/proyectos/${proj.id}/finanzas`}
-                          className="py-2 px-1 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
-                          title="Control Financiero"
-                        >
-                          <Wallet className="w-3.5 h-3.5 text-navy-800 shrink-0" />
-                          <span className="truncate">Finanzas</span>
-                        </Link>
+                          <Link
+                            href={`/proyectos/${proj.id}/finanzas`}
+                            className="py-2 px-1 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                            title="Control Financiero"
+                          >
+                            <Wallet className="w-3.5 h-3.5 text-navy-800 shrink-0" />
+                            <span className="truncate">Finanzas</span>
+                          </Link>
 
-                        <Link
-                          href={`/proyectos/${proj.id}/ia`}
-                          className="py-2 px-1 bg-gradient-to-r from-[#FF6A00]/15 to-purple-600/15 hover:from-[#FF6A00]/25 hover:to-purple-600/25 border border-[#FF6A00]/30 text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
-                          title="Copiloto IA de esta Obra"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
-                          <span className="truncate">IA</span>
-                        </Link>
+                          <Link
+                            href={`/proyectos/${proj.id}/ia`}
+                            className="py-2 px-1 bg-gradient-to-r from-[#FF6A00]/15 to-purple-600/15 hover:from-[#FF6A00]/25 hover:to-purple-600/25 border border-[#FF6A00]/30 text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
+                            title="Copiloto IA de esta Obra"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
+                            <span className="truncate">IA</span>
+                          </Link>
 
-                        <button
-                          type="button"
-                          onClick={() => setViewingMapsProject(proj)}
-                          className="py-2 px-1 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-[#1E1E1E] dark:text-white hover:text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
-                          title="Ver ubicación en Google Maps"
-                        >
-                          <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
-                          <span className="truncate">Maps</span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setViewingMapsProject(proj)}
+                            className="py-2 px-1 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-[#1E1E1E] dark:text-white hover:text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
+                            title="Ver ubicación en Google Maps"
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
+                            <span className="truncate">Maps</span>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <Link
+                            href={`/proyectos/${proj.id}/cambios`}
+                            className="py-1.5 px-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-700 dark:text-amber-400 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                            title="Reclamos, Incidencias y Solicitudes de Cambio"
+                          >
+                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                            <span className="truncate">Cambios</span>
+                          </Link>
+
+                          <Link
+                            href={`/proyectos/${proj.id}/documentos`}
+                            className="py-1.5 px-1 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 text-indigo-700 dark:text-indigo-400 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                            title="Repositorio de Contratos, Planos, Facturas y Correos"
+                          >
+                            <FolderOpen className="w-3 h-3 shrink-0" />
+                            <span className="truncate">Documentos</span>
+                          </Link>
+
+                          <Link
+                            href={`/proyectos/${proj.id}/asistencia`}
+                            className="py-1.5 px-1 bg-[#6B8F72]/15 hover:bg-[#6B8F72]/25 border border-[#6B8F72]/30 text-[#527358] dark:text-[#86B08E] rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
+                            title="Control de Asistencia de Obreros"
+                          >
+                            <ClipboardCheck className="w-3 h-3 shrink-0" />
+                            <span className="truncate">Asistencia</span>
+                          </Link>
+                        </div>
                       </div>
                     )}
                   </div>

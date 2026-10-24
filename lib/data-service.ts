@@ -16,6 +16,11 @@ import {
   MensajeChatProyecto,
   AccionAsistenteIA,
   PaymentMethod,
+  ReclamoCambioObra,
+  DocumentoObra,
+  CategoriaDocumentoObra,
+  AsistenciaObrero,
+  EstadoAsistencia,
 } from '@/types/database';
 import {
   INITIAL_PROYECTOS,
@@ -48,6 +53,9 @@ const KEYS = {
   AGENDA: 'obratrack_agenda_eventos_v7',
   CHAT_SESSION: 'obratrack_chat_session_history_v7',
   CHAT_PROYECTOS: 'obratrack_chat_proyectos_v7',
+  RECLAMOS_CAMBIOS: 'obratrack_reclamos_cambios_v7',
+  DOCUMENTOS_OBRA: 'obratrack_documentos_obra_v7',
+  ASISTENCIAS_OBRA: 'obratrack_asistencias_obra_v7',
 };
 
 const DEMO_EMPRESA_ID = 'e1111111-1111-4111-a111-111111111111';
@@ -80,10 +88,20 @@ class DataService {
     }
   }
 
+  private isPullingCloud = false;
+
   private setItem<T>(key: string, value: T): void {
     if (!this.isBrowser()) return;
     try {
       localStorage.setItem(key, JSON.stringify(value));
+      if (
+        !this.isPullingCloud &&
+        key !== KEYS.ACTIVE_USER &&
+        !key.startsWith(KEYS.CHAT_SESSION) &&
+        !key.includes(KEYS.CHAT_PROYECTOS)
+      ) {
+        this.scheduleCloudSync();
+      }
     } catch (e) {
       console.error('Error saving to localStorage', e);
     }
@@ -804,6 +822,333 @@ class DataService {
 
     reportes[index].estado = 'rechazado';
     this.setItem(this.getTenantKey(KEYS.REPORTES), reportes);
+    this.scheduleCloudSync();
+    return true;
+  }
+
+  // --- RECLAMOS, INCIDENCIAS Y SOLICITUDES DE CAMBIO POR OBRA ---
+  getReclamosCambios(proyectoId?: string): ReclamoCambioObra[] {
+    const all = this.getItem<ReclamoCambioObra[]>(this.getTenantKey(KEYS.RECLAMOS_CAMBIOS), []);
+    if (proyectoId) {
+      return all.filter((r) => r.proyecto_id === proyectoId);
+    }
+    return all;
+  }
+
+  createReclamoCambio(
+    data: Omit<ReclamoCambioObra, 'id' | 'created_at' | 'materiales_inyectados'> & {
+      materiales_inyectados?: boolean;
+    }
+  ): ReclamoCambioObra {
+    const active = this.getActiveUser();
+    const list = this.getReclamosCambios();
+    const newItem: ReclamoCambioObra = {
+      ...data,
+      id: 'rc-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      empresa_id: data.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
+      impacto_monto: Number(data.impacto_monto) || 0,
+      impacto_dias: Number(data.impacto_dias) || 0,
+      materiales_requeridos: Array.isArray(data.materiales_requeridos) ? data.materiales_requeridos : [],
+      materiales_inyectados: Boolean(data.materiales_inyectados),
+      fecha: data.fecha || new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString(),
+    };
+    list.unshift(newItem);
+    this.setItem(this.getTenantKey(KEYS.RECLAMOS_CAMBIOS), list);
+    this.scheduleCloudSync();
+    return newItem;
+  }
+
+  updateReclamoCambio(id: string, data: Partial<ReclamoCambioObra>): ReclamoCambioObra | null {
+    const list = this.getReclamosCambios();
+    const idx = list.findIndex((r) => r.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], ...data };
+    this.setItem(this.getTenantKey(KEYS.RECLAMOS_CAMBIOS), list);
+    this.scheduleCloudSync();
+    return list[idx];
+  }
+
+  deleteReclamoCambio(id: string): boolean {
+    const list = this.getReclamosCambios();
+    const filtered = list.filter((r) => r.id !== id);
+    this.setItem(this.getTenantKey(KEYS.RECLAMOS_CAMBIOS), filtered);
+    this.scheduleCloudSync();
+    return true;
+  }
+
+  /**
+   * Aprueba una solicitud de cambio o incidencia e inyecta automáticamente:
+   * 1) Los materiales nuevos requeridos en Finanzas & Insumos (materiales_proyecto)
+   * 2) El ajuste en el presupuesto cotizado (monto_cotizado) si aplica
+   * 3) La extensión en días de la fecha de término estimada si aplica
+   * 4) Un registro de trazabilidad en la Bitácora de la obra
+   */
+  aprobarEInyectarCambioObra(
+    id: string,
+    opciones?: { ajustarPresupuesto?: boolean; ajustarPlazo?: boolean; resolucionNotas?: string }
+  ): { exito: boolean; materialesAgregados: number; nuevoMontoCotizado?: number } {
+    const item = this.getReclamosCambios().find((r) => r.id === id);
+    if (!item) return { exito: false, materialesAgregados: 0 };
+
+    const proj = this.getProyectoById(item.proyecto_id);
+    if (!proj) return { exito: false, materialesAgregados: 0 };
+
+    let materialesAgregados = 0;
+
+    if (!item.materiales_inyectados && item.materiales_requeridos.length > 0) {
+      item.materiales_requeridos.forEach((m) => {
+        const cant = Number(m.cantidad) || 1;
+        const pu = Number(m.precio_unitario) || 0;
+        this.createMaterialProyecto({
+          proyecto_id: proj.id,
+          nombre: `${m.nombre} (Adicional Cambio)`,
+          categoria: 'Solicitud de Cambio',
+          cantidad: cant,
+          unidad: m.unidad || 'unidad',
+          precio_unitario: pu,
+          subtotal: cant * pu,
+          comprado: false,
+        });
+        materialesAgregados++;
+      });
+    }
+
+    let nuevoMonto = proj.monto_cotizado || 0;
+    const debeAjustarMonto = opciones?.ajustarPresupuesto !== false && item.impacto_monto > 0 && !item.materiales_inyectados;
+    if (debeAjustarMonto) {
+      nuevoMonto = nuevoMonto + item.impacto_monto;
+    }
+
+    let nuevaFechaTermino = proj.fecha_termino_estimada;
+    const debeAjustarPlazo = opciones?.ajustarPlazo !== false && item.impacto_dias > 0 && !item.materiales_inyectados;
+    if (debeAjustarPlazo && proj.fecha_termino_estimada) {
+      const f = new Date(proj.fecha_termino_estimada);
+      f.setDate(f.getDate() + item.impacto_dias);
+      nuevaFechaTermino = f.toISOString().split('T')[0];
+    }
+
+    if (debeAjustarMonto || debeAjustarPlazo) {
+      this.updateProyecto(proj.id, {
+        monto_cotizado: nuevoMonto,
+        fecha_termino_estimada: nuevaFechaTermino,
+      });
+    }
+
+    this.updateReclamoCambio(id, {
+      estado: 'aprobado',
+      materiales_inyectados: true,
+      resolucion_notas:
+        opciones?.resolucionNotas ||
+        item.resolucion_notas ||
+        `Aprobado e incorporado a la obra (${materialesAgregados} insumos cargados).`,
+    });
+
+    const active = this.getActiveUser();
+    this.createBitacoraEntrada({
+      proyecto_id: proj.id,
+      usuario_id: active?.id || 'u-1',
+      autor_nombre: active?.nombre || 'Administración Obra',
+      titulo: `Cambio Aprobado: ${item.titulo}`,
+      nota: `${item.descripcion}. Impacto: +$${item.impacto_monto.toLocaleString('es-CL')} CLP, +${item.impacto_dias} días. Materiales inyectados: ${materialesAgregados}.`,
+      tipo: 'avance',
+      fecha: new Date().toISOString().split('T')[0],
+    });
+
+    this.scheduleCloudSync();
+    return {
+      exito: true,
+      materialesAgregados,
+      nuevoMontoCotizado: nuevoMonto,
+    };
+  }
+
+  // --- REPOSITORIO DOCUMENTAL POR OBRA ---
+  getDocumentosObra(proyectoId?: string, categoria?: CategoriaDocumentoObra): DocumentoObra[] {
+    let list = this.getItem<DocumentoObra[]>(this.getTenantKey(KEYS.DOCUMENTOS_OBRA), []);
+    if (proyectoId) {
+      list = list.filter((d) => d.proyecto_id === proyectoId);
+    }
+    if (categoria) {
+      list = list.filter((d) => d.categoria === categoria);
+    }
+    return list;
+  }
+
+  createDocumentoObra(data: Omit<DocumentoObra, 'id' | 'created_at'>): DocumentoObra {
+    const active = this.getActiveUser();
+    const list = this.getDocumentosObra();
+    const newDoc: DocumentoObra = {
+      ...data,
+      id: 'doc-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      empresa_id: data.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
+      subido_por_id: data.subido_por_id || active?.id,
+      subido_por_nombre: data.subido_por_nombre || active?.nombre || 'Administrador',
+      fecha_documento: data.fecha_documento || new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString(),
+    };
+    list.unshift(newDoc);
+    this.setItem(this.getTenantKey(KEYS.DOCUMENTOS_OBRA), list);
+    this.scheduleCloudSync();
+    return newDoc;
+  }
+
+  updateDocumentoObra(id: string, data: Partial<DocumentoObra>): DocumentoObra | null {
+    const list = this.getDocumentosObra();
+    const idx = list.findIndex((d) => d.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], ...data };
+    this.setItem(this.getTenantKey(KEYS.DOCUMENTOS_OBRA), list);
+    this.scheduleCloudSync();
+    return list[idx];
+  }
+
+  deleteDocumentoObra(id: string): boolean {
+    const list = this.getDocumentosObra();
+    const filtered = list.filter((d) => d.id !== id);
+    this.setItem(this.getTenantKey(KEYS.DOCUMENTOS_OBRA), filtered);
+    this.scheduleCloudSync();
+    return true;
+  }
+
+  async uploadArchivoObra(
+    file: File,
+    proyectoId: string,
+    bucket: 'documentos-obra' | 'bitacora-fotos' = 'documentos-obra'
+  ): Promise<{ publicUrl: string; fileName: string; fileSize: number; mimeType: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('proyectoId', proyectoId);
+    formData.append('bucket', bucket);
+
+    const res = await fetch('/api/supabase/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const json = await res.json();
+    if (!res.ok || !json.publicUrl) {
+      throw new Error(json.error || 'No se pudo subir el archivo a Supabase Storage.');
+    }
+
+    return {
+      publicUrl: json.publicUrl,
+      fileName: json.fileName,
+      fileSize: json.fileSize,
+      mimeType: json.mimeType,
+    };
+  }
+
+  // --- CONTROL DE ASISTENCIA DE OBREROS ---
+  calcularHorasTrabajadas(horaEntrada?: string, horaSalida?: string): number {
+    if (!horaEntrada || !horaSalida) return 0;
+    const partsIn = horaEntrada.split(':').map(Number);
+    const partsOut = horaSalida.split(':').map(Number);
+    if (partsIn.length < 2 || partsOut.length < 2) return 0;
+    const minsIn = partsIn[0] * 60 + partsIn[1];
+    const minsOut = partsOut[0] * 60 + partsOut[1];
+    if (minsOut <= minsIn) return 0;
+    // Descontar 1 hora de colación si la jornada supera 6 horas
+    const rawHours = (minsOut - minsIn) / 60;
+    const netHours = rawHours >= 6.5 ? rawHours - 1 : rawHours;
+    return Math.round(netHours * 10) / 10;
+  }
+
+  getAsistencias(proyectoId?: string, fecha?: string): AsistenciaObrero[] {
+    let list = this.getItem<AsistenciaObrero[]>(this.getTenantKey(KEYS.ASISTENCIAS_OBRA), []);
+    if (proyectoId) {
+      list = list.filter((a) => a.proyecto_id === proyectoId);
+    }
+    if (fecha) {
+      list = list.filter((a) => a.fecha === fecha);
+    }
+    return list;
+  }
+
+  upsertAsistenciaObrero(
+    data: Omit<AsistenciaObrero, 'id' | 'created_at'> & { id?: string }
+  ): AsistenciaObrero {
+    const active = this.getActiveUser();
+    const list = this.getAsistencias();
+
+    const horas =
+      data.estado === 'presente' || data.estado === 'atraso'
+        ? data.horas_trabajadas ??
+          this.calcularHorasTrabajadas(data.hora_entrada || '08:00', data.hora_salida || '18:00')
+        : 0;
+
+    const existingIdx = list.findIndex(
+      (a) =>
+        (data.id && a.id === data.id) ||
+        (a.proyecto_id === data.proyecto_id &&
+          a.fecha === data.fecha &&
+          ((data.usuario_id && a.usuario_id === data.usuario_id) ||
+            a.trabajador_nombre.toLowerCase().trim() === data.trabajador_nombre.toLowerCase().trim()))
+    );
+
+    if (existingIdx !== -1) {
+      list[existingIdx] = {
+        ...list[existingIdx],
+        ...data,
+        horas_trabajadas: horas,
+      };
+      this.setItem(this.getTenantKey(KEYS.ASISTENCIAS_OBRA), list);
+      this.scheduleCloudSync();
+      return list[existingIdx];
+    }
+
+    const nuevo: AsistenciaObrero = {
+      ...data,
+      id: data.id || 'asis-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      empresa_id: data.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
+      horas_trabajadas: horas,
+      registrado_por: data.registrado_por || active?.nombre || 'Supervisor',
+      created_at: new Date().toISOString(),
+    };
+
+    list.unshift(nuevo);
+    this.setItem(this.getTenantKey(KEYS.ASISTENCIAS_OBRA), list);
+    this.scheduleCloudSync();
+    return nuevo;
+  }
+
+  marcarCuadrillaPresente(
+    proyectoId: string,
+    fecha: string,
+    horaEntrada = '08:00',
+    horaSalida = '18:00'
+  ): AsistenciaObrero[] {
+    const proj = this.getProyectoById(proyectoId);
+    const todosUsuarios = this.getUsuarios();
+    let cuadrilla = todosUsuarios.filter((u) => proj?.trabajadores_ids?.includes(u.id));
+    if (cuadrilla.length === 0) {
+      cuadrilla = todosUsuarios.filter((u) => u.rol === 'terreno' || u.rol === 'supervisor');
+    }
+
+    const resultados: AsistenciaObrero[] = [];
+    cuadrilla.forEach((trabajador) => {
+      const reg = this.upsertAsistenciaObrero({
+        proyecto_id: proyectoId,
+        usuario_id: trabajador.id,
+        trabajador_nombre: trabajador.nombre,
+        trabajador_rol: trabajador.rol,
+        fecha,
+        estado: 'presente',
+        hora_entrada: horaEntrada,
+        hora_salida: horaSalida,
+        origen: 'web',
+      });
+      resultados.push(reg);
+    });
+
+    return resultados;
+  }
+
+  deleteAsistencia(id: string): boolean {
+    const list = this.getAsistencias();
+    const filtered = list.filter((a) => a.id !== id);
+    this.setItem(this.getTenantKey(KEYS.ASISTENCIAS_OBRA), filtered);
+    this.scheduleCloudSync();
     return true;
   }
 
@@ -1584,6 +1929,120 @@ class DataService {
         };
       }
 
+      case 'crear_solicitud_cambio': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        if (!proj) return null;
+        const mats = Array.isArray(accion.materiales)
+          ? accion.materiales.map((m: any) => ({
+              nombre: m.nombre || 'Material',
+              cantidad: Number(m.cantidad) || 1,
+              unidad: m.unidad || 'unidad',
+              precio_unitario: Number(m.precio_unitario) || 0,
+              subtotal: (Number(m.cantidad) || 1) * (Number(m.precio_unitario) || 0),
+            }))
+          : [];
+        const rc = this.createReclamoCambio({
+          proyecto_id: proj.id,
+          tipo: (['solicitud_cambio', 'reclamo', 'incidente', 'accidente'].includes(accion.subtipo || '')
+            ? accion.subtipo
+            : 'solicitud_cambio') as any,
+          prioridad: (['baja', 'media', 'alta', 'critica'].includes(accion.prioridad || '')
+            ? accion.prioridad
+            : 'media') as any,
+          estado: 'pendiente',
+          titulo: accion.titulo || 'Solicitud de cambio registrada por IA',
+          descripcion: accion.descripcion || accion.nota || 'Requerimiento registrado por Copiloto IA',
+          solicitado_por: accion.solicitado_por || 'Mandante / Terreno',
+          impacto_monto: Number(accion.monto || accion.impacto_monto) || 0,
+          impacto_dias: Number(accion.dias || accion.impacto_dias) || 0,
+          materiales_requeridos: mats,
+          origen: 'web',
+          fecha: new Date().toISOString().split('T')[0],
+        });
+        return {
+          tipo: 'crear_solicitud_cambio',
+          titulo: `Registrado en Reclamos & Cambios: ${rc.titulo}`,
+          detalles: rc,
+          resultado_texto: `Tipo: ${rc.tipo} • Impacto: $${rc.impacto_monto.toLocaleString('es-CL')} CLP (${mats.length} materiales propuestos).`,
+          link_destino: `/proyectos/${proj.id}/cambios`,
+          link_texto: 'Ver Reclamos & Cambios ➔',
+        };
+      }
+
+      case 'registrar_asistencia': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        if (!proj) return null;
+        const fecha = accion.fecha || new Date().toISOString().split('T')[0];
+        if (accion.todos_presentes) {
+          const regs = this.marcarCuadrillaPresente(
+            proj.id,
+            fecha,
+            accion.hora_entrada || '08:00',
+            accion.hora_salida || '18:00'
+          );
+          return {
+            tipo: 'registrar_asistencia',
+            titulo: `Asistencia de Cuadrilla Registrada (${regs.length})`,
+            detalles: { registros: regs },
+            resultado_texto: `${regs.length} trabajadores marcados presentes en "${proj.nombre}" (${fecha}).`,
+            link_destino: `/proyectos/${proj.id}/asistencia`,
+            link_texto: 'Ver Asistencia ➔',
+          };
+        }
+        const reg = this.upsertAsistenciaObrero({
+          proyecto_id: proj.id,
+          trabajador_nombre: accion.trabajador_nombre || accion.nombre || 'Trabajador de Obra',
+          trabajador_rol: accion.rol || 'terreno',
+          fecha,
+          estado: (['presente', 'atraso', 'ausente', 'licencia', 'permiso'].includes(accion.estado || '')
+            ? accion.estado
+            : 'presente') as EstadoAsistencia,
+          hora_entrada: accion.hora_entrada || '08:00',
+          hora_salida: accion.hora_salida || '18:00',
+          observacion: accion.observacion || '',
+          origen: 'web',
+        });
+        return {
+          tipo: 'registrar_asistencia',
+          titulo: `Asistencia Registrada: ${reg.trabajador_nombre}`,
+          detalles: reg,
+          resultado_texto: `${reg.trabajador_nombre} marcado como ${reg.estado.toUpperCase()} en "${proj.nombre}" (${fecha}).`,
+          link_destino: `/proyectos/${proj.id}/asistencia`,
+          link_texto: 'Ver Asistencia ➔',
+        };
+      }
+
+      case 'registrar_documento': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        if (!proj) return null;
+        const doc = this.createDocumentoObra({
+          proyecto_id: proj.id,
+          categoria: (['contrato', 'plano', 'factura_boleta', 'correo', 'permiso_normativa', 'otro'].includes(
+            accion.categoria || ''
+          )
+            ? accion.categoria
+            : 'otro') as CategoriaDocumentoObra,
+          nombre: accion.nombre || accion.titulo || 'Documento registrado por IA',
+          descripcion: accion.descripcion || '',
+          numero_documento: accion.numero_documento || '',
+          proveedor_entidad: accion.proveedor || '',
+          monto_documento: accion.monto ? Number(accion.monto) : undefined,
+          correo_remitente: accion.correo_remitente || '',
+          correo_destinatario: accion.correo_destinatario || '',
+          correo_asunto: accion.correo_asunto || '',
+          correo_cuerpo: accion.correo_cuerpo || '',
+          fecha_documento: accion.fecha || new Date().toISOString().split('T')[0],
+        });
+        return {
+          tipo: 'registrar_documento',
+          titulo: `Documento Registrado: ${doc.nombre}`,
+          detalles: doc,
+          resultado_texto: `Categoría: ${doc.categoria.toUpperCase()} en "${proj.nombre}".`,
+          link_destino: `/proyectos/${proj.id}/documentos`,
+          link_texto: 'Ver Repositorio Documental ➔',
+        };
+      }
+
       case 'lote_acciones': {
         const lista = Array.isArray(accion.acciones) ? accion.acciones : [];
         const resultados: AccionAsistenteIA[] = [];
@@ -1709,63 +2168,170 @@ class DataService {
     }
   }
 
-  async syncWithSupabase(): Promise<{ success: boolean; count?: number; message: string }> {
+  private cloudSyncTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  public scheduleCloudSync(): void {
+    if (!this.isBrowser()) return;
+    if (this.cloudSyncTimeout) {
+      clearTimeout(this.cloudSyncTimeout);
+    }
+    this.cloudSyncTimeout = setTimeout(() => {
+      this.pushToCloudServer().catch((err) => console.warn('Auto Cloud Sync:', err));
+    }, 900);
+  }
+
+  async pushToCloudServer(): Promise<{ success: boolean; message: string }> {
+    if (!this.isBrowser()) return { success: false, message: 'No browser' };
     try {
-      const proyectos = this.getProyectos();
-      const actividades = this.getActividades();
-      const pagos = this.getPagos();
-      const imprevistos = this.getImprevistos();
-      const materiales = this.getMaterialesProyecto();
-      const bitacora = this.getBitacora();
-      const clientes = this.getClientes();
-      const usuarios = this.getUsuarios();
+      const active = this.getActiveUser();
+      const empresaId = active?.empresa_id || DEMO_EMPRESA_ID;
 
-      let count = 0;
-      for (const p of proyectos) {
-        await supabaseService.saveProyecto(p);
-        count++;
-      }
-      for (const c of clientes) {
-        await supabaseService.saveCliente(c);
-        count++;
-      }
-      for (const u of usuarios) {
-        await supabaseService.saveUsuario(u);
-        count++;
-      }
-      for (const a of actividades) {
-        await supabaseService.saveActividad(a);
-        count++;
-      }
-      for (const pay of pagos) {
-        await supabaseService.savePago(pay);
-        count++;
-      }
-      for (const m of materiales) {
-        await supabaseService.saveMaterial(m);
-        count++;
-      }
-      for (const b of bitacora) {
-        await supabaseService.saveBitacora(b);
-        count++;
-      }
-      for (const imp of imprevistos) {
-        await supabaseService.saveImprevisto(imp);
-        count++;
-      }
-
-      return {
-        success: true,
-        count,
-        message: `Sincronización exitosa con Supabase (${count} registros).`,
+      const payload = {
+        empresaId,
+        proyectos: this.getProyectos(),
+        clientes: this.getClientes(),
+        usuarios: this.getUsuarios(),
+        actividades: this.getActividades(),
+        pagos: this.getPagos(),
+        materiales: this.getMaterialesProyecto(),
+        bitacora: this.getBitacora(),
+        imprevistos: this.getImprevistos(),
+        reclamos_cambios: this.getReclamosCambios(),
+        documentos: this.getDocumentosObra(),
+        asistencias: this.getAsistencias(),
+        reportes_whatsapp: this.getReportes(),
       };
+
+      const res = await fetch('/api/supabase/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        return { success: false, message: 'Error enviando sincronización a Supabase.' };
+      }
+      return { success: true, message: 'Sincronizado en vivo con Supabase Cloud.' };
     } catch (err: any) {
-      return { success: false, message: err.message || 'Error sincronizando con Supabase.' };
+      return { success: false, message: err.message || 'Error de red con Supabase.' };
     }
   }
 
+  /**
+   * Sincronización inteligente bidireccional con Supabase:
+   * - Si Supabase aún no tiene las obras iniciales del usuario, sube el estado actual para inicializarlo.
+   * - Si Supabase ya tiene obras/avances/reportes de WhatsApp/fotos/asistencias/cambios, fusiona los nuevos registros
+   *   para que todo lo enviado desde WhatsApp se vea de inmediato en la Web.
+   */
+  async pullFromCloudServer(): Promise<{ success: boolean; message: string; updated?: boolean }> {
+    if (!this.isBrowser()) return { success: false, message: 'No browser' };
+    try {
+      const active = this.getActiveUser();
+      const empresaId = active?.empresa_id || DEMO_EMPRESA_ID;
+
+      const res = await fetch(`/api/supabase/sync?empresaId=${encodeURIComponent(empresaId)}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        return { success: false, message: 'No se pudo consultar Supabase.' };
+      }
+
+      const cloud = await res.json();
+      const localProjs = this.getProyectos();
+
+      // Si Supabase aún está vacío pero en la web hay obras, inicializamos Supabase automáticamente
+      if ((!cloud.proyectos || cloud.proyectos.length === 0) && localProjs.length > 0) {
+        await this.pushToCloudServer();
+        return { success: true, message: 'Base de datos Supabase inicializada con tus obras actuales.', updated: false };
+      }
+
+      const mergeById = <T extends { id: string }>(localArr: T[], cloudArr: T[], preferCloud = true): T[] => {
+        const map = new Map<string, T>();
+        if (preferCloud) {
+          localArr.forEach((item) => map.set(item.id, item));
+          cloudArr.forEach((item) => map.set(item.id, item));
+        } else {
+          cloudArr.forEach((item) => map.set(item.id, item));
+          localArr.forEach((item) => map.set(item.id, item));
+        }
+        return Array.from(map.values());
+      };
+
+      this.isPullingCloud = true;
+      try {
+        if (Array.isArray(cloud.proyectos) && cloud.proyectos.length > 0) {
+          this.setItem(this.getTenantKey(KEYS.PROYECTOS), mergeById(localProjs, cloud.proyectos));
+        }
+        if (Array.isArray(cloud.clientes) && cloud.clientes.length > 0) {
+          this.setItem(this.getTenantKey(KEYS.CLIENTES), mergeById(this.getClientes(), cloud.clientes));
+        }
+        if (Array.isArray(cloud.usuarios) && cloud.usuarios.length > 0) {
+          this.setItem(this.getTenantKey(KEYS.USUARIOS), mergeById(this.getUsuarios(), cloud.usuarios));
+        }
+        if (Array.isArray(cloud.actividades) && cloud.actividades.length > 0) {
+          this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), mergeById(this.getActividades(), cloud.actividades));
+        }
+        if (Array.isArray(cloud.pagos) && cloud.pagos.length > 0) {
+          this.setItem(this.getTenantKey(KEYS.PAGOS), mergeById(this.getPagos(), cloud.pagos));
+        }
+        if (Array.isArray(cloud.materiales) && cloud.materiales.length > 0) {
+          this.setItem(
+            this.getTenantKey(KEYS.MATERIALES_PROYECTO),
+            mergeById(this.getMaterialesProyecto(), cloud.materiales)
+          );
+        }
+        if (Array.isArray(cloud.bitacora) && cloud.bitacora.length > 0) {
+          this.setItem(this.getTenantKey(KEYS.BITACORA), mergeById(this.getBitacora(), cloud.bitacora));
+        }
+        if (Array.isArray(cloud.imprevistos) && cloud.imprevistos.length > 0) {
+          this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), mergeById(this.getImprevistos(), cloud.imprevistos));
+        }
+        if (Array.isArray(cloud.reclamos_cambios) && cloud.reclamos_cambios.length > 0) {
+          this.setItem(
+            this.getTenantKey(KEYS.RECLAMOS_CAMBIOS),
+            mergeById(this.getReclamosCambios(), cloud.reclamos_cambios)
+          );
+        }
+        if (Array.isArray(cloud.documentos) && cloud.documentos.length > 0) {
+          this.setItem(
+            this.getTenantKey(KEYS.DOCUMENTOS_OBRA),
+            mergeById(this.getDocumentosObra(), cloud.documentos)
+          );
+        }
+        if (Array.isArray(cloud.asistencias) && cloud.asistencias.length > 0) {
+          this.setItem(
+            this.getTenantKey(KEYS.ASISTENCIAS_OBRA),
+            mergeById(this.getAsistencias(), cloud.asistencias)
+          );
+        }
+        if (Array.isArray(cloud.reportes_whatsapp) && cloud.reportes_whatsapp.length > 0) {
+          this.setItem(
+            this.getTenantKey(KEYS.REPORTES),
+            mergeById(this.getReportes(), cloud.reportes_whatsapp)
+          );
+        }
+      } finally {
+        this.isPullingCloud = false;
+      }
+
+      window.dispatchEvent(new Event('obratrack_cloud_synced'));
+      return { success: true, message: 'Datos actualizados desde Supabase Cloud.', updated: true };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Error consultando Supabase.' };
+    }
+  }
+
+  async syncWithSupabase(): Promise<{ success: boolean; count?: number; message: string }> {
+    const res = await this.pushToCloudServer();
+    return {
+      success: res.success,
+      count: this.getProyectos().length,
+      message: res.message,
+    };
+  }
+
   async pullFromSupabase(): Promise<{ success: boolean; message: string }> {
-    return this.loadTenantDataFromSupabase();
+    return this.pullFromCloudServer();
   }
 
 }

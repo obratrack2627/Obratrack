@@ -72,7 +72,7 @@ export interface Proyecto {
   cliente_id?: string;
   nombre: string;
   descripcion?: string;
-  
+
   // Ubicación Geográfica (Google Maps Chile)
   direccion?: string;
   comuna?: string;
@@ -87,7 +87,7 @@ export interface Proyecto {
   monto_cotizado: number;
   trabajadores_ids?: string[];
   created_at?: string;
-  
+
   // Relaciones cargadas opcionalmente
   cliente?: Cliente;
   trabajadores?: Usuario[];
@@ -96,6 +96,9 @@ export interface Proyecto {
   bitacora?: BitacoraEntrada[];
   pagos?: Pago[];
   imprevistos?: Imprevisto[];
+  reclamos_cambios?: ReclamoCambioObra[];
+  documentos?: DocumentoObra[];
+  asistencias?: AsistenciaObrero[];
   total_pagado?: number;
   total_imprevistos?: number;
   total_materiales?: number;
@@ -185,14 +188,41 @@ export interface ExtraccionIA {
   tiene_imprevisto?: boolean;
   imprevisto_descripcion?: string | null;
   imprevisto_monto_estimado?: number | null;
+  tipo_evento?:
+    | 'avance'
+    | 'nota'
+    | 'aviso'
+    | 'incidente'
+    | 'accidente'
+    | 'solicitud_cambio'
+    | 'asistencia'
+    | 'consulta_cliente'
+    | null;
+  prioridad?: 'baja' | 'media' | 'alta' | 'critica' | null;
+  materiales_sugeridos?: Array<{
+    nombre: string;
+    cantidad: number;
+    unidad: string;
+    precio_unitario: number;
+  }>;
+  estado_asistencia?: 'presente' | 'atraso' | 'ausente' | 'licencia' | 'permiso' | null;
+  hora_entrada?: string | null;
+  resumen_ia?: string | null;
 }
 
 export interface ReporteWhatsApp {
   id: string;
   proyecto_id?: string;
+  empresa_id?: string;
   usuario_id?: string;
+  remitente_tipo?: 'obrero' | 'cliente';
+  telefono_remitente?: string;
+  nombre_remitente?: string;
   mensaje_original?: string;
   transcripcion?: string;
+  foto_url?: string;
+  respuesta_ia?: string;
+  modulo_afectado?: string;
   extraccion_ia: ExtraccionIA;
   estado: ReportStatus;
   fecha: string;
@@ -203,23 +233,116 @@ export interface ReporteWhatsApp {
   usuario?: Usuario;
 }
 
+// --- MÓDULO: RECLAMOS, INCIDENCIAS Y SOLICITUDES DE CAMBIO POR OBRA ---
+
+export type TipoReclamoCambio = 'solicitud_cambio' | 'reclamo' | 'incidente' | 'accidente';
+export type PrioridadReclamoCambio = 'baja' | 'media' | 'alta' | 'critica';
+export type EstadoReclamoCambio = 'pendiente' | 'en_revision' | 'aprobado' | 'rechazado' | 'resuelto';
+
+export interface MaterialRequeridoCambio {
+  nombre: string;
+  cantidad: number;
+  unidad: string;
+  precio_unitario: number;
+  subtotal: number;
+}
+
+export interface ReclamoCambioObra {
+  id: string;
+  proyecto_id: string;
+  empresa_id?: string;
+  reportado_por_usuario_id?: string;
+  cliente_id?: string;
+  tipo: TipoReclamoCambio;
+  prioridad: PrioridadReclamoCambio;
+  estado: EstadoReclamoCambio;
+  titulo: string;
+  descripcion: string;
+  solicitado_por?: string;
+  impacto_monto: number;
+  impacto_dias: number;
+  materiales_requeridos: MaterialRequeridoCambio[];
+  materiales_inyectados: boolean;
+  foto_url?: string;
+  origen: 'web' | 'whatsapp_ia' | 'cliente';
+  resolucion_notas?: string;
+  fecha: string;
+  created_at?: string;
+}
+
+// --- MÓDULO: REPOSITORIO DOCUMENTAL POR OBRA ---
+
+export type CategoriaDocumentoObra =
+  | 'contrato'
+  | 'plano'
+  | 'factura_boleta'
+  | 'correo'
+  | 'permiso_normativa'
+  | 'otro';
+
+export interface DocumentoObra {
+  id: string;
+  proyecto_id: string;
+  empresa_id?: string;
+  subido_por_id?: string;
+  subido_por_nombre?: string;
+  categoria: CategoriaDocumentoObra;
+  nombre: string;
+  descripcion?: string;
+  archivo_url?: string;
+  archivo_nombre?: string;
+  archivo_tamano?: number;
+  mime_type?: string;
+  numero_documento?: string;
+  proveedor_entidad?: string;
+  monto_documento?: number;
+  correo_remitente?: string;
+  correo_destinatario?: string;
+  correo_asunto?: string;
+  correo_cuerpo?: string;
+  fecha_documento: string;
+  created_at?: string;
+}
+
+// --- MÓDULO: CONTROL DE ASISTENCIA DE OBREROS ---
+
+export type EstadoAsistencia = 'presente' | 'atraso' | 'ausente' | 'licencia' | 'permiso';
+
+export interface AsistenciaObrero {
+  id: string;
+  proyecto_id: string;
+  empresa_id?: string;
+  usuario_id?: string;
+  trabajador_nombre: string;
+  trabajador_rol?: string;
+  fecha: string; // YYYY-MM-DD
+  estado: EstadoAsistencia;
+  hora_entrada?: string; // HH:MM
+  hora_salida?: string; // HH:MM
+  horas_trabajadas?: number;
+  observacion?: string;
+  origen: 'web' | 'whatsapp_ia';
+  registrado_por?: string;
+  created_at?: string;
+}
+
 // --- TIPOS PARA COTIZADOR INTELIGENTE & RADAR DE MATERIALES (IA) ---
 
 export interface ItemMaterial {
   nombre: string;
-  categoria: string; // 'obra_gruesa' | 'maderas_tableros' | 'techumbre' | 'terminaciones' | 'instalaciones' | 'ferreteria';
+  categoria: string;
   cantidad: number;
-  unidad: string; // 'saco' | 'tira' | 'plancha' | 'm2' | 'm3' | 'kg' | 'unidad' | 'litro';
+  unidad: string;
   precio_unitario_estimado: number;
   subtotal: number;
-  mejor_tienda: string; // 'Sodimac Constructor' | 'Construmart' | 'Imperial' | 'Red MTS' | 'Easy' | 'Barraca Local';
+  mejor_tienda: string;
   precio_mas_barato: number;
   ahorro_estimado: number;
   alternativa_economica?: string;
 }
 
 export interface ItemManoObra {
-  rol: string; // 'Maestro Mayor' | 'Maestro Carpintero' | 'Albañil' | 'Ayudante / Jornal' | 'Gasfíter' | 'Electricista';
+  rol: string;
   cantidad_personas: number;
   dias_estimados: number;
   valor_jornal_diario: number;
@@ -349,6 +472,9 @@ export type TipoAccionIA =
   | 'agregar_material'
   | 'agregar_materiales'
   | 'crear_bitacora'
+  | 'crear_solicitud_cambio'
+  | 'registrar_asistencia'
+  | 'registrar_documento'
   | 'generar_reporte'
   | 'generar_mensaje_whatsapp'
   | 'lote_acciones';
@@ -384,4 +510,3 @@ export interface MensajeChatProyecto {
   accion_ejecutada?: AccionAsistenteIA;
   created_at: string;
 }
-

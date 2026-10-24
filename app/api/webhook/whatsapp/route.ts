@@ -1,219 +1,216 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
-import { chatAsistenteClienteWhatsAppGemini } from '@/lib/gemini';
-import { dataService } from '@/lib/data-service';
+import { procesarEventoWhatsAppUnificado } from '@/lib/whatsapp-engine';
 
-export const dynamic = 'force-dynamic';
+const VERIFY_TOKEN = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'obratrack_verify_2026';
 
-function escapeXml(unsafe: string) {
-  return unsafe
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+/**
+ * Descarga un archivo multimedia (foto/imagen) desde Meta WhatsApp Cloud API (nivel gratuito Sandbox)
+ */
+async function descargarMediaMetaWhatsApp(
+  mediaId: string,
+  accessToken: string
+): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  try {
+    // Paso 1: Obtener URL temporal del media desde Graph API
+    const metaRes = await fetch(`https://graph.facebook.com/v20.0/${mediaId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!metaRes.ok) {
+      console.error('Error consultando metadata media Meta:', await metaRes.text());
+      return null;
+    }
+    const metaJson = await metaRes.json();
+    const downloadUrl = metaJson.url;
+    const mimeType = metaJson.mime_type || 'image/jpeg';
+    if (!downloadUrl) return null;
+
+    // Paso 2: Descargar el binario con el mismo Bearer token
+    const binRes = await fetch(downloadUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!binRes.ok) return null;
+
+    const arrBuf = await binRes.arrayBuffer();
+    return {
+      buffer: Buffer.from(arrBuf),
+      mimeType,
+    };
+  } catch (err) {
+    console.error('Error descargando imagen de Meta WhatsApp:', err);
+    return null;
+  }
 }
 
 /**
- * Valida la firma criptográfica HMAC-SHA256 enviada por Meta en la cabecera X-Hub-Signature-256.
+ * Envía mensaje de texto (y opcionalmente fotos de avance) de vuelta por Meta WhatsApp Cloud API
  */
-function verifyMetaSignature(rawBody: string, signatureHeader: string | null): boolean {
-  const appSecret = process.env.WHATSAPP_APP_SECRET;
-  if (!appSecret) {
-    // Si no está configurado el secreto en variables de entorno, emitir advertencia
-    return true;
-  }
-  if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {
-    return false;
+async function enviarRespuestaMetaWhatsApp(params: {
+  to: string;
+  texto: string;
+  fotosUrls?: string[];
+  accessToken: string;
+  phoneNumberId: string;
+}) {
+  const endpoint = `https://graph.facebook.com/v20.0/${params.phoneNumberId}/messages`;
+
+  // 1. Enviar mensaje principal de texto
+  const resTexto = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: params.to,
+      type: 'text',
+      text: { body: params.texto },
+    }),
+  });
+
+  if (!resTexto.ok) {
+    console.error('Error enviando texto Meta Cloud API:', await resTexto.text());
   }
 
-  const signature = signatureHeader.slice(7);
-  const expectedSignature = crypto
-    .createHmac('sha256', appSecret)
-    .update(rawBody, 'utf8')
-    .digest('hex');
-
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+  // 2. Si el cliente solicitó avance y existen fotos públicas en Supabase Storage, adjuntarlas
+  if (params.fotosUrls && params.fotosUrls.length > 0) {
+    for (const url of params.fotosUrls.slice(0, 2)) {
+      if (!url.startsWith('http')) continue;
+      await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${params.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: params.to,
+          type: 'image',
+          image: {
+            link: url,
+            caption: '📸 Registro fotográfico actualizado en ObraTrack',
+          },
+        }),
+      }).catch((e) => console.warn('Aviso envío imagen WA:', e));
+    }
+  }
 }
 
-// ==============================================================================
-// 1. GET: Verificación de Webhook para WhatsApp Cloud API (Meta Oficial)
-// ==============================================================================
+/**
+ * GET /api/webhook/whatsapp
+ * Verificación oficial del Webhook exigida por Meta for Developers (WhatsApp Cloud API Gratis)
+ */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get('hub.mode');
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  const expectedToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
-
-  if (!expectedToken) {
-    console.warn('WHATSAPP_WEBHOOK_VERIFY_TOKEN no está configurado en las variables de entorno.');
-    return NextResponse.json(
-      { error: 'Servicio de webhook no configurado' },
-      { status: 500 }
-    );
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+    return new NextResponse(challenge, { status: 200 });
   }
 
-  if (mode === 'subscribe' && token === expectedToken) {
-    console.log('✅ Webhook de Meta WhatsApp Cloud API verificado exitosamente');
-    return new Response(challenge || '', { status: 200 });
+  // Si alguien abre la URL en el navegador, mostrar estado operativo amigable
+  if (!mode) {
+    return NextResponse.json({
+      ok: true,
+      servicio: 'ObraTrack WhatsApp Cloud API Webhook (Obrero & Cliente + Gemini + Supabase)',
+      verify_token_configurado: Boolean(VERIFY_TOKEN),
+      cloud_api_configurada: Boolean(
+        process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN &&
+          process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID
+      ),
+    });
   }
 
   return NextResponse.json({ error: 'Token de verificación inválido' }, { status: 403 });
 }
 
-// ==============================================================================
-// 2. POST: Recepción y Respuesta en Vivo con Google Gemini (Meta & Twilio)
-// ==============================================================================
+/**
+ * POST /api/webhook/whatsapp
+ * Recibe mensajes reales desde Meta WhatsApp Cloud API (Números de prueba gratuitos / Producción)
+ * Enruta inteligentemente entre:
+ *  - OBRERO (sube fotos, notas, avisos, accidentes, avances, asistencia -> guarda en Supabase y Web)
+ *  - CLIENTE (consulta cómo va su obra -> Gemini consulta Supabase en vivo y responde por WhatsApp)
+ */
 export async function POST(request: NextRequest) {
   try {
-    let cleanPhone = '';
-    let bodyText = '';
-    let isMetaCloud = false;
+    const body = await request.json();
 
-    const contentType = request.headers.get('content-type') || '';
-
-    // CASO A: Meta WhatsApp Cloud API (JSON Payload)
-    if (contentType.includes('application/json')) {
-      isMetaCloud = true;
-      const rawBody = await request.text();
-
-      // Validación criptográfica de la firma de Meta
-      const signature = request.headers.get('x-hub-signature-256');
-      if (!verifyMetaSignature(rawBody, signature)) {
-        console.warn('Firma X-Hub-Signature-256 no válida o ausente en petición a webhook.');
-        return NextResponse.json({ error: 'Firma de webhook no válida' }, { status: 401 });
-      }
-
-      let jsonBody: any = {};
-      try {
-        jsonBody = JSON.parse(rawBody);
-      } catch {
-        return NextResponse.json({ error: 'JSON malformado' }, { status: 400 });
-      }
-
-      const entry = jsonBody.entry?.[0];
-      const change = entry?.changes?.[0]?.value;
-      const message = change?.messages?.[0];
-
-      if (!message) {
-        return NextResponse.json({ status: 'ignored_status_update' }, { status: 200 });
-      }
-
-      cleanPhone = message.from ? '+' + message.from : '';
-      if (message.type === 'text') {
-        bodyText = message.text?.body || '';
-      }
-    }
-    // CASO B: Twilio WhatsApp Webhook (Form Data)
-    else {
-      const formData = await request.formData();
-      const fromRaw = formData.get('From') as string;
-      bodyText = (formData.get('Body') as string) || '';
-      cleanPhone = (fromRaw || '').replace('whatsapp:', '').trim();
+    if (body.object !== 'whatsapp_business_account') {
+      return NextResponse.json({ received: true }, { status: 200 });
     }
 
-    if (!cleanPhone && !bodyText) {
-      return NextResponse.json({ error: 'Datos de mensaje insuficientes' }, { status: 400 });
+    const value = body.entry?.[0]?.changes?.[0]?.value;
+    const message = value?.messages?.[0];
+    if (!message) {
+      // Confirmaciones de lectura/entrega de Meta (statuses)
+      return NextResponse.json({ status: 'ack_status' }, { status: 200 });
     }
 
-    // 1. Buscar si en el mensaje del cliente viene un RUT o Nombre explícito para autenticación estricta
-    let clienteFicha = null;
-    const matchRutONombre = dataService.buscarClientePorRutONombre(bodyText);
+    const senderPhone: string = message.from || '';
+    const senderProfileName: string = value?.contacts?.[0]?.profile?.name || '';
+    const accessToken = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN || '';
+    const phoneNumberId =
+      process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID || value?.metadata?.phone_number_id || '';
 
-    if (matchRutONombre) {
-      clienteFicha = dataService.obtenerFichaCompletaCliente(matchRutONombre.id);
-    }
+    let textoMensaje = '';
+    let imagenBuffer: Buffer | undefined;
+    let imagenMimeType: string | undefined;
 
-    const clientesDisponibles = dataService.getClientes().map((c) => ({
-      id: c.id,
-      nombre: c.nombre,
-      rut: c.rut,
-    }));
-
-    // Generar respuesta conversacional con Google Gemini
-    const aiResult = await chatAsistenteClienteWhatsAppGemini({
-      historial: [],
-      mensajeCliente: bodyText,
-      clienteAutenticado: clienteFicha,
-      clientesRegistrados: clientesDisponibles,
-    });
-
-    const respuestaTexto = aiResult.respuesta || '¡Hola! Recibimos tu mensaje en ObraTrack.';
-
-    // Si es Meta Cloud API y tenemos token, responder enviando mensaje vía Graph API
-    if (isMetaCloud) {
-      const metaToken = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
-      const phoneNumberId = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
-
-      if (metaToken && phoneNumberId && cleanPhone) {
-        try {
-          // 1. Enviar mensaje de texto con Gemini
-          await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${metaToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              messaging_product: 'whatsapp',
-              to: cleanPhone.replace('+', ''),
-              type: 'text',
-              text: { body: respuestaTexto },
-            }),
-          });
-
-          // 2. Si Gemini incluyó fotos de la obra, enviarlas al WhatsApp del cliente
-          if (aiResult.fotos && aiResult.fotos.length > 0) {
-            for (const fotoUrl of aiResult.fotos.slice(0, 2)) {
-              await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${metaToken}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  messaging_product: 'whatsapp',
-                  to: cleanPhone.replace('+', ''),
-                  type: 'image',
-                  image: { link: fotoUrl },
-                }),
-              });
-            }
-          }
-        } catch (metaSendErr) {
-          console.error('Error enviando mensaje por Meta Graph API:', metaSendErr);
+    if (message.type === 'text') {
+      textoMensaje = message.text?.body || '';
+    } else if (message.type === 'image') {
+      textoMensaje = message.image?.caption || '';
+      const mediaId = message.image?.id;
+      if (mediaId && accessToken) {
+        const downloaded = await descargarMediaMetaWhatsApp(mediaId, accessToken);
+        if (downloaded) {
+          imagenBuffer = downloaded.buffer;
+          imagenMimeType = downloaded.mimeType;
         }
       }
+    } else if (message.type === 'button' || message.type === 'interactive') {
+      textoMensaje =
+        message.button?.text ||
+        message.interactive?.button_reply?.title ||
+        message.interactive?.list_reply?.title ||
+        '';
+    } else {
+      textoMensaje = `[Mensaje ${message.type} recibido por WhatsApp]`;
+    }
 
-      return NextResponse.json({
-        status: 'success',
-        respuesta: respuestaTexto,
-        fotos: aiResult.fotos || [],
+    const resultado = await procesarEventoWhatsAppUnificado({
+      telefonoRemitente: senderPhone,
+      nombrePerfilWhatsApp: senderProfileName,
+      texto: textoMensaje,
+      imagenBuffer,
+      imagenMimeType,
+    });
+
+    if (accessToken && phoneNumberId && senderPhone) {
+      await enviarRespuestaMetaWhatsApp({
+        to: senderPhone,
+        texto: resultado.respuestaTexto,
+        fotosUrls: resultado.fotosRespuesta,
+        accessToken,
+        phoneNumberId,
       });
     }
 
-    // Si es Twilio: responder inmediatamente con TwiML XML
-    const fotoTag =
-      aiResult.fotos && aiResult.fotos.length > 0
-        ? `<Media>${aiResult.fotos[0]}</Media>`
-        : '';
-
-    const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Message>
-        <Body>${escapeXml(respuestaTexto)}</Body>
-        ${fotoTag}
-    </Message>
-</Response>`;
-
-    return new Response(twimlResponse, {
-      status: 200,
-      headers: { 'Content-Type': 'text/xml' },
-    });
+    return NextResponse.json(
+      {
+        status: 'processed',
+        rol: resultado.rolDetectado,
+        obra: resultado.proyectoAfectado?.nombre || null,
+        modulo: resultado.moduloAfectado || null,
+      },
+      { status: 200 }
+    );
   } catch (error: any) {
-    console.error('Error en webhook de WhatsApp:', error);
-    return NextResponse.json({ error: error.message || 'Error interno' }, { status: 500 });
+    console.error('Error en Webhook Meta WhatsApp:', error);
+    return NextResponse.json({ status: 'error', detail: error.message }, { status: 200 });
   }
 }

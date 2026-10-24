@@ -41,6 +41,14 @@ export async function POST(request: NextRequest) {
     const devRut = isObratrackTeam ? '11.111.111-1' : '19.123.456-3';
     const devEmpresaId = isObratrackTeam ? 'empresa-dev-master' : 'e1111111-1111-4111-a111-111111111111';
 
+    // Asegurar que la empresa base exista en PostgreSQL antes de vincular usuario
+    await supabaseAdmin.from('empresas').upsert({
+      id: devEmpresaId,
+      rut: isObratrackTeam ? '76.000.000-0' : '76.123.456-7',
+      nombre: isObratrackTeam ? 'ObraTrack Dev Studio' : 'Constructora ObraTrack SpA',
+      plan_id: 'pro_ia',
+    }, { onConflict: 'id' });
+
     // 1. Buscar si el usuario ya existe en auth.users
     const { data: userList } = await supabaseAdmin.auth.admin.listUsers();
     const existing = userList?.users?.find((u) => u.email?.toLowerCase() === cleanEmail);
