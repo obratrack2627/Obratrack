@@ -30,7 +30,7 @@ Contrato de campos (montos/cantidades/días son números, sin símbolos ni separ
 - crear_actividad: proyecto_id, partidas:[{nombre,dias}]. actualizar_avance: proyecto_id, nombre exacto de actividad, porcentaje_avance (0 a 100).
 - agregar_materiales: proyecto_id, materiales:[{nombre,cantidad,unidad,precio_unitario}]. agregar_material usa esos campos individuales.
 - registrar_pago: proyecto_id, monto, metodo (transferencia/efectivo/debito), nota, fecha opcional.
-- registrar_imprevisto: proyecto_id, descripcion, monto. crear_bitacora: proyecto_id, titulo, nota, tipo (avance/incidente/clima/entrega_material).
+- registrar_imprevisto: proyecto_id, descripcion, monto. crear_bitacora: proyecto_id, titulo, nota, tipo_bitacora (avance/incidente/clima/entrega_material). El campo tipo siempre identifica la acción crear_bitacora.
 - crear_solicitud_cambio: proyecto_id, subtipo (solicitud_cambio/reclamo/incidente/accidente), titulo, descripcion, monto, dias, prioridad (baja/media/alta/critica), materiales opcionales.
 - registrar_asistencia: proyecto_id, trabajador_nombre o todos_presentes:true, fecha, estado (presente/atraso/ausente/licencia/permiso), hora_entrada/hora_salida HH:MM.
 - registrar_documento: proyecto_id, nombre, categoria (contrato/plano/factura_boleta/correo/permiso_normativa/otro), descripcion y campos de correo opcionales. No inventes archivos ni URLs.

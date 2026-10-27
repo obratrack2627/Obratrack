@@ -15,6 +15,7 @@ export async function generateGemini(
   prompt: string,
   options: {
     json?: boolean;
+    schema?: Record<string, unknown>;
     image?: { mimeType: string; data: string };
     fetcher?: typeof fetch;
     timeoutMs?: number;
@@ -61,6 +62,7 @@ export async function generateGemini(
               temperature: 0.2,
               maxOutputTokens: 4096,
               ...(options.json ? { responseMimeType: 'application/json' } : {}),
+              ...(options.schema ? { responseJsonSchema: options.schema } : {}),
               ...(model.startsWith('gemini-3.') && model.includes('flash')
                 ? { thinkingConfig: { thinkingLevel: 'minimal' } }
                 : {}),

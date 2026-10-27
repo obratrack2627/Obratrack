@@ -1,6 +1,7 @@
 import { generateGemini, getServerGeminiKey } from '@/lib/ai/provider';
 import { parseChatResponse, extractLegacyActions, normalizeQuote } from '@/lib/ai/protocol';
 import { chatPrompt, quotePrompt, isQuoteRequest } from '@/lib/ai/prompt';
+import { CHAT_RESPONSE_SCHEMA } from '@/lib/ai/schema';
 import { CotizacionEstimacion } from '@/types/database';
 
 export const DEFAULT_GEMINI_API_KEY = '';
@@ -56,7 +57,7 @@ export async function generarCotizacionGemini(params: {
   margen_utilidad: number; nivel_calidad: string;
 }): Promise<CotizacionEstimacion> {
   const prompt = quotePrompt([], `Genera una cotización detallada con estos datos: ${JSON.stringify(params)}. Incluye cotizacion y no emitas acciones para crear una obra.`, {});
-  const result = parseChatResponse(await generateGemini(prompt, { json: true }));
+  const result = parseChatResponse(await generateGemini(prompt, { json: true, schema: CHAT_RESPONSE_SCHEMA }));
   if (!result.cotizacion) throw new Error('La IA no incluyó el presupuesto solicitado.');
   return normalizeQuote({ ...result.cotizacion, estructura_financiera: { ...result.cotizacion.estructura_financiera, margen_utilidad_porcentaje: params.margen_utilidad } });
 }
@@ -74,7 +75,7 @@ export async function chatAsesorObrasGemini(
   contextoDB?: Record<string, any>
 ) {
   const prompt = isQuoteRequest(mensajeUsuario) ? quotePrompt(historial, mensajeUsuario, contextoDB) : chatPrompt(historial, mensajeUsuario, contextoDB);
-  const raw = await generateGemini(prompt, { json: true });
+  const raw = await generateGemini(prompt, { json: true, schema: CHAT_RESPONSE_SCHEMA });
   return parseChatResponse(raw);
 }
 
@@ -259,7 +260,7 @@ export async function chatAgenteProyectoGemini(params: {
 }) {
   const context = { proyectos: [params.contextoProyecto], proyecto_actual: params.contextoProyecto, cotizacion_actual: params.contextoProyecto.cotizacion_actual };
   const buildPrompt = isQuoteRequest(params.mensajeUsuario) ? quotePrompt : chatPrompt;
-  const raw = await generateGemini(buildPrompt(params.historial, params.mensajeUsuario, context), { json: true });
+  const raw = await generateGemini(buildPrompt(params.historial, params.mensajeUsuario, context), { json: true, schema: CHAT_RESPONSE_SCHEMA });
   return parseChatResponse(raw);
 }
 

@@ -291,3 +291,22 @@ test('las cotizaciones simples usan el prompt breve sin perder solicitudes con a
   const prompt = quotePrompt([], 'Cotiza', { clientes:[{id:'cliente-real', nombre:'Ana'}] });
   assert.ok(prompt.includes('cliente-real'));
 });
+
+test('Gemini recibe el contrato de acciones y sus parámetros en el esquema JSON', async () => {
+  const { CHAT_RESPONSE_SCHEMA } = require('../lib/ai/schema.ts');
+  process.env.GEMINI_API_KEY = 'fixture-token';
+  await generateGemini('Crea obra con materiales', {
+    json: true,
+    schema: CHAT_RESPONSE_SCHEMA,
+    fetcher: async (_, opts) => {
+      const schema = JSON.parse(opts.body).generationConfig.responseJsonSchema;
+      const action = schema.properties.acciones.items;
+      assert.ok(action.properties.tipo.enum.includes('crear_proyecto'));
+      assert.ok(!action.properties.tipo.enum.includes('crear_obra_inventada'));
+      assert.equal(action.properties.materiales.items.properties.precio_unitario.type, 'number');
+      assert.equal(action.properties.partidas.items.properties.nombre.type, 'string');
+      assert.equal(action.properties.tipo_bitacora.type, 'string');
+      return completion('{"respuesta":"Preparada","acciones":[],"cotizacion":null}');
+    },
+  });
+});
