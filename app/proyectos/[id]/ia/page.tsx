@@ -47,6 +47,9 @@ import { formatCLP, formatDate } from '@/lib/utils';
 import { isDeveloperUser } from '@/lib/auth-utils';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ChatMessageFormatter from '@/components/ChatMessageFormatter';
+import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
+import AIMessageTools from '@/components/AIMessageTools';
+
 
 export default function ProyectoIAPage() {
   const params = useParams();
@@ -240,49 +243,20 @@ export default function ProyectoIAPage() {
           .map((u) => ({ id: u.id, nombre: u.nombre, rol: u.rol })),
       };
 
-      const res = await fetch(`/api/proyectos/${projectId}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mensaje: query,
-          historial: mensajes.slice(-8),
-          contexto_proyecto: contextoProyecto,
-        }),
+      const data = await requestAI(`/api/proyectos/${projectId}/chat`, {
+        mensaje: query, historial: mensajes.slice(-10), contexto_proyecto: contextoProyecto, contexto_cotizacion: [...mensajes].reverse().find(m => m.cotizacion_generada)?.cotizacion_generada,
       });
-
-      const data = await res.json();
-
-      if (!res.ok || data.error) {
-        throw new Error(data.error || `Error ${res.status}: Falló la respuesta del asistente.`);
-      }
-
-      let accionEjecutada: AccionAsistenteIA | undefined = undefined;
-
-      // Ejecutar acción autónoma sobre el proyecto
-      if (data.accion) {
-        try {
-          const resultado = dataService.ejecutarAccionGlobalIA(data.accion, projectId);
-          if (resultado) {
-            accionEjecutada = resultado;
-            showToast(`⚡ ${resultado.titulo}`);
-          }
-          // Recargar datos actualizados del proyecto
-          loadData();
-        } catch (actErr: any) {
-          console.warn('Error ejecutando acción de IA en proyecto:', actErr);
-          showToast(`⚠️ ${actErr?.message || 'Error al ejecutar acción'}`);
-        }
-      }
+      const processed = await applyAIResponse(data, projectId);
+      loadData();
+      if (processed.accion_ejecutada) showToast(processed.accion_ejecutada.titulo);
 
       const agenteMsg: MensajeChatProyecto = {
         id: 'agt-p-' + Date.now(),
         proyecto_id: projectId,
         empresa_id: proyecto.empresa_id,
         remitente: 'agente',
-        texto: data.respuesta || 'He revisado tu consulta sobre la faena.',
+        ...processed,
         created_at: new Date().toISOString(),
-        sugerencias: data.sugerencias,
-        accion_ejecutada: accionEjecutada,
       };
 
       dataService.saveProyectoMensajeChat(agenteMsg);
@@ -527,6 +501,7 @@ export default function ProyectoIAPage() {
                         content={m.texto}
                         isUser={m.remitente === 'usuario'}
                       />
+                      <AIMessageTools message={m} />
                       <span
                         className={`block text-[9px] mt-1.5 text-right ${
                           m.remitente === 'usuario' ? 'text-white/70' : 'text-gray-400'
@@ -627,6 +602,7 @@ export default function ProyectoIAPage() {
                 <input
                   type="text"
                   value={inputTexto}
+                  aria-label="Mensaje para el asistente de la obra"
                   onChange={(e) => setInputTexto(e.target.value)}
                   placeholder={`Pregunta sobre finanzas, o pide: "Agrega partida techumbre de 5 días", "Redacta WhatsApp..."`}
                   disabled={cargando}
@@ -635,6 +611,7 @@ export default function ProyectoIAPage() {
 
                 <button
                   type="submit"
+                  aria-label="Enviar mensaje"
                   disabled={!inputTexto.trim() || cargando}
                   className="p-2.5 bg-[#FF6A00] hover:bg-[#E55F00] disabled:opacity-40 text-white rounded-2xl shadow-md transition-all flex items-center justify-center"
                 >

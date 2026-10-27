@@ -149,7 +149,7 @@ function formatInline(text: string): React.ReactNode {
   // 3. `código`
   // 4. *cursiva* o _cursiva_
   // 5. "frase entre comillas"
-  const tokenRegex = /(\*["“](.+?)["”]\*|\*\*(.+?)\*\*|`([^`]+)`|\*([^*]+)\*|_([^_]+)_|["“]([^"”]{3,})["”])/g;
+  const tokenRegex = /(\*["“](.+?)["”]\*|\*\*(.+?)\*\*|`([^`]+)`|\*([^*]+)\*|(?<![A-Za-z0-9_])_([^_]+)_(?![A-Za-z0-9_])|["“]([^"”]{3,})["”])/g;
 
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;

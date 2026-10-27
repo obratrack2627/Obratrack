@@ -38,3 +38,7 @@ google-service-account.json
 
 # sonarqube
 /.scannerwork/
+
+# browser test artifacts
+/test-results/
+/playwright-report/

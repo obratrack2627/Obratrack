@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { dataService } from '@/lib/data-service';
 import {
   Download,
   Printer,
@@ -33,13 +35,13 @@ export default function CotizacionPdfModal({
   isOpen,
   onClose,
   cotizacion,
-  clienteNombre = 'Carlos Henríquez',
-  clienteContacto = 'Ing. Juan Pérez',
-  clienteEmail = 'juan.perez@constructora.com',
-  clienteTelefono = '+56 9 8765 4321',
+  clienteNombre = '',
+  clienteContacto = '',
+  clienteEmail = '',
+  clienteTelefono = '',
 }: CotizacionPdfModalProps) {
   const printAreaRef = useRef<HTMLDivElement>(null);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const emisor = dataService.getActiveUser();
 
   if (!isOpen || !cotizacion) return null;
 
@@ -57,9 +59,9 @@ export default function CotizacionPdfModal({
     year: 'numeric',
   });
 
-  const folioNum = cotizacion.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '298506';
+  const folioNum = cotizacion.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '000000';
 
-  const totalConIva = cotizacion.estructura_financiera?.precio_total_con_iva || 720818;
+  const totalConIva = cotizacion.estructura_financiera?.precio_total_con_iva ?? 0;
   const subtotalNeto = cotizacion.estructura_financiera?.precio_sugerido_neto || Math.round(totalConIva / 1.19);
   const iva = cotizacion.estructura_financiera?.iva_19 || Math.round(subtotalNeto * 0.19);
 
@@ -76,7 +78,7 @@ export default function CotizacionPdfModal({
   (cotizacion.materiales || []).forEach((mat) => {
     partidasItems.push({
       nombre: mat.nombre,
-      descripcion: mat.alternativa_economica || `Material certificado en ${mat.mejor_tienda || 'Construmart'}`,
+      descripcion: mat.alternativa_economica || `Precio estimado · ${mat.mejor_tienda || 'Proveedor por confirmar'}`,
       unidad: mat.unidad || 'un',
       cantidad: mat.cantidad || 1,
       precioUnit: mat.precio_mas_barato || mat.precio_unitario_estimado || 0,
@@ -95,6 +97,14 @@ export default function CotizacionPdfModal({
     });
   });
 
+  for (const [nombre, total] of [
+    ['Gastos generales', cotizacion.estructura_financiera.gastos_generales_monto],
+    ['Provisión de imprevistos', cotizacion.estructura_financiera.imprevistos_monto],
+    ['Utilidad', cotizacion.estructura_financiera.margen_utilidad_monto],
+  ] as [string, number][]) {
+    if (total) partidasItems.push({ nombre, descripcion: '', unidad: 'gl', cantidad: 1, precioUnit: total, total });
+  }
+
   // Si no hay partidas suficientes, poblar con las partidas de la cotización
   if (partidasItems.length === 0) {
     partidasItems.push({
@@ -107,55 +117,8 @@ export default function CotizacionPdfModal({
     });
   }
 
-  // Carga dinámica de html2pdf.js desde CDN para exportar el PDF con exactitud visual 1:1
-  const loadHtml2Pdf = (): Promise<any> => {
-    return new Promise((resolve, reject) => {
-      if ((window as any).html2pdf) {
-        return resolve((window as any).html2pdf);
-      }
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      script.integrity = 'sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd47TXJWtAtUnHg40H9g50HDA50zyNDkcFIcGT8GTSajGCUgYOcxCpCSFZFYg==';
-      script.crossOrigin = 'anonymous';
-      script.onload = () => resolve((window as any).html2pdf);
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  };
-
-  // Descarga directa del archivo PDF preservando todos los colores, logo y banner naranja
-  const handleDownloadPdf = async () => {
-    if (!printAreaRef.current) return;
-    setIsGeneratingPdf(true);
-
-    try {
-      const html2pdf = await loadHtml2Pdf();
-      const element = printAreaRef.current;
-      const opt = {
-        margin: [4, 4, 4, 4], // mm
-        filename: `Cotizacion_ObraTrack_${folioNum}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          letterRendering: true,
-          scrollY: 0,
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait',
-        },
-      };
-
-      await html2pdf().set(opt).from(element).save();
-    } catch (err) {
-      console.warn('html2pdf fallback to print dialog:', err);
-      window.print();
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
+  // Impresión nativa: permite guardar PDF sin depender de una CDN externa.
+  const handleDownloadPdf = () => window.print();
 
   const handlePrint = () => {
     window.print();
@@ -163,15 +126,19 @@ export default function CotizacionPdfModal({
 
   const handleShareWhatsApp = () => {
     const cleanPhone = clienteTelefono.replace(/[^0-9]/g, '');
-    const msg = `🏗️ *COTIZACIÓN OFICIAL OBRATRACK*\n📄 *N.°:* ${folioNum}\n📅 *Fecha:* ${fechaEmision}\n\nEstimado(a) *${clienteNombre}*,\nLe compartimos la propuesta formal para:\n📌 *${cotizacion.titulo_proyecto}*\n📍 *Ubicación:* ${cotizacion.comuna_region || 'Santiago, Chile'}\n\n💰 *SUBTOTAL:* $${subtotalNeto.toLocaleString('es-CL')}\n🏛️ *IVA (19%):* $${iva.toLocaleString('es-CL')}\n🔥 *TOTAL:* *$${totalConIva.toLocaleString('es-CL')} CLP*\n\n📋 *Condiciones de pago:* 40% anticipo • 30% en ejecución • 30% contra entrega conforme.\n\nEmitido por ObraTrack.`;
+    const msg = `🏗️ *COTIZACIÓN OFICIAL OBRATRACK*\n📄 *N.°:* ${folioNum}\n📅 *Fecha:* ${fechaEmision}\n\nEstimado(a) *${clienteNombre}*,\nLe compartimos la propuesta formal para:\n📌 *${cotizacion.titulo_proyecto}*\n📍 *Ubicación:* ${cotizacion.comuna_region || 'Por definir'}\n\n💰 *SUBTOTAL:* $${subtotalNeto.toLocaleString('es-CL')}\n🏛️ *IVA (19%):* $${iva.toLocaleString('es-CL')}\n🔥 *TOTAL:* *$${totalConIva.toLocaleString('es-CL')} CLP*\n\n📋 *Condiciones de pago:* ${cotizacion.condiciones_pago || 'Por acordar con el cliente.'}\n\nEmitido por ObraTrack.`;
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-navy-950/80 backdrop-blur-sm overflow-y-auto">
+  return createPortal(
+    <div id="obratrack-quote-overlay" role="dialog" aria-modal="true" aria-label="Cotización generada" className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-navy-950/80 backdrop-blur-sm overflow-y-auto">
       {/* Reglas de impresión para forzar colores y fondos exactos */}
       <style jsx global>{`
         @media print {
+          body > *:not(#obratrack-quote-overlay) { display: none !important; }
+          #obratrack-quote-overlay { position: static !important; display: block !important; overflow: visible !important; height: auto !important; background: white !important; padding: 0 !important; backdrop-filter: none !important; }
+          #obratrack-cotizacion-pdf { width: 100% !important; max-width: none !important; max-height: none !important; overflow: visible !important; box-shadow: none !important; margin: 0 !important; }
+          #obratrack-cotizacion-pdf tr { break-inside: avoid; }
           @page {
             size: A4 portrait;
             margin: 6mm;
@@ -201,15 +168,10 @@ export default function CotizacionPdfModal({
 
         <button
           onClick={handleDownloadPdf}
-          disabled={isGeneratingPdf}
           className="flex items-center gap-2 px-4 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-xl font-heading font-bold text-xs shadow-lg transition-all cursor-pointer disabled:opacity-75"
         >
-          {isGeneratingPdf ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Download className="w-4 h-4" />
-          )}
-          <span>{isGeneratingPdf ? 'Generando PDF...' : 'Descargar PDF'}</span>
+          <Download className="w-4 h-4" />
+          <span>Guardar PDF</span>
         </button>
 
         <button
@@ -300,7 +262,7 @@ export default function CotizacionPdfModal({
               </div>
               <div className="flex">
                 <span className="font-bold text-gray-900 w-36 shrink-0">Ubicación:</span>
-                <span className="text-gray-800 truncate">{cotizacion.comuna_region || 'Santiago, Chile'}</span>
+                <span className="text-gray-800 truncate">{cotizacion.comuna_region || 'Por definir'}</span>
               </div>
               <div className="flex">
                 <span className="font-bold text-gray-900 w-36 shrink-0">Descripción:</span>
@@ -376,7 +338,7 @@ export default function CotizacionPdfModal({
                 <span>OBSERVACIONES</span>
               </div>
               <ul className="text-[11px] text-gray-600 space-y-1 pl-5 list-disc font-sans leading-relaxed">
-                <li>Los precios incluyen IVA y cotización de materiales con retiro o despacho.</li>
+                <li>Precios estimados; confirmar disponibilidad y despacho con los proveedores.</li>
                 <li>
                   Los plazos de ejecución serán definidos según el cronograma de obra (estimado en{' '}
                   <strong>{cotizacion.duracion_dias_estimada || 3} días hábiles</strong>).
@@ -391,7 +353,7 @@ export default function CotizacionPdfModal({
                 <span>CONDICIONES DE PAGO</span>
               </div>
               <p className="text-[11px] text-gray-700 font-sans">
-                40% de anticipo • 30% en ejecución de obra gruesa • 30% contra entrega conforme
+                {cotizacion.condiciones_pago || 'Por acordar con el cliente.'}
               </p>
               <p className="text-[10px] text-gray-500 font-mono">
                 Transferencia bancaria o estado de pago según contrato.
@@ -439,24 +401,24 @@ export default function CotizacionPdfModal({
               <MapPin className="w-3.5 h-3.5" />
             </div>
             <div>
-              <strong className="text-gray-800 block">ObraTrack - Software de gestión para constructoras</strong>
-              <span>Santiago Centro, Región Metropolitana, Chile</span>
+              <strong className="text-gray-800 block">{emisor?.empresa_nombre || 'Emitido con ObraTrack'}</strong>
+              <span>{emisor?.nombre || 'Presupuesto de obra'}</span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-4 gap-y-1 font-mono text-[10px]">
             <span className="flex items-center gap-1 text-gray-700">
-              <Phone className="w-3 h-3 text-[#FF6A00]" /> +56 9 8765 4321
+              <Phone className="w-3 h-3 text-[#FF6A00]" /> {emisor?.telefono_whatsapp || ''}
             </span>
             <span className="flex items-center gap-1 text-gray-700">
-              <Mail className="w-3 h-3 text-[#FF6A00]" /> contacto@obratrack.cl
+              <Mail className="w-3 h-3 text-[#FF6A00]" /> {emisor?.email || ''}
             </span>
             <span className="flex items-center gap-1 text-gray-700">
-              <Globe className="w-3 h-3 text-[#FF6A00]" /> www.obratrack.cl
+              <Globe className="w-3 h-3 text-[#FF6A00]" /> ObraTrack
             </span>
           </div>
         </div>
       </div>
-    </div>
+    </div>, document.body
   );
 }

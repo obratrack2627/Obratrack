@@ -391,6 +391,10 @@ export interface RecomendacionCobroCliente {
 }
 
 export interface CotizacionEstimacion {
+  cliente_id?: string;
+  cliente_nombre?: string;
+  cliente_telefono?: string;
+  condiciones_pago?: string;
   id: string;
   titulo_proyecto: string;
   tipo_obra: string;
@@ -498,6 +502,7 @@ export interface MensajeChatCotizador {
   sugerencias?: string[];
   accion_ejecutada?: AccionAsistenteIA;
   cotizacion_generada?: CotizacionEstimacion;
+  pendiente_sincronizacion?: string;
 }
 
 export interface MensajeChatProyecto {
@@ -507,6 +512,8 @@ export interface MensajeChatProyecto {
   remitente: 'usuario' | 'agente';
   texto: string;
   sugerencias?: string[];
+  cotizacion_generada?: CotizacionEstimacion;
+  pendiente_sincronizacion?: string;
   accion_ejecutada?: AccionAsistenteIA;
   created_at: string;
 }

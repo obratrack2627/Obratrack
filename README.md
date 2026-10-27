@@ -146,3 +146,8 @@ Benjamín Arriagada Achavar — Ingeniero Full-Stack & Arquitecto Cloud.
 Jorge Andre Castro Arteaga — Ingeniero de Requerimientos & Testing QA.
 
 Académica Guía: Teresa Jesús Tapia Soto.
+```
+
+## Configuración del chatbot
+
+Consulta [la guía del chatbot de IA](docs/CHATBOT_IA.md) para configurar Gemini, verificar la sesión de Supabase y probar cotizaciones y acciones. Las pruebas no modifican producción.

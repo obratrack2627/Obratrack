@@ -20,13 +20,18 @@ import {
   Maximize2,
 } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { dataService } from '@/lib/data-service';
 import { Usuario, SubscriptionPlanId, MensajeChatCotizador, AccionAsistenteIA } from '@/types/database';
 import { isDeveloperUser } from '@/lib/auth-utils';
 import { formatCLP, formatDate } from '@/lib/utils';
 import ChatMessageFormatter from '@/components/ChatMessageFormatter';
+import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
+import AIMessageTools from '@/components/AIMessageTools';
+
 
 export default function GlobalCopilotFloatingWidget() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [activeUser, setActiveUser] = useState<Usuario | null>(null);
@@ -102,66 +107,18 @@ export default function GlobalCopilotFloatingWidget() {
     setCargando(true);
 
     try {
-      const contextoDB = {
-        proyectos: dataService.getProyectos().map((p) => ({
-          id: p.id,
-          nombre: p.nombre,
-          comuna: p.comuna,
-          estado: p.estado,
-          monto_cotizado: p.monto_cotizado,
-          total_pagado: p.total_pagado,
-          saldo_pendiente: p.saldo_pendiente,
-          porcentaje_avance: p.porcentaje_avance_ponderado,
-          trabajadores_count: (p.trabajadores_ids || []).length,
-        })),
-        trabajadores: dataService.getUsuarios().map((u) => ({
-          id: u.id,
-          nombre: u.nombre,
-          rol: u.rol,
-          telefono: u.telefono_whatsapp,
-        })),
-        clientes: dataService.getClientes().map((c) => ({
-          id: c.id,
-          nombre: c.nombre,
-          telefono: c.telefono,
-          comuna: c.comuna,
-        })),
-      };
-
-      const res = await fetch('/api/cotizador/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mensaje: query,
-          historial: mensajes.slice(-6),
-          contexto_db: contextoDB,
-        }),
+      const data = await requestAI('/api/cotizador/chat', {
+        mensaje: query, historial: mensajes.slice(-10), contexto_db: aiContext(),
+        contexto_cotizacion: [...mensajes].reverse().find(m => m.cotizacion_generada)?.cotizacion_generada,
       });
-
-      const data = await res.json();
-
-      let accionEjecutada: AccionAsistenteIA | undefined = undefined;
-
-      if (data.accion) {
-        try {
-          const resultado = dataService.ejecutarAccionGlobalIA(data.accion);
-          if (resultado) {
-            accionEjecutada = resultado;
-            showToast(`⚡ ${resultado.titulo}`);
-          }
-        } catch (actErr: any) {
-          console.warn('Error ejecutando acción de IA:', actErr);
-          showToast(`⚠️ ${actErr?.message || 'Error al ejecutar acción'}`);
-        }
-      }
+      const processed = await applyAIResponse(data);
+      if (processed.accion_ejecutada) showToast(processed.accion_ejecutada.titulo);
 
       const agenteMsg: MensajeChatCotizador = {
         id: 'agt-' + Date.now(),
         remitente: 'agente',
-        texto: data.respuesta || 'Listo, acción procesada.',
+        ...processed,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        sugerencias: data.sugerencias,
-        accion_ejecutada: accionEjecutada,
       };
 
       setMensajes((prev) => [...prev, agenteMsg]);
@@ -172,7 +129,7 @@ export default function GlobalCopilotFloatingWidget() {
         {
           id: 'err-' + Date.now(),
           remitente: 'agente',
-          texto: 'Lo siento, hubo un inconveniente al conectar con el asistente de IA. Inténtalo de nuevo.',
+          texto: e?.message || 'No se pudo completar la solicitud. Intenta nuevamente.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -219,6 +176,8 @@ export default function GlobalCopilotFloatingWidget() {
       setIsListening(false);
     }
   };
+
+  if (pathname === '/cotizador' || /^\/proyectos\/[^/]+\/ia$/.test(pathname || '')) return null;
 
   return (
     <>
@@ -362,6 +321,7 @@ export default function GlobalCopilotFloatingWidget() {
                               content={m.texto}
                               isUser={m.remitente === 'usuario'}
                             />
+                            <AIMessageTools message={m} />
                             <span
                               className={`block text-[9px] mt-1 text-right ${
                                 m.remitente === 'usuario' ? 'text-white/70' : 'text-gray-400'
@@ -462,6 +422,7 @@ export default function GlobalCopilotFloatingWidget() {
                       <input
                         type="text"
                         value={inputTexto}
+                  aria-label="Mensaje para el copiloto global"
                         onChange={(e) => setInputTexto(e.target.value)}
                         placeholder="Escribe una orden (crear obra, cuadrilla, visita...)"
                         disabled={cargando}
@@ -470,6 +431,7 @@ export default function GlobalCopilotFloatingWidget() {
 
                       <button
                         type="submit"
+                  aria-label="Enviar mensaje"
                         disabled={!inputTexto.trim() || cargando}
                         className="p-2 bg-[#FF6A00] hover:bg-[#E55F00] disabled:opacity-40 text-white rounded-xl shadow-sm transition-all"
                       >

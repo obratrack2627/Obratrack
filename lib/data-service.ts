@@ -35,6 +35,8 @@ import {
 } from './mock-data';
 import { supabaseService } from './supabase/supabase-service';
 import { isDeveloperUser, isDeveloperEmail } from './auth-utils';
+import { resolveEntity } from './ai/actions';
+import { roundLine } from './ai/protocol';
 
 // Claves base de almacenamiento local para persistencia
 const KEYS = {
@@ -61,6 +63,14 @@ const KEYS = {
 const DEMO_EMPRESA_ID = 'e1111111-1111-4111-a111-111111111111';
 
 class DataService {
+  private aiLocalOnly = false;
+  runLocalAI<T>(work: () => T): T {
+    const previous = this.aiLocalOnly;
+    this.aiLocalOnly = true;
+    if (this.cloudSyncTimeout) clearTimeout(this.cloudSyncTimeout);
+    try { return work(); } finally { this.aiLocalOnly = previous; }
+  }
+
   private isBrowser(): boolean {
     return typeof window !== 'undefined';
   }
@@ -103,6 +113,7 @@ class DataService {
         this.scheduleCloudSync();
       }
     } catch (e) {
+      if (this.aiLocalOnly) throw new Error('No se pudieron guardar los cambios en este dispositivo. Revisa el espacio disponible.');
       console.error('Error saving to localStorage', e);
     }
   }
@@ -143,13 +154,13 @@ class DataService {
     const usuarios = this.getUsuarios();
     const newUsuario: Usuario = {
       ...usuario,
-      id: 'u-' + Date.now(),
+      id: 'u-' + crypto.randomUUID(),
       empresa_id: usuario.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
       created_at: new Date().toISOString(),
     };
     usuarios.push(newUsuario);
     this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
-    supabaseService.saveUsuario(newUsuario).catch((err) => console.warn('Sync supabase usuario:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveUsuario(newUsuario).catch((err) => console.warn('Sync supabase usuario:', err)); }
     return newUsuario;
   }
 
@@ -162,7 +173,7 @@ class DataService {
       usuarios[index].is_dev = true;
     }
     this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
-    supabaseService.saveUsuario(usuarios[index]).catch((err) => console.warn('Sync supabase usuario:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveUsuario(usuarios[index]).catch((err) => console.warn('Sync supabase usuario:', err)); }
 
     const active = this.getActiveUser();
     if (active && (active.id === id || active.email === usuarios[index].email)) {
@@ -181,7 +192,7 @@ class DataService {
     }
     const filtered = usuarios.filter((u) => u.id !== id);
     this.setItem(this.getTenantKey(KEYS.USUARIOS), filtered);
-    supabaseService.deleteUsuario(id).catch((err) => console.warn('Delete supabase usuario:', err));
+    if (!this.aiLocalOnly) { supabaseService.deleteUsuario(id).catch((err) => console.warn('Delete supabase usuario:', err)); }
     return true;
   }
 
@@ -274,7 +285,7 @@ class DataService {
 
     this.setItem(this.getTenantKey(KEYS.PLAN), plan);
     if (active?.empresa_id) {
-      supabaseService.updateEmpresaPlan(active.empresa_id, plan).catch(() => {});
+      if (!this.aiLocalOnly) { supabaseService.updateEmpresaPlan(active.empresa_id, plan).catch(() => {}); }
     }
     if (this.isBrowser()) {
       window.dispatchEvent(new CustomEvent('obratrack_plan_changed', { detail: plan }));
@@ -298,13 +309,13 @@ class DataService {
     const clientes = this.getClientes();
     const newCliente: Cliente = {
       ...cliente,
-      id: 'c-' + Date.now(),
+      id: 'c-' + crypto.randomUUID(),
       empresa_id: cliente.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
       created_at: new Date().toISOString(),
     };
     clientes.push(newCliente);
     this.setItem(this.getTenantKey(KEYS.CLIENTES), clientes);
-    supabaseService.saveCliente(newCliente).catch((err) => console.warn('Sync supabase cliente:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveCliente(newCliente).catch((err) => console.warn('Sync supabase cliente:', err)); }
     return newCliente;
   }
 
@@ -314,7 +325,7 @@ class DataService {
     if (index === -1) return null;
     clientes[index] = { ...clientes[index], ...data };
     this.setItem(this.getTenantKey(KEYS.CLIENTES), clientes);
-    supabaseService.saveCliente(clientes[index]).catch((err) => console.warn('Sync supabase cliente:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveCliente(clientes[index]).catch((err) => console.warn('Sync supabase cliente:', err)); }
     return clientes[index];
   }
 
@@ -322,7 +333,7 @@ class DataService {
     const clientes = this.getClientes();
     const filtered = clientes.filter((c) => c.id !== id);
     this.setItem(this.getTenantKey(KEYS.CLIENTES), filtered);
-    supabaseService.deleteCliente(id).catch((err) => console.warn('Delete supabase cliente:', err));
+    if (!this.aiLocalOnly) { supabaseService.deleteCliente(id).catch((err) => console.warn('Delete supabase cliente:', err)); }
     return true;
   }
 
@@ -512,7 +523,7 @@ class DataService {
 
     const defaultProjs = this.isDemoTenant() ? INITIAL_PROYECTOS : [];
     const proyectos = this.getItem<Proyecto[]>(this.getTenantKey(KEYS.PROYECTOS), defaultProjs);
-    const newProjId = 'p-' + Date.now();
+    const newProjId = 'p-' + crypto.randomUUID();
     const newProyecto: Proyecto = {
       ...data,
       id: newProjId,
@@ -522,7 +533,7 @@ class DataService {
     proyectos.unshift(newProyecto);
     this.setItem(this.getTenantKey(KEYS.PROYECTOS), proyectos);
 
-    supabaseService.saveProyecto(newProyecto).catch((err) => console.warn('Sync supabase proyecto:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveProyecto(newProyecto).catch((err) => console.warn('Sync supabase proyecto:', err)); }
 
     if (actividadesIniciales && actividadesIniciales.length > 0) {
       let currentDate = new Date(newProyecto.fecha_inicio);
@@ -551,7 +562,7 @@ class DataService {
     const filtered = proyectos.filter((p) => p.id !== id);
     this.setItem(this.getTenantKey(KEYS.PROYECTOS), filtered);
 
-    supabaseService.deleteProyecto(id).catch((err) => console.warn('Delete supabase proyecto:', err));
+    if (!this.aiLocalOnly) { supabaseService.deleteProyecto(id).catch((err) => console.warn('Delete supabase proyecto:', err)); }
     return true;
   }
 
@@ -563,7 +574,7 @@ class DataService {
 
     proyectos[index] = { ...proyectos[index], ...data };
     this.setItem(this.getTenantKey(KEYS.PROYECTOS), proyectos);
-    supabaseService.saveProyecto(proyectos[index]).catch((err) => console.warn('Update supabase proyecto:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveProyecto(proyectos[index]).catch((err) => console.warn('Update supabase proyecto:', err)); }
     return proyectos[index];
   }
 
@@ -580,19 +591,19 @@ class DataService {
     const all = this.getItem<MaterialProyecto[]>(this.getTenantKey(KEYS.MATERIALES_PROYECTO), []);
     const newMat: MaterialProyecto = {
       ...mat,
-      id: 'mat-' + Date.now(),
+      id: 'mat-' + crypto.randomUUID(),
       created_at: new Date().toISOString(),
     };
     all.push(newMat);
     this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all);
-    supabaseService.saveMaterial(newMat).catch((err) => console.warn('Sync supabase material:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveMaterial(newMat).catch((err) => console.warn('Sync supabase material:', err)); }
     return newMat;
   }
 
   deleteMaterialProyecto(id: string): boolean {
     const all = this.getItem<MaterialProyecto[]>(this.getTenantKey(KEYS.MATERIALES_PROYECTO), []);
     this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all.filter((m) => m.id !== id));
-    supabaseService.deleteMaterial(id).catch((err) => console.warn('Delete supabase material:', err));
+    if (!this.aiLocalOnly) { supabaseService.deleteMaterial(id).catch((err) => console.warn('Delete supabase material:', err)); }
     return true;
   }
 
@@ -602,7 +613,7 @@ class DataService {
     if (index === -1) return null;
     all[index] = { ...all[index], ...data };
     this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all);
-    supabaseService.saveMaterial(all[index]).catch((err) => console.warn('Sync supabase material:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveMaterial(all[index]).catch((err) => console.warn('Sync supabase material:', err)); }
     return all[index];
   }
 
@@ -619,12 +630,12 @@ class DataService {
     const all = this.getItem<BitacoraEntrada[]>(this.getTenantKey(KEYS.BITACORA), []);
     const newEntry: BitacoraEntrada = {
       ...entry,
-      id: 'bit-' + Date.now(),
+      id: 'bit-' + crypto.randomUUID(),
       created_at: new Date().toISOString(),
     };
     all.unshift(newEntry);
     this.setItem(this.getTenantKey(KEYS.BITACORA), all);
-    supabaseService.saveBitacora(newEntry).catch((err) => console.warn('Sync supabase bitacora:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveBitacora(newEntry).catch((err) => console.warn('Sync supabase bitacora:', err)); }
     return newEntry;
   }
 
@@ -634,14 +645,14 @@ class DataService {
     if (index === -1) return null;
     all[index] = { ...all[index], ...data };
     this.setItem(this.getTenantKey(KEYS.BITACORA), all);
-    supabaseService.saveBitacora(all[index]).catch((err) => console.warn('Sync supabase bitacora:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveBitacora(all[index]).catch((err) => console.warn('Sync supabase bitacora:', err)); }
     return all[index];
   }
 
   deleteBitacoraEntrada(id: string): boolean {
     const all = this.getItem<BitacoraEntrada[]>(this.getTenantKey(KEYS.BITACORA), []);
     this.setItem(this.getTenantKey(KEYS.BITACORA), all.filter((b) => b.id !== id));
-    supabaseService.deleteBitacora(id).catch((err) => console.warn('Delete supabase bitacora:', err));
+    if (!this.aiLocalOnly) { supabaseService.deleteBitacora(id).catch((err) => console.warn('Delete supabase bitacora:', err)); }
     return true;
   }
 
@@ -664,12 +675,12 @@ class DataService {
     const actividades = this.getItem<Actividad[]>(this.getTenantKey(KEYS.ACTIVIDADES), defaultActs);
     const newActividad: Actividad = {
       ...actividad,
-      id: 'act-' + Date.now(),
+      id: 'act-' + crypto.randomUUID(),
       created_at: new Date().toISOString(),
     };
     actividades.push(newActividad);
     this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), actividades);
-    supabaseService.saveActividad(newActividad).catch((err) => console.warn('Sync supabase actividad:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveActividad(newActividad).catch((err) => console.warn('Sync supabase actividad:', err)); }
     return newActividad;
   }
 
@@ -681,7 +692,7 @@ class DataService {
 
     actividades[index] = { ...actividades[index], ...data };
     this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), actividades);
-    supabaseService.saveActividad(actividades[index]).catch((err) => console.warn('Sync supabase actividad:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveActividad(actividades[index]).catch((err) => console.warn('Sync supabase actividad:', err)); }
     return actividades[index];
   }
 
@@ -690,7 +701,7 @@ class DataService {
     const actividades = this.getItem<Actividad[]>(this.getTenantKey(KEYS.ACTIVIDADES), defaultActs);
     const filtered = actividades.filter((a) => a.id !== id);
     this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), filtered);
-    supabaseService.deleteActividad(id).catch((err) => console.warn('Delete supabase actividad:', err));
+    if (!this.aiLocalOnly) { supabaseService.deleteActividad(id).catch((err) => console.warn('Delete supabase actividad:', err)); }
     return true;
   }
 
@@ -709,12 +720,12 @@ class DataService {
     const pagos = this.getItem<Pago[]>(this.getTenantKey(KEYS.PAGOS), defaultPagos);
     const newPago: Pago = {
       ...pago,
-      id: 'pay-' + Date.now(),
+      id: 'pay-' + crypto.randomUUID(),
       created_at: new Date().toISOString(),
     };
     pagos.push(newPago);
     this.setItem(this.getTenantKey(KEYS.PAGOS), pagos);
-    supabaseService.savePago(newPago).catch((err) => console.warn('Sync supabase pago:', err));
+    if (!this.aiLocalOnly) { supabaseService.savePago(newPago).catch((err) => console.warn('Sync supabase pago:', err)); }
     return newPago;
   }
 
@@ -726,7 +737,7 @@ class DataService {
 
     pagos[index] = { ...pagos[index], ...data };
     this.setItem(this.getTenantKey(KEYS.PAGOS), pagos);
-    supabaseService.savePago(pagos[index]).catch((err) => console.warn('Sync supabase pago:', err));
+    if (!this.aiLocalOnly) { supabaseService.savePago(pagos[index]).catch((err) => console.warn('Sync supabase pago:', err)); }
     return pagos[index];
   }
 
@@ -735,7 +746,7 @@ class DataService {
     const pagos = this.getItem<Pago[]>(this.getTenantKey(KEYS.PAGOS), defaultPagos);
     const filtered = pagos.filter((p) => p.id !== id);
     this.setItem(this.getTenantKey(KEYS.PAGOS), filtered);
-    supabaseService.deletePago(id).catch((err) => console.warn('Delete supabase pago:', err));
+    if (!this.aiLocalOnly) { supabaseService.deletePago(id).catch((err) => console.warn('Delete supabase pago:', err)); }
     return true;
   }
 
@@ -754,12 +765,12 @@ class DataService {
     const imprevistos = this.getItem<Imprevisto[]>(this.getTenantKey(KEYS.IMPREVISTOS), defaultImps);
     const newImprevisto: Imprevisto = {
       ...imprevisto,
-      id: 'imp-' + Date.now(),
+      id: 'imp-' + crypto.randomUUID(),
       created_at: new Date().toISOString(),
     };
     imprevistos.push(newImprevisto);
     this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), imprevistos);
-    supabaseService.saveImprevisto(newImprevisto).catch((err) => console.warn('Sync supabase imprevisto:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveImprevisto(newImprevisto).catch((err) => console.warn('Sync supabase imprevisto:', err)); }
     return newImprevisto;
   }
 
@@ -771,7 +782,7 @@ class DataService {
 
     imprevistos[index] = { ...imprevistos[index], ...data };
     this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), imprevistos);
-    supabaseService.saveImprevisto(imprevistos[index]).catch((err) => console.warn('Sync supabase imprevisto:', err));
+    if (!this.aiLocalOnly) { supabaseService.saveImprevisto(imprevistos[index]).catch((err) => console.warn('Sync supabase imprevisto:', err)); }
     return imprevistos[index];
   }
 
@@ -780,7 +791,7 @@ class DataService {
     const imprevistos = this.getItem<Imprevisto[]>(this.getTenantKey(KEYS.IMPREVISTOS), defaultImps);
     const filtered = imprevistos.filter((i) => i.id !== id);
     this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), filtered);
-    supabaseService.deleteImprevisto(id).catch((err) => console.warn('Delete supabase imprevisto:', err));
+    if (!this.aiLocalOnly) { supabaseService.deleteImprevisto(id).catch((err) => console.warn('Delete supabase imprevisto:', err)); }
     return true;
   }
 
@@ -795,7 +806,7 @@ class DataService {
     const reportes = this.getItem<ReporteWhatsApp[]>(this.getTenantKey(KEYS.REPORTES), defaultReps);
     const newReporte: ReporteWhatsApp = {
       ...reporte,
-      id: 'rep-' + Date.now(),
+      id: 'rep-' + crypto.randomUUID(),
       created_at: new Date().toISOString(),
     };
     reportes.unshift(newReporte);
@@ -907,7 +918,7 @@ class DataService {
           cantidad: cant,
           unidad: m.unidad || 'unidad',
           precio_unitario: pu,
-          subtotal: cant * pu,
+          subtotal: roundLine(cant, pu),
           comprado: false,
         });
         materialesAgregados++;
@@ -1255,7 +1266,7 @@ class DataService {
   ): EventoAgenda {
     const active = this.getActiveUser();
     const agenda = this.getEventosAgenda();
-    const id = evento.id || 'evt-' + Date.now();
+    const id = evento.id || 'evt-' + crypto.randomUUID();
     const fullEvento: EventoAgenda = {
       ...evento,
       id,
@@ -1270,7 +1281,7 @@ class DataService {
       agenda.push(fullEvento);
     }
     this.setItem(this.getTenantKey(KEYS.AGENDA), agenda);
-    supabaseService.saveEventoAgenda(fullEvento).catch(() => {});
+    if (!this.aiLocalOnly) { supabaseService.saveEventoAgenda(fullEvento).catch(() => {}); }
     return fullEvento;
   }
 
@@ -1278,7 +1289,7 @@ class DataService {
     const agenda = this.getEventosAgenda();
     const filtered = agenda.filter((e) => e.id !== id);
     this.setItem(this.getTenantKey(KEYS.AGENDA), filtered);
-    supabaseService.deleteEventoAgenda(id).catch(() => {});
+    if (!this.aiLocalOnly) { supabaseService.deleteEventoAgenda(id).catch(() => {}); }
     return true;
   }
 
@@ -1288,13 +1299,14 @@ class DataService {
     if (idx === -1) return null;
     agenda[idx].completado = !agenda[idx].completado;
     this.setItem(this.getTenantKey(KEYS.AGENDA), agenda);
-    supabaseService.saveEventoAgenda(agenda[idx]).catch(() => {});
+    if (!this.aiLocalOnly) { supabaseService.saveEventoAgenda(agenda[idx]).catch(() => {}); }
     return agenda[idx];
   }
 
   // --- MÉTODOS DE INTEGRACIÓN CON IA ---
   crearProyectoDesdeIA(datos: {
     nombre: string;
+    fecha_inicio?: string;
     descripcion?: string;
     comuna?: string;
     direccion?: string;
@@ -1321,8 +1333,8 @@ class DataService {
       } else {
         const nuevoCli = this.createCliente({
           nombre: datos.cliente_nombre,
-          telefono: datos.cliente_telefono || '+56900000000',
-          email: datos.cliente_email || `${datos.cliente_nombre.toLowerCase().replace(/\s+/g, '.')}@cliente.cl`,
+          telefono: datos.cliente_telefono || '',
+          email: datos.cliente_email || '',
           rut: datos.cliente_rut,
           comuna: datos.comuna || 'Santiago',
           direccion: datos.direccion || '',
@@ -1331,10 +1343,10 @@ class DataService {
       }
     }
 
-    const fechaInicio = new Date().toISOString().split('T')[0];
+    const fechaInicio = datos.fecha_inicio || new Date().toISOString().split('T')[0];
     const dias = datos.dias_estimados ?? datos.dias ?? 30;
-    const fechaFinDate = new Date();
-    fechaFinDate.setDate(fechaFinDate.getDate() + dias);
+    const fechaFinDate = new Date(fechaInicio + 'T12:00:00Z');
+    fechaFinDate.setUTCDate(fechaFinDate.getUTCDate() + dias);
     const fechaTermino = fechaFinDate.toISOString().split('T')[0];
     const monto = datos.monto_cotizado ?? datos.monto ?? 0;
 
@@ -1370,7 +1382,7 @@ class DataService {
           cantidad: cant,
           unidad: m.unidad || 'unidad',
           precio_unitario: pu,
-          subtotal: cant * pu,
+          subtotal: roundLine(cant, pu),
           categoria: m.categoria || 'General',
           comprado: false,
         });
@@ -1430,24 +1442,24 @@ class DataService {
     return this.createUsuario({
       nombre: datos.nombre,
       rol: datos.rol || 'terreno',
-      email: datos.email || `${datos.nombre.toLowerCase().replace(/\s+/g, '.')}@faena.cl`,
-      telefono_whatsapp: datos.telefono || datos.telefono_whatsapp || '+56900000000',
-      rut: datos.rut || '11.111.111-1',
+      email: datos.email || '',
+      telefono_whatsapp: datos.telefono || datos.telefono_whatsapp || '',
+      rut: datos.rut || undefined,
       empresa_id: this.getActiveUser()?.empresa_id || DEMO_EMPRESA_ID,
     });
   }
 
   asignarTrabajadorAProyecto(trabajadorIdent: string, proyectoIdent: string): boolean {
     const proyectos = this.getProyectos();
-    const proyecto =
-      proyectos.find((p) => p.id === proyectoIdent) ||
-      proyectos.find((p) => p.nombre.toLowerCase().includes(proyectoIdent.toLowerCase()));
-    if (!proyecto) return false;
-
+    const proyecto = resolveEntity(proyectos, proyectoIdent);
     const usuarios = this.getUsuarios();
-    let trabajador =
-      usuarios.find((u) => u.id === trabajadorIdent) ||
-      usuarios.find((u) => u.nombre.toLowerCase().includes(trabajadorIdent.toLowerCase()));
+    const nombre = trabajadorIdent.trim().toLowerCase();
+    let trabajador = usuarios.find(u => u.id === trabajadorIdent) || usuarios.find(u => u.nombre.toLowerCase() === nombre);
+    if (!trabajador) {
+      const candidatos = usuarios.filter(u => u.nombre.toLowerCase().includes(nombre));
+      if (candidatos.length > 1) throw new Error('Indica el nombre completo del trabajador.');
+      trabajador = candidatos[0];
+    }
 
     // Si el trabajador mencionado no existe en el equipo, crearlo automáticamente
     if (!trabajador && trabajadorIdent.trim().length > 0) {
@@ -1475,23 +1487,7 @@ class DataService {
     if (!accion || !accion.tipo) return null;
 
     // Helper para resolver id de proyecto por id o por nombre
-    const resolverProyecto = (ident?: string): Proyecto | null => {
-      const projs = this.getProyectos();
-      if (ident && typeof ident === 'string') {
-        const clean = ident.trim().toLowerCase();
-        const found = projs.find(
-          (p) =>
-            p.id.toLowerCase() === clean ||
-            p.nombre.toLowerCase().includes(clean) ||
-            clean.includes(p.nombre.toLowerCase())
-        );
-        if (found) return found;
-      }
-      if (contextProyectoId) {
-        return projs.find((p) => p.id === contextProyectoId) || null;
-      }
-      return projs[0] || null;
-    };
+    const resolverProyecto = (ident?: string): Proyecto => resolveEntity(this.getProyectos(), ident, contextProyectoId);
 
     switch (accion.tipo) {
       case 'crear_proyecto':
@@ -1518,7 +1514,7 @@ class DataService {
         if (!proj) return null;
         const updates: Partial<Proyecto> = {};
         if (accion.estado) updates.estado = accion.estado;
-        if (accion.monto || accion.monto_cotizado) updates.monto_cotizado = Number(accion.monto || accion.monto_cotizado);
+        if (accion.monto !== undefined || accion.monto_cotizado !== undefined) updates.monto_cotizado = Number(accion.monto_cotizado ?? accion.monto);
         if (accion.fecha_termino_estimada) updates.fecha_termino_estimada = accion.fecha_termino_estimada;
         if (accion.descripcion) updates.descripcion = accion.descripcion;
         const updated = this.updateProyecto(proj.id, updates);
@@ -1549,8 +1545,8 @@ class DataService {
       case 'crear_cliente': {
         const nuevoCli = this.createCliente({
           nombre: accion.nombre || 'Nuevo Cliente',
-          telefono: accion.telefono || '+56900000000',
-          email: accion.email || `${(accion.nombre || 'cliente').toLowerCase().replace(/\s+/g, '.')}@cliente.cl`,
+          telefono: accion.telefono || '',
+          email: accion.email || '',
           rut: accion.rut,
           comuna: accion.comuna || 'Santiago',
           direccion: accion.direccion || '',
@@ -1567,12 +1563,7 @@ class DataService {
 
       case 'actualizar_cliente': {
         const clis = this.getClientes();
-        const cli = clis.find(
-          (c) =>
-            c.id === accion.cliente_id ||
-            (accion.nombre && c.nombre.toLowerCase().includes(accion.nombre.toLowerCase()))
-        );
-        if (!cli) return null;
+        const cli = resolveEntity(clis, accion.cliente_id || accion.nombre);
         const updated = this.updateCliente(cli.id, {
           telefono: accion.telefono ?? cli.telefono,
           email: accion.email ?? cli.email,
@@ -1628,7 +1619,7 @@ class DataService {
 
       case 'asignar_trabajador':
       case 'asignar_trabajadores': {
-        const proj = resolverProyecto(accion.proyecto_nombre || accion.proyecto_id);
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         const nombres: string[] = Array.isArray(accion.trabajadores_nombres)
           ? accion.trabajadores_nombres
           : Array.isArray(accion.trabajadores)
@@ -1659,7 +1650,7 @@ class DataService {
       }
 
       case 'desasignar_trabajador': {
-        const proj = resolverProyecto(accion.proyecto_nombre || accion.proyecto_id);
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (proj) {
           const usuarios = this.getUsuarios();
           const u = usuarios.find(
@@ -1733,11 +1724,7 @@ class DataService {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;
         const acts = this.getActividades(proj.id);
-        const match = acts.find(
-          (a) =>
-            a.id === accion.actividad_id ||
-            (accion.nombre && a.nombre.toLowerCase().includes(accion.nombre.toLowerCase()))
-        );
+        const match = resolveEntity(acts, accion.actividad_id || accion.nombre);
         if (match) {
           const avance = Math.min(100, Math.max(0, Number(accion.porcentaje_avance) || 0));
           const estado = avance === 100 ? 'terminada' : avance > 0 ? 'en_curso' : 'pendiente';
@@ -1782,7 +1769,7 @@ class DataService {
             cantidad: cant,
             unidad: m.unidad || 'unidad',
             precio_unitario: pu,
-            subtotal: cant * pu,
+            subtotal: roundLine(cant, pu),
             categoria: m.categoria || 'General',
             comprado: false,
           });
@@ -1827,7 +1814,8 @@ class DataService {
         const pago = this.createPago({
           proyecto_id: proj.id,
           monto,
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: accion.fecha || new Date().toISOString().split('T')[0],
+          nota: accion.nota || '',
           metodo: (['transferencia', 'efectivo', 'debito'].includes(accion.metodo || '')
             ? accion.metodo
             : 'transferencia') as PaymentMethod,
@@ -1902,7 +1890,8 @@ class DataService {
           hora: accion.hora || '10:00',
           comuna_lugar: accion.comuna_lugar || 'Santiago, Chile',
           descripcion: accion.descripcion || 'Visita de inspección coordinada por IA.',
-          cliente_nombre: accion.cliente_nombre || 'Mandante',
+          cliente_nombre: accion.cliente_nombre || '',
+          proyecto_id: accion.proyecto_id,
           completado: false,
           origen: 'asistente_ia',
         });
@@ -2048,6 +2037,7 @@ class DataService {
         const resultados: AccionAsistenteIA[] = [];
         for (const sub of lista) {
           const res = this.ejecutarAccionGlobalIA(sub, contextProyectoId);
+          if (!res) throw new Error('No se pudo ejecutar una acción del lote.');
           if (res) {
             if (res.tipo === 'lote_acciones' && res.detalles?.acciones) {
               resultados.push(...res.detalles.acciones);
@@ -2091,9 +2081,9 @@ class DataService {
     this.setItem(key, historial);
 
     // Sincronizar en segundo plano con Supabase
-    supabaseService.saveProyectoMensajeChat(fullMsg).catch((err) =>
+    if (!this.aiLocalOnly) { supabaseService.saveProyectoMensajeChat(fullMsg).catch((err) =>
       console.warn('Sync chat proyecto en Supabase:', err)
-    );
+    ); }
 
     return fullMsg;
   }
@@ -2101,9 +2091,9 @@ class DataService {
   clearProyectoChatHistorial(proyectoId: string): void {
     const key = this.getTenantKey(`${KEYS.CHAT_PROYECTOS}_${proyectoId}`);
     this.setItem(key, []);
-    supabaseService.clearProyectoChatHistorial(proyectoId).catch((err) =>
+    if (!this.aiLocalOnly) { supabaseService.clearProyectoChatHistorial(proyectoId).catch((err) =>
       console.warn('Clear chat proyecto en Supabase:', err)
-    );
+    ); }
   }
 
   async loadProyectoChatFromSupabase(proyectoId: string): Promise<MensajeChatProyecto[]> {
@@ -2130,7 +2120,7 @@ class DataService {
         datos: res.detalles,
       };
     }
-    return { exito: true, mensaje: 'Acción procesada correctamente.' };
+    return { exito: false, mensaje: 'No se pudo ejecutar la acción solicitada.' };
   }
 
   // --- SINCRONIZACIÓN Y CARGA DESDE SUPABASE ---
@@ -2171,7 +2161,7 @@ class DataService {
   private cloudSyncTimeout: ReturnType<typeof setTimeout> | null = null;
 
   public scheduleCloudSync(): void {
-    if (!this.isBrowser()) return;
+    if (!this.isBrowser() || this.aiLocalOnly) return;
     if (this.cloudSyncTimeout) {
       clearTimeout(this.cloudSyncTimeout);
     }
