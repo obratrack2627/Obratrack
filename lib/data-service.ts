@@ -39,7 +39,7 @@ import { resolveEntity } from './ai/actions';
 import { roundLine } from './ai/protocol';
 
 // Claves base de almacenamiento local para persistencia
-const KEYS = {
+export const DATA_STORAGE_KEYS = {
   PROYECTOS: 'obratrack_proyectos_v7',
   ACTIVIDADES: 'obratrack_actividades_v7',
   PAGOS: 'obratrack_pagos_v7',
@@ -60,9 +60,13 @@ const KEYS = {
   ASISTENCIAS_OBRA: 'obratrack_asistencias_obra_v7',
 };
 
+const KEYS = DATA_STORAGE_KEYS;
+
 const DEMO_EMPRESA_ID = 'e1111111-1111-4111-a111-111111111111';
 
-class DataService {
+export class DataService {
+  constructor(private isolatedStorage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>) {}
+
   private aiLocalOnly = false;
   runLocalAI<T>(work: () => T): T {
     const previous = this.aiLocalOnly;
@@ -89,9 +93,9 @@ class DataService {
   }
 
   public getItem<T>(key: string, defaultValue: T): T {
-    if (!this.isBrowser()) return defaultValue;
+    if (!this.isBrowser() && !this.isolatedStorage) return defaultValue;
     try {
-      const item = localStorage.getItem(key);
+      const item = (this.isolatedStorage || localStorage).getItem(key);
       return item ? JSON.parse(item) : defaultValue;
     } catch {
       return defaultValue;
@@ -101,9 +105,9 @@ class DataService {
   private isPullingCloud = false;
 
   private setItem<T>(key: string, value: T): void {
-    if (!this.isBrowser()) return;
+    if (!this.isBrowser() && !this.isolatedStorage) return;
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      (this.isolatedStorage || localStorage).setItem(key, JSON.stringify(value));
       if (
         !this.isPullingCloud &&
         key !== KEYS.ACTIVE_USER &&

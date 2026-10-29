@@ -167,6 +167,8 @@ async function setup(
   return db;
 }
 async function send(page: Page, text: string) {
+  // Esperar los datos cargados por React: escribir antes de hidratar puede perder el texto.
+  await expect(page.getByText('Contratista de prueba', { exact: true })).toBeVisible();
   await page
     .getByRole('textbox', { name: 'Mensaje para el asistente', exact: true })
     .fill(text);
@@ -371,4 +373,99 @@ test('el asistente de una obra ejecuta y guarda su avance', async ({
   expect(
     db.actividades.find((a) => a.id === 'act-existing').porcentaje_avance,
   ).toBe(60);
+});
+
+test("la bandeja del jefe muestra conexión pendiente y abre una cotización recibida por WhatsApp", async ({
+  page,
+}) => {
+  await setup(page, { respuesta: "Lista", accion: null });
+  const quote = normalizeQuote({
+    titulo_proyecto: "Radier por WhatsApp",
+    comuna_region: "Maipú",
+    materiales: [
+      {
+        nombre: "Hormigón",
+        cantidad: 2,
+        unidad: "m3",
+        precio_unitario_estimado: 100000,
+      },
+    ],
+    mano_de_obra: [
+      {
+        rol: "Maestro",
+        cantidad_personas: 1,
+        dias_estimados: 2,
+        valor_jornal_diario: 45000,
+      },
+    ],
+  });
+  await page.route("**/api/webhook/whatsapp", (route) =>
+    route.fulfill({ json: { ok: true, cloud_api_configurada: false } }),
+  );
+  await page.route("**/api/whatsapp/mensajes", (route) => {
+    expect(route.request().headers().authorization).toMatch(/^Bearer /);
+    return route.fulfill({
+      json: {
+        mensajes: [
+          {
+            message_id: "wamid.fixture",
+            texto: "Cotiza radier",
+            respuesta: "Cotización lista",
+            cotizacion: quote,
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("/reportes");
+  await expect(
+    page.getByRole("heading", { name: "Gestiona tu obra desde tu WhatsApp" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Conexión con Meta pendiente", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Abrir WhatsApp de ObraTrack" }),
+  ).toHaveCount(0);
+  await page.getByText("Mis mensajes de WhatsApp (1)").click();
+  await page.getByRole("button", { name: "Ver cotización / PDF" }).click();
+  await expect(
+    page.getByText("Radier por WhatsApp", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Guardar PDF", exact: true }),
+  ).toBeVisible();
+});
+
+test("el simulador envía la sesión en multipart y muestra los errores del servidor", async ({
+  page,
+}) => {
+  await setup(page, { respuesta: "Lista", accion: null }, true);
+  await page.route("**/api/webhook/whatsapp", (route) =>
+    route.fulfill({ json: { ok: true, cloud_api_configurada: false } }),
+  );
+  await page.route("**/api/whatsapp/mensajes", (route) =>
+    route.fulfill({ json: { mensajes: [] } }),
+  );
+  await page.route("**/api/webhook/whatsapp/simulador", (route) => {
+    expect(route.request().headers().authorization).toMatch(/^Bearer /);
+    expect(route.request().headers()["content-type"]).toContain(
+      "multipart/form-data; boundary=",
+    );
+    return route.fulfill({
+      status: 403,
+      json: { error: "La obra de prueba no está autorizada." },
+    });
+  });
+  await page.goto("/reportes");
+  await page
+    .getByPlaceholder("Escribe nota, avance, accidente o sube foto...")
+    .fill("Actualiza Radier al 50 %");
+  await page
+    .getByPlaceholder("Escribe nota, avance, accidente o sube foto...")
+    .press("Enter");
+  await expect(
+    page.getByText("La obra de prueba no está autorizada.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/✅ Guardado en Supabase:/)).toHaveCount(0);
 });

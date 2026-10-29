@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { procesarEventoWhatsAppUnificado } from '@/lib/whatsapp-engine';
+import { NextRequest, NextResponse } from "next/server";
+import { authorizeAI, errorJSON } from "@/lib/ai/server";
+import { procesarEventoWhatsAppUnificado } from "@/lib/whatsapp-engine";
 
 /**
  * POST /api/webhook/whatsapp/simulador
@@ -8,30 +9,41 @@ import { procesarEventoWhatsAppUnificado } from '@/lib/whatsapp-engine';
  */
 export async function POST(request: NextRequest) {
   try {
-    const contentType = request.headers.get('content-type') || '';
+    const { client, user } = await authorizeAI(request);
+    if (user.rol === "terreno")
+      return NextResponse.json(
+        {
+          error:
+            "El simulador está disponible para administración y supervisión.",
+        },
+        { status: 403 },
+      );
+    const contentType = request.headers.get("content-type") || "";
 
-    let modoForzado: 'obrero' | 'cliente' = 'obrero';
-    let texto = '';
-    let telefono = '+56911112222';
+    let modoForzado: "obrero" | "cliente" = "obrero";
+    let texto = "";
+    let telefono = "+56911112222";
     let proyectoForzadoId: string | undefined;
     let clienteForzadoId: string | undefined;
     let obreroForzadoNombre: string | undefined;
     let empresaId: string | undefined;
-    let historialPrevio: { rol: 'user' | 'model'; texto: string }[] = [];
+    let historialPrevio: { rol: "user" | "model"; texto: string }[] = [];
     let imagenBuffer: Buffer | undefined;
     let imagenMimeType: string | undefined;
 
-    if (contentType.includes('multipart/form-data')) {
+    if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
-      modoForzado = (formData.get('modo') as string) === 'cliente' ? 'cliente' : 'obrero';
-      texto = (formData.get('texto') as string) || '';
-      telefono = (formData.get('telefono') as string) || '+56911112222';
-      proyectoForzadoId = (formData.get('proyectoId') as string) || undefined;
-      clienteForzadoId = (formData.get('clienteId') as string) || undefined;
-      obreroForzadoNombre = (formData.get('obreroNombre') as string) || undefined;
-      empresaId = (formData.get('empresaId') as string) || undefined;
+      modoForzado =
+        (formData.get("modo") as string) === "cliente" ? "cliente" : "obrero";
+      texto = (formData.get("texto") as string) || "";
+      telefono = (formData.get("telefono") as string) || "+56911112222";
+      proyectoForzadoId = (formData.get("proyectoId") as string) || undefined;
+      clienteForzadoId = (formData.get("clienteId") as string) || undefined;
+      obreroForzadoNombre =
+        (formData.get("obreroNombre") as string) || undefined;
+      empresaId = (formData.get("empresaId") as string) || undefined;
 
-      const histStr = formData.get('historial') as string | null;
+      const histStr = formData.get("historial") as string | null;
       if (histStr) {
         try {
           historialPrevio = JSON.parse(histStr);
@@ -40,17 +52,17 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const file = formData.get('foto') as File | null;
+      const file = formData.get("foto") as File | null;
       if (file && file.size > 0) {
         const ab = await file.arrayBuffer();
         imagenBuffer = Buffer.from(ab);
-        imagenMimeType = file.type || 'image/jpeg';
+        imagenMimeType = file.type || "image/jpeg";
       }
     } else {
       const body = await request.json();
-      modoForzado = body.modo === 'cliente' ? 'cliente' : 'obrero';
-      texto = body.texto || '';
-      telefono = body.telefono || '+56911112222';
+      modoForzado = body.modo === "cliente" ? "cliente" : "obrero";
+      texto = body.texto || "";
+      telefono = body.telefono || "+56911112222";
       proyectoForzadoId = body.proyectoId || undefined;
       clienteForzadoId = body.clienteId || undefined;
       obreroForzadoNombre = body.obreroNombre || undefined;
@@ -58,6 +70,33 @@ export async function POST(request: NextRequest) {
       historialPrevio = Array.isArray(body.historial) ? body.historial : [];
     }
 
+    empresaId = user.empresa_id;
+    if (proyectoForzadoId) {
+      const { data, error } = await client
+        .from("proyectos")
+        .select("id")
+        .eq("id", proyectoForzadoId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (error || !data)
+        return NextResponse.json(
+          { error: "La obra no está disponible para tu cuenta." },
+          { status: 403 },
+        );
+    }
+    if (clienteForzadoId) {
+      const { data, error } = await client
+        .from("clientes")
+        .select("id")
+        .eq("id", clienteForzadoId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (error || !data)
+        return NextResponse.json(
+          { error: "El cliente no está disponible para tu cuenta." },
+          { status: 403 },
+        );
+    }
     const resultado = await procesarEventoWhatsAppUnificado({
       telefonoRemitente: telefono,
       texto,
@@ -75,11 +114,7 @@ export async function POST(request: NextRequest) {
       success: true,
       ...resultado,
     });
-  } catch (err: any) {
-    console.error('Error en /api/webhook/whatsapp/simulador:', err);
-    return NextResponse.json(
-      { error: err.message || 'Error procesando mensaje de WhatsApp.' },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorJSON(err);
   }
 }

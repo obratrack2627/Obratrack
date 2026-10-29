@@ -25,6 +25,8 @@ import {
   X,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import { aiHeaders } from '@/lib/ai/client';
+import WhatsAppJefePanel from '@/components/WhatsAppJefePanel';
 import { dataService } from '@/lib/data-service';
 import {
   Cliente,
@@ -86,7 +88,7 @@ export default function ReportesWhatsAppPage() {
       id: 'wa-ob-init',
       remitente: 'asistente',
       texto:
-        '👷 *Canal Terreno ObraTrack IA Activo*\n\nEnvía desde aquí o desde tu WhatsApp:\n• 📸 *Fotos de avance* o materiales\n• 📊 *Progreso de partidas* (ej. "Radier listo al 100%")\n• 🚨 *Avisos, incidentes o accidentes*\n• 🔄 *Cambios pedidos por el cliente*\n• 🕒 *Asistencia* (ej. "Presente hoy a las 08:00")\n\nGemini lo leerá y lo guardará automáticamente en la obra correspondiente en Supabase.',
+        '👷 *Simulador de terreno*\n\nPrueba reportes desde aquí:\n• 📸 *Fotos de avance* o materiales\n• 📊 *Progreso de partidas* (ej. "Radier listo al 100%")\n• 🚨 *Avisos, incidentes o accidentes*\n• 🔄 *Cambios pedidos por el cliente*\n• 🕒 *Asistencia* (ej. "Presente hoy a las 08:00")\n\nGemini lo leerá y lo guardará automáticamente en la obra correspondiente en Supabase.',
       timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -132,10 +134,8 @@ export default function ReportesWhatsAppPage() {
 
   useEffect(() => {
     reloadLocalData();
-    // Asegurar sincronización inicial con Supabase Cloud
-    dataService.pushToCloudServer().then(() => {
-      dataService.pullFromCloudServer().then(() => reloadLocalData());
-    });
+    // Leer primero los cambios recibidos por teléfono; no subir una caché antigua.
+    dataService.pullFromCloudServer().then(() => reloadLocalData());
 
     fetch('/api/webhook/whatsapp')
       .then((r) => r.json())
@@ -170,7 +170,6 @@ export default function ReportesWhatsAppPage() {
   const handleSincronizarSupabaseManual = async () => {
     setIsSyncingCloud(true);
     try {
-      await dataService.pushToCloudServer();
       await dataService.pullFromCloudServer();
       reloadLocalData();
       showToast('☁️ Sincronización completa con Supabase PostgreSQL & Storage.');
@@ -207,9 +206,6 @@ export default function ReportesWhatsAppPage() {
     setIsLoading(true);
 
     try {
-      // Asegurar que las obras actuales estén en Supabase antes de procesar
-      await dataService.pushToCloudServer();
-
       const activeUser = dataService.getActiveUser();
       const obreroObj = usuarios.find((u) => u.id === obreroSeleccionadoId);
       const clienteObj = clientes.find((c) => c.id === clienteSeleccionadoId);
@@ -240,12 +236,15 @@ export default function ReportesWhatsAppPage() {
         formData.append('historial', JSON.stringify(hist));
       }
 
+      const {Authorization}=await aiHeaders();
       const res = await fetch('/api/webhook/whatsapp/simulador', {
         method: 'POST',
+        headers:{Authorization},
         body: formData,
       });
 
       const data = await res.json();
+      if(!res.ok || data.error) throw new Error(data.error || 'No se pudo procesar el reporte.');
 
       // Traer de inmediato desde Supabase todo lo que Gemini acaba de guardar
       await dataService.pullFromCloudServer();
@@ -280,7 +279,7 @@ export default function ReportesWhatsAppPage() {
       const errMsg: MensajeBurbujaWA = {
         id: 'err-' + Date.now(),
         remitente: 'asistente',
-        texto: '⚠️ Error de conexión procesando el mensaje de WhatsApp.',
+        texto: err instanceof Error ? err.message : 'No se pudo procesar el reporte.',
         timestamp: hora,
       };
       if (modoSimulador === 'obrero') {
@@ -348,6 +347,7 @@ export default function ReportesWhatsAppPage() {
       />
 
       <div className="p-4 md:p-6 max-w-7xl w-full mx-auto space-y-6">
+        <WhatsAppJefePanel />
         <PlanLockOverlay
           isLocked={activePlan === 'gratis'}
           featureName="WhatsApp Bidireccional IA (Obreros & Clientes)"
@@ -401,13 +401,13 @@ export default function ReportesWhatsAppPage() {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-kraft-100 dark:border-[#263040] pb-4">
                 <div>
                   <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#25D366]/15 text-[#25D366]">
-                    100% GRATIS PARA PROYECTO DE TÍTULO
+                    CONEXIÓN OFICIAL CON META
                   </span>
                   <h2 className="text-lg font-heading font-bold text-navy-900 dark:text-white mt-2">
                     Guía Rápida: Vincular Número de Prueba Oficial de Meta WhatsApp Cloud API
                   </h2>
                   <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                    Meta entrega gratis un número de prueba oficial (Test Number) que permite recibir y responder fotos y mensajes reales desde hasta 5 teléfonos (obreros y clientes) sin tarjeta de crédito.
+                    Empieza con el número de prueba de Meta y agrega tu teléfono personal como destinatario autorizado. La disponibilidad y condiciones dependen de Meta.
                   </p>
                 </div>
               </div>
@@ -437,20 +437,7 @@ export default function ReportesWhatsAppPage() {
                   <label className="text-xs font-bold text-navy-900 dark:text-white block">
                     2. Identificador de Verificación (Verify Token)
                   </label>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 bg-white dark:bg-[#141A23] px-3 py-2 rounded-lg border border-kraft-200 dark:border-[#263040] text-xs font-mono text-navy-900 dark:text-gray-200">
-                      obratrack_verify_2026
-                    </code>
-                    <button
-                      onClick={() => copiarTexto('obratrack_verify_2026', 'Verify Token')}
-                      className="p-2 rounded-lg bg-[#FF6A00] text-white hover:bg-[#E05E00]"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-gray-500">
-                    Pega este token exacto en Meta for Developers → WhatsApp → Configuración → Webhook y suscríbete al campo <strong>messages</strong>.
-                  </p>
+                  <p className="text-xs text-gray-600">Crea un valor privado en Vercel como WHATSAPP_WEBHOOK_VERIFY_TOKEN y utiliza ese mismo valor en Meta. No uses un token de ejemplo.</p>
                 </div>
               </div>
 
@@ -458,19 +445,23 @@ export default function ReportesWhatsAppPage() {
                 <p className="text-[#25D366] font-bold">
                   # 3. Variables en .env.local o Vercel Environment Variables:
                 </p>
-                <pre className="overflow-x-auto text-[11px] leading-relaxed text-gray-300">{`WHATSAPP_WEBHOOK_VERIFY_TOKEN=obratrack_verify_2026
-WHATSAPP_CLOUD_API_ACCESS_TOKEN=EAAG...tu_token_temporal_o_permanente_de_meta...
-WHATSAPP_CLOUD_API_PHONE_NUMBER_ID=123456789012345`}</pre>
+                <pre className="overflow-x-auto text-[11px] leading-relaxed text-gray-300">{`WHATSAPP_WEBHOOK_VERIFY_TOKEN=valor_privado_aleatorio
+WHATSAPP_APP_SECRET=secreto_de_la_app_meta
+WHATSAPP_CLOUD_API_ACCESS_TOKEN=token_de_meta
+WHATSAPP_CLOUD_API_PHONE_NUMBER_ID=id_del_numero_bot
+NEXT_PUBLIC_WHATSAPP_NUMBER=numero_del_bot_con_codigo_pais
+SUPABASE_SERVICE_ROLE_KEY=clave_privada_del_servidor
+GEMINI_API_KEY=clave_de_gemini`}</pre>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                 <div className="p-4 rounded-xl border border-[#25D366]/30 bg-[#25D366]/5 space-y-1.5">
                   <h4 className="font-heading font-bold text-navy-900 dark:text-white flex items-center gap-1.5">
                     <HardHat className="w-4 h-4 text-[#FF6A00]" />
-                    <span>¿Cómo reconoce al Obrero?</span>
+                    <span>¿Cómo reconoce al jefe o trabajador?</span>
                   </h4>
                   <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                    Registra el celular del obrero en <Link href="/equipo" className="text-[#FF6A00] font-bold underline">Equipo de Obra</Link> (o inicia el mensaje con <code>#obrero</code>). Cuando mande fotos, avances, accidentes, cambios o asistencia al número de prueba de WhatsApp, Gemini lo cargará directo en la obra y en Supabase.
+                    Registra el celular del obrero en <Link href="/equipo" className="text-[#FF6A00] font-bold underline">Equipo de Obra</Link> . Cuando mande fotos, avances, accidentes, cambios o asistencia al número de prueba de WhatsApp, El remitente debe estar registrado y asignado a la obra; las acciones se guardan en Supabase.
                   </p>
                 </div>
 
@@ -480,7 +471,7 @@ WHATSAPP_CLOUD_API_PHONE_NUMBER_ID=123456789012345`}</pre>
                     <span>¿Cómo reconoce al Cliente?</span>
                   </h4>
                   <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                    Registra el celular del mandante en <Link href="/clientes" className="text-[#FF6A00] font-bold underline">Clientes</Link> (o que indique su Nombre/RUT en el chat). Gemini recopilará en tiempo real el % de avance Gantt, pagos y fotos desde Supabase y se lo enviará a su WhatsApp.
+                    El simulador permite revisar las consultas de tus clientes. El número de gestión de ObraTrack reconoce a los usuarios registrados de tu empresa; la atención externa de clientes requiere una conexión separada.
                   </p>
                 </div>
               </div>

@@ -19,6 +19,7 @@ export async function generateGemini(
     image?: { mimeType: string; data: string };
     fetcher?: typeof fetch;
     timeoutMs?: number;
+    budgetMs?: number;
   } = {},
 ): Promise<string> {
   const key = getServerGeminiKey();
@@ -37,7 +38,7 @@ export async function generateGemini(
     );
   const models = Array.from(new Set([configured, 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']));
   const fetcher = options.fetcher || serverFetch;
-  const deadline = Date.now() + 45000;
+  const deadline = Date.now() + Math.min(options.budgetMs || 45000, 45000);
   for (let index = 0; index < models.length; index++) {
     const model = models[index];
     const remaining = deadline - Date.now();

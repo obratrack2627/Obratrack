@@ -62,9 +62,9 @@ export async function procesarEventoWhatsAppUnificado(
     sb.from('proyecto_trabajadores').select('*'),
   ]);
 
-  const todosProyectos = projsRes.data || [];
-  const todosClientes = clisRes.data || [];
-  const todosUsuarios = usersRes.data || [];
+  const todosProyectos = (projsRes.data || []).filter((p:any)=>p.empresa_id===input.empresaId);
+  const todosClientes = (clisRes.data || []).filter((p:any)=>p.empresa_id===input.empresaId);
+  const todosUsuarios = (usersRes.data || []).filter((p:any)=>p.empresa_id===input.empresaId);
   const relacionesPT = ptRes.data || [];
 
   const phoneKey = normalizePhoneKey(input.telefonoRemitente);
@@ -144,7 +144,7 @@ export async function procesarEventoWhatsAppUnificado(
     }
 
     const proyectosEmpresa = todosProyectos.filter(
-      (p: any) => !p.empresa_id || p.empresa_id === empresaId || todosProyectos.length <= 10
+      (p: any) => p.empresa_id === empresaId
     );
     const projIds = proyectosEmpresa.map((p: any) => p.id);
     const { data: actsData } =
@@ -188,9 +188,11 @@ export async function procesarEventoWhatsAppUnificado(
       imagenMimeType: input.imagenMimeType,
     });
 
-    const targetProyectoId = analisis.proyecto_id || proyectosEmpresa[0]?.id || null;
+    const targetProyectoId = analisis.proyecto_id || (proyectosEmpresa.length===1 ? proyectosEmpresa[0].id : null);
     const targetProyecto = proyectosEmpresa.find((p: any) => p.id === targetProyectoId) || null;
     const modulosActualizados: string[] = [];
+
+    if (!targetProyecto) return {rolDetectado:'obrero',respuestaTexto:'Indica el nombre de la obra para registrar el reporte.'};
 
     if (targetProyectoId) {
       // 1. Guardar siempre trazabilidad en Bitácora de Terreno (incluyendo foto si existe)
@@ -445,7 +447,7 @@ export async function procesarEventoWhatsAppUnificado(
 
   if (clienteMatch) {
     const obrasCliente = todosProyectos.filter((p: any) => p.cliente_id === clienteMatch.id);
-    const obrasParaFicha = obrasCliente.length > 0 ? obrasCliente : todosProyectos.slice(0, 1);
+    const obrasParaFicha = obrasCliente;
     const idsObras = obrasParaFicha.map((p: any) => p.id);
 
     const [actsRes, pagosRes, bitRes] =

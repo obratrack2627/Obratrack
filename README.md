@@ -151,3 +151,5 @@ Académica Guía: Teresa Jesús Tapia Soto.
 ## Configuración del chatbot
 
 Consulta [la guía del chatbot de IA](docs/CHATBOT_IA.md) para configurar Gemini, verificar la sesión de Supabase y probar cotizaciones y acciones. Las pruebas no modifican producción.
+
+Para gestionar desde el celular del jefe, consulta [WhatsApp personal → ObraTrack](docs/WHATSAPP_JEFE_OBRA.md).
