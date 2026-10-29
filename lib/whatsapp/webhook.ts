@@ -1,3 +1,4 @@
+import { aiErrorResponse } from "@/lib/ai/errors";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { serverFetch } from "@/lib/server-fetch";
@@ -82,6 +83,7 @@ export function createWhatsAppWebhook(
     }
     if (body.object !== "whatsapp_business_account")
       return NextResponse.json({ received: true });
+    let stage = "initialize";
     try {
       const sb = deps.client();
       const deadline = Date.now() + 45000;
@@ -96,10 +98,13 @@ export function createWhatsAppWebhook(
           for (const message of value.messages || []) {
             if (Date.now() > deadline)
               throw new Error("El lote continuará en el siguiente intento.");
+            stage = "process";
             const result = await deps.process(sb, message);
             if (!result.sent_at) {
+              stage = "send";
               await deps.send(message.from, result.respuesta);
               if (result.persistido) {
+                stage = "confirm_delivery";
                 const { error } = await sb
                   .from("whatsapp_mensajes")
                   .update({ sent_at: new Date().toISOString() })
@@ -110,10 +115,12 @@ export function createWhatsAppWebhook(
           }
         }
       return NextResponse.json({ received: true });
-    } catch {
+    } catch (error) {
+      const { code } = aiErrorResponse(error);
+      console.error("whatsapp_failure", { stage, code });
       // Meta reintentará; los mensajes guardados no vuelven a ejecutar pagos u otras acciones.
       return NextResponse.json(
-        { error: "No se pudo completar el mensaje. Se reintentará." },
+        { error: "No se pudo completar el mensaje. Se reintentará.", code, stage },
         { status: 503 },
       );
     }

@@ -1,3 +1,4 @@
+import { AIError } from "@/lib/ai/errors";
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateGemini } from "@/lib/ai/provider";
 import { canonicalPhone, downloadMetaMedia } from "./meta";
@@ -25,7 +26,7 @@ const workerActions = new Set([
 ]);
 const checked = (result: any) => {
   if (result.error)
-    throw new Error("No se pudo consultar la información de la obra.");
+    throw new AIError("WHATSAPP_DATABASE_READ", "No se pudo consultar la información de la obra.", 503);
   return result.data || [];
 };
 export function identifySender(users: any[], phone: string) {
@@ -219,6 +220,6 @@ export async function processPersonalMessage(
     p_deleted: plan.deleted,
   });
   if (error || !data?.message_id)
-    throw new Error("No se confirmó el guardado del mensaje.");
+    throw new AIError("WHATSAPP_DATABASE_SAVE", "No se confirmó el guardado del mensaje.", 503);
   return { ...data, persistido: true };
 }

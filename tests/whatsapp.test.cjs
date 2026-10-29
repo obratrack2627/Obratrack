@@ -353,3 +353,15 @@ test("el simulador también exige una sesión JWT real", async () => {
   );
   assert.equal((await POST(req)).status, 401);
 });
+
+test('el diagnóstico del webhook identifica cuota sin publicar mensajes internos', async () => {
+  setup();
+  const {AIError}=require('../lib/ai/errors.ts');
+  const handler=createWhatsAppWebhook({client:()=>({}),process:async()=>{throw new AIError('AI_RATE_LIMIT','sensitive-private-diagnostic',429);},send:async()=>{}});
+  const result=await handler(request(event([{id:'test'}])));
+  const body=await result.json();
+  assert.equal(result.status,503);
+  assert.equal(body.code,'AI_RATE_LIMIT');
+  assert.equal(body.stage,'process');
+  assert.ok(!JSON.stringify(body).includes('sensitive-private-diagnostic'));
+});

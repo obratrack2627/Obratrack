@@ -1,3 +1,4 @@
+import { AIError } from "@/lib/ai/errors";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { serverFetch } from "@/lib/server-fetch";
 
@@ -43,8 +44,11 @@ export async function sendMetaText(to: string, text: string) {
         }),
       },
     );
-    if (!res.ok)
-      throw new Error("No se pudo enviar la respuesta por WhatsApp.");
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const providerCode = Number.isInteger(body.error?.code) ? body.error.code : "UNKNOWN";
+      throw new AIError(`WHATSAPP_SEND_${providerCode}`, "No se pudo enviar la respuesta por WhatsApp.", 503);
+    }
   }
 }
 export async function downloadMetaMedia(id: string) {
