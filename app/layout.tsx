@@ -1,24 +1,31 @@
 import type { Metadata } from 'next';
-import { Space_Grotesk, Inter, IBM_Plex_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import AppShell from '@/components/AppShell';
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
+const spaceGrotesk = localFont({
+  src: './fonts/space-grotesk-latin.woff2',
   variable: '--font-space-grotesk',
-  weight: ['500', '600', '700'],
+  weight: '500 700',
+  display: 'swap',
 });
 
-const inter = Inter({
-  subsets: ['latin'],
+const inter = localFont({
+  src: './fonts/inter-latin.woff2',
   variable: '--font-inter',
-  weight: ['400', '500', '600', '700'],
+  weight: '400 700',
+  display: 'swap',
 });
 
-const ibmPlexMono = IBM_Plex_Mono({
-  subsets: ['latin'],
+const ibmPlexMono = localFont({
+  src: [
+    { path: './fonts/ibm-plex-mono-400-latin.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/ibm-plex-mono-500-latin.woff2', weight: '500', style: 'normal' },
+    { path: './fonts/ibm-plex-mono-600-latin.woff2', weight: '600', style: 'normal' },
+    { path: './fonts/ibm-plex-mono-700-latin.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-ibm-plex-mono',
-  weight: ['400', '500', '600', '700'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
