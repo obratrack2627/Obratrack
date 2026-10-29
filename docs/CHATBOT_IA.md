@@ -46,7 +46,7 @@ Los precios de Gemini son estimaciones, no consultas verificadas en tiempo real 
 - Registrar pagos, imprevistos y bitácora.
 - Registrar cambios, asistencia y documentos.
 - Agendar visitas e hitos y generar reportes.
-- Preparar mensajes de WhatsApp para que el usuario decida enviarlos. El chat no envía mensajes automáticamente.
+- Preparar mensajes o, ante una petición expresa de envío, encolar avisos reales a trabajadores por rol o nombre y opcionalmente por obra. El servidor registra los destinatarios y el procesador de WhatsApp envía con seguimiento por persona. Requiere las migraciones y configuración descritas en la guía de WhatsApp.
 
 Se conservan las restricciones del plan y los estados de los módulos existentes. Para asistencia, cambios, documentos y los campos V2 de reportes, el proyecto debe tener aplicada la migración existente `supabase/migrations_v2.sql`. No ejecutes `supabase/schema.sql` sobre datos existentes: contiene eliminación de tablas. El arranque y las pruebas no aplican SQL automáticamente. En esta configuración se activaron los tres módulos SQL y sus políticas por empresa usando la migración existente; no se aplicaron sus políticas públicas de Storage. Se verificaron inserción, lectura y aislamiento con una transacción de diagnóstico que terminó en ROLLBACK, sin conservar registros de prueba.
 
@@ -75,7 +75,7 @@ Validación automatizada: pruebas de lógica, rutas y navegador, TypeScript y co
 
 ## Canal del jefe por WhatsApp
 
-Consulta [la guía de WhatsApp personal → ObraTrack](WHATSAPP_JEFE_OBRA.md) para conectar el teléfono del jefe mediante el número del asistente y habilitar su bandeja de cotizaciones.
+Consulta [la guía de WhatsApp personal → ObraTrack](WHATSAPP_JEFE_OBRA.md) para conectar el teléfono del jefe, revisar registros y activar avisos al equipo. Crear una obra por este canal requiere nombre del cliente, nombre de la obra, presupuesto, correo y teléfono; el borrador se conserva mientras falten datos. Los demás campos son opcionales.
 
 ## Preparación de producción (octubre de 2026)
 

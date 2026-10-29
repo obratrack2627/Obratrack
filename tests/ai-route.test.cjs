@@ -260,3 +260,50 @@ test("el copiloto web respeta los mismos permisos de terreno que WhatsApp", asyn
   assert.equal(res.status, 403);
   assert.equal((await res.json()).code, "ACTION_FORBIDDEN");
 });
+
+test("el copiloto web encola el aviso real y no devuelve una acción para simular en el navegador", async () => {
+  fixture.tables.set("empresas", [{ id: "company-a", plan_id: "pro_ia" }]);
+  fixture.tables.set("usuarios", [
+    { id: "u", empresa_id: "company-a", rol: "admin", nombre: "Jefa" },
+    {
+      id: "worker",
+      empresa_id: "company-a",
+      rol: "terreno",
+      nombre: "Maestro",
+      telefono_whatsapp: "+56912345679",
+    },
+  ]);
+  fixture.handleRPC("encolar_aviso_equipo", async (p) => {
+    assert.deepEqual(p.p_destinatarios, ["worker"]);
+    assert.equal(p.p_empresa, "company-a");
+    return {
+      data: { id: "11111111-1111-4111-a111-111111111111" },
+      error: null,
+    };
+  });
+  const handler = createChatHandler({
+    authorize: authorized,
+    global: async () => ({
+      ...response,
+      accion: {
+        tipo: "enviar_mensaje_equipo",
+        roles_destino: ["terreno"],
+        mensaje: "Mañana a las 08:00.",
+      },
+    }),
+    project: async () => response,
+  });
+  const result = await handler(
+    makeRequest({
+      mensaje:
+        "Envía un aviso a los trabajadores de terreno: mañana a las 08:00",
+      request_id: "11111111-1111-4111-a111-111111111112",
+    }),
+  );
+  assert.equal(result.status, 200);
+  const body = await result.json();
+  assert.equal(body.accion, null);
+  assert.equal(body.accion_ejecutada.tipo, "enviar_mensaje_equipo");
+  assert.match(body.respuesta, /registrado/);
+  assert.equal(fixture.rpcCalls.length, 1);
+});

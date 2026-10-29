@@ -1336,7 +1336,7 @@ export class DataService {
           telefono: datos.cliente_telefono || '',
           email: datos.cliente_email || '',
           rut: datos.cliente_rut,
-          comuna: datos.comuna || 'Santiago',
+          comuna: datos.comuna || '',
           direccion: datos.direccion || '',
         });
         finalClienteId = nuevoCli.id;
@@ -1359,7 +1359,7 @@ export class DataService {
       {
         nombre: datos.nombre,
         descripcion: datos.descripcion || 'Creado automáticamente mediante copiloto de IA.',
-        comuna: datos.comuna || 'Santiago',
+        comuna: datos.comuna || '',
         direccion: datos.direccion || '',
         monto_cotizado: monto,
         fecha_inicio: fechaInicio,

@@ -625,7 +625,7 @@ export default function ProyectosPage() {
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="overflow-hidden">
                           <h3 className="font-heading font-bold text-base text-navy-900 leading-snug truncate">
-                            {proj.nombre}
+                            <Link href={`/proyectos/${proj.id}/gantt`} className="hover:text-obra-orange hover:underline focus-visible:underline">{proj.nombre}</Link>
                           </h3>
                           <div className="flex flex-col gap-0.5 mt-0.5">
                             <p className="text-xs text-gray-500 flex items-center gap-1 truncate">

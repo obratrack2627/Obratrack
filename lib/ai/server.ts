@@ -7,6 +7,8 @@ import { chatAsesorObrasGemini, chatAgenteProyectoGemini } from "@/lib/gemini";
 import { loadAIContext } from "./context";
 import { saveBudget } from "@/lib/presupuestos";
 import { checkActionPermissions } from "./permissions";
+import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
+import { randomUUID } from "node:crypto";
 
 export async function authorizeAI(request: NextRequest) {
   const bearer = request.headers
@@ -106,7 +108,50 @@ export function createChatHandler(
     try {
       const { client, user } = await deps.authorize(request);
       const body = await readAIRequest(request);
-      const { context, service } = await loadAIContext(client, user);
+      const { context, service, tables } = await loadAIContext(client, user);
+      const finish = async (result: any, currentId?: string) => {
+        const actions = checkActionPermissions(
+          user,
+          result.accion,
+          body.mensaje,
+        );
+        const broadcast = actions.find(
+          (a) => a.tipo === "enviar_mensaje_equipo",
+        );
+        if (!broadcast) return null;
+        if (service.getActivePlan() !== "pro_ia")
+          throw new AIError(
+            "PLAN_REQUIRED",
+            "Los avisos al equipo requieren el plan Pro IA.",
+            403,
+          );
+        const plan = prepareCampaign(
+          user,
+          broadcast,
+          tables.usuarios,
+          service.getProyectos(),
+          currentId,
+        );
+        const requestId =
+          typeof body.request_id === "string" &&
+          /^[a-f0-9-]{36}$/.test(body.request_id)
+            ? body.request_id
+            : randomUUID();
+        const action = await enqueueCampaign(
+          client,
+          user,
+          plan,
+          `web:${user.id}:${requestId}`,
+          "plataforma",
+        );
+        return NextResponse.json({
+          ...result,
+          respuesta: action.resultado_texto,
+          accion: null,
+          cotizacion: null,
+          accion_ejecutada: action,
+        });
+      };
       if (!["admin", "supervisor", "terreno"].includes(user.rol))
         throw new AIError(
           "ROLE_FORBIDDEN",
@@ -131,7 +176,8 @@ export function createChatHandler(
             cotizacion_actual: body.contexto_cotizacion || null,
           },
         });
-        checkActionPermissions(user, result.accion, body.mensaje);
+        const queued = await finish(result, projectId);
+        if (queued) return queued;
         if (result.cotizacion)
           await saveBudget(client, user, result.cotizacion, projectId);
         return NextResponse.json(result);
@@ -140,7 +186,8 @@ export function createChatHandler(
         ...context,
         cotizacion_actual: body.contexto_cotizacion || null,
       });
-      checkActionPermissions(user, result.accion, body.mensaje);
+      const queued = await finish(result);
+      if (queued) return queued;
       if (result.cotizacion) await saveBudget(client, user, result.cotizacion);
       return NextResponse.json(result);
     } catch (error) {

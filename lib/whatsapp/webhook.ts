@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { serverFetch } from "@/lib/server-fetch";
 import { processPersonalMessage } from "@/lib/whatsapp/assistant";
 import { sendMetaText, validMetaSignature } from "@/lib/whatsapp/meta";
+import { receiveDeliveryStatus } from "./outbox";
 
 export function whatsappConfigured() {
   return Boolean(
@@ -95,6 +96,10 @@ export function createWhatsAppWebhook(
             process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID
           )
             continue;
+          for (const status of value.statuses || []) {
+            stage = "delivery_status";
+            await receiveDeliveryStatus(sb, status);
+          }
           for (const message of value.messages || []) {
             if (Date.now() > deadline)
               throw new Error("El lote continuará en el siguiente intento.");
@@ -120,7 +125,11 @@ export function createWhatsAppWebhook(
       console.error("whatsapp_failure", { stage, code });
       // Meta reintentará; los mensajes guardados no vuelven a ejecutar pagos u otras acciones.
       return NextResponse.json(
-        { error: "No se pudo completar el mensaje. Se reintentará.", code, stage },
+        {
+          error: "No se pudo completar el mensaje. Se reintentará.",
+          code,
+          stage,
+        },
         { status: 503 },
       );
     }

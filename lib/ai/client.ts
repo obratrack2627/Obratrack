@@ -46,7 +46,7 @@ export async function requestAI(url: string, body: any) {
   const response = await fetch(url, {
     method: "POST",
     headers: await aiHeaders(),
-    body: JSON.stringify(body),
+    body: JSON.stringify({ request_id: crypto.randomUUID(), ...body }),
     signal: AbortSignal.timeout(65000),
   });
   let data: any;
@@ -75,7 +75,7 @@ export async function applyAIResponse(data: any, projectId?: string) {
     dataService.runLocalAI(() => dataService.saveCotizacion(cotizacion));
   return {
     texto: action?.warning || data.respuesta,
-    accion_ejecutada: action?.result,
+    accion_ejecutada: action?.result || data.accion_ejecutada,
     cotizacion_generada: cotizacion,
     pendiente_sincronizacion: action?.pendingId,
     sugerencias: data.sugerencias,

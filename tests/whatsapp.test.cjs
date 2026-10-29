@@ -130,7 +130,7 @@ function database() {
           cotizacion: p.p_cotizacion,
           acciones: p.p_acciones,
         };
-        db.whatsapp_mensajes.push(row);
+        db.whatsapp_mensajes.unshift(row);
       }
       return { data: row };
     },
@@ -615,4 +615,162 @@ test("diagnóstico privado distingue un token vencido y no expone el detalle de 
       new Response(JSON.stringify({ error: { code: 200 } }), { status: 403 }),
   );
   assert.equal(denied.estado, "permisos_pendientes");
+});
+
+test("crear una obra por WhatsApp no guarda nada hasta reunir los cinco campos obligatorios", async () => {
+  const sb = database();
+  const rpc = sb.rpc;
+  let params;
+  sb.rpc = async (name, p) => {
+    params = p;
+    return rpc(name, p);
+  };
+  let step = 0;
+  const deps = {
+    chat: async (_, __, context) => {
+      step++;
+      if (step === 1)
+        return {
+          respuesta: "Faltan datos",
+          accion: null,
+          cotizacion: null,
+          obra_propuesta: { nombre: "Patio", monto_cotizado: 1500000 },
+        };
+      assert.equal(context.creacion_obra_whatsapp.borrador.nombre, "Patio");
+      return {
+        respuesta: "Datos completos",
+        accion: null,
+        cotizacion: null,
+        obra_propuesta: {
+          cliente_nombre: "Ana Pérez",
+          cliente_email: "ana@example.test",
+          cliente_telefono: "+56987654321",
+        },
+      };
+    },
+  };
+  const first = await processPersonalMessage(
+    sb,
+    {
+      id: "create1",
+      from: "56912345678",
+      type: "text",
+      text: { body: "Crea una obra llamada Patio, presupuesto 1500000" },
+    },
+    deps,
+  );
+  assert.match(first.respuesta, /Nombre del cliente/);
+  assert.match(first.respuesta, /Correo/);
+  assert.match(first.respuesta, /Teléfono/);
+  assert.equal(params.p_acciones.tipo, "solicitar_datos_obra");
+  assert.equal(Object.values(params.p_changed).flat().length, 0);
+  const second = await processPersonalMessage(
+    sb,
+    {
+      id: "create2",
+      from: "56912345678",
+      type: "text",
+      text: {
+        body: "Cliente Ana Pérez, correo ana@example.test, teléfono +56987654321",
+      },
+    },
+    deps,
+  );
+  assert.match(second.respuesta, /Obra Creada/);
+  assert.equal(params.p_changed.proyectos.length, 1);
+  assert.equal(params.p_changed.proyectos[0].nombre, "Patio");
+  assert.equal(params.p_changed.proyectos[0].monto_cotizado, 1500000);
+  assert.equal(params.p_changed.clientes[0].email, "ana@example.test");
+  assert.equal(params.p_changed.clientes[0].telefono, "+56987654321");
+});
+
+test("el aviso de WhatsApp se registra atómicamente con sus destinatarios y el reintento no vuelve a encolarlo", async () => {
+  const sb = database();
+  sb.db.usuarios.push({
+    id: "worker",
+    empresa_id: "empresa1",
+    nombre: "Maestro",
+    rol: "terreno",
+    telefono_whatsapp: "+56912345679",
+  });
+  const rpc = sb.rpc;
+  let queued = 0;
+  sb.rpc = async (name, p) => {
+    assert.equal(name, "registrar_mensaje_aviso");
+    queued++;
+    assert.deepEqual(p.p_aviso.destinatarios, ["worker"]);
+    const result = await rpc("aplicar_lote_whatsapp", p.p_mensaje);
+    result.data.aviso_id = "11111111-1111-4111-a111-111111111111";
+    return result;
+  };
+  const deps = {
+    chat: async () => ({
+      respuesta: "Aviso preparado",
+      accion: {
+        tipo: "enviar_mensaje_equipo",
+        mensaje: "Mañana a las 08:00.",
+        roles_destino: ["terreno"],
+      },
+      cotizacion: null,
+    }),
+  };
+  const msg = {
+    id: "aviso1",
+    from: "56912345678",
+    type: "text",
+    text: { body: "Envía a terreno que mañana comenzamos a las 08:00" },
+  };
+  const result = await processPersonalMessage(sb, msg, deps);
+  await processPersonalMessage(sb, msg, deps);
+  assert.equal(queued, 1);
+  assert.match(result.respuesta, /en cola/);
+  assert.doesNotMatch(result.respuesta, /entregado|se envi[oó]/);
+});
+
+test("una petición expresa inicia el borrador aunque Gemini solo devuelva texto sin propuesta", async () => {
+  const sb = database();
+  const result = await processPersonalMessage(
+    sb,
+    {
+      id: "draft-without-model-proposal",
+      from: user.telefono_whatsapp,
+      type: "text",
+      text: { body: "Crea una obra llamada Terraza" },
+    },
+    {
+      chat: async () => ({
+        respuesta: "Dime los datos.",
+        accion: null,
+        cotizacion: null,
+        sugerencias: [],
+      }),
+    },
+  );
+  assert.equal(result.acciones.tipo, "solicitar_datos_obra");
+  assert.equal(result.acciones.detalles.borrador.nombre, "Terraza");
+  assert.equal(sb.db.proyectos.length, 0);
+  assert.match(result.respuesta, /Correo/);
+});
+
+test("una consulta sobre el avance de una obra no inicia una creación", async () => {
+  const sb = database();
+  const result = await processPersonalMessage(
+    sb,
+    {
+      id: "query-not-creation",
+      from: user.telefono_whatsapp,
+      type: "text",
+      text: { body: "Necesito saber el avance de la obra" },
+    },
+    {
+      chat: async () => ({
+        respuesta: "Indica la obra.",
+        accion: null,
+        cotizacion: null,
+        sugerencias: [],
+      }),
+    },
+  );
+  assert.equal(result.acciones, null);
+  assert.equal(result.respuesta, "Indica la obra.");
 });

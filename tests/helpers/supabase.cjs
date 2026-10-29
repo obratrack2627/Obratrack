@@ -34,6 +34,8 @@ function columns(table) {
 }
 const tables = new Map();
 const calls = [];
+const rpcCalls = [];
+const rpcHandlers = new Map();
 let failTable = "",
   failMode = "",
   remainingFailures = 0;
@@ -48,7 +50,25 @@ class Query {
     this.mode = "select";
     this.payload = null;
   }
-  select() {
+  select(_fields, options) {
+    if (options?.count) this.countRequested = true;
+    return this;
+  }
+  gte(key, value) {
+    this.filters.push((row) => row[key] >= value);
+    return this;
+  }
+  contains(key, value) {
+    this.filters.push((row) =>
+      Array.isArray(value)
+        ? value.every((v) => (row[key] || []).includes(v))
+        : Object.entries(value).every(([k, v]) => row[key]?.[k] === v),
+    );
+    return this;
+  }
+  range(start, end) {
+    this.start = start;
+    this.maximum = end - start + 1;
     return this;
   }
   eq(key, value) {
@@ -140,14 +160,31 @@ class Query {
           : [this.payload]
         : rows
             .filter((row) => this.filters.every((f) => f(row)))
-            .slice(0, this.maximum);
-    return { data: this.single ? result[0] || null : result, error: null };
+            .slice(
+              this.start || 0,
+              this.maximum === undefined
+                ? undefined
+                : (this.start || 0) + this.maximum,
+            );
+    return {
+      data: this.single ? result[0] || null : result,
+      error: null,
+      count: this.countRequested
+        ? rows.filter((row) => this.filters.every((f) => f(row))).length
+        : null,
+    };
   }
   then(resolve, reject) {
     return this.run().then(resolve, reject);
   }
 }
 const supabase = {
+  rpc: async (name, params) => {
+    rpcCalls.push({ name, params });
+    return rpcHandlers.has(name)
+      ? await rpcHandlers.get(name)(params)
+      : { data: null, error: { code: "NOT_CONFIGURED" } };
+  },
   from: (table) => new Query(table),
   auth: {
     getSession: async () => ({
@@ -162,9 +199,15 @@ module.exports = {
   supabaseAnonKey: "public-fixture-key",
   tables,
   calls,
+  rpcCalls,
+  handleRPC(name, handler) {
+    rpcHandlers.set(name, handler);
+  },
   reset() {
     tables.clear();
     calls.length = 0;
+    rpcCalls.length = 0;
+    rpcHandlers.clear();
     failTable = "";
     failMode = "";
     remainingFailures = 0;

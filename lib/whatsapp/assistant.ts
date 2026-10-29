@@ -6,6 +6,8 @@ import { isolatedState, planWhatsAppActions } from "./state";
 import { checkActionPermissions } from "@/lib/ai/permissions";
 import { formatCLP } from "@/lib/utils";
 import { storeEvidence, evidenceActions } from "./evidence";
+import { projectIntake } from "./project-intake";
+import { prepareCampaign } from "./campaigns";
 
 const childTables = [
   "actividades",
@@ -130,6 +132,10 @@ export async function processPersonalMessage(
       .limit(6),
   );
   let attachment: any = null;
+  const pendingProject =
+    history[0]?.acciones?.tipo === "solicitar_datos_obra"
+      ? history[0].acciones.detalles?.borrador
+      : null;
   // Una respuesta posterior puede indicar la obra de la última foto pendiente.
   if (
     message.type === "text" &&
@@ -181,6 +187,16 @@ export async function processPersonalMessage(
         clientes: tables.clientes,
         cotizacion_actual:
           history.find((m: any) => m.cotizacion)?.cotizacion || null,
+        creacion_obra_whatsapp: {
+          borrador: pendingProject,
+          requeridos: [
+            "cliente_nombre",
+            "nombre",
+            "monto_cotizado",
+            "cliente_email",
+            "cliente_telefono",
+          ],
+        },
         ...(image ? { foto_adjunta: true } : {}),
       },
       { budgetMs: 30000, timeoutMs: 20000, ...(image ? { image } : {}) },
@@ -203,14 +219,79 @@ export async function processPersonalMessage(
     };
   }
   let plan;
+  let campaign: ReturnType<typeof prepareCampaign> | undefined;
   let response = result.respuesta;
   try {
     let actions = checkActionPermissions(user, result.accion, text);
+    const create = actions.find((a) =>
+      ["crear_proyecto", "crear_proyecto_completo"].includes(a.tipo),
+    );
+    const normalized = text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    const wantsProject =
+      /\b(crea\w*|crees?|registra\w*|agrega\w*|abre|inicia\w*)\s+(?:(?:una?|la|el|nuev[oa])\s+){0,3}(obra|proyecto)\b|\b(obra|proyecto)\s+nuev[oa]\b/.test(
+        normalized,
+      ) &&
+      !/\bno\s+(?:(?:quiero|debes|necesito|que)\s+){0,3}(crea\w*|crees?|registra\w*|agrega\w*)/.test(
+        normalized,
+      );
+    if (create && !pendingProject && !wantsProject)
+      throw new AIError(
+        "CREATE_NOT_REQUESTED",
+        "Para crear una obra, solicítalo expresamente e indica sus datos.",
+        422,
+      );
+    let intake: ReturnType<typeof projectIntake> | undefined;
+    if (pendingProject || wantsProject || create) {
+      if (
+        pendingProject &&
+        /\b(cancela|cancelar|olvida|olvidar)\b/i.test(text)
+      ) {
+        actions = [];
+        response = "La creación de la obra quedó cancelada.";
+      } else {
+        intake = projectIntake(
+          user,
+          result.obra_propuesta || create,
+          pendingProject,
+          tables.clientes,
+          text,
+        );
+        actions = intake.question
+          ? []
+          : [
+              ...actions.filter(
+                (a) =>
+                  !["crear_proyecto", "crear_proyecto_completo"].includes(
+                    a.tipo,
+                  ),
+              ),
+              ...intake.actions,
+            ];
+        if (intake.question) response = intake.question;
+      }
+    }
+    const broadcast = actions.find((a) => a.tipo === "enviar_mensaje_equipo");
+    if (broadcast)
+      campaign = prepareCampaign(
+        user,
+        broadcast,
+        tables.usuarios,
+        service.getProyectos(),
+      );
     // Las URLs de evidencia provienen de Storage; el modelo no elige archivos.
     actions.forEach((a) => {
       delete a.foto_url;
     });
-    if (attachment) {
+    if (
+      attachment &&
+      !intake?.question &&
+      !actions.some((a) =>
+        ["crear_proyecto", "crear_proyecto_completo"].includes(a.tipo),
+      )
+    ) {
       const evidence = evidenceActions(
         actions,
         attachment,
@@ -221,13 +302,19 @@ export async function processPersonalMessage(
       attachment = evidence.attachment;
     }
     checkActionPermissions(user, actions, text);
-    plan = planWhatsAppActions(service, actions);
+    plan = planWhatsAppActions(
+      service,
+      actions.filter((a) => a.tipo !== "enviar_mensaje_equipo"),
+    );
+    if (intake?.question) plan.result = intake.result;
+    if (campaign) plan.result = campaign.result;
   } catch (error) {
     response = `No se guardaron cambios. ${(error as Error).message}`;
     plan = { changed: {}, deleted: {}, result: null };
     if (attachment) attachment.proyecto_id = null;
+    campaign = undefined;
   }
-  if (plan.result)
+  if (plan.result && plan.result.tipo !== "solicitar_datos_obra")
     response = `✅ Guardado en ObraTrack.\n${plan.result.titulo}\n${plan.result.resultado_texto || ""}${image ? `\n\n${result.respuesta}` : ""}`;
   if (result.cotizacion) response += `\n\n${quoteWhatsApp(result.cotizacion)}`;
   if (attachment)
@@ -237,7 +324,7 @@ export async function processPersonalMessage(
   if (analysisFailed)
     response +=
       "\nEl análisis de la imagen no estuvo disponible. La foto quedó conservada; puedes reenviarla para volver a analizarla.";
-  const { data, error } = await sb.rpc("aplicar_lote_whatsapp", {
+  const params = {
     p_id: message.id,
     p_empresa: user.empresa_id,
     p_actor: user.id,
@@ -249,7 +336,17 @@ export async function processPersonalMessage(
     p_changed: plan.changed,
     p_deleted: plan.deleted,
     p_adjunto: attachment,
-  });
+  };
+  const { data, error } = campaign
+    ? await sb.rpc("registrar_mensaje_aviso", {
+        p_mensaje: params,
+        p_aviso: {
+          mensaje: campaign.mensaje,
+          destinatarios: campaign.destinatarios,
+          proyecto_id: campaign.proyecto_id,
+        },
+      })
+    : await sb.rpc("aplicar_lote_whatsapp", params);
   if (error || !data?.message_id)
     throw new AIError(
       "WHATSAPP_DATABASE_SAVE",

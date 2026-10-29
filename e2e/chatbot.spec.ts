@@ -442,10 +442,11 @@ test("la bandeja del jefe muestra conexión pendiente y abre una cotización rec
   await expect(
     page.getByRole("link", { name: "Abrir WhatsApp de ObraTrack" }),
   ).toHaveCount(0);
-  await page.getByText("Mis mensajes de WhatsApp (1)").click();
   await page.getByRole("button", { name: "Ver cotización / PDF" }).click();
   await expect(
-    page.getByText("Radier por WhatsApp", { exact: true }),
+    page
+      .getByRole("dialog", { name: "Cotización generada" })
+      .getByText("Radier por WhatsApp", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Guardar PDF", exact: true }),
@@ -539,11 +540,161 @@ test("reportes muestra el canal real y las imágenes recibidas sin herramientas 
   await expect(
     page.getByRole("link", { name: "Abrir WhatsApp de ObraTrack" }),
   ).toHaveAttribute("href", "https://wa.me/15550000000");
-  await page.getByText("Mis mensajes de WhatsApp (1)").click();
   await expect(
     page.getByRole("img", { name: "Foto enviada por WhatsApp" }),
   ).toBeVisible();
   await expect(
     page.getByText(/simulador|modo desarrollador|fotos de prueba/i),
   ).toHaveCount(0);
+});
+
+test("el nombre de una obra abre su Carta Gantt", async ({ page }) => {
+  await setup(page, { respuesta: "Lista", accion: null }, true);
+  await page.goto("/proyectos");
+  const name = page.getByRole("link", { name: "Terraza", exact: true });
+  await expect(name).toHaveAttribute("href", "/proyectos/p-existing/gantt");
+  await name.click();
+  await expect(page).toHaveURL(/\/proyectos\/p-existing\/gantt$/);
+});
+
+test("reportes permite filtrar los registros y muestra autor, obra, fecha y detalle", async ({
+  page,
+}) => {
+  await setup(page, { respuesta: "Lista", accion: null });
+  await page.route("**/api/webhook/whatsapp", (r) =>
+    r.fulfill({ json: { cloud_api_configurada: true, numero: "15550000000" } }),
+  );
+  await page.route("**/api/whatsapp/mensajes*", (r) => {
+    const filtered =
+      new URL(r.request().url()).searchParams.get("tipo") === "registro";
+    return r.fulfill({
+      json: {
+        gestion: true,
+        total: filtered ? 1 : 2,
+        autores: [{ id: "worker", nombre: "Ana", rol: "terreno" }],
+        obras: [{ id: "p1", nombre: "Patio" }],
+        mensajes: [
+          {
+            message_id: "m1",
+            actor_id: "worker",
+            categoria: "registro",
+            created_at: "2026-10-29T15:00:00Z",
+            sent_at: "2026-10-29T15:00:02Z",
+            autor: { nombre: "Ana", rol: "terreno" },
+            obras: [{ id: "p1", nombre: "Patio" }],
+            texto: "Radier de Patio al 50 %",
+            respuesta: "Avance registrado",
+            acciones: {
+              tipo: "actualizar_avance",
+              titulo: "Avance actualizado",
+              resultado_texto: "Radier al 50 %",
+            },
+          },
+          ...(filtered
+            ? []
+            : [
+                {
+                  message_id: "m2",
+                  categoria: "consulta",
+                  created_at: "2026-10-29T16:00:00Z",
+                  texto: "¿Qué obras están activas?",
+                  respuesta: "Estas son tus obras",
+                },
+              ]),
+        ],
+      },
+    });
+  });
+  await page.goto("/reportes");
+  await expect(
+    page.getByText("Avance actualizado", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Patio", exact: true }),
+  ).toHaveAttribute("href", "/proyectos/p1/gantt");
+  await page.getByLabel("Tipo de registro").selectOption("registro");
+  await expect(
+    page.getByText("¿Qué obras están activas?", { exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByText("Ana · Terreno", { exact: false })).toBeVisible();
+  await page.getByText("Ver detalle", { exact: true }).click();
+  await expect(
+    page.getByText("Respuesta de ObraTrack", { exact: true }),
+  ).toBeVisible();
+});
+
+test("los avisos muestran el estado por destinatario y permiten reintentar solo los fallidos", async ({
+  page,
+}) => {
+  await setup(page, { respuesta: "Lista", accion: null });
+  let retried = false;
+  const id = "11111111-1111-4111-a111-111111111111";
+  await page.route("**/api/webhook/whatsapp", (r) =>
+    r.fulfill({ json: { cloud_api_configurada: true, numero: "15550000000" } }),
+  );
+  await page.route("**/api/whatsapp/mensajes", (r) =>
+    r.fulfill({ json: { mensajes: [], gestion: true, total: 0 } }),
+  );
+  await page.route("**/api/whatsapp/avisos*", (r) => {
+    if (r.request().method() === "POST") {
+      expect(r.request().postDataJSON().id).toBe(id);
+      retried = true;
+      return r.fulfill({ json: { reintentados: 1 } });
+    }
+    if (new URL(r.request().url()).searchParams.has("id"))
+      return r.fulfill({
+        json: {
+          envios: [
+            {
+              id: "d1",
+              nombre: "Ana",
+              rol: "terreno",
+              telefono: "56912345678",
+              estado: "aceptado",
+            },
+            {
+              id: "d2",
+              nombre: "Pedro",
+              rol: "supervisor",
+              telefono: "56987654321",
+              estado: retried ? "pendiente" : "fallido",
+              error_detalle: retried ? null : "Número no habilitado en Meta",
+            },
+          ],
+        },
+      });
+    return r.fulfill({
+      json: {
+        total: 1,
+        avisos: [
+          {
+            id,
+            destinatarios: 2,
+            created_at: "2026-10-29T16:00:00Z",
+            origen: "whatsapp",
+            mensaje: "Mañana comenzamos a las 08:00.",
+            estados: retried
+              ? { aceptado: 1, pendiente: 1 }
+              : { aceptado: 1, fallido: 1 },
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("/reportes");
+  await page.getByRole("tab", { name: "Avisos enviados", exact: true }).click();
+  await expect(
+    page.getByText("Aceptado por Meta: 1", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Ver destinatarios", exact: true })
+    .click();
+  await expect(
+    page.getByText("Número no habilitado en Meta", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Reintentar fallidos", exact: true })
+    .click();
+  await expect(page.getByText("Pendiente: 1", { exact: true })).toBeVisible();
+  expect(retried).toBe(true);
 });

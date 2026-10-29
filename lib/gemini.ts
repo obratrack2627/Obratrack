@@ -1,7 +1,7 @@
 import { generateGemini, getServerGeminiKey } from '@/lib/ai/provider';
 import { parseChatResponse, extractLegacyActions, normalizeQuote } from '@/lib/ai/protocol';
 import { chatPrompt, quotePrompt, isQuoteRequest } from '@/lib/ai/prompt';
-import { CHAT_RESPONSE_SCHEMA } from '@/lib/ai/schema';
+import { CHAT_RESPONSE_SCHEMA, WHATSAPP_RESPONSE_SCHEMA } from '@/lib/ai/schema';
 import { CotizacionEstimacion } from '@/types/database';
 
 export const DEFAULT_GEMINI_API_KEY = '';
@@ -75,7 +75,8 @@ export async function chatAsesorObrasGemini(
   contextoDB?: Record<string, any>, options: { budgetMs?: number; timeoutMs?: number; image?: {mimeType:string;data:string} } = {}
 ) {
   const prompt = isQuoteRequest(mensajeUsuario) ? quotePrompt(historial, mensajeUsuario, contextoDB) : chatPrompt(historial, mensajeUsuario, contextoDB);
-  const raw = await generateGemini(prompt, { json: true, schema: CHAT_RESPONSE_SCHEMA, ...options });
+  const schema = contextoDB?.creacion_obra_whatsapp ? WHATSAPP_RESPONSE_SCHEMA : CHAT_RESPONSE_SCHEMA;
+  const raw = await generateGemini(prompt, { json: true, schema, ...options });
   return parseChatResponse(raw);
 }
 

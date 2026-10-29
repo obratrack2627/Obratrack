@@ -481,6 +481,8 @@ export type TipoAccionIA =
   | 'registrar_documento'
   | 'generar_reporte'
   | 'generar_mensaje_whatsapp'
+  | 'enviar_mensaje_equipo'
+  | 'solicitar_datos_obra'
   | 'lote_acciones';
 
 export interface AccionAsistenteIA {
