@@ -443,3 +443,16 @@ test("una obra con los cinco datos y campos opcionales vacíos se puede ejecutar
   assert.equal(plan.changed.clientes[0].email, "ana@example.test");
   assert.equal(plan.changed.actividades?.length || 0, 0);
 });
+
+test("un rechazo real de permiso de Meta queda como fallido con el permiso requerido, sin reenvío ciego", async () => {
+  await processOutbox(fixture.supabase, {
+    template: async () => ({ status: "APPROVED" }),
+    send: async () => {
+      throw new DispatchError("131005");
+    },
+  });
+  const row = fixture.tables.get("whatsapp_envios")[0];
+  assert.equal(row.estado, "fallido");
+  assert.match(row.error_detalle, /whatsapp_business_messaging/);
+  assert.equal(row.reintentos, 0);
+});

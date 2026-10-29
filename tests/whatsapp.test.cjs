@@ -774,3 +774,29 @@ test("una consulta sobre el avance de una obra no inicia una creación", async (
   assert.equal(result.acciones, null);
   assert.equal(result.respuesta, "Indica la obra.");
 });
+
+test("leer el número en Meta no acredita un permiso de mensajería que falta en la credencial", async () => {
+  setup();
+  const { checkMetaConnection } = require("../lib/whatsapp/meta.ts");
+  const result = await checkMetaConnection(
+    async (url) =>
+      new Response(
+        JSON.stringify(
+          url.includes("/me/permissions")
+            ? {
+                data: [
+                  {
+                    permission: "whatsapp_business_management",
+                    status: "granted",
+                  },
+                ],
+              }
+            : { id: "fixture" },
+        ),
+        { status: 200 },
+      ),
+  );
+  assert.equal(result.estado, "permisos_pendientes");
+  assert.equal(result.permisos_mensajeria, "pendiente");
+  assert.match(result.mensaje, /whatsapp_business_messaging/);
+});

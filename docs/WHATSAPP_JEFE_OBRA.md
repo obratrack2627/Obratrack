@@ -88,3 +88,6 @@ Dentro de la ventana de atención se envía texto. Fuera de ella se utiliza la p
 Pruebas automatizadas: firma, número receptor, teléfonos ambiguos, aislamiento de solicitudes, permisos de terreno, lotes y reintentos. Prueba SQL real: proyecto y pago, idempotencia, rollback del lote, separación de empresas y RLS de conversaciones. Los registros de diagnóstico se revierten. La activación anterior consiguió generar una cotización real y Meta aceptó su envío. La entrega en el celular debe confirmarse por separado; el número de producción y un token estable de Meta siguen siendo requisitos comerciales pendientes.
 
 Administración y supervisión pueden consultar `GET /api/whatsapp/estado` con su JWT para verificar el acceso real a Meta. El diagnóstico distingue credencial inválida o vencida, permisos pendientes y fallo de conexión, sin exponer tokens ni cuerpos del proveedor.
+
+
+El diagnóstico privado también consulta `whatsapp_business_messaging`: poder leer el ID del número o gestionar plantillas no acredita permiso para enviar. Si Meta rechaza un envío con `131005`, el registro queda fallido y señala revisar el permiso de mensajería y la asignación del token a la cuenta y número correctos. El administrador debe corregir esa configuración antes de reintentar. En Reportes se distingue un permiso pendiente de un canal simplemente configurado.

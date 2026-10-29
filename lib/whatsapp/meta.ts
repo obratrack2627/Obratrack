@@ -40,11 +40,38 @@ export async function checkMetaConnection(fetcher: typeof fetch = serverFetch) {
       },
     );
     const body = await response.json().catch(() => null);
-    if (response.ok && body?.id === phone)
+    if (response.ok && body?.id === phone) {
+      // Leer el número no demuestra que la credencial pueda enviar mensajes.
+      let messaging: "concedido" | "pendiente" | "no_verificado" =
+        "no_verificado";
+      try {
+        const permissions = await fetcher(
+          `https://graph.facebook.com/${version()}/me/permissions`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(5000),
+          },
+        );
+        const result = await permissions.json().catch(() => null);
+        if (permissions.ok && Array.isArray(result?.data))
+          messaging = result.data.some(
+            (p: any) =>
+              p.permission === "whatsapp_business_messaging" &&
+              p.status === "granted",
+          )
+            ? "concedido"
+            : "pendiente";
+      } catch {}
       return {
-        estado: "disponible",
-        mensaje: "La conexión con Meta está disponible.",
+        estado:
+          messaging === "pendiente" ? "permisos_pendientes" : "disponible",
+        permisos_mensajeria: messaging,
+        mensaje:
+          messaging === "pendiente"
+            ? "La credencial puede consultar Meta, pero le falta whatsapp_business_messaging. Genera una credencial con ese permiso y acceso al número de ObraTrack."
+            : "El número está disponible en Meta. La entrega de cada aviso se confirma por separado.",
       };
+    }
     if (body?.error?.code === 190)
       return {
         estado: "renovar_conexion",

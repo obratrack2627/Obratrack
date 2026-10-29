@@ -350,7 +350,9 @@ export async function processOutbox(
               ? "Meta requiere una plantilla para iniciar esta conversación."
               : e.code === "190"
                 ? "La conexión con Meta necesita renovar su credencial."
-                : "No se pudo completar el envío. Revisa la conexión y los permisos.",
+                : ["131005", "10", "200"].includes(e.code)
+                  ? "Meta denegó el permiso para enviar mensajes. Revisa whatsapp_business_messaging y el acceso de la credencial al número de ObraTrack."
+                  : "No se pudo completar el envío. Revisa la conexión y los permisos.",
       });
     }
   };

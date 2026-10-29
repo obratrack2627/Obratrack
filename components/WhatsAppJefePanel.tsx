@@ -34,6 +34,7 @@ const dates = (value?: string) =>
     : "Fecha no disponible";
 export default function WhatsAppJefePanel() {
   const [tab, setTab] = useState<"registros" | "envios">("registros");
+  const [connection, setConnection] = useState<any>(null);
   const [status, setStatus] = useState<any>(null),
     [phone, setPhone] = useState(""),
     [staff, setStaff] = useState(false);
@@ -55,6 +56,13 @@ export default function WhatsAppJefePanel() {
     const user = dataService.getActiveUser();
     setPhone(user?.telefono_whatsapp || "");
     setStaff(["admin", "supervisor"].includes(user?.rol || ""));
+    if (["admin", "supervisor"].includes(user?.rol || "")) {
+      void aiHeaders()
+        .then((headers) => fetch("/api/whatsapp/estado", { headers }))
+        .then((r) => (r.ok ? r.json() : null))
+        .then(setConnection)
+        .catch(() => {});
+    }
     void fetch("/api/webhook/whatsapp")
       .then((r) => (r.ok ? r.json() : null))
       .then(setStatus)
@@ -115,11 +123,15 @@ export default function WhatsAppJefePanel() {
           <p className="text-sm text-gray-500 mt-1">
             Tu teléfono: {phone || "Pendiente en tu ficha"} ·{" "}
             <span>
-              {status
-                ? status.cloud_api_configurada
-                  ? "Canal configurado"
-                  : "Conexión con Meta pendiente"
-                : "Comprobando conexión…"}
+              {connection?.estado === "permisos_pendientes"
+                ? "Permisos de Meta pendientes"
+                : connection?.estado === "renovar_conexion"
+                  ? "Renovar conexión con Meta"
+                  : status
+                    ? status.cloud_api_configurada
+                      ? "Canal configurado"
+                      : "Conexión con Meta pendiente"
+                    : "Comprobando conexión…"}
             </span>
           </p>
         </div>

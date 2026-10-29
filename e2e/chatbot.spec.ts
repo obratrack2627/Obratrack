@@ -109,6 +109,13 @@ async function setup(
       body: JSON.stringify(reply),
     });
   });
+  await page.route("**/api/whatsapp/estado", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ estado: "disponible" }),
+    }),
+  );
   await page.route("**/api/supabase/sync*", (route) =>
     route.fulfill({
       status: 503,
