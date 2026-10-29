@@ -13,6 +13,7 @@ import {
   User,
   AlertTriangle,
   FolderOpen,
+  FileText,
   ClipboardCheck,
 } from 'lucide-react';
 import { Proyecto, Cliente } from '@/types/database';
@@ -70,11 +71,12 @@ export default function ProjectTabsHeader({
     },
     {
       id: 'finanzas',
-      label: 'Finanzas & Insumos',
+      label: 'Finanzas y materiales',
       href: `/proyectos/${proyecto.id}/finanzas`,
       icon: Wallet,
       badge: formatCLP(proyecto.monto_cotizado || 0),
     },
+    {id:'presupuestos',label:'Presupuestos',href:`/proyectos/${proyecto.id}/presupuestos`,icon:FileText},
     {
       id: 'cambios',
       label: 'Reclamos & Cambios',
@@ -193,7 +195,7 @@ export default function ProjectTabsHeader({
 
       {/* Fila Inferior: Pestañas de Navegación Rápida por Obra */}
       <div className="px-4 sm:px-6 flex items-center gap-1 overflow-x-auto no-scrollbar border-t border-kraft-100 dark:border-[#1E2530] pt-1">
-        {tabs.map((tab) => {
+        {tabs.filter(tab=>tab.id!=='presupuestos'||['admin','supervisor'].includes(dataService.getActiveUser()?.rol||'')).map((tab) => {
           const Icon = tab.icon;
           const isActive = pathname?.startsWith(tab.href);
 

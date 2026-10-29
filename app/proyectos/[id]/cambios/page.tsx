@@ -25,6 +25,7 @@ import {
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import { dataService } from '@/lib/data-service';
+import {aiHeaders} from '@/lib/ai/client';
 import {
   Proyecto,
   Cliente,
@@ -141,7 +142,7 @@ export default function ProyectoCambiosPage() {
     try {
       const res = await fetch('/api/ia/cambio-materiales', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await aiHeaders(),
         body: JSON.stringify({
           titulo,
           descripcion,
@@ -149,6 +150,7 @@ export default function ProyectoCambiosPage() {
         }),
       });
       const data = await res.json();
+      if(!res.ok||data.error) throw new Error(data.error||'No se pudo calcular el cambio.');
       if (data.success && Array.isArray(data.materiales)) {
         const sugeridos: MaterialRequeridoCambio[] = data.materiales.map((m: any) => {
           const cant = Number(m.cantidad) || 1;
@@ -172,7 +174,7 @@ export default function ProyectoCambiosPage() {
       }
     } catch (err) {
       console.error(err);
-      showToast('No se pudo conectar con Gemini en este momento.');
+      showToast(err instanceof Error?err.message:'No se pudo conectar con Gemini en este momento.');
     } finally {
       setIsCalculandoIA(false);
     }
@@ -537,7 +539,7 @@ export default function ProyectoCambiosPage() {
                             className="text-[11px] font-bold text-[#6B8F72] hover:underline flex items-center gap-1"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Cargados en Finanzas & Insumos</span>
+                            <span>Cargados en Finanzas y materiales</span>
                             <ArrowRight className="w-3 h-3" />
                           </Link>
                         )}

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { aiHeaders } from "@/lib/ai/client";
 import AIMessageTools from "./AIMessageTools";
 import { dataService } from "@/lib/data-service";
+import EvidenceImage from './EvidenceImage';
 
 export default function WhatsAppJefePanel() {
   const [status, setStatus] = useState<any>(null),
@@ -43,13 +44,12 @@ export default function WhatsAppJefePanel() {
           {!status
             ? "Comprobando conexión…"
             : status.cloud_api_configurada
-              ? "Configuración del servidor completa · falta comprobar el envío real"
+              ? "Canal configurado"
               : "Conexión con Meta pendiente"}
         </span>
       </div>
       <p className="text-sm">
-        Escribe desde tu teléfono al número de ObraTrack para cotizar, registrar
-        pagos y actualizar tus obras. Tu número registrado:{" "}
+        Envía mensajes, audios y fotos indicando la obra. Tu número registrado:{" "}
         <strong>{phone || "Pendiente en tu ficha de usuario"}</strong>.
       </p>
       {status?.cloud_api_configurada && status.numero && (
@@ -74,10 +74,6 @@ export default function WhatsAppJefePanel() {
           {error}
         </p>
       )}
-      <p className="text-xs text-gray-600">
-        Ejemplo: «Cotiza un radier de 20 m² en Maipú, de 10 cm de espesor, con
-        margen del 20 %».
-      </p>
       {messages.length > 0 && (
         <details>
           <summary className="cursor-pointer text-sm font-bold">
@@ -87,6 +83,7 @@ export default function WhatsAppJefePanel() {
             {messages.map((m) => (
               <article key={m.message_id} className="border-t pt-3 text-sm">
                 <p className="font-medium whitespace-pre-wrap">{m.texto}</p>
+                {m.adjunto?.path && <EvidenceImage src={'whatsapp-evidencias:'+m.adjunto.path} alt="Foto enviada por WhatsApp" className="mt-2 max-h-72 rounded-xl object-contain"/>}
                 <p className="whitespace-pre-wrap mt-1">{m.respuesta}</p>
                 <AIMessageTools
                   message={{ cotizacion_generada: m.cotizacion || undefined }}

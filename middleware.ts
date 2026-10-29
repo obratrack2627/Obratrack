@@ -7,7 +7,6 @@ const PUBLIC_PAGES = ['/login', '/auth/callback', '/actualizar-password', '/icon
 // Endpoints de API específicamente públicos (ej. webhooks externos de Meta)
 const PUBLIC_API_ROUTES = [
   '/api/webhook/whatsapp', // Webhook entrante de Meta WhatsApp Cloud API
-  '/api/auth/dev-sync',    // Endpoint de auto-sincronización de credenciales de desarrollador
 ];
 
 function isValidAuthToken(token?: string): boolean {
@@ -37,7 +36,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Permitir solo las rutas de API expresamente públicas
-  if (PUBLIC_API_ROUTES.some((route) => pathname.startsWith(route))) {
+  if (PUBLIC_API_ROUTES.some((route) => pathname === route)) {
     return NextResponse.next();
   }
 

@@ -26,7 +26,6 @@ import Logo from '@/components/Logo';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 import { signOutSupabase } from '@/lib/supabase/auth';
 import ThemeToggle from '@/components/ThemeToggle';
-import { isDeveloperUser } from '@/lib/auth-utils';
 
 interface SidebarProps {
   mobileOpen?: boolean;
@@ -83,11 +82,6 @@ export default function Sidebar() {
       window.removeEventListener('obratrack_cloud_synced', syncHandler);
     };
   }, [pathname]);
-
-  const handleRoleChange = (newRole: UserRole) => {
-    const updated = dataService.setActiveUserRole(newRole);
-    setActiveUser(updated);
-  };
 
   const currentPlanDetails = getPlanDetails(activePlan);
 
@@ -289,13 +283,10 @@ export default function Sidebar() {
         {/* Footer: Subscription Plan Widget & User Role Selector */}
         <div className="p-3.5 border-t border-[#2A2A2A] bg-black/30 space-y-3">
           
-          {/* Plan Selector Widget (Modo Desarrollador vs Usuario Regular) */}
+          {/* Suscripción de la empresa */}
           <div className="p-2.5 rounded-xl bg-[#2A2A2A]/90 border border-[#383838] space-y-1.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 flex items-center gap-1">
-                {isDeveloperUser(activeUser) && (
-                  <span className="text-[#FF6A00] font-black">DEV</span>
-                )}
                 <span>Suscripción:</span>
               </span>
               <span
@@ -311,16 +302,6 @@ export default function Sidebar() {
               </span>
             </div>
 
-            {isDeveloperUser(activeUser) ? (
-              <button
-                type="button"
-                onClick={() => setIsPlanModalOpen(true)}
-                className="w-full mt-1 py-1.5 px-2 bg-gradient-to-r from-[#FF6A00]/20 to-amber-500/20 hover:from-[#FF6A00] hover:to-[#E55F00] text-amber-300 hover:text-white border border-[#FF6A00]/40 rounded-lg text-[11px] font-heading font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <Zap className="w-3 h-3 text-[#FF6A00] group-hover:text-white" />
-                <span>Simular / Cambiar Plan</span>
-              </button>
-            ) : (
               <Link
                 href="/planes"
                 className="w-full mt-1 py-1.5 px-2 bg-white/10 hover:bg-[#FF6A00] hover:text-white text-gray-300 rounded-lg text-[11px] font-heading font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
@@ -328,19 +309,7 @@ export default function Sidebar() {
                 <Zap className="w-3 h-3 text-[#FF6A00] hover:text-white" />
                 <span>Ver Planes & Mejoras</span>
               </Link>
-            )}
-          </div>
 
-          {/* WhatsApp Webhook Active Badge */}
-          <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#2A2A2A]/80 border border-[#383838] text-[11px] font-mono text-gray-300">
-            <div className="flex items-center gap-1.5">
-              <PhoneCall className="w-3.5 h-3.5 text-[#6B8F72]" />
-              <span>WhatsApp Cloud API</span>
-            </div>
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#6B8F72] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#6B8F72]"></span>
-            </span>
           </div>
 
           {/* Active User info & Logout */}
@@ -355,9 +324,7 @@ export default function Sidebar() {
                     {activeUser?.nombre ? activeUser.nombre.split(' ')[0] : 'Usuario'}
                   </p>
                   <p className="text-[10px] text-[#FF6A00] font-mono capitalize">
-                    {isDeveloperUser(activeUser)
-                      ? 'Desarrollador (DEV)'
-                      : activeUser?.rol === 'admin'
+                    {activeUser?.rol === 'admin'
                       ? 'Contratista / Admin'
                       : activeUser?.rol === 'supervisor'
                       ? 'Supervisor'

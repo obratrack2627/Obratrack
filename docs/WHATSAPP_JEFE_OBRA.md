@@ -4,13 +4,13 @@ El jefe conserva su aplicación y su número personal. Envía instrucciones al *
 
 ## Estado y alcance
 
-El código prepara cotizaciones y ejecuta las mismas acciones del asistente web: obras, clientes, cuadrillas, actividades, materiales, avances, pagos, imprevistos, agenda, bitácora, asistencia, cambios y documentos. Las cotizaciones se responden por WhatsApp y quedan en **Reportes WhatsApp → Mis mensajes de WhatsApp**, con acceso a la vista PDF.
+El código prepara cotizaciones y ejecuta las mismas acciones del asistente web: obras, clientes, cuadrillas, actividades, materiales, avances, pagos, imprevistos, agenda, bitácora, asistencia, cambios y documentos. Las cotizaciones se responden por WhatsApp y quedan en **Reportes WhatsApp → Mis mensajes de WhatsApp**, con acceso a la vista PDF. También aparecen en **Obras y proyectos → Presupuestos**, con estados borrador, enviada, aprobada, rechazada o anulada y asociación opcional a una obra.
 
-Administradores y supervisores gestionan su empresa. Los perfiles de terreno ven solamente sus obras asignadas y pueden registrar avances, bitácora, su propia asistencia, solicitudes de cambio, reportes y documentos. Los números no registrados o duplicados no obtienen acceso. Las consultas de clientes se conservan en el simulador interno; este canal de gestión requiere una ficha de usuario.
+Administradores y supervisores gestionan su empresa. Los perfiles de terreno ven solamente sus obras asignadas y pueden registrar avances, bitácora, su propia asistencia, solicitudes de cambio, reportes y documentos. Los números no registrados o duplicados no obtienen acceso. Este canal de gestión requiere una ficha de usuario. Las rutas y herramientas de simulación fueron retiradas de producción.
 
-Se admiten texto y notas de voz transcritas con Gemini. Las fotos pueden analizarse para describir lo observado; **el archivo fotográfico no se conserva por este canal**. Una descripción de foto no equivale a guardar la evidencia original. No se admiten archivos PDF entrantes ni se envía un PDF automáticamente: la cotización se envía como texto y el PDF se obtiene desde la plataforma.
+Se admiten texto, notas de voz y fotos JPG, PNG y WebP de hasta 10 MB. El archivo original se guarda en el bucket privado `whatsapp-evidencias`. Gemini describe la imagen sin inferir porcentajes ni montos. Si la obra es inequívoca, se registra la foto en la bitácora; si hay varias, queda pendiente y el usuario puede indicar el nombre en su siguiente mensaje. El servidor verifica sesión, empresa y permisos antes de emitir un enlace de lectura de cinco minutos. No se admiten archivos PDF entrantes ni se envía un PDF automáticamente: la cotización se envía como texto y el PDF se obtiene desde la plataforma.
 
-El estado «configuración del servidor completa» comprueba variables presentes; no acredita un envío real ni la vigencia del token. La activación requiere terminar Meta y hacer la prueba desde el teléfono. La conexión no está activa mientras falten las credenciales.
+El estado «Canal configurado» comprueba variables presentes; no acredita un envío real ni la vigencia del token. La activación requiere terminar Meta y hacer la prueba desde el teléfono. La conexión no está activa mientras falten las credenciales.
 
 ## 1. Crear la prueba en Meta
 
@@ -55,7 +55,7 @@ El servidor valida la firma `X-Hub-Signature-256` con el App Secret y acepta sol
 
 En **Equipo de Obra**, registra el teléfono personal del jefe, con código de país, en su ficha de administrador o supervisor. Ejemplo chileno de formato: `+569XXXXXXXX`. Un mismo teléfono no puede identificar de forma ambigua a dos usuarios. La empresa necesita el plan Pro IA.
 
-La migración aditiva `supabase/whatsapp_jefe.sql` crea la bandeja privada y la función de guardado. En este proyecto ya fue aplicada y se verificó con fixtures revertidos. Para otro proyecto, aplicar también los módulos previos de `supabase/migrations_v2.sql` necesarios. No ejecutar `schema.sql` sobre datos existentes.
+Las migraciones aditivas `supabase/produccion_copiloto.sql` y `supabase/whatsapp_jefe.sql`, en ese orden y en una transacción, habilitan presupuestos, evidencias privadas, bandeja y función de guardado. En este proyecto ya fue aplicada y se verificó con fixtures revertidos. Para otro proyecto, aplicar también los módulos previos de `supabase/migrations_v2.sql` necesarios. No ejecutar `schema.sql` sobre datos existentes.
 
 ## 5. Prueba desde el teléfono
 
@@ -74,4 +74,4 @@ El motor prepara el lote entero en memoria aislada por solicitud. Una función S
 
 El envío de WhatsApp ocurre después del commit. Si falla, el webhook devuelve 503 y Meta puede reintentar usando la respuesta guardada. Si Meta recibió una respuesta pero se perdió su confirmación de envío, podría recibirse un texto repetido; las acciones no se vuelven a ejecutar. El procesamiento es síncrono con duración limitada; para tráfico alto se necesita una cola durable y un worker. No se afirma que esa infraestructura ya exista.
 
-Pruebas automatizadas: firma, número receptor, teléfonos ambiguos, aislamiento de solicitudes, permisos de terreno, lotes y reintentos. Prueba SQL real: proyecto y pago, idempotencia, rollback del lote, separación de empresas y RLS de conversaciones. Los registros de diagnóstico se revierten. **El envío real queda pendiente del alta de Meta y la prueba del teléfono.**
+Pruebas automatizadas: firma, número receptor, teléfonos ambiguos, aislamiento de solicitudes, permisos de terreno, lotes y reintentos. Prueba SQL real: proyecto y pago, idempotencia, rollback del lote, separación de empresas y RLS de conversaciones. Los registros de diagnóstico se revierten. La activación anterior consiguió generar una cotización real y Meta aceptó su envío. La entrega en el celular debe confirmarse por separado; el número de producción y un token estable de Meta siguen siendo requisitos comerciales pendientes.

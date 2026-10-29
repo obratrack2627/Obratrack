@@ -23,6 +23,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import EvidenceImage from '@/components/EvidenceImage';
 import GanttChart from '@/components/GanttChart';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
@@ -316,7 +317,7 @@ export default function ProyectoGanttPage() {
                           onClick={() => setPreviewPhoto(entry.foto_url || null)}
                           className="w-full h-32 rounded-lg border border-kraft-200 overflow-hidden relative group mt-2"
                         >
-                          <img
+                          <EvidenceImage
                             src={entry.foto_url}
                             alt="Evidencia fotográfica"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
@@ -701,7 +702,7 @@ export default function ProyectoGanttPage() {
             >
               <X className="w-5 h-5" />
             </button>
-            <img src={previewPhoto} alt="Evidencia fotográfica" className="w-full h-auto max-h-[75vh] object-contain rounded-lg" />
+            <EvidenceImage src={previewPhoto} alt="Evidencia fotográfica" className="w-full h-auto max-h-[75vh] object-contain rounded-lg" />
           </div>
         </div>
       )}

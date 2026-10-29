@@ -6,7 +6,9 @@ export async function GET(request: NextRequest) {
     const { client, user } = await authorizeAI(request);
     const { data, error } = await client
       .from("whatsapp_mensajes")
-      .select("message_id,texto,respuesta,cotizacion,created_at")
+      .select(
+        "message_id,texto,respuesta,cotizacion,adjunto,sent_at,created_at",
+      )
       .eq("empresa_id", user.empresa_id)
       .eq("actor_id", user.id)
       .order("created_at", { ascending: false })

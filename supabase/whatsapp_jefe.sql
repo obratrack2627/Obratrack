@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS public.whatsapp_mensajes (
   respuesta text NOT NULL,
   cotizacion jsonb,
   acciones jsonb,
+  adjunto jsonb,
   sent_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -17,9 +18,11 @@ CREATE POLICY whatsapp_lectura_empresa ON public.whatsapp_mensajes FOR SELECT TO
  USING (empresa_id = public.get_auth_empresa_id() AND actor_id IN (SELECT id FROM public.usuarios WHERE id=auth.uid()::text OR auth_user_id=auth.uid()::text));
 CREATE INDEX IF NOT EXISTS whatsapp_historial_idx ON public.whatsapp_mensajes(actor_id, created_at DESC);
 
+ALTER TABLE public.whatsapp_mensajes ADD COLUMN IF NOT EXISTS adjunto jsonb;
+DROP FUNCTION IF EXISTS public.aplicar_lote_whatsapp(text,text,text,text,text,text,jsonb,jsonb,jsonb,jsonb);
 CREATE OR REPLACE FUNCTION public.aplicar_lote_whatsapp(
  p_id text, p_empresa text, p_actor text, p_phone text, p_texto text,
- p_respuesta text, p_cotizacion jsonb, p_acciones jsonb, p_changed jsonb, p_deleted jsonb
+ p_respuesta text, p_cotizacion jsonb, p_acciones jsonb, p_changed jsonb, p_deleted jsonb, p_adjunto jsonb DEFAULT NULL
 ) RETURNS jsonb LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
  t text; r jsonb; item jsonb; old_empresa text; cols text; updates text; workers jsonb;
@@ -69,10 +72,14 @@ BEGIN
  FOR r IN SELECT value FROM jsonb_array_elements(COALESCE(p_deleted->'proyectos','[]'::jsonb)) LOOP
   DELETE FROM public.proyectos WHERE id=r->>'id' AND empresa_id=p_empresa;
  END LOOP;
- INSERT INTO public.whatsapp_mensajes(message_id,empresa_id,actor_id,sender_phone,texto,respuesta,cotizacion,acciones)
- VALUES(p_id,p_empresa,p_actor,p_phone,p_texto,p_respuesta,p_cotizacion,p_acciones) RETURNING * INTO cached;
+ IF p_adjunto->>'proyecto_id' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.proyectos WHERE id=p_adjunto->>'proyecto_id' AND empresa_id=p_empresa) THEN RAISE EXCEPTION 'Obra de evidencia no autorizada'; END IF;
+ IF p_adjunto->>'origen_message_id' IS NOT NULL AND p_adjunto->>'proyecto_id' IS NOT NULL THEN
+  UPDATE public.whatsapp_mensajes SET adjunto=p_adjunto WHERE message_id=p_adjunto->>'origen_message_id' AND empresa_id=p_empresa AND actor_id=p_actor AND adjunto->>'path'=p_adjunto->>'path';
+ END IF;
+ INSERT INTO public.whatsapp_mensajes(message_id,empresa_id,actor_id,sender_phone,texto,respuesta,cotizacion,acciones,adjunto)
+ VALUES(p_id,p_empresa,p_actor,p_phone,p_texto,p_respuesta,p_cotizacion,p_acciones,p_adjunto) RETURNING * INTO cached;
  RETURN to_jsonb(cached);
 END $$;
-REVOKE ALL ON FUNCTION public.aplicar_lote_whatsapp(text,text,text,text,text,text,jsonb,jsonb,jsonb,jsonb) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.aplicar_lote_whatsapp(text,text,text,text,text,text,jsonb,jsonb,jsonb,jsonb) TO service_role;
+REVOKE ALL ON FUNCTION public.aplicar_lote_whatsapp(text,text,text,text,text,text,jsonb,jsonb,jsonb,jsonb,jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.aplicar_lote_whatsapp(text,text,text,text,text,text,jsonb,jsonb,jsonb,jsonb,jsonb) TO service_role;
 NOTIFY pgrst, 'reload schema';

@@ -34,7 +34,8 @@ import {
   CATALOGO_MATERIALES_CHILE,
 } from './mock-data';
 import { supabaseService } from './supabase/supabase-service';
-import { isDeveloperUser, isDeveloperEmail } from './auth-utils';
+import {supabase} from './supabase/client';
+import { isDeveloperEmail } from './auth-utils';
 import { resolveEntity } from './ai/actions';
 import { roundLine } from './ai/protocol';
 
@@ -104,9 +105,30 @@ export class DataService {
 
   private isPullingCloud = false;
 
+  private dirtyKey() { return `obratrack_dirty_v1_${this.getActiveUser()?.empresa_id || ''}`; }
+  private syncNames: Record<string,string> = {
+    [KEYS.PROYECTOS]:'proyectos',[KEYS.CLIENTES]:'clientes',[KEYS.USUARIOS]:'usuarios',
+    [KEYS.ACTIVIDADES]:'actividades',[KEYS.PAGOS]:'pagos',[KEYS.MATERIALES_PROYECTO]:'materiales',
+    [KEYS.BITACORA]:'bitacora',[KEYS.IMPREVISTOS]:'imprevistos',[KEYS.RECLAMOS_CAMBIOS]:'reclamos_cambios',
+    [KEYS.DOCUMENTOS_OBRA]:'documentos',[KEYS.ASISTENCIAS_OBRA]:'asistencias',[KEYS.REPORTES]:'reportes_whatsapp',
+  };
+
   private setItem<T>(key: string, value: T): void {
     if (!this.isBrowser() && !this.isolatedStorage) return;
     try {
+      if(this.isBrowser() && !this.isolatedStorage && !this.isPullingCloud && !this.aiLocalOnly && Array.isArray(value)) {
+        const empresa=this.getActiveUser()?.empresa_id;
+        const base=Object.keys(this.syncNames).find(base=>key===`${base}_${empresa}`);
+        if(base) {
+          const previous=new Map(this.getItem<any[]>(key,[]).map(row=>[row.id,JSON.stringify(row)]));
+          const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
+          const name=this.syncNames[base]; pending[name] ||= {};
+          const retained=new Set(value.map(row=>row.id));
+          for(const id of Object.keys(pending[name])) if(!retained.has(id)) delete pending[name][id];
+          for(const row of value) if(row.id && previous.get(row.id)!==JSON.stringify(row)) pending[name][row.id]=row;
+          localStorage.setItem(this.dirtyKey(),JSON.stringify(pending));
+        }
+      }
       (this.isolatedStorage || localStorage).setItem(key, JSON.stringify(value));
       if (
         !this.isPullingCloud &&
@@ -262,39 +284,11 @@ export class DataService {
     }
   }
 
-  setActiveUserRole(rol: UserRole): Usuario {
-    const usuarios = this.getUsuarios();
-    const current = this.getActiveUser();
-    const user = { ...(current || usuarios[0]), rol };
-    this.setActiveUser(user);
-    return user;
-  }
-
-  // --- PLANES DE SUSCRIPCIÓN (MODO DESARROLLADOR VS USUARIO REGULAR) ---
+  // --- PLAN DE LA EMPRESA ---
   getActivePlan(): SubscriptionPlanId {
-    const active = this.getActiveUser();
-    const isDev = isDeveloperUser(active);
-    const defaultPlan: SubscriptionPlanId = isDev ? 'pro_ia' : 'gratis';
+    const defaultPlan: SubscriptionPlanId = 'gratis';
     const plan = this.getItem<SubscriptionPlanId>(this.getTenantKey(KEYS.PLAN), defaultPlan);
-    return isDev ? plan : (plan === 'pro_ia' || plan === 'pro' ? plan : 'gratis');
-  }
-
-  setActivePlan(plan: SubscriptionPlanId): SubscriptionPlanId {
-    const active = this.getActiveUser();
-    // Solo desarrolladores tienen la facultad de cambiar de plan a voluntad
-    if (!isDeveloperUser(active)) {
-      console.warn('Solo los desarrolladores autorizados pueden alternar planes de suscripción.');
-      return this.getActivePlan();
-    }
-
-    this.setItem(this.getTenantKey(KEYS.PLAN), plan);
-    if (active?.empresa_id) {
-      if (!this.aiLocalOnly) { supabaseService.updateEmpresaPlan(active.empresa_id, plan).catch(() => {}); }
-    }
-    if (this.isBrowser()) {
-      window.dispatchEvent(new CustomEvent('obratrack_plan_changed', { detail: plan }));
-    }
-    return plan;
+    return plan === 'pro_ia' || plan === 'pro' ? plan : 'gratis';
   }
 
   // --- CLIENTES ---
@@ -512,11 +506,10 @@ export class DataService {
     actividadesIniciales?: Array<{ nombre: string; dias: number }>
   ): Proyecto {
     const activeUser = this.getActiveUser();
-    const isDev = isDeveloperUser(activeUser);
     const plan = this.getActivePlan();
 
     // Verificación de límite del Plan Gratis (máx 1 obra activa)
-    if (plan === 'gratis' && !isDev) {
+    if (plan === 'gratis') {
       const activeProjects = this.getProyectos().filter((p) => p.estado === 'activo');
       if (activeProjects.length >= 1) {
         throw new Error(
@@ -894,7 +887,7 @@ export class DataService {
 
   /**
    * Aprueba una solicitud de cambio o incidencia e inyecta automáticamente:
-   * 1) Los materiales nuevos requeridos en Finanzas & Insumos (materiales_proyecto)
+   * 1) Los materiales nuevos requeridos en Finanzas y materiales (materiales_proyecto)
    * 2) El ajuste en el presupuesto cotizado (monto_cotizado) si aplica
    * 3) La extensión en días de la fecha de término estimada si aplica
    * 4) Un registro de trazabilidad en la Bitácora de la obra
@@ -1036,8 +1029,11 @@ export class DataService {
     formData.append('proyectoId', proyectoId);
     formData.append('bucket', bucket);
 
+    const {data,error}=await supabase.auth.getSession();
+    if(error||!data.session?.access_token) throw new Error('Inicia sesión para subir archivos.');
     const res = await fetch('/api/supabase/upload', {
       method: 'POST',
+      headers: {Authorization:`Bearer ${data.session.access_token}`},
       body: formData,
     });
 
@@ -1785,7 +1781,7 @@ export class DataService {
           detalles: { materiales: lista, total: totalGasto },
           resultado_texto: `${lista.map((m: any) => `${m.nombre} (${m.cantidad} ${m.unidad || 'u'})`).join(', ')} • Total: $${totalGasto.toLocaleString('es-CL')} CLP`,
           link_destino: `/proyectos/${proj.id}/finanzas`,
-          link_texto: 'Ver Finanzas & Materiales ➔',
+          link_texto: 'Ver Finanzas y materiales ➔',
         };
       }
 
@@ -1846,6 +1842,7 @@ export class DataService {
           autor_nombre: active?.nombre || 'Inspector de Obra',
           titulo: accion.titulo || 'Registro de terreno',
           nota: accion.nota || accion.descripcion || 'Sin observaciones.',
+          foto_url: accion.foto_url || undefined,
           tipo: (['avance', 'incidente', 'clima', 'entrega_material'].includes(accion.subtipo || accion.tipo_bitacora || '')
             ? (accion.subtipo || accion.tipo_bitacora)
             : 'avance') as 'avance' | 'incidente' | 'clima' | 'entrega_material',
@@ -2129,37 +2126,8 @@ export class DataService {
 
   // --- SINCRONIZACIÓN Y CARGA DESDE SUPABASE ---
   async loadTenantDataFromSupabase(empresaId?: string): Promise<{ success: boolean; message: string }> {
-    try {
-      const active = this.getActiveUser();
-      const targetEmpresaId = empresaId || active?.empresa_id || DEMO_EMPRESA_ID;
-
-      const data = await supabaseService.loadTenantData(targetEmpresaId);
-
-      this.setItem(this.getTenantKey(KEYS.PROYECTOS), data.proyectos);
-      this.setItem(this.getTenantKey(KEYS.CLIENTES), data.clientes);
-      this.setItem(
-        this.getTenantKey(KEYS.USUARIOS),
-        data.usuarios.length > 0 ? data.usuarios : active ? [active] : []
-      );
-      this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), data.actividades);
-      this.setItem(this.getTenantKey(KEYS.PAGOS), data.pagos);
-      this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), data.materiales);
-      this.setItem(this.getTenantKey(KEYS.BITACORA), data.bitacora);
-      this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), data.imprevistos);
-      this.setItem(this.getTenantKey(KEYS.AGENDA), data.agenda);
-
-      if (data.empresa?.plan_id) {
-        this.setItem(this.getTenantKey(KEYS.PLAN), data.empresa.plan_id);
-      }
-
-      return {
-        success: true,
-        message: `Datos sincronizados con Supabase (${data.proyectos.length} obras).`,
-      };
-    } catch (err: any) {
-      console.warn('Error cargando tenant desde Supabase:', err);
-      return { success: false, message: err.message || 'Error cargando datos desde Supabase.' };
-    }
+    if(empresaId && empresaId!==this.getActiveUser()?.empresa_id) return {success:false,message:'La empresa no corresponde a tu sesión.'};
+    return this.pullFromCloudServer();
   }
 
   private cloudSyncTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -2180,31 +2148,27 @@ export class DataService {
       const active = this.getActiveUser();
       const empresaId = active?.empresa_id || DEMO_EMPRESA_ID;
 
-      const payload = {
-        empresaId,
-        proyectos: this.getProyectos(),
-        clientes: this.getClientes(),
-        usuarios: this.getUsuarios(),
-        actividades: this.getActividades(),
-        pagos: this.getPagos(),
-        materiales: this.getMaterialesProyecto(),
-        bitacora: this.getBitacora(),
-        imprevistos: this.getImprevistos(),
-        reclamos_cambios: this.getReclamosCambios(),
-        documentos: this.getDocumentosObra(),
-        asistencias: this.getAsistencias(),
-        reportes_whatsapp: this.getReportes(),
-      };
-
+      if(!active?.empresa_id) return {success:false,message:'Inicia sesión para sincronizar.'};
+      const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
+      const captured=JSON.parse(JSON.stringify(pending));
+      const cambios=Object.fromEntries(Object.entries(captured).map(([key,rows])=>[key,Object.values(rows as object)]).filter(([,rows])=>(rows as any[]).length));
+      if(!Object.keys(cambios).length) return {success:true,message:'No hay cambios pendientes.'};
+      const {data,error}=await supabase.auth.getSession();
+      if(error||!data.session?.access_token) return {success:false,message:'Inicia sesión para sincronizar.'};
       const res = await fetch('/api/supabase/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json',Authorization:`Bearer ${data.session.access_token}` },
+        body: JSON.stringify({cambios}),
       });
 
       if (!res.ok) {
         return { success: false, message: 'Error enviando sincronización a Supabase.' };
       }
+      const remaining=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
+      for(const [key,rows] of Object.entries(captured) as [string,Record<string,any>][]) for(const [id,row] of Object.entries(rows)) {
+        if(JSON.stringify(remaining[key]?.[id])===JSON.stringify(row)) delete remaining[key][id];
+      }
+      localStorage.setItem(this.dirtyKey(),JSON.stringify(remaining));
       return { success: true, message: 'Sincronizado en vivo con Supabase Cloud.' };
     } catch (err: any) {
       return { success: false, message: err.message || 'Error de red con Supabase.' };
@@ -2212,10 +2176,7 @@ export class DataService {
   }
 
   /**
-   * Sincronización inteligente bidireccional con Supabase:
-   * - Si Supabase aún no tiene las obras iniciales del usuario, sube el estado actual para inicializarlo.
-   * - Si Supabase ya tiene obras/avances/reportes de WhatsApp/fotos/asistencias/cambios, fusiona los nuevos registros
-   *   para que todo lo enviado desde WhatsApp se vea de inmediato en la Web.
+   * Carga datos actuales sin reenviar la caché. Conserva únicamente las filas con ediciones pendientes.
    */
   async pullFromCloudServer(): Promise<{ success: boolean; message: string; updated?: boolean }> {
     if (!this.isBrowser()) return { success: false, message: 'No browser' };
@@ -2223,8 +2184,11 @@ export class DataService {
       const active = this.getActiveUser();
       const empresaId = active?.empresa_id || DEMO_EMPRESA_ID;
 
+      const {data,error}=await supabase.auth.getSession();
+      if(error||!data.session?.access_token) return {success:false,message:'Inicia sesión para sincronizar.'};
       const res = await fetch(`/api/supabase/sync?empresaId=${encodeURIComponent(empresaId)}`, {
         cache: 'no-store',
+        headers:{Authorization:`Bearer ${data.session.access_token}`},
       });
       if (!res.ok) {
         return { success: false, message: 'No se pudo consultar Supabase.' };
@@ -2233,81 +2197,74 @@ export class DataService {
       const cloud = await res.json();
       const localProjs = this.getProyectos();
 
-      // Si Supabase aún está vacío pero en la web hay obras, inicializamos Supabase automáticamente
-      if ((!cloud.proyectos || cloud.proyectos.length === 0) && localProjs.length > 0) {
-        await this.pushToCloudServer();
-        return { success: true, message: 'Base de datos Supabase inicializada con tus obras actuales.', updated: false };
-      }
-
-      const mergeById = <T extends { id: string }>(localArr: T[], cloudArr: T[], preferCloud = true): T[] => {
-        const map = new Map<string, T>();
-        if (preferCloud) {
-          localArr.forEach((item) => map.set(item.id, item));
-          cloudArr.forEach((item) => map.set(item.id, item));
-        } else {
-          cloudArr.forEach((item) => map.set(item.id, item));
-          localArr.forEach((item) => map.set(item.id, item));
-        }
-        return Array.from(map.values());
+      const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
+      const mergeById = <T extends {id:string}>(localArr:T[],cloudArr:T[],name:string):T[] => {
+        const table=pending[name];
+        const rows=new Map(cloudArr.map(row=>[row.id,row]));
+        for(const row of localArr) if(table?.[row.id]) rows.set(row.id,row);
+        return Array.from(rows.values());
       };
 
       this.isPullingCloud = true;
       try {
-        if (Array.isArray(cloud.proyectos) && cloud.proyectos.length > 0) {
-          this.setItem(this.getTenantKey(KEYS.PROYECTOS), mergeById(localProjs, cloud.proyectos));
+        if (['gratis','pro','pro_ia'].includes(cloud.plan_id)) this.setItem(this.getTenantKey(KEYS.PLAN),cloud.plan_id);
+        if (Array.isArray(cloud.agenda)) this.setItem(this.getTenantKey(KEYS.AGENDA),cloud.agenda);
+        if (Array.isArray(cloud.proyectos)) {
+          this.setItem(this.getTenantKey(KEYS.PROYECTOS), mergeById(localProjs, cloud.proyectos, 'proyectos'));
         }
-        if (Array.isArray(cloud.clientes) && cloud.clientes.length > 0) {
-          this.setItem(this.getTenantKey(KEYS.CLIENTES), mergeById(this.getClientes(), cloud.clientes));
+        if (Array.isArray(cloud.clientes)) {
+          this.setItem(this.getTenantKey(KEYS.CLIENTES), mergeById(this.getClientes(), cloud.clientes, 'clientes'));
         }
-        if (Array.isArray(cloud.usuarios) && cloud.usuarios.length > 0) {
-          this.setItem(this.getTenantKey(KEYS.USUARIOS), mergeById(this.getUsuarios(), cloud.usuarios));
+        if (Array.isArray(cloud.usuarios)) {
+          this.setItem(this.getTenantKey(KEYS.USUARIOS), mergeById(this.getUsuarios(), cloud.usuarios, 'usuarios'));
         }
-        if (Array.isArray(cloud.actividades) && cloud.actividades.length > 0) {
-          this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), mergeById(this.getActividades(), cloud.actividades));
+        if (Array.isArray(cloud.actividades)) {
+          this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), mergeById(this.getActividades(), cloud.actividades, 'actividades'));
         }
-        if (Array.isArray(cloud.pagos) && cloud.pagos.length > 0) {
-          this.setItem(this.getTenantKey(KEYS.PAGOS), mergeById(this.getPagos(), cloud.pagos));
+        if (Array.isArray(cloud.pagos)) {
+          this.setItem(this.getTenantKey(KEYS.PAGOS), mergeById(this.getPagos(), cloud.pagos, 'pagos'));
         }
-        if (Array.isArray(cloud.materiales) && cloud.materiales.length > 0) {
+        if (Array.isArray(cloud.materiales)) {
           this.setItem(
             this.getTenantKey(KEYS.MATERIALES_PROYECTO),
-            mergeById(this.getMaterialesProyecto(), cloud.materiales)
+            mergeById(this.getMaterialesProyecto(), cloud.materiales, 'materiales')
           );
         }
-        if (Array.isArray(cloud.bitacora) && cloud.bitacora.length > 0) {
-          this.setItem(this.getTenantKey(KEYS.BITACORA), mergeById(this.getBitacora(), cloud.bitacora));
+        if (Array.isArray(cloud.bitacora)) {
+          this.setItem(this.getTenantKey(KEYS.BITACORA), mergeById(this.getBitacora(), cloud.bitacora, 'bitacora'));
         }
-        if (Array.isArray(cloud.imprevistos) && cloud.imprevistos.length > 0) {
-          this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), mergeById(this.getImprevistos(), cloud.imprevistos));
+        if (Array.isArray(cloud.imprevistos)) {
+          this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), mergeById(this.getImprevistos(), cloud.imprevistos, 'imprevistos'));
         }
-        if (Array.isArray(cloud.reclamos_cambios) && cloud.reclamos_cambios.length > 0) {
+        if (Array.isArray(cloud.reclamos_cambios)) {
           this.setItem(
             this.getTenantKey(KEYS.RECLAMOS_CAMBIOS),
-            mergeById(this.getReclamosCambios(), cloud.reclamos_cambios)
+            mergeById(this.getReclamosCambios(), cloud.reclamos_cambios, 'reclamos_cambios')
           );
         }
-        if (Array.isArray(cloud.documentos) && cloud.documentos.length > 0) {
+        if (Array.isArray(cloud.documentos)) {
           this.setItem(
             this.getTenantKey(KEYS.DOCUMENTOS_OBRA),
-            mergeById(this.getDocumentosObra(), cloud.documentos)
+            mergeById(this.getDocumentosObra(), cloud.documentos, 'documentos')
           );
         }
-        if (Array.isArray(cloud.asistencias) && cloud.asistencias.length > 0) {
+        if (Array.isArray(cloud.asistencias)) {
           this.setItem(
             this.getTenantKey(KEYS.ASISTENCIAS_OBRA),
-            mergeById(this.getAsistencias(), cloud.asistencias)
+            mergeById(this.getAsistencias(), cloud.asistencias, 'asistencias')
           );
         }
-        if (Array.isArray(cloud.reportes_whatsapp) && cloud.reportes_whatsapp.length > 0) {
+        if (Array.isArray(cloud.reportes_whatsapp)) {
           this.setItem(
             this.getTenantKey(KEYS.REPORTES),
-            mergeById(this.getReportes(), cloud.reportes_whatsapp)
+            mergeById(this.getReportes(), cloud.reportes_whatsapp, 'reportes_whatsapp')
           );
         }
       } finally {
         this.isPullingCloud = false;
       }
 
+      if (['gratis','pro','pro_ia'].includes(cloud.plan_id)) window.dispatchEvent(new CustomEvent('obratrack_plan_changed',{detail:cloud.plan_id}));
       window.dispatchEvent(new Event('obratrack_cloud_synced'));
       return { success: true, message: 'Datos actualizados desde Supabase Cloud.', updated: true };
     } catch (err: any) {

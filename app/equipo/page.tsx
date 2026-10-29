@@ -447,16 +447,9 @@ export default function EquipoPage() {
                           <h3 className="font-heading font-bold text-sm text-navy-900 truncate">
                             {user.nombre}
                           </h3>
-                          {isDeveloperEmail(user.email) || user.is_dev ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md mt-0.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm border border-blue-400/40">
-                              <Terminal className="w-3 h-3 text-cyan-300" />
-                              <span>Desarrollador (DEV)</span>
-                            </span>
-                          ) : (
-                            <span className={`inline-block text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md mt-0.5 ${roleBadge}`}>
-                              {user.rol === 'admin' ? '🛡️ Contratista / Admin' : user.rol === 'supervisor' ? '📋 Supervisor' : '👷 Maestro Terreno'}
-                            </span>
-                          )}
+                          <span className={`inline-block text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md mt-0.5 ${roleBadge}`}>
+                            {user.rol === 'admin' ? 'Administrador' : user.rol === 'supervisor' ? 'Supervisor' : 'Terreno'}
+                          </span>
                         </div>
                       </div>
 
@@ -797,9 +790,7 @@ export default function EquipoPage() {
                   onChange={(e) => setEditRol(e.target.value as UserRole)}
                   className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-mono"
                 >
-                  {(isDeveloperEmail(editingUser?.email) || editingUser?.is_dev) && (
-                    <option value="admin">💻 Desarrollador (Control Total DEV Master)</option>
-                  )}
+
                   <option value="admin">🛡️ Administrador / Contratista General</option>
                   <option value="supervisor">📋 Supervisor (Control de Gantt y Aprobación)</option>
                   <option value="terreno">👷 Terreno (Maestro / Capataz - Reporta por WhatsApp)</option>

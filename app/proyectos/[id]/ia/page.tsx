@@ -44,7 +44,6 @@ import {
   AccionAsistenteIA,
 } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
-import { isDeveloperUser } from '@/lib/auth-utils';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
@@ -76,8 +75,7 @@ export default function ProyectoIAPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const isDev = isDeveloperUser(activeUser);
-  const hasAccess = isDev || activePlan === 'pro_ia';
+  const hasAccess = activePlan === 'pro_ia';
 
   const loadData = () => {
     if (!projectId) return;

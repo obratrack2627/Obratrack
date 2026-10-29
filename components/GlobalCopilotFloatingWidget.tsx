@@ -23,7 +23,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { dataService } from '@/lib/data-service';
 import { Usuario, SubscriptionPlanId, MensajeChatCotizador, AccionAsistenteIA } from '@/types/database';
-import { isDeveloperUser } from '@/lib/auth-utils';
 import { formatCLP, formatDate } from '@/lib/utils';
 import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
@@ -44,8 +43,7 @@ export default function GlobalCopilotFloatingWidget() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const isDev = isDeveloperUser(activeUser);
-  const hasAccess = isDev || activePlan === 'pro_ia';
+  const hasAccess = activePlan === 'pro_ia';
 
   useEffect(() => {
     const user = dataService.getActiveUser();
@@ -78,13 +76,13 @@ export default function GlobalCopilotFloatingWidget() {
           id: 'welcome-global',
           remitente: 'agente',
           texto:
-            '¡Hola! Soy tu **Copiloto Obrero IA Global**. Puedo ayudarte a gestionar todo el SaaS en segundos:\n\n• **Crear obras:** "Créame una obra de radier de 30m2 en La Florida por $3.2M"\n• **Gestionar cuadrillas:** "Agrega al maestro albañil Carlos al equipo"\n• **Agendar compromisos:** "Agenda visita técnica mañana a las 10:00"\n• **Cotizar y consultar precios de materiales en Chile**',
+            'Hola. Puedo preparar presupuestos, consultar tus obras y registrar cambios. Indica qué necesitas y el nombre de la obra.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           sugerencias: [
             'Crea una obra de radier en Maipú por $2.800.000',
             'Agrega al maestro Juan Pérez al equipo',
             'Agenda visita de inspección mañana a las 11:00',
-            '¿Dónde comprar cemento más barato hoy?',
+            'Cotiza un radier de 20 m² en Maipú',
           ],
         },
       ]);

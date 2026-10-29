@@ -56,7 +56,7 @@ const INITIAL_CHAT_MESSAGE: MensajeChatCotizador = {
   id: 'm-init',
   remitente: 'agente',
   texto:
-    '¡Hola! Soy tu **Copiloto Obrero IA de ObraTrack**, impulsado por **Google Gemini**.\n\nPuedo cotizar obras, asesorarte en costos de faena, y lo más importante: **controlar y actualizar la plataforma por ti**.\n\nPruébame pidiéndome cosas como:\n• **Crear obras:** "Créame una obra de radier para Carlos Henríquez en Peñalolén por 3.5 millones iniciando este lunes"\n• **Gestionar cuadrillas:** "Agrega al maestro Juan Pérez como albañil con teléfono +56912345678"\n• **Agendar compromisos:** "Agéndame una visita a terreno para el viernes a las 10:00 en Las Condes"',
+    'Hola. Puedo preparar presupuestos y ayudarte a gestionar obras, materiales, pagos y cuadrillas. ¿Qué necesitas?',
   timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
   sugerencias: [
     'Créame una obra de radier de 35m2 en Peñalolén por 3.2M',

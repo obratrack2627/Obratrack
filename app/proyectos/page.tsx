@@ -38,6 +38,7 @@ import {
   ClipboardCheck,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import PresupuestosPanel from '@/components/PresupuestosPanel';
 import { dataService } from '@/lib/data-service';
 import { Proyecto, Cliente, Usuario, SubscriptionPlanId, ProjectStatus } from '@/types/database';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
@@ -48,6 +49,7 @@ import GoogleMapsLocationPicker from '@/components/GoogleMapsLocationPicker';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 
 export default function ProyectosPage() {
+  const [tab,setTab]=useState<'obras'|'presupuestos'>('obras');
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -66,6 +68,7 @@ export default function ProyectosPage() {
   const [avanceTitulo, setAvanceTitulo] = useState('');
   const [avanceNota, setAvanceNota] = useState('');
   const [avanceFoto, setAvanceFoto] = useState('');
+  const [subiendoFoto,setSubiendoFoto]=useState(false);
   const [avanceTipo, setAvanceTipo] = useState<'avance' | 'incidente' | 'clima' | 'entrega_material'>('avance');
 
   // Filtros de búsqueda y estado
@@ -132,7 +135,8 @@ export default function ProyectosPage() {
       if (e.detail) setActivePlan(e.detail);
     };
     window.addEventListener('obratrack_plan_changed', handler);
-    return () => window.removeEventListener('obratrack_plan_changed', handler);
+    window.addEventListener('obratrack_cloud_synced', loadData);
+    return () => {window.removeEventListener('obratrack_plan_changed', handler);window.removeEventListener('obratrack_cloud_synced', loadData);};
   }, []);
 
   // Métricas globales
@@ -250,7 +254,7 @@ export default function ProyectosPage() {
 
   const handleCrearAvanceTerreno = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProjectForAvance || !avanceTitulo.trim()) return;
+    if (!selectedProjectForAvance || !avanceTitulo.trim() || subiendoFoto) return;
 
     const autor = activeUser?.nombre || 'Maestro de Faena';
 
@@ -357,6 +361,11 @@ export default function ProyectosPage() {
 
       <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
         
+        {!isTerreno && <div role="tablist" aria-label="Proyectos y obras" className="flex gap-3 border-b">
+          <button role="tab" aria-selected={tab==='obras'} onClick={()=>setTab('obras')} className={`px-4 py-3 font-semibold ${tab==='obras'?'border-b-2 border-obra-orange text-obra-orange':''}`}>Obras</button>
+          <button role="tab" aria-selected={tab==='presupuestos'} onClick={()=>setTab('presupuestos')} className={`px-4 py-3 font-semibold ${tab==='presupuestos'?'border-b-2 border-obra-orange text-obra-orange':''}`}>Presupuestos</button>
+        </div>}
+        {tab==='presupuestos'&&!isTerreno ? <PresupuestosPanel/> : <>
         {/* Banner Informativo si está en Plan Gratis y llegó al límite */}
         {activePlan === 'gratis' && proyectosActivos.length >= 1 && (
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
@@ -375,7 +384,7 @@ export default function ProyectosPage() {
               onClick={() => setIsPlanModalOpen(true)}
               className="px-3.5 py-1.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl shadow-sm transition-colors whitespace-nowrap"
             >
-              ⚡ Simular Plan Pro en Demo
+              Ver planes
             </button>
           </div>
         )}
@@ -867,6 +876,7 @@ export default function ProyectosPage() {
         })()}
         </div>
 
+        </>}
       </div>
 
       {/* Modal: + Nuevo Proyecto */}
@@ -1402,38 +1412,18 @@ export default function ProyectosPage() {
                   <div className="flex gap-2">
                     <input
                       type="url"
-                      placeholder="https://... o selecciona abajo una foto de prueba"
+                      placeholder="https://..."
                       value={avanceFoto}
                       onChange={(e) => setAvanceFoto(e.target.value)}
                       className="flex-1 px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-gray-900 dark:text-white font-mono focus:outline-none focus:border-[#FF6A00]"
                     />
                   </div>
 
-                  {/* Fotos rápidas de prueba para faena */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] font-mono">
-                    <span className="text-gray-400 shrink-0">Ejemplos:</span>
-                    <button
-                      type="button"
-                      onClick={() => setAvanceFoto('https://images.unsplash.com/photo-1541888946425-d0fbb18086f6?w=600&q=80')}
-                      className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-[#FF6A00]/10 text-gray-700 dark:text-gray-300 hover:text-[#FF6A00] rounded-lg transition-colors shrink-0"
-                    >
-                      🧱 Muro Estructura
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAvanceFoto('https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600&q=80')}
-                      className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-[#FF6A00]/10 text-gray-700 dark:text-gray-300 hover:text-[#FF6A00] rounded-lg transition-colors shrink-0"
-                    >
-                      🏗️ Radier & Enfierradura
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAvanceFoto('https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&q=80')}
-                      className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-[#FF6A00]/10 text-gray-700 dark:text-gray-300 hover:text-[#FF6A00] rounded-lg transition-colors shrink-0"
-                    >
-                      🔧 Instalaciones
-                    </button>
-                  </div>
+                  <input aria-label="Subir foto de avance" type="file" accept="image/jpeg,image/png,image/webp" disabled={subiendoFoto} onChange={async e=>{
+                    const file=e.target.files?.[0];if(!file||!selectedProjectForAvance)return;
+                    setSubiendoFoto(true);try{const uploaded=await dataService.uploadArchivoObra(file,selectedProjectForAvance.id,'bitacora-fotos');setAvanceFoto(uploaded.publicUrl);}catch(error){setToastMessage((error as Error).message);}finally{setSubiendoFoto(false);}
+                  }} className="text-sm w-full"/>
+                  {subiendoFoto&&<p role="status" className="text-xs">Subiendo foto…</p>}
 
                   {avanceFoto && (
                     <div className="relative w-full h-36 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-black">

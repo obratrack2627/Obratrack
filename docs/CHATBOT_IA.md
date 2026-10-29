@@ -19,7 +19,7 @@ El token personal `SUPABASE_ACCESS_TOKEN` sirve para administración de Supabase
 ## Flujo
 
 1. El usuario inicia sesión en la plataforma y escribe su solicitud.
-2. La API verifica el token de Supabase, el perfil y, en el chat por obra, la pertenencia de la obra a la empresa.
+2. La API verifica el token de Supabase, el perfil y, en el chat por obra, la pertenencia de la obra a la empresa y su asignación cuando el perfil es de terreno. Consulta datos actuales de SQL; descarta inventarios enviados desde el navegador.
 3. Gemini devuelve JSON con texto, acciones, sugerencias y una cotización opcional. La solicitud incluye un esquema con los tipos de acción y sus campos admitidos; el servidor vuelve a validar la respuesta.
 4. Se valida el lote completo antes de modificar registros locales. Una obra inexistente o ambigua no se sustituye por la primera de la lista.
 5. Los cambios se guardan en Supabase con la sesión del usuario, respetando claves externas. La confirmación se muestra después de que Supabase confirme el guardado.
@@ -35,7 +35,7 @@ La IA pregunta por información insuficiente y prepara materiales, mano de obra 
 
 **Ver cotización / PDF** muestra esos mismos datos, sin sustituirlos por una plantilla de porcelanato. Guardar PDF utiliza el diálogo nativo de impresión del navegador. El documento incluye los costos indirectos para que el detalle sume el neto. No se inventan destinatarios, teléfonos o un esquema de anticipos: las condiciones no proporcionadas quedan por acordar.
 
-Los precios de Gemini son estimaciones, no consultas verificadas en tiempo real a ferreterías. Las cotizaciones y el historial general conservan la persistencia local existente; no se creó una tabla nueva de cotizaciones en esta corrección.
+Los precios de Gemini son estimaciones, no consultas verificadas en tiempo real a ferreterías. Las cotizaciones nuevas se guardan en la tabla `presupuestos` desde el servidor antes de responder. Las cotizaciones anteriores de WhatsApp se incorporan mediante una migración aditiva. El historial general conserva su caché local. Obras y proyectos incluye una pestaña de presupuestos con búsqueda, filtros, estado, asociación a obra y PDF. Aprobar un presupuesto no crea una obra ni registra pagos.
 
 ## Acciones disponibles
 
@@ -71,8 +71,18 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:e2e
 
 Las pruebas de proveedor y rutas usan respuestas controladas. Las pruebas de ejecución comprueban los campos enviados contra el esquema del repositorio, y las del navegador interceptan API y Supabase. Ninguna modifica datos reales ni consume cuota de Gemini. Estas pruebas no sustituyen una validación con las credenciales reales ya aplicadas y una cuenta de usuario auténtica.
 
-Validación de esta corrección: 38 pruebas de lógica y rutas, 8 pruebas de navegador, TypeScript y compilación de producción. Además se comprobó Gemini con cotización real (cantidades, margen e IVA) y un plan de acciones sin ejecutarlo sobre registros de negocio. Supabase se verificó por separado con diagnóstico transaccional y ROLLBACK. El proveedor puede devolver indisponibilidad temporal; el chat muestra ese error para permitir reintentar. No se realizó una sesión de navegador con las credenciales de una cuenta real.
+Validación automatizada: pruebas de lógica, rutas y navegador, TypeScript y compilación de producción. Además se comprobó Gemini con cotización real (cantidades, margen e IVA) y un plan de acciones sin ejecutarlo sobre registros de negocio. Supabase se verificó por separado con diagnóstico transaccional y ROLLBACK. El proveedor puede devolver indisponibilidad temporal; el chat muestra ese error para permitir reintentar. No se realizó una sesión de navegador con las credenciales de una cuenta real.
 
 ## Canal del jefe por WhatsApp
 
 Consulta [la guía de WhatsApp personal → ObraTrack](WHATSAPP_JEFE_OBRA.md) para conectar el teléfono del jefe mediante el número del asistente y habilitar su bandeja de cotizaciones.
+
+## Preparación de producción (octubre de 2026)
+
+Se corrigió la ruta general: Next pasa un objeto de contexto como segundo argumento y este no debe confundirse con el ID de una obra. Una prueba reproduce ese contrato real de invocación.
+
+Se retiraron el simulador de WhatsApp, el endpoint de atención externa no conectado, las fotos de ejemplo y el selector de planes de demostración. También se retiró `auth/dev-sync`, que podía reemplazar credenciales sin verificar la contraseña anterior. La recuperación de acceso conserva Supabase Auth.
+
+La sincronización ahora requiere JWT real, obtiene la empresa de la sesión, usa el cliente con RLS y verifica las referencias antes de escribir. Envía únicamente filas editadas, conserva pendientes al fallar y no fuerza el plan ni vuelve a subir obras eliminadas durante una lectura. Los endpoints de carga de archivos y cálculo de materiales también requieren sesión. La sincronización web de varias tablas mantiene el límite de escrituras secuenciales descrito arriba.
+
+Aplicar `supabase/produccion_copiloto.sql` y después `supabase/whatsapp_jefe.sql` en una misma transacción. La función de WhatsApp conserva compatibilidad con llamadas anteriores mediante el parámetro opcional de adjunto. No ejecutar `schema.sql` en producción.

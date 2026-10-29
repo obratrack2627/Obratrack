@@ -194,29 +194,6 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
     authData = initialAttempt.data;
     authError = initialAttempt.error;
 
-    // Si es desarrollador y falló la contraseña o el usuario no estaba sincronizado, auto-sincronizar
-    if (authError && isDev) {
-      try {
-        const syncRes = await fetch('/api/auth/dev-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: resolvedEmail, password: pass }),
-        });
-        if (syncRes.ok) {
-          const retry = await supabase.auth.signInWithPassword({
-            email: resolvedEmail,
-            password: pass,
-          });
-          if (!retry.error) {
-            authData = retry.data;
-            authError = null;
-          }
-        }
-      } catch (syncErr) {
-        console.warn('Error en dev-sync fallback:', syncErr);
-      }
-    }
-
     if (authError) {
       return {
         success: false,

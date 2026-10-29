@@ -1,15 +1,15 @@
-'use client';
-import { supabase } from '@/lib/supabase/client';
-import { dataService } from '@/lib/data-service';
-import { executeAI } from './execute';
-import type { CotizacionEstimacion } from '@/types/database';
+"use client";
+import { supabase } from "@/lib/supabase/client";
+import { dataService } from "@/lib/data-service";
+import { executeAI } from "./execute";
+import type { CotizacionEstimacion } from "@/types/database";
 
 export async function aiHeaders() {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token)
-    throw new Error('Inicia sesión nuevamente para usar el asistente.');
+    throw new Error("Inicia sesión nuevamente para usar el asistente.");
   return {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     Authorization: `Bearer ${data.session.access_token}`,
   };
 }
@@ -44,7 +44,7 @@ export function aiContext() {
 }
 export async function requestAI(url: string, body: any) {
   const response = await fetch(url, {
-    method: 'POST',
+    method: "POST",
     headers: await aiHeaders(),
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(65000),
@@ -54,16 +54,18 @@ export async function requestAI(url: string, body: any) {
     data = await response.json();
   } catch {
     throw new Error(
-      'El servidor no devolvió una respuesta válida. Intenta nuevamente.',
+      "El servidor no devolvió una respuesta válida. Intenta nuevamente.",
     );
   }
   if (!response.ok || data.error)
-    throw new Error(data.error || 'No se pudo completar la solicitud.');
+    throw new Error(data.error || "No se pudo completar la solicitud.");
   if (!data.respuesta?.trim())
-    throw new Error('La IA no incluyó una respuesta válida.');
+    throw new Error("La IA no incluyó una respuesta válida.");
   return data;
 }
 export async function applyAIResponse(data: any, projectId?: string) {
+  // Una obra recién creada desde WhatsApp puede no existir todavía en la caché de esta pestaña.
+  if (data.accion) await dataService.pullFromCloudServer();
   const action = data.accion
     ? await executeAI(data.accion, projectId)
     : undefined;

@@ -341,27 +341,166 @@ test("verificación de Meta requiere token privado configurado, no un valor pred
   assert.equal((await getWhatsAppStatus(new NextRequest(url))).status, 403);
 });
 
-test("el simulador también exige una sesión JWT real", async () => {
-  const { POST } = require("../app/api/webhook/whatsapp/simulador/route.ts");
-  const req = new NextRequest(
-    "https://example.test/api/webhook/whatsapp/simulador",
-    {
-      method: "POST",
-      headers: { cookie: "obratrack_auth_token=inventado" },
-      body: "{}",
-    },
-  );
-  assert.equal((await POST(req)).status, 401);
+test("las rutas de simulación y recuperación de desarrollador se retiraron de producción", () => {
+  const fs = require("node:fs");
+  for (const path of [
+    "webhook/whatsapp/simulador",
+    "webhook/whatsapp/cliente",
+    "auth/dev-sync",
+  ])
+    assert.equal(
+      fs.existsSync(
+        require("node:path").join(__dirname, "../app/api", path, "route.ts"),
+      ),
+      false,
+    );
 });
 
-test('el diagnóstico del webhook identifica cuota sin publicar mensajes internos', async () => {
+test("el diagnóstico del webhook identifica cuota sin publicar mensajes internos", async () => {
   setup();
-  const {AIError}=require('../lib/ai/errors.ts');
-  const handler=createWhatsAppWebhook({client:()=>({}),process:async()=>{throw new AIError('AI_RATE_LIMIT','sensitive-private-diagnostic',429);},send:async()=>{}});
-  const result=await handler(request(event([{id:'test'}])));
-  const body=await result.json();
-  assert.equal(result.status,503);
-  assert.equal(body.code,'AI_RATE_LIMIT');
-  assert.equal(body.stage,'process');
-  assert.ok(!JSON.stringify(body).includes('sensitive-private-diagnostic'));
+  const { AIError } = require("../lib/ai/errors.ts");
+  const handler = createWhatsAppWebhook({
+    client: () => ({}),
+    process: async () => {
+      throw new AIError("AI_RATE_LIMIT", "sensitive-private-diagnostic", 429);
+    },
+    send: async () => {},
+  });
+  const result = await handler(request(event([{ id: "test" }])));
+  const body = await result.json();
+  assert.equal(result.status, 503);
+  assert.equal(body.code, "AI_RATE_LIMIT");
+  assert.equal(body.stage, "process");
+  assert.ok(!JSON.stringify(body).includes("sensitive-private-diagnostic"));
+});
+
+test("foto de WhatsApp conserva archivo y bitácora con la obra autorizada; reintentar no vuelve a subirla", async () => {
+  const sb = database();
+  sb.db.proyectos = [
+    {
+      id: "p1",
+      empresa_id: "empresa1",
+      nombre: "Radier",
+      estado: "activo",
+      monto_cotizado: 0,
+    },
+  ];
+  let uploads = 0;
+  const rpc = sb.rpc;
+  let params;
+  sb.rpc = async (name, p) => {
+    params = p;
+    const r = await rpc(name, p);
+    r.data.adjunto = p.p_adjunto;
+    return r;
+  };
+  const deps = {
+    media: async () => ({ mimeType: "image/jpeg", data: "cGhvdG8=" }),
+    store: async () => {
+      uploads++;
+      return {
+        path: "empresa1/jefe/photo.jpg",
+        proyecto_id: null,
+        origen_message_id: "photo1",
+      };
+    },
+    transcribe: async () => "Se observa un radier.",
+    chat: async () => ({
+      respuesta: "Foto recibida",
+      accion: null,
+      cotizacion: null,
+    }),
+  };
+  const message = {
+    id: "photo1",
+    from: "56912345678",
+    type: "image",
+    image: { id: "123", caption: "Avance en Radier" },
+  };
+  const first = await processPersonalMessage(sb, message, deps);
+  await processPersonalMessage(sb, message, deps);
+  assert.match(first.respuesta, /Foto guardada/);
+  assert.equal(params.p_adjunto.proyecto_id, "p1");
+  assert.equal(params.p_changed.bitacora_entradas.length, 1);
+  assert.equal(
+    params.p_changed.bitacora_entradas[0].foto_url,
+    "whatsapp-evidencias:empresa1/jefe/photo.jpg",
+  );
+  assert.equal(uploads, 1);
+});
+
+test("una foto sin obra identificable queda pendiente y se puede asociar en el mensaje siguiente", async () => {
+  const sb = database();
+  sb.db.proyectos = [
+    { id: "p1", empresa_id: "empresa1", nombre: "Radier" },
+    { id: "p2", empresa_id: "empresa1", nombre: "Terraza" },
+  ];
+  const rpc = sb.rpc;
+  let params;
+  sb.rpc = async (name, p) => {
+    params = p;
+    const r = await rpc(name, p);
+    r.data.adjunto = p.p_adjunto;
+    return r;
+  };
+  const deps = {
+    media: async () => ({ mimeType: "image/jpeg", data: "cGhvdG8=" }),
+    store: async () => ({
+      path: "empresa1/jefe/photo.jpg",
+      proyecto_id: null,
+      origen_message_id: "photo1",
+    }),
+    transcribe: async () => "Material acopiado.",
+    chat: async () => ({
+      respuesta: "Recibido",
+      accion: null,
+      cotizacion: null,
+    }),
+  };
+  const result = await processPersonalMessage(
+    sb,
+    { id: "photo1", from: "56912345678", type: "image", image: { id: "123" } },
+    deps,
+  );
+  assert.match(result.respuesta, /Indica el nombre/);
+  assert.equal(params.p_changed.bitacora_entradas.length, 0);
+  assert.equal(params.p_adjunto.proyecto_id, null);
+  await processPersonalMessage(
+    sb,
+    {
+      id: "answer1",
+      from: "56912345678",
+      type: "text",
+      text: { body: "Corresponde a Terraza" },
+    },
+    deps,
+  );
+  assert.equal(params.p_adjunto.proyecto_id, "p2");
+  assert.equal(params.p_changed.bitacora_entradas[0].proyecto_id, "p2");
+});
+
+test("fallo de Storage no confirma la recepción de una foto sin guardar", async () => {
+  const sb = database();
+  await assert.rejects(
+    processPersonalMessage(
+      sb,
+      {
+        id: "photo1",
+        from: "56912345678",
+        type: "image",
+        image: { id: "123" },
+      },
+      {
+        media: async () => ({}),
+        store: async () => {
+          throw Error("Storage failed");
+        },
+        chat: async () => {
+          throw Error("no debe llamarse");
+        },
+      },
+    ),
+    /Storage failed/,
+  );
+  assert.equal(sb.commits, 0);
 });
