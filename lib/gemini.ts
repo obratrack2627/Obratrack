@@ -72,7 +72,7 @@ export const extraerAccionesDeTexto = extractLegacyActions;
  */
 export async function chatAsesorObrasGemini(
   historial: { rol: 'user' | 'model'; texto: string }[], mensajeUsuario: string,
-  contextoDB?: Record<string, any>, options: { budgetMs?: number; timeoutMs?: number } = {}
+  contextoDB?: Record<string, any>, options: { budgetMs?: number; timeoutMs?: number; image?: {mimeType:string;data:string} } = {}
 ) {
   const prompt = isQuoteRequest(mensajeUsuario) ? quotePrompt(historial, mensajeUsuario, contextoDB) : chatPrompt(historial, mensajeUsuario, contextoDB);
   const raw = await generateGemini(prompt, { json: true, schema: CHAT_RESPONSE_SCHEMA, ...options });

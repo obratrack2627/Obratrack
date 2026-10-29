@@ -504,3 +504,115 @@ test("fallo de Storage no confirma la recepción de una foto sin guardar", async
   );
   assert.equal(sb.commits, 0);
 });
+
+test("la foto y su pregunta llegan juntas a Gemini en una sola llamada, sin perder la respuesta al guardarla", async () => {
+  const sb = database();
+  sb.db.proyectos = [{ id: "p1", empresa_id: "empresa1", nombre: "Radier" }];
+  let calls = 0;
+  const photo = { mimeType: "image/jpeg", data: "cGhvdG8=" };
+  const result = await processPersonalMessage(
+    sb,
+    {
+      id: "direct-photo",
+      from: "56912345678",
+      type: "image",
+      image: { id: "123", caption: "¿Qué problema se ve en Radier?" },
+    },
+    {
+      media: async () => photo,
+      store: async () => ({
+        path: "empresa1/jefe/direct.jpg",
+        proyecto_id: null,
+        origen_message_id: "direct-photo",
+      }),
+      transcribe: async () => {
+        throw Error("No se debe usar una descripción intermedia");
+      },
+      chat: async (_, text, context, options) => {
+        calls++;
+        assert.equal(text, "¿Qué problema se ve en Radier?");
+        assert.equal(context.foto_adjunta, true);
+        assert.deepEqual(options.image, photo);
+        assert.ok(options.timeoutMs > 5000);
+        return {
+          respuesta:
+            "Se observa una fisura; no puedo determinar su profundidad desde la foto.",
+          accion: null,
+          cotizacion: null,
+        };
+      },
+    },
+  );
+  assert.equal(calls, 1);
+  assert.match(result.respuesta, /Se observa una fisura/);
+  assert.match(result.respuesta, /Foto guardada/);
+});
+
+test("si Gemini agota el tiempo se conserva la foto y se avisa sin inventar observaciones ni costos", async () => {
+  const sb = database();
+  sb.db.proyectos = [{ id: "p1", empresa_id: "empresa1", nombre: "Radier" }];
+  const rpc = sb.rpc;
+  let params;
+  sb.rpc = async (name, p) => {
+    params = p;
+    return rpc(name, p);
+  };
+  const { AIError } = require("../lib/ai/errors.ts");
+  const result = await processPersonalMessage(
+    sb,
+    {
+      id: "slow-photo",
+      from: "56912345678",
+      type: "image",
+      image: { id: "123", caption: "Foto de Radier" },
+    },
+    {
+      media: async () => ({ mimeType: "image/jpeg", data: "cGhvdG8=" }),
+      store: async () => ({
+        path: "empresa1/jefe/slow.jpg",
+        proyecto_id: null,
+        origen_message_id: "slow-photo",
+      }),
+      chat: async () => {
+        throw new AIError("AI_TIMEOUT", "private-provider-detail", 503);
+      },
+    },
+  );
+  assert.equal(result.persistido, true);
+  assert.equal(params.p_adjunto.analisis_pendiente, true);
+  assert.equal(params.p_changed.bitacora_entradas.length, 1);
+  assert.equal(params.p_changed.pagos.length, 0);
+  assert.equal(params.p_changed.imprevistos.length, 0);
+  assert.match(result.respuesta, /análisis de la imagen no estuvo disponible/);
+  assert.doesNotMatch(result.respuesta, /private-provider-detail/);
+});
+
+test("diagnóstico privado distingue un token vencido y no expone el detalle de Meta", async () => {
+  setup();
+  const { checkMetaConnection } = require("../lib/whatsapp/meta.ts");
+  const result = await checkMetaConnection(
+    async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 190,
+            error_subcode: 463,
+            message: "private-meta-token-detail",
+          },
+        }),
+        { status: 401 },
+      ),
+  );
+  assert.equal(result.estado, "renovar_conexion");
+  assert.doesNotMatch(JSON.stringify(result), /private-meta-token-detail/);
+  const good = await checkMetaConnection(
+    async () =>
+      new Response(JSON.stringify({ id: "fixture" }), { status: 200 }),
+  );
+  assert.equal(good.estado, "disponible");
+  const denied = await checkMetaConnection(
+    async () =>
+      new Response(JSON.stringify({ error: { code: 200 } }), { status: 403 }),
+  );
+  assert.equal(denied.estado, "permisos_pendientes");
+});

@@ -23,6 +23,51 @@ export function validMetaSignature(
   );
 }
 const version = () => process.env.WHATSAPP_GRAPH_API_VERSION || "v23.0";
+export async function checkMetaConnection(fetcher: typeof fetch = serverFetch) {
+  const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
+  const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
+  if (!token || !phone)
+    return {
+      estado: "sin_configurar",
+      mensaje: "La conexión de WhatsApp está pendiente de configurar.",
+    };
+  try {
+    const response = await fetcher(
+      `https://graph.facebook.com/${version()}/${phone}?fields=id`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    const body = await response.json().catch(() => null);
+    if (response.ok && body?.id === phone)
+      return {
+        estado: "disponible",
+        mensaje: "La conexión con Meta está disponible.",
+      };
+    if (body?.error?.code === 190)
+      return {
+        estado: "renovar_conexion",
+        mensaje:
+          "La credencial de WhatsApp venció o dejó de ser válida. El administrador debe renovarla.",
+      };
+    if ([10, 200].includes(body?.error?.code))
+      return {
+        estado: "permisos_pendientes",
+        mensaje:
+          "La conexión de WhatsApp necesita revisar los permisos en Meta.",
+      };
+    return {
+      estado: "no_disponible",
+      mensaje: "Meta no pudo confirmar la conexión de WhatsApp.",
+    };
+  } catch {
+    return {
+      estado: "no_verificado",
+      mensaje: "No se pudo comprobar la conexión de WhatsApp en este momento.",
+    };
+  }
+}
 export async function sendMetaText(to: string, text: string) {
   const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
   const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
@@ -46,8 +91,14 @@ export async function sendMetaText(to: string, text: string) {
     );
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      const providerCode = Number.isInteger(body.error?.code) ? body.error.code : "UNKNOWN";
-      throw new AIError(`WHATSAPP_SEND_${providerCode}`, "No se pudo enviar la respuesta por WhatsApp.", 503);
+      const providerCode = Number.isInteger(body.error?.code)
+        ? body.error.code
+        : "UNKNOWN";
+      throw new AIError(
+        `WHATSAPP_SEND_${providerCode}`,
+        "No se pudo enviar la respuesta por WhatsApp.",
+        503,
+      );
     }
   }
 }
