@@ -1,4 +1,4 @@
-﻿const { google } = require('googleapis');
+const { google } = require('googleapis');
 const credentials = require('./google-service-account.json');
 
 async function readDoc() {
@@ -41,4 +41,4 @@ async function readDoc() {
   }
 }
 
-readDoc();
+readDoc().catch(console.error);

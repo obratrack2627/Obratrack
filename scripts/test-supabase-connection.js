@@ -1,4 +1,4 @@
-﻿const { createClient } = require('@supabase/supabase-js');
+const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = 'https://guouimnywtmnfzgocksr.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1b3VpbW55d3RtbmZ6Z29ja3NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5MjQ5MjUsImV4cCI6MjEwNDUwMDkyNX0.PZTxOfJs0MBCC3ZtPMIwaKSZUwBoQ4Q_XvtyMV6ae2I';
@@ -55,4 +55,4 @@ async function testInsert() {
   else console.log('📋 Proyectos en Supabase:', projs);
 }
 
-testInsert();
+testInsert().catch(console.error);

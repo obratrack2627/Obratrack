@@ -66,7 +66,7 @@ export default function Sidebar() {
     loadSidebarData();
 
     // Sincronizar con Supabase Cloud en segundo plano para reflejar mensajes de WhatsApp en vivo
-    dataService.pullFromCloudServer().then((res) => {
+    void dataService.pullFromCloudServer().then((res) => {
       if (res.updated) loadSidebarData();
     });
 

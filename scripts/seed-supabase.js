@@ -1,7 +1,7 @@
-﻿const { createClient } = require('@supabase/supabase-js');
+const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = 'https://guouimnywtmnfzgocksr.supabase.co';
-const serviceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1b3VpbW55d3RtbmZ6Z29ja3NyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODkyNDkyNSwiZXhwIjoyMTA0NTAwOTI1fQ.XxLB5RRMrXHzvaMZB7noUWwrcwM0hgWLKjF_WP5VGMQ';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 const supabase = createClient(supabaseUrl, serviceKey);
 
@@ -207,4 +207,7 @@ async function seedData() {
   console.log('🎉 DATOS SEMBRADOS CON ÉXITO EN SUPABASE!');
 }
 
-seedData();
+seedData().catch((err) => {
+  console.error('Error sembrando datos:', err);
+  process.exitCode = 1;
+});

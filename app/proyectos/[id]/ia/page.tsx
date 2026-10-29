@@ -130,7 +130,7 @@ export default function ProyectoIAPage() {
 
     // Sincronizar desde Supabase en segundo plano
     if (projectId) {
-      dataService.loadProyectoChatFromSupabase(projectId).then((synced) => {
+      void dataService.loadProyectoChatFromSupabase(projectId).then((synced) => {
         if (synced && synced.length > 0) {
           setMensajes(synced);
         }
@@ -309,7 +309,7 @@ export default function ProyectoIAPage() {
         const transcript = event.results[0][0].transcript;
         if (transcript) {
           setInputTexto(transcript);
-          handleEnviarMensaje(transcript);
+          handleEnviarMensaje(transcript).catch(console.error);
         }
       };
 
@@ -580,7 +580,7 @@ export default function ProyectoIAPage() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  handleEnviarMensaje();
+                  void handleEnviarMensaje();
                 }}
                 className="flex items-center gap-2.5"
               >

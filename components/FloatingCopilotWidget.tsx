@@ -266,7 +266,7 @@ export default function FloatingCopilotWidget() {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  handleSend();
+                  void handleSend();
                 }}
                 className="p-2.5 bg-white dark:bg-[#141A23] border-t border-[#E5DFC9] dark:border-[#263040] flex items-center gap-2"
               >

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const https = require('https');
 
-const token = 'sbp_oauth_145ae72a1dc956e561aaba1f463ec428139f732c';
+const token = process.env.SUPABASE_ACCESS_TOKEN || '';
 const ref = 'guouimnywtmnfzgocksr';
 const sql = fs.readFileSync('C:/Users/Benja/.gemini/antigravity-ide/scratch/ObraTrack/supabase/schema.sql', 'utf8');
 
@@ -24,7 +24,7 @@ const req = https.request({
     if (res.statusCode === 200 || res.statusCode === 201) {
       console.log('🎉 ESQUEMA SQL DE OBRATRACK APLICADO EXITOSAMENTE EN SUPABASE!');
     } else {
-      console.log('Detalle de respuesta:', body);
+      console.error('Error aplicando esquema SQL. Status:', Number(res.statusCode) || 0);
     }
   });
 });

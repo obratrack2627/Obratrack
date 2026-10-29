@@ -560,7 +560,7 @@ export default function EquipoPage() {
                 type="button"
                 onClick={() => {
                   const text = `👷 ObraTrack - Tus accesos a faena:\n🔗 Link: ${window.location.origin}/login\n📧 Usuario: ${createdCredentials.email}\n🔑 Clave: ${createdCredentials.pass}\n(Acceso exclusivo para reportar avances y fotos de obras asignadas)`;
-                  navigator.clipboard.writeText(text);
+                  void navigator.clipboard.writeText(text);
                   showToast('📋 Credenciales copiadas al portapapeles.');
                 }}
                 className="px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold font-mono transition-colors"

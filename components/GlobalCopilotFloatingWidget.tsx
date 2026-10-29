@@ -164,7 +164,7 @@ export default function GlobalCopilotFloatingWidget() {
         const transcript = event.results[0][0].transcript;
         if (transcript) {
           setInputTexto(transcript);
-          handleEnviarMensaje(transcript);
+          void handleEnviarMensaje(transcript);
         }
       };
 
@@ -400,7 +400,7 @@ export default function GlobalCopilotFloatingWidget() {
                     <form
                       onSubmit={(e) => {
                         e.preventDefault();
-                        handleEnviarMensaje();
+                        void handleEnviarMensaje();
                       }}
                       className="flex items-center gap-2"
                     >

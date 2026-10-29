@@ -68,7 +68,7 @@ export default function GoogleMapsProjectViewer({
   // Copiar datos de ubicación al portapapeles
   const handleCopyLocation = () => {
     const textToCopy = `${proyecto.nombre} - ${direccion ? `${direccion}, ` : ''}${comuna}, Chile (GPS: ${lat}, ${lng})`;
-    navigator.clipboard.writeText(textToCopy);
+    void navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };

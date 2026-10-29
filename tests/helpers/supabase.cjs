@@ -49,6 +49,9 @@ class Query {
     this.filters = [];
     this.mode = "select";
     this.payload = null;
+    Object.defineProperty(this, "then", {
+      value: (resolve, reject) => this.run().then(resolve, reject),
+    });
   }
   select(_fields, options) {
     if (options?.count) this.countRequested = true;
@@ -174,7 +177,7 @@ class Query {
         : null,
     };
   }
-  then(resolve, reject) {
+  asPromise() {
     return this.run().then(resolve, reject);
   }
 }

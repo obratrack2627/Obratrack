@@ -71,7 +71,7 @@ export default function ActualizarPasswordPage() {
       }
     }
 
-    checkAuth();
+    void checkAuth();
 
     return () => {
       isMounted = false;
