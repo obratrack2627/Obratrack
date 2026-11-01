@@ -1,155 +1,107 @@
-Markdown
-# 🏗️ ObraTrack — Copiloto Digital de Faenas, Cotización con IA y Trazabilidad
+# 🏗️ ObraTrack — SaaS de Gestión de Obras, Cotización con IA y Trazabilidad
 
-**Plataforma web responsiva Cloud-Native de Software as a Service (SaaS), diseñada para la gestión operativa, cotización con IA y trazabilidad financiera de Mipymes y contratistas de la construcción en Chile.**
+![Next.js](https://img.shields.io/badge/Next.js-14.2-black?logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL_%2B_RLS-3ECF8E?logo=supabase&logoColor=white)
+![Google Gemini](https://img.shields.io/badge/Google_Gemini-Structured_JSON-4285F4?logo=google&logoColor=white)
+![WhatsApp Cloud API](https://img.shields.io/badge/Meta_WhatsApp-Graph_API_v23-25D366?logo=whatsapp&logoColor=white)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=obratrack2627_Obratrack&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=obratrack2627_Obratrack)
 
-Reemplaza los registros informales en papel, las notas sueltas en chats de WhatsApp y las planillas desarticuladas por una plataforma centralizada que conecta la faena en terreno con la administración de costos y la transparencia hacia el cliente mandante.
+**ObraTrack** es una plataforma web **Software as a Service (SaaS) Cloud-Native y Multi-Tenant** diseñada para contratistas, maestros y Mipymes de la construcción en Chile. Centraliza presupuestos asistidos por IA, planificación táctica, control financiero y reportes desde terreno vía web móvil y WhatsApp, eliminando planillas sueltas, registros en papel y fugas de utilidad por adicionales no cobrados.
 
----
-
-## 🚀 Funcionalidades Principales
-
-- **Copiloto Obrero & Cotizador Inteligente IA (Google Gemini API)**:
-  - Generación de presupuestos y cubicación técnica automatizada a partir de descripciones en lenguaje natural mediante salidas estructuradas (*Structured Outputs JSON*).
-  - **Radar Comparativo de Precios Ferreteros**: Comparación en tiempo real de insumos en pesos chilenos (CLP) entre tiendas de Chile (*Sodimac, Construmart, Imperial, MTS, Easy*).
-  - Recomendación paramétrica de márgenes comerciales (Mínimo 15%, Sugerido 25-30%, Premium 35-40%).
-- **Gestión de Obras & Georreferenciación GPS**:
-  - Administración de proyectos con selección de 16 regiones y comunas de Chile.
-  - Integración con Google Maps Platform para geolocalización automatizada y *Reverse Geocoding*.
-- **Carta Gantt Interactiva Semanal**:
-  - Planificación táctil de partidas con cálculo automático de avance físico ponderado.
-- **Bitácora de Terreno Offline-First**:
-  - Captura de fotos georreferenciadas y notas en faena con persistencia local (*IndexedDB*) y sincronización diferida hacia la nube al restablecer la red 4G/5G.
-- **Control Financiero & Fuga de Utilidades**:
-  - Flujo de caja, estados de pago y registro digital de adicionales e imprevistos para evitar absorción de sobrecostos no formalizados.
-  - Gráficos financieros interactivos con Recharts.
-- **Portal del Mandante & Mensajería WhatsApp**:
-  - Portal web público transparente para clientes mandantes autenticado mediante validación de **RUT chileno (Módulo 11)**, sin requerir contraseñas.
-  - Integración con **Meta WhatsApp Business Cloud API** para envío de alertas e hitos vía Webhooks Serverless (*Plantillas HSM*).
-- **Exportación Oficial**:
-  - Generación de presupuestos formales y cotizaciones en PDF vectorial.
+🌐 **Aplicación en Producción:** [https://obratrack-5zwn.vercel.app](https://obratrack-5zwn.vercel.app)
 
 ---
 
-## 🌐 Despliegue en Vivo
-- **URL Oficial en Vercel**: https://obratrack-5zwn.vercel.app/
+## ✨ Módulos Principales del SaaS
+
+| Módulo | Ruta | Qué resuelve |
+| :--- | :--- | :--- |
+| **Centro de Mando** | `/dashboard` | KPIs consolidados en vivo: obras activas, avance físico ponderado, flujo de caja en CLP y alertas operativas. |
+| **Cotizador IA & Presupuestos** | `/cotizador` · `/proyectos/[id]/presupuestos` | Cubicación de materiales, mano de obra y cronograma con **Google Gemini** (`JSON Schema`). El servidor recalcula determinísticamente costos directos, gastos generales, margen e IVA (19%) y exporta cotizaciones formales en **PDF**. |
+| **Gestión Integral de Obras** | `/proyectos` · `/proyectos/[id]/*` | Ficha georreferenciada con **Google Maps** (16 regiones y comunas de Chile) y pestañas dedicadas por obra: **Carta Gantt táctil** (`/gantt`), **Finanzas y pagos** (`/finanzas`), **Cambios/Adicionales** (`/cambios`), **Asistencia** (`/asistencia`), **Documentos** (`/documentos`) y **Chat IA** (`/ia`). |
+| **Copiloto Web & WhatsApp** | `/reportes` · Widget global | Mismo motor transaccional en la web y en **Meta WhatsApp Cloud API**: permite cotizar, crear obras, registrar abonos/avances, analizar fotos o audios de faena y despachar avisos individuales a la cuadrilla con trazabilidad de entrega. |
+| **Clientes & Equipo Multi-Rol** | `/clientes` · `/equipo` | Directorio con validación de **RUT chileno (Módulo 11)** y gestión de accesos RBAC por empresa (`admin`, `supervisor` y `terreno`, donde terreno solo opera sobre sus obras asignadas). |
 
 ---
 
-## 🛠️ Stack Técnico & Arquitectura Cloud-Native (3 Capas)
+## 💼 Planes de Suscripción SaaS (CLP)
 
-- **Capa 1: Presentación (Frontend Mobile-First)**
-  - Next.js 14 (App Router) + React 18 (*React Server Components* & *Client Components*).
-  - TypeScript (Tipado estricto end-to-end).
-  - Tailwind CSS (Diseño responsivo de alto contraste para visibilidad solar en faena).
-- **Capa 2: Servicios & API (Backend Serverless)**
-  - Next.js Route Handlers ejecutados en la red Edge de Vercel.
-  - Google Gemini API (Modelos 3.5 / 3.6 Flash para inferencias en JSON estructurado).
-  - Meta WhatsApp Business Cloud API & Webhooks asíncronos.
-  - Google Maps Platform (Geocoding API, Maps Embed SDK).
-  - Validación de RUT chileno (Algoritmo Módulo 11).
-- **Capa 3: Datos & Almacenamiento (Supabase Platform)**
-  - PostgreSQL relacional en Tercera Forma Normal (3FN).
-  - **Seguridad Multi-Tenant**: Políticas *Row Level Security* (RLS) por `empresa_id`.
-  - **Autenticación**: Supabase Auth con tokens seguros JWT y control de acceso por roles (RBAC: Admin, Terreno, Mandante).
-  - **Almacenamiento de Objetos**: Supabase Storage para fotografías y documentos PDF.
-  - **Tiempo Real**: Supabase Realtime vía WebSockets.
-- **Hosting**: Vercel Edge Network.
+| Plan | Precio Mensual | Alcance Operativo |
+| :--- | :--- | :--- |
+| **Gratis** (`gratis`) | **$0** / mes | 1 obra activa, georreferenciación Google Maps, clientes, Carta Gantt táctil, pagos básicos e imprevistos. |
+| **Pro** (`pro`) | **$12.990** / mes | Obras ilimitadas, **Cotizador IA + APU**, asesor de cobro en 3 tarifas, finanzas avanzadas con gráficos, carga de boletas/documentos y exportación PDF. |
+| **Pro IA** (`pro_ia`) | **$24.990** / mes | Todo el Plan Pro + **Canal bidireccional WhatsApp IA** (texto, voz y fotos), agentes autónomos que actualizan obras/Gantt/pagos y despacho de avisos multi-cuadrilla. |
 
 ---
 
-## 🔒 Cumplimiento Normativo Chileno (Compliance)
+## 🛠️ Arquitectura y Stack Tecnológico
 
-- **Ley N° 21.719**: Protección de Datos Personales (Cifrado TLS 1.3 / AES-256, derechos ARCO, privacidad por diseño).
-- **Ley N° 21.663**: Ley Marco de Ciberseguridad e Infraestructura Crítica.
-- **Ley N° 19.496**: Protección de los Derechos de los Consumidores.
-- **Normas Chilenas (NCh)**: Especificaciones de construcción e Instituto Nacional de Normalización (INN).
+- **Frontend (Mobile-First):** Next.js `14.2` (App Router, RSC + Client Components), React `18.3`, TypeScript `5` estricto, Tailwind CSS `3.4` (modo claro/oscuro de alto contraste solar), Recharts, Lucide React y fuentes autoalojadas (`next/font/local`). Resiliencia local con cola de reintentos idempotentes para zonas con señal 4G inestable.
+- **Backend Serverless & Edge:** 17 Route Handlers en `app/api/*`, guardia perimetral en `middleware.ts` (`HTTP 401` / anti-*Open Redirect*) y cliente HTTP `undici` con control de *timeouts* y TLS.
+- **Inteligencia Artificial Multimodal:** Google Gemini API (`gemini-3.5-flash-lite` con *fallback* a `gemini-3.1-flash-lite`), validación estricta de contratos JSON y ejecución por lotes validados antes de persistir.
+- **Datos, Auth y Storage (Supabase):** PostgreSQL en 3FN con aislamiento **Multi-Tenant** mediante *Row Level Security* (`RLS` por `empresa_id`), Supabase Auth (`JWT`), buckets privados/públicos en Supabase Storage y colas programadas (`pg_cron` + `pg_net` + Supabase Vault) para despachos de WhatsApp.
+- **Seguridad y Calidad (DevSecOps):** Firmas `HMAC-SHA256` (`timingSafeEqual`) en webhooks de Meta, cabeceras estrictas (`HSTS`, `X-Frame-Options`, `nosniff`), 83 pruebas unitarias (`node:test`), pruebas E2E (`Playwright`), pruebas de carga (`Apache JMeter`), escaneo dinámico (`OWASP ZAP`) y auditoría continua SAST en **SonarQube Cloud**.
 
 ---
 
-## 📁 Estructura del Proyecto
+## 📁 Estructura del Repositorio
 
-obratrack/
+```text
+Obratrack/
 ├── app/
-│   ├── api/
-│   │   ├── cotizador/route.ts          # Endpoint Cotizador IA & JSON Schema Gemini
-│   │   ├── chat/route.ts               # Asistente conversacional de obras & costos
-│   │   ├── geocode/reverse/route.ts    # Reverse Geocoding con Google Maps API
-│   │   └── webhook/whatsapp/route.ts   # Webhook Serverless Meta WhatsApp Cloud API
-│   ├── cotizador/page.tsx              # Módulo Cotizador IA & Radar de Materiales Chile
-│   ├── clientes/page.tsx               # Módulo Directorio de Clientes & Validación RUT
-│   ├── dashboard/page.tsx              # Centro de Mando, KPIs & Gráficos
-│   ├── equipo/page.tsx                 # Módulo Cuadrillas & Asignación de Terreno
-│   ├── login/page.tsx                  # Autenticación con Supabase Auth (JWT)
-│   ├── proyectos/
-│   │   ├── page.tsx                    # Panel Central de Obras & Google Maps
-│   │   └── [id]/
-│   │       ├── finanzas/page.tsx       # Control Financiero, Flujo de Caja & Recharts
-│   │       └── gantt/page.tsx          # Carta Gantt Semanal & Bitácora Offline
-│   ├── reportes/page.tsx               # Bandeja de Mensajería & Reportes WhatsApp
-│   ├── globals.css                     # Estilos globales y diseño responsivo
-│   ├── layout.tsx                      # Layout raíz con Sidebar & Context Providers
-│   └── page.tsx                        # Redirección raíz
-├── components/
-│   ├── GanttChart.tsx                  # Componente Carta Gantt táctil semanal
-│   ├── GoogleMapsProjectViewer.tsx     # Visor interactivo de mapas GPS
-│   ├── Navbar.tsx                      # Header con acciones contextuales
-│   └── Sidebar.tsx                     # Navegación lateral blueprint
+│   ├── api/                    # Endpoints Serverless (IA, presupuestos, sync, geocode, WhatsApp)
+│   ├── cotizador/              # Cotizador con IA y exportación PDF
+│   ├── dashboard/              # Centro de mando y KPIs
+│   ├── proyectos/[id]/         # Módulos por obra: gantt, finanzas, presupuestos, cambios, asistencia, documentos, ia
+│   ├── clientes/ · equipo/     # CRM con RUT Módulo 11 y administración RBAC de cuadrillas
+│   ├── asistencia/ · planes/   # Control global de asistencia y planes SaaS
+│   └── reportes/               # Bandeja auditada y avisos enviados por WhatsApp
+├── components/                 # UI modular (GanttChart, Copiloto, GoogleMaps, PDF Modal, paneles WhatsApp)
 ├── lib/
-│   ├── supabase/                       # Clientes Supabase (SSR, Browser, Admin Key)
-│   ├── gemini.ts                       # Cliente central Google Gemini API & Prompts
-│   ├── data-service.ts                 # Servicio central de datos PostgreSQL & Supabase
-│   ├── mock-data.ts                    # Dataset demo e índices ferreteros CLP
-│   ├── utils.ts                        # Formateadores CLP, RUT Módulo 11 y fechas
-│   └── chile-locations.ts              # Catálogo de 16 regiones y comunas de Chile
-├── types/
-│   └── database.ts                     # Tipos TypeScript exportados del esquema 3FN
-├── supabase/
-│   ├── migrations/                     # Migraciones SQL & Estructura 3FN
-│   └── rules.sql                       # Políticas de seguridad Row Level Security (RLS)
-├── .env.example                        # Variables de entorno de referencia
-├── package.json
-└── tsconfig.json
-
-
----
-
-## ⚙️ Instalación y Puesta en Marcha en Local
-
-### 1. Clonar e Instalar Dependencias
-```bash
-git clone [https://github.com/obratrack2627/Obratrack.git](https://github.com/obratrack2627/Obratrack.git)
-cd Obratrack
-npm install
-2. Configurar Variables de Entorno
-Copia el archivo .env.example a .env.local e ingresa tus credenciales:
-
-Bash
-cp .env.example .env.local
-Ejemplo de .env.local:
-
-Fragmento de código
-NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=tu_supabase_service_role_key
-GEMINI_API_KEY=tu_google_gemini_api_key
-NEXT_PUBLIC_MAPS_API_KEY=tu_google_maps_api_key
-WHATSAPP_TOKEN=tu_whatsapp_cloud_api_token
-3. Ejecutar Servidor de Desarrollo
-Bash
-npm run dev
-Abre http://localhost:3000 en tu navegador.
-
-👥 Equipo de Desarrollo (INACAP 2026)
-Benjamín Arriagada Achavar — Ingeniero Full-Stack & Arquitecto Cloud.
-
-Jorge Andre Castro Arteaga — Ingeniero de Requerimientos & Testing QA.
-
-Académica Guía: Teresa Jesús Tapia Soto.
+│   ├── ai/                     # Motor Gemini, esquemas JSON, permisos y ejecutor transaccional
+│   ├── supabase/               # Clientes Auth, RLS, Storage y servicio multi-tenant
+│   └── whatsapp/               # Conector Meta Graph API v23, verificación HMAC, evidencias y cola de salida
+├── supabase/                   # Esquema SQL 3FN, migraciones aditivas, RLS y colas WhatsApp
+├── tests/ · e2e/               # 83 tests unitarios/integración (node:test) y suite E2E (Playwright)
+└── docs/                       # Guías técnicas de IA y configuración de Meta WhatsApp
 ```
 
-## Configuración del chatbot
+---
 
-Consulta [la guía del chatbot de IA](docs/CHATBOT_IA.md) para configurar Gemini, verificar la sesión de Supabase y probar cotizaciones y acciones. Las pruebas no modifican producción.
+## ⚙️ Puesta en Marcha Local
 
-Para gestionar desde el celular del jefe, consulta [WhatsApp personal → ObraTrack](docs/WHATSAPP_JEFE_OBRA.md).
+1. **Clonar e instalar dependencias**
+   ```bash
+   git clone https://github.com/obratrack2627/Obratrack.git
+   cd Obratrack
+   npm install
+   ```
+
+2. **Configurar variables de entorno**
+   Copia `.env.example` a `.env.local` y completa las claves del servidor (las credenciales de IA y de Meta viven exclusivamente en el backend, nunca con prefijo `NEXT_PUBLIC_`):
+   ```bash
+   cp .env.example .env.local
+   ```
+
+3. **Ejecutar desarrollo y suites de verificación**
+   ```bash
+   npm run dev        # Servidor local en http://localhost:3000
+   npm test           # 83 pruebas automatizadas (node:test)
+   npm run test:e2e   # Suite End-to-End con Playwright
+   npm run build      # Compilación optimizada de producción
+   ```
+
+📖 **Documentación técnica detallada:**
+- [Arquitectura y flujo del Copiloto IA y Cotizaciones](docs/CHATBOT_IA.md)
+- [Integración de WhatsApp personal del jefe y cola de avisos](docs/WHATSAPP_JEFE_OBRA.md)
+
+---
+
+## 🔒 Normativa y Equipo (INACAP 2026)
+
+Diseñado bajo estándares de privacidad y ciberseguridad vigentes en Chile (**Ley N° 21.719** de Protección de Datos Personales y **Ley N° 21.663** Marco de Ciberseguridad), incluyendo portabilidad íntegra en JSON y supresión local de datos.
+
+- **Benjamín Arriagada Achavar** — Arquitectura Cloud & Desarrollo Full-Stack
+- **Jorge Andre Castro Arteaga** — Ingeniería de Requerimientos & Aseguramiento de Calidad (QA)
+- **Académica Guía:** Teresa Jesús Tapia Soto
