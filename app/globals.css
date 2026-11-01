@@ -20,6 +20,7 @@
   }
 
   .dark {
+    color-scheme: dark;
     --bg-page: #0B0E14;
     --bg-card: #141A23;
     --border-card: #263040;
@@ -27,6 +28,36 @@
     --text-muted: #9CA3AF;
     --bg-input: #0F141C;
     --brand-carbon: #0F141C;
+  }
+
+  .dark *,
+  .dark ::before,
+  .dark ::after {
+    border-color: #263040;
+  }
+
+  .pdf-paper *,
+  .pdf-paper ::before,
+  .pdf-paper ::after {
+    border-color: #E5E7EB;
+  }
+
+  .dark input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):where(:not(.pdf-paper):not(.pdf-paper *)),
+  .dark select:where(:not(.pdf-paper):not(.pdf-paper *)),
+  .dark textarea:where(:not(.pdf-paper):not(.pdf-paper *)) {
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border-color: var(--border-card);
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #6B7280;
+  }
+
+  .dark select option {
+    background-color: #141A23;
+    color: #F3F4F6;
   }
 
   * {
@@ -75,38 +106,94 @@
   background-size: 20px 20px;
 }
 
-/* Soporte Dark Mode automático para elementos estándar */
-.dark .bg-white {
-  background-color: #141A23 !important;
-  color: #F3F4F6 !important;
+/* Hoja A4 aislada para cotizaciones / PDF en cualquier tema */
+.pdf-paper {
+  color-scheme: light;
+  background-color: #FFFFFF !important;
+  color: #111827 !important;
 }
 
-.dark .bg-kraft-50,
-.dark .bg-kraft-100 {
+.pdf-paper .logo-carbon-bar {
+  fill: #1E1E1E !important;
+}
+
+/* Soporte Dark Mode automático para elementos estándar (excluyendo .pdf-paper) */
+.dark .bg-white:where(:not(.pdf-paper):not(.pdf-paper *)) {
+  background-color: #141A23 !important;
+}
+
+.dark .bg-kraft-50:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .bg-kraft-100:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .bg-gray-50:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .bg-slate-50:where(:not(.pdf-paper):not(.pdf-paper *)) {
   background-color: #0F141C !important;
 }
 
-.dark .border-kraft-200,
-.dark .border-\[\#E5DFC9\] {
+.dark .bg-gray-100:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .bg-slate-100:where(:not(.pdf-paper):not(.pdf-paper *)) {
+  background-color: #1A2230 !important;
+}
+
+.dark .bg-\[\#FAF8F5\]:where(:not(.pdf-paper):not(.pdf-paper *)) {
+  background-color: #0B0E14 !important;
+}
+
+.dark .border-kraft-100:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .border-kraft-200:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .border-\[\#E5DFC9\]:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .border-gray-100:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .border-gray-200:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .border-slate-200:where(:not(.pdf-paper):not(.pdf-paper *)) {
   border-color: #263040 !important;
 }
 
-.dark .text-navy-900,
-.dark .text-\[\#1E1E1E\] {
+.dark .divide-gray-100:where(:not(.pdf-paper):not(.pdf-paper *)) > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-200:where(:not(.pdf-paper):not(.pdf-paper *)) > :not([hidden]) ~ :not([hidden]),
+.dark .divide-kraft-100:where(:not(.pdf-paper):not(.pdf-paper *)) > :not([hidden]) ~ :not([hidden]),
+.dark .divide-kraft-200:where(:not(.pdf-paper):not(.pdf-paper *)) > :not([hidden]) ~ :not([hidden]) {
+  border-color: #263040 !important;
+}
+
+.dark .text-navy-900:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .text-navy-800:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .text-\[\#1E1E1E\]:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .text-gray-900:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .text-slate-900:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .text-black:where(:not(.pdf-paper):not(.pdf-paper *)) {
   color: #F9FAFB !important;
 }
 
-.dark .text-gray-700,
-.dark .text-gray-600 {
+.dark .text-gray-800:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .text-slate-800:where(:not(.pdf-paper):not(.pdf-paper *)) {
+  color: #E5E7EB !important;
+}
+
+.dark .text-gray-700:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .text-gray-600:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .text-slate-700:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .text-slate-600:where(:not(.pdf-paper):not(.pdf-paper *)) {
   color: #D1D5DB !important;
 }
 
-.dark .text-gray-500 {
+.dark .text-gray-500:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .text-slate-500:where(:not(.pdf-paper):not(.pdf-paper *)) {
   color: #9CA3AF !important;
 }
 
-.dark .bg-\[\#FAF8F5\] {
-  background-color: #0B0E14 !important;
+.dark .hover\:bg-red-50:hover:where(:not(.pdf-paper):not(.pdf-paper *)) {
+  background-color: rgba(127, 29, 29, 0.35) !important;
+}
+
+.dark .hover\:bg-gray-50:hover:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .hover\:bg-gray-100:hover:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .hover\:bg-gray-200:hover:where(:not(.pdf-paper):not(.pdf-paper *)) {
+  background-color: #222C3D !important;
+}
+
+.dark .hover\:text-gray-900:hover:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .hover\:text-gray-800:hover:where(:not(.pdf-paper):not(.pdf-paper *)),
+.dark .hover\:text-navy-900:hover:where(:not(.pdf-paper):not(.pdf-paper *)) {
+  color: #FFFFFF !important;
 }
 
 /* Estilos para Frappe Gantt */
@@ -120,6 +207,32 @@
 .dark .gantt-container {
   background: #141A23 !important;
   border-color: #263040 !important;
+}
+
+.dark .gantt .grid-header {
+  fill: #1A2230 !important;
+  stroke: #263040 !important;
+}
+
+.dark .gantt .grid-row {
+  fill: #141A23 !important;
+}
+
+.dark .gantt .grid-row:nth-child(even) {
+  fill: #0F141C !important;
+}
+
+.dark .gantt .row-line,
+.dark .gantt .tick {
+  stroke: #263040 !important;
+}
+
+.dark .gantt .upper-text {
+  fill: #F3F4F6 !important;
+}
+
+.dark .gantt .lower-text {
+  fill: #9CA3AF !important;
 }
 
 .gantt .bar {

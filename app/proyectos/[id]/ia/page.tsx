@@ -64,7 +64,7 @@ export default function ProyectoIAPage() {
   const [cliente, setCliente] = useState<Cliente | null>(null);
 
   const [activeUser, setActiveUser] = useState<Usuario | null>(null);
-  const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
+  const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('gratis');
 
   const [mensajes, setMensajes] = useState<MensajeChatProyecto[]>([]);
   const [inputTexto, setInputTexto] = useState('');
@@ -166,7 +166,7 @@ export default function ProyectoIAPage() {
 
   const handleEnviarMensaje = async (textoAEnviar?: string) => {
     const query = (textoAEnviar || inputTexto).trim();
-    if (!query || cargando || !proyecto) return;
+    if (!query || cargando || !proyecto || dataService.getActivePlan() !== 'pro_ia') return;
 
     const userMsg: MensajeChatProyecto = {
       id: 'usr-p-' + Date.now(),

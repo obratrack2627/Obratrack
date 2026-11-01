@@ -110,9 +110,9 @@ export default function ProjectTabsHeader({
   ];
 
   return (
-    <div className="bg-white dark:bg-[#141A23] border-b border-kraft-200 dark:border-[#263040] shadow-sm transition-colors duration-200">
+    <div className="bg-white dark:bg-[#141A23] border-b border-kraft-200 dark:border-[#263040] shadow-sm transition-colors duration-200 print:hidden">
       {/* Fila Superior: Breadcrumbs, Título y Datos Clave */}
-      <div className="px-4 sm:px-6 pt-4 pb-3">
+      <div className="px-4 sm:px-6 md:pr-16 pt-4 pb-3">
         {/* Breadcrumb de Navegación */}
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 font-mono mb-2">
           <Link

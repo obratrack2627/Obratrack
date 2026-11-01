@@ -488,7 +488,7 @@ export default function EquipoPage() {
                             href={`https://wa.me/${cleanPhone}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold flex items-center gap-1 shrink-0 transition-colors"
+                            className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 rounded text-[10px] font-bold flex items-center gap-1 shrink-0 transition-colors"
                             title="Abrir chat de WhatsApp"
                           >
                             <MessageSquare className="w-3 h-3" />

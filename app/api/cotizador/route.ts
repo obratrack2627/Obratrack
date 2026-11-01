@@ -8,6 +8,17 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   try {
     const { client, user } = await authorizeAI(request);
+    const { data: company } = await client
+      .from("empresas")
+      .select("plan_id")
+      .eq("id", user.empresa_id)
+      .maybeSingle();
+    if (company?.plan_id === "gratis")
+      throw new AIError(
+        "PLAN_REQUIRED",
+        "El cotizador con IA requiere el Plan Pro o Plan Pro IA.",
+        403,
+      );
     let body: any;
     try {
       body = await request.json();

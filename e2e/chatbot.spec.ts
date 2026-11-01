@@ -341,24 +341,25 @@ test("reintentar un pago pendiente no duplica el ingreso", async ({ page }) => {
   expect(db.pagos[0].monto).toBe(400000);
 });
 
-test("el copiloto flotante comparte la misma ejecución y los mismos errores", async ({
+test("no se renderiza el chat flotante de IA, el plan gratis queda bloqueado y el botón de tema es fijo", async ({
   page,
 }) => {
-  await setup(page, {
-    error: "La IA alcanzó su cuota o límite de uso.",
-    code: "AI_RATE_LIMIT",
-  });
+  await setup(page, {});
+  await page.addInitScript((companyId) => {
+    localStorage.setItem(
+      `obratrack_active_plan_v7_${companyId}`,
+      JSON.stringify("gratis"),
+    );
+  }, company);
   await page.goto("/dashboard");
-  await page.getByRole("button", { name: /Copiloto IA/ }).click();
-  await page
-    .getByRole("textbox", { name: "Mensaje para el copiloto global" })
-    .fill("Cotiza un radier");
-  await page
-    .getByRole("button", { name: "Enviar mensaje", exact: true })
-    .click();
-  await expect(
-    page.getByText("La IA alcanzó su cuota o límite de uso.", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /Copiloto IA/ })).toHaveCount(0);
+  const themeButtons = page.locator('button[aria-label="Cambiar tema"]:visible');
+  await expect(themeButtons).toHaveCount(1);
+  await themeButtons.first().click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.goto("/cotizador");
+  await expect(page.getByText(/Desbloquea Copiloto Obrero IA/)).toBeVisible();
+  await expect(page.locator('button[aria-label="Cambiar tema"]:visible')).toHaveCount(1);
 });
 
 test("el asistente de una obra ejecuta y guarda su avance", async ({

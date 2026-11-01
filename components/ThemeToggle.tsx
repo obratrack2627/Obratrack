@@ -18,12 +18,13 @@ export default function ThemeToggle({ variant = 'button', className = '' }: Them
       <button
         type="button"
         onClick={toggleTheme}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-mono transition-all ${
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-mono shadow-sm backdrop-blur-md transition-all cursor-pointer ${
           isDark
-            ? 'bg-[#171D26] border-[#2B3545] text-amber-300 hover:border-amber-400'
-            : 'bg-white border-[#E5DFC9] text-gray-700 hover:border-[#FF6A00]'
+            ? 'bg-[#171D26]/95 border-[#2B3545] text-amber-300 hover:border-amber-400'
+            : 'bg-white/95 border-[#E5DFC9] text-gray-800 hover:border-[#FF6A00]'
         } ${className}`}
         title={isDark ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+        aria-label={isDark ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
       >
         {isDark ? (
           <>
@@ -44,10 +45,10 @@ export default function ThemeToggle({ variant = 'button', className = '' }: Them
     <button
       type="button"
       onClick={toggleTheme}
-      className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
+      className={`p-2 rounded-xl border shadow-sm backdrop-blur-md transition-all flex items-center justify-center cursor-pointer ${
         isDark
-          ? 'bg-[#171D26] border-[#2B3545] text-amber-300 hover:bg-[#222A36]'
-          : 'bg-white border-[#E5DFC9] text-gray-700 hover:bg-gray-50'
+          ? 'bg-[#171D26]/95 border-[#2B3545] text-amber-300 hover:bg-[#222A36] hover:border-amber-400/60'
+          : 'bg-white/95 border-[#E5DFC9] text-gray-800 hover:bg-gray-50 hover:border-[#FF6A00]/60'
       } ${className}`}
       title={isDark ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
       aria-label="Cambiar tema"
@@ -55,7 +56,7 @@ export default function ThemeToggle({ variant = 'button', className = '' }: Them
       {isDark ? (
         <Sun className="w-4 h-4 text-amber-400 transition-transform duration-300 hover:rotate-45" />
       ) : (
-        <Moon className="w-4 h-4 text-gray-700 transition-transform duration-300 hover:-rotate-12" />
+        <Moon className="w-4 h-4 text-gray-800 transition-transform duration-300 hover:-rotate-12" />
       )}
     </button>
   );

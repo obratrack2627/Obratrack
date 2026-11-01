@@ -43,7 +43,7 @@ export default function PlanesPage() {
                 ))}
               </ul>
               {p.id === plan ? (
-                <p className="rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800">
+                <p className="rounded-xl bg-green-50 dark:bg-emerald-950/40 border border-green-200 dark:border-emerald-800/50 p-3 text-sm font-semibold text-green-800 dark:text-emerald-300">
                   Plan actual
                 </p>
               ) : (

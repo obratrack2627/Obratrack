@@ -111,7 +111,7 @@ export default function WhatsAppAvisosPanel() {
       {error && (
         <p
           role="alert"
-          className="rounded-xl bg-red-50 p-3 text-red-800 text-sm"
+          className="rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/50 p-3 text-red-800 dark:text-red-300 text-sm"
         >
           {error}
         </p>
@@ -142,7 +142,7 @@ export default function WhatsAppAvisosPanel() {
             {Object.entries(row.estados || {}).map(([state, count]) => (
               <span
                 key={state}
-                className={`text-xs rounded-full px-2 py-1 ${["entregado", "leido"].includes(state) ? "bg-green-50 text-green-800" : ["fallido", "por_verificar", "sin_telefono"].includes(state) ? "bg-red-50 text-red-800" : "bg-kraft-100 text-gray-700"}`}
+                className={`text-xs rounded-full px-2 py-1 ${["entregado", "leido"].includes(state) ? "bg-green-50 dark:bg-emerald-950/40 text-green-800 dark:text-emerald-300" : ["fallido", "por_verificar", "sin_telefono"].includes(state) ? "bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300" : "bg-kraft-100 text-gray-700"}`}
               >
                 {labels[state] || state}: {String(count)}
               </span>

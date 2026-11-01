@@ -146,7 +146,7 @@ export default function DashboardPage() {
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
       {/* Cabecera Principal */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#141A23] p-6 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#141A23] p-6 md:pr-14 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-[#6B8F72]/15 text-[#6B8F72] border border-[#6B8F72]/30">

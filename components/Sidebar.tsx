@@ -176,7 +176,7 @@ export default function Sidebar() {
       />
 
       {/* Mobile Top Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#1E1E1E] text-white z-50 flex items-center justify-between px-4 border-b border-[#2A2A2A] shadow-md">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#1E1E1E] text-white z-50 flex items-center justify-between px-4 border-b border-[#2A2A2A] shadow-md print:hidden">
         <Link href="/dashboard">
           <Logo variant="horizontal" theme="dark" size="sm" />
         </Link>
@@ -209,7 +209,7 @@ export default function Sidebar() {
 
       {/* Sidebar Desktop & Mobile Drawer */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 w-64 bg-blueprint text-white z-40 flex flex-col justify-between border-r border-[#2A2A2A] transition-transform duration-300 shadow-2xl md:shadow-none ${
+        className={`fixed top-0 bottom-0 left-0 w-64 bg-blueprint text-white z-40 flex flex-col justify-between border-r border-[#2A2A2A] transition-transform duration-300 shadow-2xl md:shadow-none print:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         } pt-16 md:pt-0`}
       >

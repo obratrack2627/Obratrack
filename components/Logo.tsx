@@ -53,11 +53,11 @@ export function ObraTrackIcon({
 
       {/* 2. Columnas de edificios / Barras de progreso (Carbón) */}
       {/* Barra Izquierda */}
-      <rect x="36" y="52" width="13" height="46" rx="2.5" fill={carbon} />
+      <rect x="36" y="52" width="13" height="46" rx="2.5" fill={carbon} className={theme === 'light' ? 'fill-[#1E1E1E] dark:fill-white logo-carbon-bar' : undefined} />
       {/* Barra Centro (más alta) */}
-      <rect x="53" y="32" width="15" height="66" rx="2.5" fill={carbon} />
+      <rect x="53" y="32" width="15" height="66" rx="2.5" fill={carbon} className={theme === 'light' ? 'fill-[#1E1E1E] dark:fill-white logo-carbon-bar' : undefined} />
       {/* Barra Derecha */}
-      <rect x="72" y="46" width="13" height="52" rx="2.5" fill={carbon} />
+      <rect x="72" y="46" width="13" height="52" rx="2.5" fill={carbon} className={theme === 'light' ? 'fill-[#1E1E1E] dark:fill-white logo-carbon-bar' : undefined} />
 
       {/* 3. Checkmark / Flecha de avance (Verde Terreno #6B8F72) */}
       <path

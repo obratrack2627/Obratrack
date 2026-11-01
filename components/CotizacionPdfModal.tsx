@@ -184,7 +184,7 @@ export default function CotizacionPdfModal({
 
         <button
           onClick={onClose}
-          className="p-2.5 bg-white/95 hover:bg-white text-gray-800 rounded-xl shadow-lg transition-all cursor-pointer"
+          className="p-2.5 bg-white/95 dark:bg-[#1E2634] hover:bg-white dark:hover:bg-[#263040] text-gray-800 dark:text-gray-100 rounded-xl shadow-lg transition-all cursor-pointer"
           title="Cerrar"
         >
           <X className="w-5 h-5" />
@@ -197,7 +197,7 @@ export default function CotizacionPdfModal({
       <div
         ref={printAreaRef}
         id="obratrack-cotizacion-pdf"
-        className="w-full max-w-4xl bg-white text-gray-900 rounded-2xl shadow-2xl overflow-hidden my-6 p-6 sm:p-10 border border-gray-200 font-sans print:m-0 print:p-8 print:shadow-none print:w-full print:max-w-none print:rounded-none print:border-none"
+        className="pdf-paper w-full max-w-4xl bg-white text-gray-900 rounded-2xl shadow-2xl overflow-hidden my-6 p-6 sm:p-10 border border-gray-200 font-sans print:m-0 print:p-8 print:shadow-none print:w-full print:max-w-none print:rounded-none print:border-none"
       >
         {/* Encabezado: Logo ObraTrack a la izquierda | Folio & Fecha a la derecha */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-6 border-b border-gray-100">

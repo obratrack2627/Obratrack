@@ -66,6 +66,7 @@ export async function loadAIContext(client: any, user: any) {
   }
   const service = isolatedState(user, tables, company?.plan_id || "gratis");
   return {
+    company,
     service,
     tables,
     context: {

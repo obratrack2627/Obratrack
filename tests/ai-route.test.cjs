@@ -307,3 +307,29 @@ test("el copiloto web encola el aviso real y no devuelve una acción para simula
   assert.match(body.respuesta, /registrado/);
   assert.equal(fixture.rpcCalls.length, 1);
 });
+
+test("empresas con plan gratis no pueden utilizar los endpoints del asistente de IA", async () => {
+  fixture.tables.set("empresas", [{ id: "company-a", plan_id: "gratis" }]);
+  fixture.tables.set("proyectos", [
+    { id: "p-a", nombre: "Obra A", empresa_id: "company-a" },
+  ]);
+  let calls = 0;
+  const handler = createChatHandler({
+    authorize: authorized,
+    global: async () => {
+      calls++;
+      return response;
+    },
+    project: async () => {
+      calls++;
+      return response;
+    },
+  });
+  const globalRes = await handler(makeRequest({ mensaje: "Cotiza radier" }));
+  assert.equal(globalRes.status, 403);
+  assert.equal((await globalRes.json()).code, "PLAN_REQUIRED");
+  const projectRes = await handler(makeRequest({ mensaje: "Avance" }), "p-a");
+  assert.equal(projectRes.status, 403);
+  assert.equal((await projectRes.json()).code, "PLAN_REQUIRED");
+  assert.equal(calls, 0);
+});

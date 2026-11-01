@@ -20,7 +20,6 @@ import {
   Phone,
 } from 'lucide-react';
 import Logo from '@/components/Logo';
-import ThemeToggle from '@/components/ThemeToggle';
 import LegalTermsModal from '@/components/LegalTermsModal';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
 import {
@@ -324,11 +323,6 @@ function LoginForm() {
           </g>
           <text x="35" y="165" fill="currentColor" className="text-[8.5px] font-mono tracking-widest font-semibold">COORD: 33°28'S 70°36'W</text>
         </svg>
-      </div>
-
-      {/* Botón de Modo Claro / Oscuro */}
-      <div className="absolute top-4 right-4 z-20">
-        <ThemeToggle />
       </div>
 
       {/* Card Principal */}

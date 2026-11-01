@@ -77,7 +77,7 @@ export default function CopilotoObreroPage() {
   const [eventosAgenda, setEventosAgenda] = useState<EventoAgenda[]>([]);
 
   // Estados de interfaz
-  const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
+  const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('gratis');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -103,12 +103,25 @@ export default function CopilotoObreroPage() {
     reloadData();
     const savedPlan = dataService.getActivePlan();
     if (savedPlan) setActivePlan(savedPlan);
+    const planHandler = (e: any) => {
+      if (e.detail) setActivePlan(e.detail);
+    };
+    const syncHandler = () => {
+      setActivePlan(dataService.getActivePlan());
+      reloadData();
+    };
+    window.addEventListener('obratrack_plan_changed', planHandler);
+    window.addEventListener('obratrack_cloud_synced', syncHandler);
 
     // Recuperar historial de la sesión activa
     const savedChat = dataService.getChatSessionHistory();
     if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
       setMensajesChat(savedChat);
     }
+    return () => {
+      window.removeEventListener('obratrack_plan_changed', planHandler);
+      window.removeEventListener('obratrack_cloud_synced', syncHandler);
+    };
   }, [router]);
 
   useEffect(() => {
@@ -136,7 +149,7 @@ export default function CopilotoObreroPage() {
   // Enviar mensaje a Google Gemini y ejecutar acciones
   const handleSendChat = async (texto?: string) => {
     const msgToSend = texto || inputChat;
-    if (!msgToSend.trim() || isChatLoading) return;
+    if (!msgToSend.trim() || isChatLoading || dataService.getActivePlan() !== 'pro_ia') return;
 
     const userMsg: MensajeChatCotizador = {
       id: 'm-u-' + Date.now(),
@@ -273,7 +286,7 @@ export default function CopilotoObreroPage() {
               </div>
 
               {/* Feed de Conversación */}
-              <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-kraft-50/40 text-xs">
+              <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-kraft-50/40 dark:bg-[#0B0E14] text-xs">
                 {mensajesChat.map((m) => (
                   <div
                     key={m.id}
@@ -282,7 +295,7 @@ export default function CopilotoObreroPage() {
                     <div
                       className={`w-full max-w-[95%] sm:max-w-[85%] rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-sm overflow-hidden break-words ${
                         m.remitente === 'usuario'
-                          ? 'bg-navy-900 text-white rounded-br-xs'
+                          ? 'bg-navy-900 dark:bg-[#FF6A00] text-white rounded-br-xs'
                           : 'bg-white border border-kraft-200 text-navy-900 rounded-bl-xs'
                       }`}
                     >
@@ -306,7 +319,7 @@ export default function CopilotoObreroPage() {
                       {/* TARJETA INTERACTIVA DE ACCIÓN EJECUTADA POR LA IA */}
                       {/* ============================================================= */}
                       {m.accion_ejecutada && (
-                        <div className="mt-3 bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-obra-orange rounded-2xl p-3.5 space-y-2 text-navy-900 animate-in fade-in">
+                        <div className="mt-3 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-[#1E2634] dark:to-[#18202C] border-2 border-obra-orange rounded-2xl p-3.5 space-y-2 text-navy-900 dark:text-gray-100 animate-in fade-in">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-mono font-bold uppercase text-obra-orange flex items-center gap-1.5">
                               <Sparkles className="w-3.5 h-3.5 text-obra-orange" />
@@ -358,7 +371,7 @@ export default function CopilotoObreroPage() {
                           <button
                             key={sIdx}
                             onClick={() => handleSendChat(sug)}
-                            className="px-3 py-1.5 bg-white border border-kraft-200 hover:border-obra-orange text-navy-900 rounded-xl text-[11px] font-medium shadow-2xs transition-all hover:bg-orange-50/50 text-left"
+                            className="px-3 py-1.5 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] hover:border-obra-orange text-navy-900 dark:text-gray-100 rounded-xl text-[11px] font-medium shadow-2xs transition-all hover:bg-orange-50/50 dark:hover:bg-[#1E2634] text-left"
                           >
                             💡 {sug}
                           </button>
@@ -386,7 +399,7 @@ export default function CopilotoObreroPage() {
                   onChange={(e) => setInputChat(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
                   placeholder="Escribe tu instrucción (ej: Créame una obra de radier para Carlos en Peñalolén por 3.5M)..."
-                  className="flex-1 min-w-0 text-xs bg-kraft-50 border border-kraft-200 rounded-2xl px-4 py-3 text-navy-900 focus:outline-none focus:border-obra-orange focus:bg-white transition-all shadow-inner"
+                  className="flex-1 min-w-0 text-xs bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-2xl px-4 py-3 text-navy-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:border-obra-orange focus:bg-white dark:focus:bg-[#141A23] transition-all shadow-inner"
                 />
                 <button
                   onClick={() => handleSendChat()}
@@ -428,7 +441,7 @@ export default function CopilotoObreroPage() {
                     proyectos.slice(0, 4).map((p) => (
                       <div
                         key={p.id}
-                        className="bg-kraft-50/60 hover:bg-kraft-100/80 border border-kraft-200 p-2.5 rounded-xl transition-all space-y-1.5"
+                        className="bg-kraft-50/60 dark:bg-[#0F141C] hover:bg-kraft-100/80 dark:hover:bg-[#1A2230] border border-kraft-200 dark:border-[#263040] p-2.5 rounded-xl transition-all space-y-1.5"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-xs text-navy-900 truncate">{p.nombre}</span>
@@ -442,7 +455,7 @@ export default function CopilotoObreroPage() {
                             <Link href={`/proyectos/${p.id}/ia`} className="text-obra-orange text-xs font-bold">Cotizar con IA</Link>
                             <Link
                               href={`/proyectos/${p.id}/finanzas`}
-                              className="px-2 py-0.5 rounded bg-navy-900 hover:bg-navy-800 text-white font-mono font-bold text-[9px]"
+                              className="px-2 py-0.5 rounded bg-navy-900 dark:bg-[#FF6A00] hover:bg-navy-800 dark:hover:bg-[#E55F00] text-white font-mono font-bold text-[9px]"
                             >
                               Ver ➔
                             </Link>
@@ -475,7 +488,7 @@ export default function CopilotoObreroPage() {
                   {usuarios.slice(0, 4).map((u) => (
                     <div
                       key={u.id}
-                      className="flex items-center justify-between bg-kraft-50/60 border border-kraft-200 p-2.5 rounded-xl text-xs"
+                      className="flex items-center justify-between bg-kraft-50/60 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] p-2.5 rounded-xl text-xs"
                     >
                       <div>
                         <span className="font-bold text-navy-900 block">{u.nombre}</span>
@@ -518,7 +531,7 @@ export default function CopilotoObreroPage() {
                         className={`p-2.5 rounded-xl border text-xs space-y-1 ${
                           evt.completado
                             ? 'bg-gray-50 border-gray-200 opacity-60'
-                            : 'bg-kraft-50/60 border-kraft-200'
+                            : 'bg-kraft-50/60 dark:bg-[#0F141C] border-kraft-200 dark:border-[#263040]'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-1.5">

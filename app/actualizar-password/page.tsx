@@ -14,7 +14,6 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import Logo from '@/components/Logo';
-import ThemeToggle from '@/components/ThemeToggle';
 import { supabase } from '@/lib/supabase/client';
 import { updatePasswordWithSupabase } from '@/lib/supabase/auth';
 
@@ -151,11 +150,6 @@ export default function ActualizarPasswordPage() {
         </defs>
         <rect width="100%" height="100%" fill="url(#grid-pattern-pwd)" />
       </svg>
-
-      {/* Botón de Tema */}
-      <div className="absolute top-4 right-4 z-20">
-        <ThemeToggle />
-      </div>
 
       {/* Tarjeta de Formulario */}
       <div className="w-full max-w-md bg-white/95 dark:bg-[#141A23]/95 backdrop-blur-md border border-[#E5DFC9] dark:border-[#263040] rounded-3xl shadow-2xl p-6 sm:p-8 relative z-10 animate-in fade-in transition-all">

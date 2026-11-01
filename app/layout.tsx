@@ -34,14 +34,34 @@ export const metadata: Metadata = {
     'Control, Cotizaciones, Costos, Pagos, Avances y Georreferenciación con Inteligencia Artificial (Google Gemini), Google Maps y WhatsApp para constructoras en Chile.',
 };
 
+const themeInitScript = `
+(function() {
+  try {
+    var saved = localStorage.getItem('obratrack_theme');
+    if (saved === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className={`${spaceGrotesk.variable} ${inter.variable} ${ibmPlexMono.variable}`}>
-      <body className="min-h-screen bg-kraft-100 antialiased">
+    <html
+      lang="es"
+      suppressHydrationWarning
+      className={`${spaceGrotesk.variable} ${inter.variable} ${ibmPlexMono.variable}`}
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased">
         <AppShell>{children}</AppShell>
       </body>
     </html>

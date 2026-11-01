@@ -368,14 +368,14 @@ export default function ProyectosPage() {
         {tab==='presupuestos'&&!isTerreno ? <PresupuestosPanel/> : <>
         {/* Banner Informativo si está en Plan Gratis y llegó al límite */}
         {activePlan === 'gratis' && proyectosActivos.length >= 1 && (
-          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/35 border border-amber-200 dark:border-amber-800/50 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
             <div className="flex items-center gap-3">
               <span className="text-xl">⚠️</span>
               <div>
                 <p className="text-xs font-bold font-heading">
                   Límite del Plan Gratis alcanzado ({proyectosActivos.length}/1 Obra Activa)
                 </p>
-                <p className="text-[11px] text-amber-800 font-sans">
+                <p className="text-[11px] text-amber-800 dark:text-amber-300/90 font-sans">
                   Para gestionar obras ilimitadas, desbloquear el Cotizador con IA y el comparador de precios, activa el <strong>Plan Pro</strong>.
                 </p>
               </div>
@@ -653,7 +653,7 @@ export default function ProyectosPage() {
                               proj.estado === 'activo'
                                 ? 'bg-obra-green-light text-obra-green'
                                 : proj.estado === 'terminado'
-                                ? 'bg-blue-50 text-blue-700'
+                                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
                                 : 'bg-gray-100 text-gray-600'
                             }`}
                           >
@@ -701,13 +701,13 @@ export default function ProyectosPage() {
                               <div
                                 key={w.id}
                                 title={`${w.nombre} (${w.rol})`}
-                                className="w-6 h-6 rounded-full bg-[#1E1E1E] text-white border-2 border-white flex items-center justify-center text-[9px] font-bold uppercase shrink-0"
+                                className="w-6 h-6 rounded-full bg-[#1E1E1E] text-white border-2 border-white dark:border-[#141A23] flex items-center justify-center text-[9px] font-bold uppercase shrink-0"
                               >
                                 {w.nombre.charAt(0)}
                               </div>
                             ))}
                             {workers.length > 4 && (
-                              <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-700 border-2 border-white flex items-center justify-center text-[9px] font-bold shrink-0">
+                              <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-[#263040] text-gray-700 dark:text-gray-200 border-2 border-white dark:border-[#141A23] flex items-center justify-center text-[9px] font-bold shrink-0">
                                 +{workers.length - 4}
                               </div>
                             )}

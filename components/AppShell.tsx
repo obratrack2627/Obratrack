@@ -4,30 +4,39 @@ import React from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import ThemeProvider from '@/components/ThemeProvider';
-
-import GlobalCopilotFloatingWidget from '@/components/GlobalCopilotFloatingWidget';
+import ThemeToggle from '@/components/ThemeToggle';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  // Tanto la raíz (/) como (/login) son vistas de autenticación que no muestran Sidebar ni Dashboard
-  const isAuthPage = !pathname || pathname === '/' || pathname === '/login' || pathname.startsWith('/login');
+  // Raíz (/), /login y /actualizar-password son vistas de autenticación sin Sidebar
+  const isAuthPage =
+    !pathname ||
+    pathname === '/' ||
+    pathname === '/login' ||
+    pathname.startsWith('/login') ||
+    pathname === '/actualizar-password' ||
+    pathname.startsWith('/actualizar-password');
 
   return (
     <ThemeProvider>
       {isAuthPage ? (
-        <main className="min-h-screen w-full page-fade-enter">
+        <main className="min-h-screen w-full bg-[var(--bg-page)] text-[var(--text-primary)] antialiased page-fade-enter transition-colors duration-200">
+          <div className="fixed top-4 right-4 z-40 print:hidden">
+            <ThemeToggle />
+          </div>
           {children}
         </main>
       ) : (
         <div className="min-h-screen flex flex-col md:flex-row bg-[var(--bg-page)] text-[var(--text-primary)] antialiased transition-colors duration-200">
           <Sidebar />
+          <div className="hidden md:flex fixed top-3.5 right-4 z-40 print:hidden">
+            <ThemeToggle />
+          </div>
           <main className="flex-1 flex flex-col min-h-screen w-full pt-16 md:pt-0 md:pl-64 transition-all">
             <div className="flex-1 flex flex-col page-fade-enter">
               {children}
             </div>
           </main>
-          {/* Copiloto Obrero IA Global en Botón Emergente */}
-          <GlobalCopilotFloatingWidget />
         </div>
       )}
     </ThemeProvider>

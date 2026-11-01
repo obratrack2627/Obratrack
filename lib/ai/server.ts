@@ -108,7 +108,13 @@ export function createChatHandler(
     try {
       const { client, user } = await deps.authorize(request);
       const body = await readAIRequest(request);
-      const { context, service, tables } = await loadAIContext(client, user);
+      const { company, context, service, tables } = await loadAIContext(client, user);
+      if (company?.plan_id === "gratis")
+        throw new AIError(
+          "PLAN_REQUIRED",
+          "El asistente de IA requiere el Plan Pro o Plan Pro IA.",
+          403,
+        );
       const finish = async (result: any, currentId?: string) => {
         const actions = checkActionPermissions(
           user,
