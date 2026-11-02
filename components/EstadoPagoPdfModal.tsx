@@ -281,7 +281,7 @@ export default function EstadoPagoPdfModal({
           <div
             id="obratrack-edp-pdf"
             style={{ backgroundColor: '#ffffff', color: '#111827' }}
-            className="mx-auto max-w-3xl bg-white text-gray-900 rounded-xl shadow-md p-6 sm:p-8 space-y-6 border border-gray-200"
+            className="pdf-paper mx-auto max-w-3xl bg-white text-gray-900 rounded-xl shadow-md p-6 sm:p-8 space-y-6 border border-gray-200"
           >
             {/* Encabezado Documento */}
             <div className="flex flex-wrap items-start justify-between gap-4 pb-5 border-b-2 border-[#FF6A00]">

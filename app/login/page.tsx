@@ -6,18 +6,18 @@ import {
   Lock,
   Mail,
   ArrowRight,
-  ShieldCheck,
+  ArrowLeft,
   CheckCircle2,
   User,
+  Building2,
   Eye,
   EyeOff,
-  UserPlus,
-  LogIn,
   AlertTriangle,
   Loader2,
   RefreshCw,
   Send,
   Phone,
+  Check,
 } from 'lucide-react';
 import Logo from '@/components/Logo';
 import LegalTermsModal from '@/components/LegalTermsModal';
@@ -31,6 +31,973 @@ import {
 import { dataService } from '@/lib/data-service';
 
 type AuthMode = 'signin' | 'signup' | 'forgot_password' | 'confirm_email';
+type LegalTab = 'terminos' | 'privacidad' | 'ciberseguridad';
+
+const INPUT_BASE_CLASS =
+  'h-11 w-full bg-[#FFFFFF] dark:bg-[#0F141C] border border-[#D5CEC0] dark:border-[#263040] rounded-xl text-sm text-[#1E1E1E] dark:text-gray-100 placeholder:text-[#9A9A9A] dark:placeholder:text-gray-500 focus:outline-none focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/15 transition-colors';
+
+const HEADER_COPY: Record<AuthMode, { title: string; subtitle: string }> = {
+  signin: {
+    title: 'Ingresa a tu cuenta',
+    subtitle: 'Accede al panel de obras, presupuestos y control financiero.',
+  },
+  signup: {
+    title: 'Registra tu constructora',
+    subtitle: 'Crea la cuenta titular de tu empresa para gestionar obras y cuadrillas.',
+  },
+  forgot_password: {
+    title: 'Recuperar contraseña',
+    subtitle: 'Ingresa tu correo y te enviaremos un enlace seguro para restablecer tu clave.',
+  },
+  confirm_email: {
+    title: 'Confirma tu correo electrónico',
+    subtitle: 'Activa tu acceso desde el mensaje enviado a tu casilla corporativa.',
+  },
+};
+
+function isValidInternalRedirect(path: string | null): path is string {
+  if (!path) return false;
+  return path.startsWith('/') && !path.startsWith('//') && !path.includes('://');
+}
+
+function resolveSafeRedirect(isTerreno: boolean): string {
+  const defaultTarget = isTerreno ? '/proyectos' : '/dashboard';
+  if (typeof window === 'undefined' || isTerreno) return defaultTarget;
+
+  const redirectParam = new URLSearchParams(window.location.search).get('redirect');
+  return isValidInternalRedirect(redirectParam) ? redirectParam : defaultTarget;
+}
+
+interface SignUpValidationArgs {
+  acceptTerms: boolean;
+  rut: string;
+  empresaNombre: string;
+  signupPassword: string;
+  signupConfirmPassword: string;
+}
+
+function validateSignUpFields(args: SignUpValidationArgs): string | null {
+  if (!args.acceptTerms) {
+    return 'Debes aceptar los Términos de Servicio y la Política de Privacidad para registrar tu empresa.';
+  }
+  if (!validarRutChileno(args.rut)) {
+    return 'El RUT ingresado no es válido según el cálculo oficial chileno (Módulo 11).';
+  }
+  if (args.empresaNombre.trim().length < 3) {
+    return 'Ingresa el nombre comercial o razón social de tu constructora o contratista.';
+  }
+  if (args.signupPassword !== args.signupConfirmPassword) {
+    return 'Las contraseñas ingresadas no coinciden.';
+  }
+  if (args.signupPassword.length < 6) {
+    return 'La contraseña debe tener al menos 6 caracteres.';
+  }
+  return null;
+}
+
+function resolveUrlAuthNotice(
+  cuentaConfirmada: string | null,
+  errorParam: string | null
+): { success?: string; error?: string; forceSignIn?: boolean } {
+  if (cuentaConfirmada === 'true') {
+    return {
+      success: 'Tu correo fue confirmado correctamente. Ya puedes ingresar a tu cuenta.',
+      forceSignIn: true,
+    };
+  }
+  if (errorParam === 'enlace_expirado') {
+    return {
+      error:
+        'El enlace de confirmación o recuperación expiró o ya fue utilizado. Solicita uno nuevo.',
+    };
+  }
+  if (errorParam === 'error_autenticacion') {
+    return {
+      error:
+        'No pudimos validar el enlace de acceso. Inicia sesión nuevamente o solicita recuperar tu contraseña.',
+    };
+  }
+  return {};
+}
+
+function CorporateLeftPanel() {
+  return (
+    <>
+      {/* Encabezado compacto móvil (< lg) */}
+      <header className="lg:hidden bg-[#141920] border-b border-[#232B36] relative">
+        <div className="h-[3px] w-full bg-[#FF6A00]" />
+        <div className="px-5 py-3.5 pr-16 flex items-center justify-between">
+          <Logo variant="horizontal" theme="dark" size="sm" />
+          <span className="text-[11px] font-medium text-[#94A3B8] hidden sm:inline">
+            Gestión de Obras · Chile
+          </span>
+        </div>
+      </header>
+
+      {/* Panel Institucional Izquierdo (Desktop lg+) */}
+      <aside className="hidden lg:flex lg:col-span-5 bg-[#141920] text-white border-r border-[#232B36] flex-col justify-between relative overflow-hidden select-none">
+        <div className="h-[3px] w-full bg-[#FF6A00] shrink-0" />
+
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none opacity-[0.035]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, #FFFFFF 1px, transparent 1px), linear-gradient(to bottom, #FFFFFF 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+          }}
+        />
+
+        <div className="relative z-10 flex-1 flex flex-col justify-between p-10 xl:p-12">
+          <div className="flex items-center justify-between gap-4">
+            <Logo variant="horizontal" theme="dark" size="md" />
+            <span className="text-xs font-medium text-[#94A3B8] tracking-tight">
+              Plataforma B2B · Chile
+            </span>
+          </div>
+
+          <div className="my-auto py-10">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#FF6A00] mb-3">
+              Control de Obra y Presupuestos
+            </p>
+            <h2 className="font-heading text-[28px] xl:text-[32px] font-bold leading-[1.18] tracking-tight text-white">
+              Presupuestos, avance físico y estados de pago en un solo lugar.
+            </h2>
+            <p className="text-[15px] leading-relaxed text-[#94A3B8] mt-3.5 max-w-md">
+              Diseñado para constructoras y contratistas en Chile. Centraliza cubicaciones con IVA
+              (19%), Carta Gantt por partidas, compras de materiales y reportes desde terreno sin
+              depender de planillas sueltas.
+            </p>
+
+            {/* Resumen Ejecutivo Sobrio de Obra */}
+            <div className="mt-8 rounded-xl bg-[#1B222C] border border-[#2A3442] overflow-hidden shadow-sm">
+              <div className="px-4 py-3 border-b border-[#2A3442] flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-white truncate">
+                    Remodelación Comercial Providencia
+                  </p>
+                  <p className="text-[11px] text-[#94A3B8] truncate mt-0.5">
+                    Mandante: Inmobiliaria Santa Elena SpA · Obra activa
+                  </p>
+                </div>
+                <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-medium text-[#86EFAC] bg-[#14532D]/40 border border-[#166534]/60 px-2.5 py-0.5 rounded-md">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80]" />
+                  En ejecución
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 divide-x divide-[#2A3442] bg-[#171D26]">
+                <div className="px-3.5 py-3">
+                  <p className="text-[11px] text-[#94A3B8]">Presupuesto neto</p>
+                  <p className="font-mono text-xs xl:text-[13px] font-semibold text-white mt-1">
+                    $42.850.000
+                  </p>
+                </div>
+                <div className="px-3.5 py-3">
+                  <p className="text-[11px] text-[#94A3B8]">Avance físico</p>
+                  <p className="font-mono text-xs xl:text-[13px] font-semibold text-white mt-1">
+                    68% ejecutado
+                  </p>
+                  <div className="h-1 w-full bg-[#2A3442] rounded-full mt-1.5 overflow-hidden">
+                    <div className="h-full w-[68%] bg-[#FF6A00] rounded-full" />
+                  </div>
+                </div>
+                <div className="px-3.5 py-3">
+                  <p className="text-[11px] text-[#94A3B8]">Estado de pago</p>
+                  <p className="font-mono text-xs xl:text-[13px] font-semibold text-[#E2E8F0] mt-1">
+                    EDP-002 al día
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <ul className="mt-6 space-y-2.5 text-[13px] text-[#CBD5E1]">
+              <li className="flex items-center gap-2.5">
+                <Check className="w-4 h-4 text-[#FF6A00] shrink-0" />
+                <span>Estados de pago con retención contractual, anticipos e IVA (19%)</span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <Check className="w-4 h-4 text-[#FF6A00] shrink-0" />
+                <span>Perfiles diferenciados para administración de obra y jefes de terreno</span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <Check className="w-4 h-4 text-[#FF6A00] shrink-0" />
+                <span>Entorno multiempresa validado con RUT chileno (Módulo 11)</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="pt-5 border-t border-[#232B36] flex items-center justify-between text-xs text-[#64748B]">
+            <span>© {new Date().getFullYear()} ObraTrack Chile</span>
+            <span>Operación en las 16 regiones del país</span>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+interface PasswordToggleButtonProps {
+  readonly visible: boolean;
+  readonly onToggle: () => void;
+}
+
+function PasswordToggleButton({ visible, onToggle }: PasswordToggleButtonProps) {
+  const label = visible ? 'Ocultar contraseña' : 'Mostrar contraseña';
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={label}
+      title={label}
+      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[#8C857B] hover:text-[#1E1E1E] dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+    >
+      {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+    </button>
+  );
+}
+
+interface SignInSectionProps {
+  readonly email: string;
+  readonly password: string;
+  readonly showPassword: boolean;
+  readonly isLoading: boolean;
+  readonly onEmailChange: (val: string) => void;
+  readonly onPasswordChange: (val: string) => void;
+  readonly onTogglePassword: () => void;
+  readonly onForgotPassword: () => void;
+  readonly onSubmit: (e: React.FormEvent) => void;
+}
+
+function SignInSection({
+  email,
+  password,
+  showPassword,
+  isLoading,
+  onEmailChange,
+  onPasswordChange,
+  onTogglePassword,
+  onForgotPassword,
+  onSubmit,
+}: SignInSectionProps) {
+  return (
+    <>
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div>
+          <label
+            htmlFor="login-email"
+            className="block text-sm font-medium text-[#1E1E1E] dark:text-gray-200 mb-1.5"
+          >
+            Correo electrónico
+          </label>
+          <div className="relative">
+            <Mail className="w-4 h-4 text-[#8C857B] dark:text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="login-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => onEmailChange(e.target.value)}
+              className={`${INPUT_BASE_CLASS} pl-10 pr-3.5`}
+              placeholder="nombre@constructora.cl"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label
+              htmlFor="login-password"
+              className="text-sm font-medium text-[#1E1E1E] dark:text-gray-200"
+            >
+              Contraseña
+            </label>
+            <button
+              type="button"
+              onClick={onForgotPassword}
+              className="text-xs font-medium text-[#C85200] dark:text-[#FF8533] hover:underline"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          </div>
+          <div className="relative">
+            <Lock className="w-4 h-4 text-[#8C857B] dark:text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="login-password"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => onPasswordChange(e.target.value)}
+              className={`${INPUT_BASE_CLASS} pl-10 pr-10`}
+              placeholder="Ingresa tu contraseña"
+              required
+            />
+            <PasswordToggleButton visible={showPassword} onToggle={onTogglePassword} />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="h-11 w-full mt-2 bg-[#FF6A00] hover:bg-[#E55F00] active:bg-[#CC5500] text-white font-semibold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Verificando acceso...</span>
+            </>
+          ) : (
+            <>
+              <span>Ingresar al panel</span>
+              <ArrowRight className="w-4 h-4" />
+            </>
+          )}
+        </button>
+      </form>
+
+      <div className="mt-5 pt-4 border-t border-[#E5DFC9] dark:border-[#1E2633]">
+        <p className="text-xs text-[#666666] dark:text-gray-400 leading-relaxed">
+          <strong className="font-semibold text-[#1E1E1E] dark:text-gray-200">
+            ¿Acceso de terreno?
+          </strong>{' '}
+          Si eres jefe de obra o maestro, ingresa con el correo y clave habilitados por el
+          administrador de tu constructora.
+        </p>
+      </div>
+    </>
+  );
+}
+
+interface SignUpSectionProps {
+  readonly nombre: string;
+  readonly rut: string;
+  readonly empresaNombre: string;
+  readonly signupEmail: string;
+  readonly telefono: string;
+  readonly signupPassword: string;
+  readonly signupConfirmPassword: string;
+  readonly showPassword: boolean;
+  readonly acceptTerms: boolean;
+  readonly acceptMarketing: boolean;
+  readonly isLoading: boolean;
+  readonly onNombreChange: (val: string) => void;
+  readonly onRutChange: (val: string) => void;
+  readonly onEmpresaChange: (val: string) => void;
+  readonly onEmailChange: (val: string) => void;
+  readonly onTelefonoChange: (val: string) => void;
+  readonly onPasswordChange: (val: string) => void;
+  readonly onConfirmPasswordChange: (val: string) => void;
+  readonly onTogglePassword: () => void;
+  readonly onAcceptTermsChange: (checked: boolean) => void;
+  readonly onAcceptMarketingChange: (checked: boolean) => void;
+  readonly onOpenLegalTab: (tab: LegalTab) => void;
+  readonly onSubmit: (e: React.FormEvent) => void;
+}
+
+function RutStatusBadge({ rut, isValid }: { readonly rut: string; readonly isValid: boolean }) {
+  if (!rut) return null;
+  const badgeClass = isValid
+    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+    : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300';
+  return (
+    <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${badgeClass}`}>
+      {isValid ? 'Válido' : 'Revisar'}
+    </span>
+  );
+}
+
+function SignUpSection(props: SignUpSectionProps) {
+  const isRutValid = props.rut ? validarRutChileno(props.rut) : true;
+  const rutBorderClass = isRutValid
+    ? 'border-[#D5CEC0] dark:border-[#263040] focus:border-[#FF6A00] focus:ring-[#FF6A00]/15'
+    : 'border-red-500 focus:border-red-500 focus:ring-red-500/15';
+
+  return (
+    <form onSubmit={props.onSubmit} className="space-y-3.5">
+      <div className="p-3.5 rounded-xl bg-[#F2EDE2] dark:bg-[#141A23] border border-[#E2DAC9] dark:border-[#263040] text-xs text-[#4A4640] dark:text-gray-300 leading-relaxed">
+        Registro para titulares de constructoras o contratistas generales. Una vez creada la cuenta
+        podrás agregar obras y habilitar usuarios de terreno.
+      </div>
+
+      <div>
+        <label
+          htmlFor="signup-nombre"
+          className="block text-sm font-medium text-[#1E1E1E] dark:text-gray-200 mb-1"
+        >
+          Nombre del responsable
+        </label>
+        <div className="relative">
+          <User className="w-4 h-4 text-[#8C857B] dark:text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            id="signup-nombre"
+            name="nombre"
+            type="text"
+            autoComplete="name"
+            required
+            placeholder="Ej. Rodrigo Morales"
+            value={props.nombre}
+            onChange={(e) => props.onNombreChange(e.target.value)}
+            className={`${INPUT_BASE_CLASS} pl-10 pr-3.5`}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label
+              htmlFor="signup-rut"
+              className="text-sm font-medium text-[#1E1E1E] dark:text-gray-200"
+            >
+              RUT empresa o personal
+            </label>
+            <RutStatusBadge rut={props.rut} isValid={isRutValid} />
+          </div>
+          <input
+            id="signup-rut"
+            name="rut"
+            type="text"
+            required
+            maxLength={12}
+            placeholder="76.543.210-K"
+            value={props.rut}
+            onChange={(e) => props.onRutChange(formatRUT(e.target.value))}
+            className={`h-11 w-full px-3.5 bg-[#FFFFFF] dark:bg-[#0F141C] border rounded-xl text-sm font-mono text-[#1E1E1E] dark:text-gray-100 placeholder:text-[#9A9A9A] focus:outline-none focus:ring-2 transition-colors ${rutBorderClass}`}
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="signup-empresa"
+            className="block text-sm font-medium text-[#1E1E1E] dark:text-gray-200 mb-1"
+          >
+            Constructora / Contratista
+          </label>
+          <div className="relative">
+            <Building2 className="w-4 h-4 text-[#8C857B] dark:text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="signup-empresa"
+              name="organization"
+              type="text"
+              autoComplete="organization"
+              required
+              placeholder="Constructora Los Andes"
+              value={props.empresaNombre}
+              onChange={(e) => props.onEmpresaChange(e.target.value)}
+              className={`${INPUT_BASE_CLASS} pl-10 pr-3.5`}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label
+            htmlFor="signup-email"
+            className="block text-sm font-medium text-[#1E1E1E] dark:text-gray-200 mb-1"
+          >
+            Correo corporativo
+          </label>
+          <div className="relative">
+            <Mail className="w-4 h-4 text-[#8C857B] dark:text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="signup-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              placeholder="contacto@empresa.cl"
+              value={props.signupEmail}
+              onChange={(e) => props.onEmailChange(e.target.value)}
+              className={`${INPUT_BASE_CLASS} pl-10 pr-3.5`}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="signup-telefono"
+            className="block text-sm font-medium text-[#1E1E1E] dark:text-gray-200 mb-1"
+          >
+            Teléfono / WhatsApp
+          </label>
+          <div className="relative">
+            <Phone className="w-4 h-4 text-[#8C857B] dark:text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="signup-telefono"
+              name="tel"
+              type="tel"
+              autoComplete="tel"
+              required
+              placeholder="+56 9 1234 5678"
+              value={props.telefono}
+              onChange={(e) => props.onTelefonoChange(e.target.value)}
+              className={`${INPUT_BASE_CLASS} pl-10 pr-3.5 font-mono`}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label
+            htmlFor="signup-password"
+            className="block text-sm font-medium text-[#1E1E1E] dark:text-gray-200 mb-1"
+          >
+            Contraseña
+          </label>
+          <div className="relative">
+            <Lock className="w-4 h-4 text-[#8C857B] dark:text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="signup-password"
+              name="new-password"
+              type={props.showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              required
+              minLength={6}
+              placeholder="Mínimo 6 caracteres"
+              value={props.signupPassword}
+              onChange={(e) => props.onPasswordChange(e.target.value)}
+              className={`${INPUT_BASE_CLASS} pl-10 pr-10`}
+            />
+            <PasswordToggleButton visible={props.showPassword} onToggle={props.onTogglePassword} />
+          </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="signup-confirm-password"
+            className="block text-sm font-medium text-[#1E1E1E] dark:text-gray-200 mb-1"
+          >
+            Confirmar contraseña
+          </label>
+          <div className="relative">
+            <Lock className="w-4 h-4 text-[#8C857B] dark:text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="signup-confirm-password"
+              name="confirm-password"
+              type={props.showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
+              required
+              minLength={6}
+              placeholder="Repite tu clave"
+              value={props.signupConfirmPassword}
+              onChange={(e) => props.onConfirmPasswordChange(e.target.value)}
+              className={`${INPUT_BASE_CLASS} pl-10 pr-3.5`}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2.5 pt-1">
+        <div className="flex items-start gap-2.5">
+          <input
+            id="signup-accept-terms"
+            type="checkbox"
+            required
+            checked={props.acceptTerms}
+            onChange={(e) => props.onAcceptTermsChange(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded border-[#C8C0B0] text-[#FF6A00] focus:ring-[#FF6A00] shrink-0 cursor-pointer"
+          />
+          <span className="text-xs text-[#555555] dark:text-gray-400 leading-relaxed">
+            <label htmlFor="signup-accept-terms" className="cursor-pointer">
+              He leído y acepto los{' '}
+            </label>
+            <button
+              type="button"
+              onClick={() => props.onOpenLegalTab('terminos')}
+              className="text-[#C85200] dark:text-[#FF8533] underline font-medium hover:text-[#E55F00]"
+            >
+              Términos de Servicio
+            </button>{' '}
+            y la{' '}
+            <button
+              type="button"
+              onClick={() => props.onOpenLegalTab('privacidad')}
+              className="text-[#C85200] dark:text-[#FF8533] underline font-medium hover:text-[#E55F00]"
+            >
+              Política de Privacidad
+            </button>{' '}
+            (Leyes N° 19.496 y 21.719).
+          </span>
+        </div>
+
+        <div className="flex items-start gap-2.5">
+          <input
+            id="signup-accept-marketing"
+            type="checkbox"
+            checked={props.acceptMarketing}
+            onChange={(e) => props.onAcceptMarketingChange(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded border-[#C8C0B0] text-[#FF6A00] focus:ring-[#FF6A00] shrink-0 cursor-pointer"
+          />
+          <label
+            htmlFor="signup-accept-marketing"
+            className="text-xs text-[#666666] dark:text-gray-400 leading-relaxed cursor-pointer select-none"
+          >
+            Deseo recibir actualizaciones sobre precios de materiales y mejoras de la plataforma
+            (opcional).
+          </label>
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={props.isLoading || !props.acceptTerms || !isRutValid}
+        className="h-11 w-full mt-2 bg-[#FF6A00] hover:bg-[#E55F00] active:bg-[#CC5500] text-white font-semibold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+      >
+        {props.isLoading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Registrando empresa...</span>
+          </>
+        ) : (
+          <>
+            <span>Crear cuenta de empresa</span>
+            <ArrowRight className="w-4 h-4" />
+          </>
+        )}
+      </button>
+    </form>
+  );
+}
+
+interface ForgotPasswordSectionProps {
+  readonly forgotEmail: string;
+  readonly isLoading: boolean;
+  readonly onEmailChange: (val: string) => void;
+  readonly onBack: () => void;
+  readonly onSubmit: (e: React.FormEvent) => void;
+}
+
+function ForgotPasswordSection({
+  forgotEmail,
+  isLoading,
+  onEmailChange,
+  onBack,
+  onSubmit,
+}: ForgotPasswordSectionProps) {
+  return (
+    <form onSubmit={onSubmit} className="space-y-4">
+      <div>
+        <label
+          htmlFor="forgot-email"
+          className="block text-sm font-medium text-[#1E1E1E] dark:text-gray-200 mb-1.5"
+        >
+          Correo electrónico registrado
+        </label>
+        <div className="relative">
+          <Mail className="w-4 h-4 text-[#8C857B] dark:text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            id="forgot-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            value={forgotEmail}
+            onChange={(e) => onEmailChange(e.target.value)}
+            className={`${INPUT_BASE_CLASS} pl-10 pr-3.5`}
+            placeholder="nombre@constructora.cl"
+            required
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="h-11 flex-1 bg-[#FF6A00] hover:bg-[#E55F00] text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Enviando enlace...</span>
+            </>
+          ) : (
+            <>
+              <Send className="w-4 h-4" />
+              <span>Enviar enlace de recuperación</span>
+            </>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onBack}
+          className="h-11 px-4 bg-[#ECE7DC] dark:bg-[#1A2230] hover:bg-[#E2DAC9] dark:hover:bg-[#222C3D] text-[#1E1E1E] dark:text-gray-200 font-medium rounded-xl text-sm flex items-center justify-center gap-1.5 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Volver</span>
+        </button>
+      </div>
+    </form>
+  );
+}
+
+interface ConfirmEmailSectionProps {
+  readonly signupEmail: string;
+  readonly isResending: boolean;
+  readonly onResend: () => void;
+  readonly onGoToSignIn: () => void;
+}
+
+function ConfirmEmailSection({
+  signupEmail,
+  isResending,
+  onResend,
+  onGoToSignIn,
+}: ConfirmEmailSectionProps) {
+  return (
+    <div className="p-6 rounded-2xl bg-[#FFFFFF] dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] space-y-4">
+      <div className="w-11 h-11 rounded-xl bg-[#FF6A00]/10 border border-[#FF6A00]/20 flex items-center justify-center text-[#FF6A00]">
+        <Mail className="w-5 h-5" />
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm text-[#4A4A4A] dark:text-gray-300 leading-relaxed">
+          Enviamos un enlace de activación a la siguiente dirección:
+        </p>
+        <p className="text-sm font-mono font-semibold text-[#1E1E1E] dark:text-white bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] px-3 py-2 rounded-lg break-all">
+          {signupEmail || 'tu correo corporativo'}
+        </p>
+        <p className="text-xs text-[#666666] dark:text-gray-400 leading-relaxed">
+          Abre el mensaje y confirma tu cuenta antes de iniciar sesión. Si no aparece en unos
+          minutos, revisa tu carpeta de correo no deseado.
+        </p>
+      </div>
+
+      <div className="pt-2 space-y-2.5">
+        <button
+          type="button"
+          onClick={onResend}
+          disabled={isResending}
+          className="h-10 w-full bg-[#FAF8F5] dark:bg-[#0F141C] hover:bg-[#EFECE4] dark:hover:bg-[#1A2230] border border-[#D5CEC0] dark:border-[#263040] text-[#1E1E1E] dark:text-gray-200 font-medium rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+        >
+          {isResending ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Reenviando correo...</span>
+            </>
+          ) : (
+            <>
+              <RefreshCw className="w-4 h-4" />
+              <span>Reenviar correo de activación</span>
+            </>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={onGoToSignIn}
+          className="h-10 w-full bg-[#1E1E1E] dark:bg-[#FF6A00] hover:bg-black dark:hover:bg-[#E55F00] text-white font-semibold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors"
+        >
+          <span>Ir a iniciar sesión</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+async function executeSignInRequest(
+  email: string,
+  password: string
+): Promise<{ ok: true; welcomeMsg: string; redirectTo: string } | { ok: false; errorMsg: string }> {
+  try {
+    const result = await signInWithSupabase(email, password);
+    if (!result.success) {
+      return {
+        ok: false,
+        errorMsg:
+          result.error ||
+          'Correo o contraseña incorrectos. Verifica tus datos e inténtalo nuevamente.',
+      };
+    }
+
+    dataService.clearChatSessionHistory();
+    const isTerreno = result.user?.rol === 'terreno';
+    const welcomeName = result.user?.nombre || 'Jefe de Terreno';
+    const welcomeMsg = isTerreno
+      ? `Bienvenido, ${welcomeName}. Abriendo tus obras asignadas...`
+      : 'Acceso verificado. Abriendo panel de control...';
+
+    return { ok: true, welcomeMsg, redirectTo: resolveSafeRedirect(isTerreno) };
+  } catch (err: any) {
+    return {
+      ok: false,
+      errorMsg: err?.message || 'Error al iniciar sesión. Inténtalo nuevamente.',
+    };
+  }
+}
+
+interface ExecuteSignUpArgs {
+  signupEmail: string;
+  signupPassword: string;
+  nombre: string;
+  rut: string;
+  empresaNombre: string;
+  telefono: string;
+}
+
+async function executeSignUpRequest(
+  args: ExecuteSignUpArgs
+): Promise<
+  | { status: 'error'; message: string }
+  | { status: 'confirm_email'; message: string }
+  | { status: 'authenticated'; message: string; redirectTo: string }
+> {
+  try {
+    const result = await signUpWithSupabase(
+      args.signupEmail,
+      args.signupPassword,
+      args.nombre,
+      args.rut,
+      args.empresaNombre,
+      args.telefono
+    );
+
+    if (!result.success) {
+      return {
+        status: 'error',
+        message: result.error || 'No fue posible completar el registro de la cuenta.',
+      };
+    }
+
+    if (result.emailConfirmationRequired) {
+      return {
+        status: 'confirm_email',
+        message:
+          result.message || 'Te enviamos un correo de activación. Revisa tu bandeja de entrada.',
+      };
+    }
+
+    return {
+      status: 'authenticated',
+      message: 'Empresa registrada correctamente. Ingresando al panel...',
+      redirectTo: resolveSafeRedirect(false),
+    };
+  } catch (err: any) {
+    return {
+      status: 'error',
+      message: err?.message || 'Error al registrar la cuenta.',
+    };
+  }
+}
+
+async function executeForgotPasswordRequest(
+  forgotEmail: string
+): Promise<{ ok: boolean; message: string }> {
+  const res = await resetPasswordWithSupabase(forgotEmail);
+  if (res.success) {
+    return {
+      ok: true,
+      message:
+        res.message ||
+        'Te enviamos las instrucciones de recuperación. Revisa tu bandeja de entrada o correo no deseado.',
+    };
+  }
+  return { ok: false, message: res.error || 'No se pudo enviar el correo de recuperación.' };
+}
+
+async function executeResendConfirmationRequest(
+  signupEmail: string
+): Promise<{ ok: boolean; message: string }> {
+  const res = await resendConfirmationEmail(signupEmail);
+  if (res.success) {
+    return { ok: true, message: res.message || 'Correo de activación reenviado correctamente.' };
+  }
+  return { ok: false, message: res.error || 'No se pudo reenviar el correo de activación.' };
+}
+
+function ModeSwitcher({
+  mode,
+  onSwitch,
+}: {
+  readonly mode: AuthMode;
+  readonly onSwitch: (next: AuthMode) => void;
+}) {
+  if (mode !== 'signin' && mode !== 'signup') return null;
+
+  const activeClass =
+    'bg-[#FFFFFF] dark:bg-[#1E2633] text-[#1E1E1E] dark:text-white shadow-sm font-semibold';
+  const inactiveClass =
+    'text-[#5C5852] dark:text-gray-400 hover:text-[#1E1E1E] dark:hover:text-gray-200';
+
+  return (
+    <div className="grid grid-cols-2 p-1 rounded-xl bg-[#ECE7DC] dark:bg-[#121821] border border-[#DFD8C8] dark:border-[#263040] mb-6">
+      <button
+        type="button"
+        aria-pressed={mode === 'signin'}
+        onClick={() => onSwitch('signin')}
+        className={`h-9 text-sm rounded-lg transition-all font-medium ${
+          mode === 'signin' ? activeClass : inactiveClass
+        }`}
+      >
+        Iniciar sesión
+      </button>
+      <button
+        type="button"
+        aria-pressed={mode === 'signup'}
+        onClick={() => onSwitch('signup')}
+        className={`h-9 text-sm rounded-lg transition-all font-medium ${
+          mode === 'signup' ? activeClass : inactiveClass
+        }`}
+      >
+        Crear cuenta
+      </button>
+    </div>
+  );
+}
+
+function AuthStatusBanners({
+  errorMsg,
+  successMsg,
+}: {
+  readonly errorMsg: string | null;
+  readonly successMsg: string | null;
+}) {
+  return (
+    <>
+      {errorMsg && (
+        <div
+          role="alert"
+          className="mb-5 p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 text-red-800 dark:text-red-300 text-xs sm:text-[13px] flex items-start gap-2.5 leading-snug"
+        >
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {successMsg && (
+        <div
+          role="status"
+          className="mb-5 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-xs sm:text-[13px] flex items-start gap-2.5 leading-snug"
+        >
+          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+function useUrlAuthNotice(
+  searchParams: ReturnType<typeof useSearchParams>,
+  onSuccess: (msg: string) => void,
+  onError: (msg: string) => void,
+  onForceSignIn: () => void
+) {
+  useEffect(() => {
+    const notice = resolveUrlAuthNotice(
+      searchParams.get('cuenta_confirmada'),
+      searchParams.get('error')
+    );
+    if (notice.success) onSuccess(notice.success);
+    if (notice.error) onError(notice.error);
+    if (notice.forceSignIn) onForceSignIn();
+  }, [searchParams, onSuccess, onError, onForceSignIn]);
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -43,17 +1010,14 @@ function LoginForm() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Estados de Cumplimiento Legal (Ley 19.496, 21.719 y 21.663)
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
-  const [legalModalTab, setLegalModalTab] = useState<'terminos' | 'privacidad' | 'ciberseguridad'>('terminos');
+  const [legalModalTab, setLegalModalTab] = useState<LegalTab>('terminos');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptMarketing, setAcceptMarketing] = useState(false);
 
-  // Iniciar Sesión
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Crear Cuenta (Exclusivo Dueño / Contratista)
   const [nombre, setNombre] = useState('');
   const [rut, setRut] = useState('');
   const [empresaNombre, setEmpresaNombre] = useState('');
@@ -62,145 +1026,78 @@ function LoginForm() {
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
   const [telefono, setTelefono] = useState('+56 9 ');
 
-  // Recuperación
   const [forgotEmail, setForgotEmail] = useState('');
 
-  // Detección de parámetros URL (confirmación de cuenta o errores de enlace)
-  useEffect(() => {
-    const cuentaConfirmada = searchParams.get('cuenta_confirmada');
-    const errorParam = searchParams.get('error');
+  const forceSignInMode = React.useCallback(() => setMode('signin'), []);
+  useUrlAuthNotice(searchParams, setSuccessMsg, setErrorMsg, forceSignInMode);
 
-    if (cuentaConfirmada === 'true') {
-      setSuccessMsg('¡Tu correo ha sido confirmado exitosamente! Ya puedes iniciar sesión con tu cuenta.');
-      setMode('signin');
-    } else if (errorParam === 'enlace_expirado') {
-      setErrorMsg('El enlace de confirmación o recuperación ha expirado o ya fue utilizado. Por favor solicita uno nuevo.');
-    } else if (errorParam === 'error_autenticacion') {
-      setErrorMsg('Ocurrió un problema al validar el enlace de autenticación. Por favor inicia sesión o recupera tu clave.');
-    }
-  }, [searchParams]);
-
-  // Manejo de formateo de RUT en vivo
-  const handleRutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    const formatted = formatRUT(raw);
-    setRut(formatted);
+  const openLegalTab = (tab: LegalTab) => {
+    setLegalModalTab(tab);
+    setIsLegalModalOpen(true);
   };
 
-  // Manejo de inicio de sesión en Supabase Auth
+  const switchMode = (nextMode: AuthMode) => {
+    setMode(nextMode);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
     setIsLoading(true);
 
-    try {
-      const result = await signInWithSupabase(email, password);
-      if (!result.success) {
-        setErrorMsg(result.error || 'Credenciales inválidas o cuenta no registrada en Supabase.');
-        setIsLoading(false);
-        return;
-      }
-
-      dataService.clearChatSessionHistory();
-      const isTerreno = result.user?.rol === 'terreno';
-      setSuccessMsg(
-        isTerreno
-          ? `¡Hola ${result.user?.nombre || 'Maestro'}! Ingresando a la vista de faena...`
-          : '¡Cuenta verificada! Ingresando al Centro de Mando...'
-      );
-
-      setTimeout(() => {
-        let target = isTerreno ? '/proyectos' : '/dashboard';
-        if (typeof window !== 'undefined') {
-          const params = new URLSearchParams(window.location.search);
-          const redirectParam = params.get('redirect');
-          if (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//') && !redirectParam.includes('://')) {
-            target = isTerreno ? '/proyectos' : redirectParam;
-          }
-        }
-        router.replace(target);
-      }, 400);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error de autenticación.');
+    const outcome = await executeSignInRequest(email, password);
+    if (!outcome.ok) {
+      setErrorMsg(outcome.errorMsg);
       setIsLoading(false);
+      return;
     }
+
+    setSuccessMsg(outcome.welcomeMsg);
+    setTimeout(() => router.replace(outcome.redirectTo), 350);
   };
 
-  // Manejo de registro en Supabase Auth con validación estricta de RUT chileno
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    // 1. Validación de Términos y Condiciones Legales (Ley 19.496 y 21.719)
-    if (!acceptTerms) {
-      setErrorMsg('Debes leer y aceptar los Términos de Servicio y la Política de Privacidad y Confidencialidad de ObraTrack.');
-      return;
-    }
-
-    // 2. Validación estricta de RUT chileno (Módulo 11)
-    if (!validarRutChileno(rut)) {
-      setErrorMsg('El RUT ingresado no es válido según el formato oficial chileno (Módulo 11). Verifica el número y dígito verificador.');
-      return;
-    }
-
-    if (!empresaNombre || empresaNombre.trim().length < 3) {
-      setErrorMsg('Debes ingresar el nombre o razón social de tu constructora / contratista.');
-      return;
-    }
-
-    if (signupPassword !== signupConfirmPassword) {
-      setErrorMsg('Las contraseñas no coinciden. Verifica que ambas sean iguales.');
-      return;
-    }
-    if (signupPassword.length < 6) {
-      setErrorMsg('La contraseña debe tener al menos 6 caracteres.');
+    const validationError = validateSignUpFields({
+      acceptTerms,
+      rut,
+      empresaNombre,
+      signupPassword,
+      signupConfirmPassword,
+    });
+    if (validationError) {
+      setErrorMsg(validationError);
       return;
     }
 
     setIsLoading(true);
+    const outcome = await executeSignUpRequest({
+      signupEmail,
+      signupPassword,
+      nombre,
+      rut,
+      empresaNombre,
+      telefono,
+    });
+    setIsLoading(false);
 
-    try {
-      const result = await signUpWithSupabase(
-        signupEmail,
-        signupPassword,
-        nombre,
-        rut,
-        empresaNombre,
-        telefono
-      );
-
-      if (!result.success) {
-        setErrorMsg(result.error || 'No se pudo crear la cuenta en Supabase.');
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(false);
-
-      if (result.emailConfirmationRequired) {
-        setMode('confirm_email');
-        setSuccessMsg(result.message || 'Te hemos enviado un correo de confirmación. Por favor revisa tu bandeja.');
-        return;
-      }
-
-      setSuccessMsg('¡Cuenta de Dueño/Contratista verificada y creada con éxito! Ingresando...');
-      setTimeout(() => {
-        let target = '/dashboard';
-        if (typeof window !== 'undefined') {
-          const params = new URLSearchParams(window.location.search);
-          const redirectParam = params.get('redirect');
-          if (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//') && !redirectParam.includes('://')) {
-            target = redirectParam;
-          }
-        }
-        router.replace(target);
-      }, 500);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error al registrar la cuenta.');
-      setIsLoading(false);
+    if (outcome.status === 'error') {
+      setErrorMsg(outcome.message);
+      return;
     }
+    if (outcome.status === 'confirm_email') {
+      setMode('confirm_email');
+      setSuccessMsg(outcome.message);
+      return;
+    }
+    setSuccessMsg(outcome.message);
+    setTimeout(() => router.replace(outcome.redirectTo), 450);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -209,645 +1106,135 @@ function LoginForm() {
     setErrorMsg(null);
     setSuccessMsg(null);
     setIsLoading(true);
-    const res = await resetPasswordWithSupabase(forgotEmail);
+    const outcome = await executeForgotPasswordRequest(forgotEmail);
     setIsLoading(false);
-    if (res.success) {
-      setSuccessMsg(res.message || 'Correo de recuperación enviado. Por favor revisa tu bandeja de entrada o spam.');
-    } else {
-      setErrorMsg(res.error || 'No se pudo enviar el correo de recuperación.');
-    }
+    setSuccessMsg(outcome.ok ? outcome.message : null);
+    setErrorMsg(outcome.ok ? null : outcome.message);
   };
 
   const handleResendConfirmation = async () => {
     if (!signupEmail) return;
     setIsResending(true);
     setErrorMsg(null);
-    const res = await resendConfirmationEmail(signupEmail);
+    const outcome = await executeResendConfirmationRequest(signupEmail);
     setIsResending(false);
-    if (res.success) {
-      setSuccessMsg(res.message || 'Correo de confirmación reenviado.');
-    } else {
-      setErrorMsg(res.error || 'No se pudo reenviar el correo.');
-    }
+    if (outcome.ok) setSuccessMsg(outcome.message);
+    else setErrorMsg(outcome.message);
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-[#F5F0E6] via-[#FAF8F5] to-[#EAE2D2] dark:from-[#06080C] dark:via-[#0D1117] dark:to-[#040609] flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors duration-300">
-      
-      {/* Resplandores difusos ambientales (Warm Amber & Safety Green / Steel Slate) */}
-      <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#FF6A00]/12 dark:bg-[#FF6A00]/10 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '6s' }}></div>
-      <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#6B8F72]/15 dark:bg-[#2563EB]/10 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '8s' }}></div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#E5DFC9]/30 dark:bg-[#151D28]/30 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="min-h-screen w-full flex flex-col lg:grid lg:grid-cols-12 bg-[#FAF8F5] dark:bg-[#0B0E14]">
+      <CorporateLeftPanel />
 
-      {/* Retícula técnica milimétrica de plano / blueprint con cruces de arquitectura */}
-      <svg className="absolute inset-0 w-full h-full opacity-35 dark:opacity-15 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <pattern id="grid-pattern" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.6" className="text-[#C8BFAB] dark:text-[#263040]" />
-            <path d="M 19 20 L 21 20 M 20 19 L 20 21" stroke="currentColor" strokeWidth="0.8" className="text-[#FF6A00]/40 dark:text-[#FF6A00]/30" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid-pattern)" />
-      </svg>
+      <section className="flex-1 lg:col-span-7 flex flex-col justify-center items-center px-5 sm:px-10 lg:px-14 pt-8 pb-10 lg:py-12">
+        <div className="w-full max-w-[440px]">
+          <div className="mb-6">
+            <h1 className="font-heading text-2xl sm:text-[26px] font-bold text-[#1E1E1E] dark:text-white tracking-tight">
+              {HEADER_COPY[mode].title}
+            </h1>
+            <p className="text-sm text-[#666666] dark:text-gray-400 mt-1 leading-relaxed">
+              {HEADER_COPY[mode].subtitle}
+            </p>
+          </div>
 
-      {/* FIGURA 1: Grúa Torre Isométrica y Cota de Nivel (Esquina Superior Izquierda) */}
-      <div className="absolute top-6 left-6 sm:top-12 sm:left-12 opacity-40 dark:opacity-25 pointer-events-none select-none hidden md:block">
-        <svg width="220" height="180" viewBox="0 0 220 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
-          <line x1="40" y1="40" x2="40" y2="160" stroke="currentColor" strokeWidth="1.5" />
-          <line x1="60" y1="40" x2="60" y2="160" stroke="currentColor" strokeWidth="1.5" />
-          <line x1="40" y1="60" x2="60" y2="80" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
-          <line x1="60" y1="60" x2="40" y2="80" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
-          <line x1="40" y1="100" x2="60" y2="120" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
-          <line x1="60" y1="100" x2="40" y2="120" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
-          <line x1="40" y1="140" x2="60" y2="160" stroke="currentColor" strokeWidth="1" strokeDasharray="2 2" />
-          <polygon points="40,40 50,15 60,40" stroke="#FF6A00" strokeWidth="1.5" fill="none" />
-          <line x1="10" y1="40" x2="200" y2="40" stroke="currentColor" strokeWidth="1.5" />
-          <line x1="50" y1="15" x2="160" y2="40" stroke="#FF6A00" strokeWidth="1" strokeDasharray="3 2" />
-          <line x1="50" y1="15" x2="20" y2="40" stroke="currentColor" strokeWidth="1" />
-          <rect x="15" y="42" width="18" height="12" stroke="currentColor" strokeWidth="1" fill="#FF6A00" fillOpacity="0.2" />
-          <line x1="140" y1="40" x2="140" y2="95" stroke="#FF6A00" strokeWidth="1" strokeDasharray="2 2" />
-          <circle cx="140" cy="98" r="3" stroke="#FF6A00" strokeWidth="1.5" />
-          <text x="68" y="30" fill="currentColor" className="text-[9px] font-mono font-bold tracking-widest opacity-80">+28.50m COTA GRÚA</text>
-          <text x="68" y="150" fill="#FF6A00" className="text-[8px] font-mono font-semibold tracking-wider">OBRA.TRACK // 01</text>
-        </svg>
-      </div>
+          <ModeSwitcher mode={mode} onSwitch={switchMode} />
+          <AuthStatusBanners errorMsg={errorMsg} successMsg={successMsg} />
 
-      {/* FIGURA 2: Celosía Estructural Warren & Cota Angular (Esquina Superior Derecha) */}
-      <div className="absolute top-8 right-8 sm:top-14 sm:right-14 opacity-35 dark:opacity-20 pointer-events-none select-none hidden lg:block">
-        <svg width="240" height="130" viewBox="0 0 240 130" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
-          <line x1="10" y1="30" x2="230" y2="30" stroke="currentColor" strokeWidth="1.5" />
-          <line x1="10" y1="90" x2="230" y2="90" stroke="currentColor" strokeWidth="1.5" />
-          <line x1="10" y1="90" x2="45" y2="30" stroke="currentColor" strokeWidth="1.2" />
-          <line x1="45" y1="30" x2="80" y2="90" stroke="#FF6A00" strokeWidth="1.2" />
-          <line x1="80" y1="90" x2="115" y2="30" stroke="currentColor" strokeWidth="1.2" />
-          <line x1="115" y1="30" x2="150" y2="90" stroke="currentColor" strokeWidth="1.2" />
-          <line x1="150" y1="90" x2="185" y2="30" stroke="#FF6A00" strokeWidth="1.2" />
-          <line x1="185" y1="30" x2="220" y2="90" stroke="currentColor" strokeWidth="1.2" />
-          <circle cx="45" cy="30" r="3" fill="#FF6A00" />
-          <circle cx="115" cy="30" r="3" fill="currentColor" />
-          <circle cx="185" cy="30" r="3" fill="#FF6A00" />
-          <circle cx="80" cy="90" r="3" fill="currentColor" />
-          <circle cx="150" cy="90" r="3" fill="currentColor" />
-          <line x1="10" y1="105" x2="230" y2="105" stroke="currentColor" strokeWidth="0.8" strokeDasharray="3 3" />
-          <path d="M 10 101 L 10 109 M 230 101 L 230 109" stroke="currentColor" strokeWidth="1" />
-          <text x="95" y="120" fill="currentColor" className="text-[9px] font-mono font-bold tracking-widest">L = 12.00 METROS</text>
-        </svg>
-      </div>
-
-      {/* FIGURA 3: Cubo Isométrico & Estratigrafía de Cimentación (Esquina Inferior Izquierda) */}
-      <div className="absolute bottom-8 left-8 sm:bottom-12 sm:left-12 opacity-40 dark:opacity-25 pointer-events-none select-none hidden md:block">
-        <svg width="220" height="190" viewBox="0 0 220 190" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
-          <polygon points="90,20 160,55 90,90 20,55" stroke="#FF6A00" strokeWidth="1.5" fill="#FF6A00" fillOpacity="0.06" />
-          <polygon points="20,55 90,90 90,160 20,125" stroke="currentColor" strokeWidth="1.5" fill="none" />
-          <polygon points="90,90 160,55 160,125 90,160" stroke="currentColor" strokeWidth="1.5" fill="none" />
-          <line x1="20" y1="90" x2="90" y2="125" stroke="#6B8F72" strokeWidth="1.2" strokeDasharray="3 2" />
-          <line x1="90" y1="125" x2="160" y2="90" stroke="#6B8F72" strokeWidth="1.2" strokeDasharray="3 2" />
-          <line x1="90" y1="90" x2="90" y2="10" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" />
-          <text x="100" y="15" fill="#FF6A00" className="text-[8px] font-mono font-bold">EJE Z [HORMIGÓN H-25]</text>
-          <text x="15" y="180" fill="currentColor" className="text-[8.5px] font-mono tracking-wider opacity-80">RADIER 3D // SECCIÓN 04</text>
-        </svg>
-      </div>
-
-      {/* FIGURA 4: Perfil Viga I / Doble T y Coordenadas Geodésicas (Esquina Inferior Derecha) */}
-      <div className="absolute bottom-8 right-8 sm:bottom-12 sm:right-12 opacity-40 dark:opacity-25 pointer-events-none select-none hidden md:block">
-        <svg width="220" height="180" viewBox="0 0 220 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-[#1E1E1E] dark:text-[#E5DFC9]">
-          <polygon points="80,30 180,60 160,70 60,40" stroke="currentColor" strokeWidth="1.5" fill="none" />
-          <line x1="120" y1="50" x2="120" y2="120" stroke="#FF6A00" strokeWidth="2" />
-          <line x1="110" y1="46" x2="110" y2="116" stroke="currentColor" strokeWidth="1.2" />
-          <polygon points="80,100 180,130 160,140 60,110" stroke="currentColor" strokeWidth="1.5" fill="#FF6A00" fillOpacity="0.08" />
-          <g transform="translate(160, 110)">
-            <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 2" />
-            <polygon points="20,6 24,20 20,17 16,20" fill="#FF6A00" />
-            <polygon points="20,34 24,20 20,23 16,20" fill="currentColor" opacity="0.6" />
-            <text x="17" y="3" fill="#FF6A00" className="text-[7px] font-mono font-bold">N</text>
-          </g>
-          <text x="35" y="165" fill="currentColor" className="text-[8.5px] font-mono tracking-widest font-semibold">COORD: 33°28'S 70°36'W</text>
-        </svg>
-      </div>
-
-      {/* Card Principal */}
-      <div className="w-full max-w-md bg-white/95 dark:bg-[#141A23]/95 backdrop-blur-md border border-[#E5DFC9] dark:border-[#263040] rounded-3xl shadow-2xl p-6 sm:p-8 relative z-10 animate-in fade-in transition-all duration-300">
-        
-        {/* Logo & Marca */}
-        <div className="flex flex-col items-center text-center mb-6">
-          <Logo variant="vertical" size="md" withDescriptor={false} className="mb-2" />
-          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-            El copiloto digital del constructor
-          </p>
-        </div>
-
-        {/* Selector de Modo: Iniciar Sesión / Crear Cuenta */}
-        {mode !== 'forgot_password' && mode !== 'confirm_email' && (
-          <div className="grid grid-cols-2 p-1 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl mb-5">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signin');
-                setErrorMsg(null);
-                setSuccessMsg(null);
+          {mode === 'signin' && (
+            <SignInSection
+              email={email}
+              password={password}
+              showPassword={showPassword}
+              isLoading={isLoading}
+              onEmailChange={setEmail}
+              onPasswordChange={setPassword}
+              onTogglePassword={() => setShowPassword((prev) => !prev)}
+              onForgotPassword={() => {
+                setForgotEmail(email);
+                switchMode('forgot_password');
               }}
-              className={`py-2 text-xs font-bold font-heading rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                mode === 'signin'
-                  ? 'bg-[#1E1E1E] dark:bg-[#FF6A00] text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Iniciar Sesión</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMode('signup');
-                setErrorMsg(null);
-                setSuccessMsg(null);
+              onSubmit={handleLogin}
+            />
+          )}
+
+          {mode === 'signup' && (
+            <SignUpSection
+              nombre={nombre}
+              rut={rut}
+              empresaNombre={empresaNombre}
+              signupEmail={signupEmail}
+              telefono={telefono}
+              signupPassword={signupPassword}
+              signupConfirmPassword={signupConfirmPassword}
+              showPassword={showPassword}
+              acceptTerms={acceptTerms}
+              acceptMarketing={acceptMarketing}
+              isLoading={isLoading}
+              onNombreChange={setNombre}
+              onRutChange={setRut}
+              onEmpresaChange={setEmpresaNombre}
+              onEmailChange={setSignupEmail}
+              onTelefonoChange={setTelefono}
+              onPasswordChange={setSignupPassword}
+              onConfirmPasswordChange={setSignupConfirmPassword}
+              onTogglePassword={() => setShowPassword((prev) => !prev)}
+              onAcceptTermsChange={setAcceptTerms}
+              onAcceptMarketingChange={setAcceptMarketing}
+              onOpenLegalTab={openLegalTab}
+              onSubmit={handleSignUp}
+            />
+          )}
+
+          {mode === 'forgot_password' && (
+            <ForgotPasswordSection
+              forgotEmail={forgotEmail}
+              isLoading={isLoading}
+              onEmailChange={setForgotEmail}
+              onBack={() => switchMode('signin')}
+              onSubmit={handleForgotPassword}
+            />
+          )}
+
+          {mode === 'confirm_email' && (
+            <ConfirmEmailSection
+              signupEmail={signupEmail}
+              isResending={isResending}
+              onResend={handleResendConfirmation}
+              onGoToSignIn={() => {
+                setEmail(signupEmail);
+                switchMode('signin');
               }}
-              className={`py-2 text-xs font-bold font-heading rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                mode === 'signup'
-                  ? 'bg-[#FF6A00] text-white shadow-sm'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-[#FF6A00]'
-              }`}
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Crear Cuenta</span>
-            </button>
-          </div>
-        )}
+            />
+          )}
 
-        {/* Alertas */}
-        {errorMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 text-red-700 dark:text-red-300 text-xs flex items-center gap-2 animate-in fade-in">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-        {successMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-            <span>{successMsg}</span>
-          </div>
-        )}
-
-        {/* 1. VISTA: INICIAR SESIÓN */}
-        {mode === 'signin' && (
-          <form onSubmit={handleLogin} className="space-y-4 animate-in fade-in">
-            <div>
-              <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                Correo Electrónico
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/20 font-sans transition-all"
-                  placeholder="tu@constructora.cl"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider font-mono">
-                  Contraseña
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotEmail(email);
-                    setMode('forgot_password');
-                    setErrorMsg(null);
-                    setSuccessMsg(null);
-                  }}
-                  className="text-[11px] text-[#FF6A00] hover:underline font-mono"
-                >
-                  ¿Olvidaste tu clave?
-                </button>
-              </div>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/20 font-sans transition-all"
-                  placeholder="••••••••"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 bg-[#FF6A00] hover:bg-[#E55F00] text-white font-bold rounded-xl shadow-lg shadow-[#FF6A00]/25 hover:shadow-xl hover:shadow-[#FF6A00]/35 transition-all flex items-center justify-center gap-2 font-heading text-xs uppercase tracking-wider disabled:opacity-50"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verificando credenciales...</span>
-                </>
-              ) : (
-                <>
-                  <span>Ingresar a ObraTrack</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
-        )}
-
-        {/* 2. VISTA: CREAR CUENTA (EXCLUSIVO DUEÑO / CONTRATISTA GENERAL) */}
-        {mode === 'signup' && (
-          <form onSubmit={handleSignUp} className="space-y-3 animate-in fade-in">
-            {/* Aviso de Exclusividad */}
-            <div className="p-3 bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/30 dark:border-amber-700/40 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
-              <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-[#FF6A00]" />
-              <p className="leading-snug">
-                <strong>Registro exclusivo para Dueño o Contratista General:</strong> Valida tu empresa con RUT chileno. Supabase Auth enviará un correo de confirmación para activar tu acceso.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                Nombre del Dueño / Contratista *
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej: Benjamín Achávar"
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] font-sans"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider font-mono">
-                    RUT Empresa / Personal *
-                  </label>
-                  {rut && (
-                    <span
-                      className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded ${
-                        validarRutChileno(rut)
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                          : 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
-                      }`}
-                    >
-                      {validarRutChileno(rut) ? '✓ Válido' : '✗ Inválido'}
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  required
-                  maxLength={12}
-                  placeholder="12.345.678-9"
-                  value={rut}
-                  onChange={handleRutChange}
-                  className={`w-full px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none font-mono ${
-                    rut && !validarRutChileno(rut)
-                      ? 'border-red-500 focus:border-red-500'
-                      : 'border-[#E5DFC9] dark:border-[#263040] focus:border-[#FF6A00]'
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                  Constructora / Contratista *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ej: Constructora Los Andes"
-                  value={empresaNombre}
-                  onChange={(e) => setEmpresaNombre(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00]"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                  Correo Electrónico *
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="tu@constructora.cl"
-                    value={signupEmail}
-                    onChange={(e) => setSignupEmail(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] font-sans"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                  WhatsApp Contacto *
-                </label>
-                <div className="relative">
-                  <Phone className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="tel"
-                    required
-                    placeholder="+56 9 1234 5678"
-                    value={telefono}
-                    onChange={(e) => setTelefono(e.target.value)}
-                    className="w-full pl-8 pr-2 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] font-mono"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                  Contraseña *
-                </label>
-                <div className="relative">
-                  <Lock className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    minLength={6}
-                    placeholder="Mín 6 car."
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
-                    className="w-full pl-8 pr-2 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                  Confirmar *
-                </label>
-                <div className="relative">
-                  <Lock className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    minLength={6}
-                    placeholder="Repetir"
-                    value={signupConfirmPassword}
-                    onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                    className="w-full pl-8 pr-2 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Consentimientos Legales (Ley 19.496, Ley 21.719 y Ley 21.663) */}
-            <div className="space-y-2 pt-1">
-              <label className="flex items-start gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  required
-                  checked={acceptTerms}
-                  onChange={(e) => setAcceptTerms(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#FF6A00] focus:ring-[#FF6A00] shrink-0"
-                />
-                <span className="text-[11px] text-gray-600 dark:text-gray-400 leading-tight">
-                  He leído y acepto los{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLegalModalTab('terminos');
-                      setIsLegalModalOpen(true);
-                    }}
-                    className="text-[#FF6A00] underline font-semibold hover:text-[#E55F00]"
-                  >
-                    Términos de Servicio
-                  </button>{' '}
-                  y la{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLegalModalTab('privacidad');
-                      setIsLegalModalOpen(true);
-                    }}
-                    className="text-[#FF6A00] underline font-semibold hover:text-[#E55F00]"
-                  >
-                    Política de Privacidad y Confidencialidad
-                  </button>{' '}
-                  (Leyes N° 19.496 y 21.719).
-                </span>
-              </label>
-
-              <label className="flex items-start gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={acceptMarketing}
-                  onChange={(e) => setAcceptMarketing(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#FF6A00] focus:ring-[#FF6A00] shrink-0"
-                />
-                <span className="text-[11px] text-gray-500 dark:text-gray-400 leading-tight">
-                  (Opcional) Deseo recibir reportes de precios de materiales y novedades del sector por correo.
-                </span>
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading || !acceptTerms || (!!rut && !validarRutChileno(rut))}
-              className="w-full mt-2 py-3 bg-[#FF6A00] hover:bg-[#E55F00] text-white font-bold rounded-xl shadow-lg shadow-[#FF6A00]/25 transition-all flex items-center justify-center gap-2 font-heading text-xs uppercase tracking-wider disabled:opacity-50"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Validando RUT y creando cuenta...</span>
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-4 h-4" />
-                  <span>Registrar Empresa & Crear Cuenta</span>
-                </>
-              )}
-            </button>
-          </form>
-        )}
-
-        {/* 3. VISTA: RECUPERACIÓN DE CONTRASEÑA */}
-        {mode === 'forgot_password' && (
-          <div className="space-y-4 animate-in fade-in">
-            <div>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white font-heading">
-                Recuperar Contraseña
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Ingresa tu correo para recibir un enlace seguro de restablecimiento de contraseña vía Supabase Auth.
-              </p>
-            </div>
-
-            <form onSubmit={handleForgotPassword} className="space-y-3">
-              <div className="relative">
-                <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="email"
-                  value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00]"
-                  placeholder="tu@constructora.cl"
-                  required
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="flex-1 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Enviando enlace...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Enviar Enlace</span>
-                    </>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('signin');
-                    setErrorMsg(null);
-                    setSuccessMsg(null);
-                  }}
-                  className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl text-xs"
-                >
-                  Volver
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* 4. VISTA: CONFIRMAR CORREO ELECTRÓNICO */}
-        {mode === 'confirm_email' && (
-          <div className="space-y-4 animate-in fade-in text-center py-2">
-            <div className="w-14 h-14 bg-[#FF6A00]/10 dark:bg-[#FF6A00]/20 rounded-full flex items-center justify-center mx-auto text-[#FF6A00] animate-pulse">
-              <Mail className="w-7 h-7" />
-            </div>
-
-            <div>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white font-heading">
-                ¡Confirma tu correo electrónico!
-              </h3>
-              <p className="text-xs text-gray-600 dark:text-gray-300 mt-1.5 leading-relaxed">
-                Hemos enviado un correo de confirmación con un enlace de activación a:
-              </p>
-              <p className="text-xs font-mono font-bold text-[#FF6A00] mt-1.5 bg-amber-500/10 dark:bg-amber-950/30 py-1.5 px-3 rounded-xl inline-block border border-amber-500/20">
-                {signupEmail || 'tu correo'}
-              </p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 leading-relaxed">
-                Para proteger la información de tu constructora, haz clic en el botón del correo recibido (revisa también tu carpeta de spam) antes de iniciar sesión.
-              </p>
-            </div>
-
-            <div className="pt-2 space-y-2">
+          <footer className="mt-8 pt-5 border-t border-[#E5DFC9] dark:border-[#1E2633]">
+            <div className="flex flex-wrap items-center justify-center sm:justify-start divide-x divide-[#D5CEC0] dark:divide-[#263040] text-xs text-[#666666] dark:text-gray-400">
               <button
                 type="button"
-                onClick={handleResendConfirmation}
-                disabled={isResending}
-                className="w-full py-2.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-900 dark:text-amber-200 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 font-heading"
+                onClick={() => openLegalTab('terminos')}
+                className="pr-3 py-0.5 hover:text-[#1E1E1E] dark:hover:text-white hover:underline transition-colors"
               >
-                {isResending ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Reenviando correo...</span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Reenviar correo de confirmación</span>
-                  </>
-                )}
+                Términos (Ley 19.496)
               </button>
-
               <button
                 type="button"
-                onClick={() => {
-                  setMode('signin');
-                  setEmail(signupEmail);
-                  setErrorMsg(null);
-                  setSuccessMsg(null);
-                }}
-                className="w-full py-2.5 bg-[#1E1E1E] dark:bg-gray-800 hover:bg-black text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 font-heading"
+                onClick={() => openLegalTab('privacidad')}
+                className="px-3 py-0.5 hover:text-[#1E1E1E] dark:hover:text-white hover:underline transition-colors"
               >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Ya confirmé mi correo / Iniciar Sesión</span>
+                Privacidad (Ley 21.719)
+              </button>
+              <button
+                type="button"
+                onClick={() => openLegalTab('ciberseguridad')}
+                className="pl-3 py-0.5 hover:text-[#1E1E1E] dark:hover:text-white hover:underline transition-colors"
+              >
+                Seguridad (Ley 21.663)
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Footer Seguridad & Marco Legal */}
-        <div className="mt-5 pt-3.5 border-t border-[#E5DFC9] dark:border-[#263040] flex flex-col items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 font-mono">
-          <div className="flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#6B8F72]" />
-            <span>Protección de Datos & Supabase Auth (PostgreSQL 17)</span>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center">
-            <button
-              type="button"
-              onClick={() => {
-                setLegalModalTab('terminos');
-                setIsLegalModalOpen(true);
-              }}
-              className="hover:underline hover:text-gray-800 dark:hover:text-white"
-            >
-              Términos (Ley 19.496)
-            </button>
-            <span>•</span>
-            <button
-              type="button"
-              onClick={() => {
-                setLegalModalTab('privacidad');
-                setIsLegalModalOpen(true);
-              }}
-              className="hover:underline hover:text-gray-800 dark:hover:text-white"
-            >
-              Privacidad (Ley 21.719)
-            </button>
-            <span>•</span>
-            <button
-              type="button"
-              onClick={() => {
-                setLegalModalTab('ciberseguridad');
-                setIsLegalModalOpen(true);
-              }}
-              className="hover:underline hover:text-gray-800 dark:hover:text-white"
-            >
-              Ciberseguridad (Ley 21.663)
-            </button>
-          </div>
+          </footer>
         </div>
-      </div>
+      </section>
 
-      {/* Modal Interactivo de Términos y Condiciones / Privacidad */}
       <LegalTermsModal
         isOpen={isLegalModalOpen}
         onClose={() => setIsLegalModalOpen(false)}
@@ -861,8 +1248,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen w-full flex items-center justify-center bg-[#F5F0E6] dark:bg-[#06080C]">
-          <Loader2 className="w-8 h-8 animate-spin text-[#FF6A00]" />
+        <div className="min-h-screen w-full flex items-center justify-center bg-[#FAF8F5] dark:bg-[#0B0E14]">
+          <Loader2 className="w-7 h-7 animate-spin text-[#FF6A00]" />
         </div>
       }
     >
