@@ -73,6 +73,11 @@ export default function ClientesPage() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    window.addEventListener('obratrack_cloud_synced', loadData);
+    return () => window.removeEventListener('obratrack_cloud_synced', loadData);
+  }, []);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);

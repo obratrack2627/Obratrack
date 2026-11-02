@@ -62,6 +62,14 @@ export default function DashboardPage() {
     setReportes(reps);
 
     setLoading(false);
+    const onSync = () => {
+      setActiveUser(dataService.getActiveUser());
+      setProyectos(dataService.getProyectos());
+      setEventos(dataService.getEventosAgenda());
+      setReportes(dataService.getReportes());
+    };
+    window.addEventListener('obratrack_cloud_synced', onSync);
+    return () => window.removeEventListener('obratrack_cloud_synced', onSync);
   }, [router]);
 
   // Cálculos de KPIs Financieros y Operacionales

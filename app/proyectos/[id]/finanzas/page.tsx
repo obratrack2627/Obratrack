@@ -21,13 +21,28 @@ import {
   Store,
   MapPin,
   Sparkles,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import Navbar from '@/components/Navbar';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import { dataService } from '@/lib/data-service';
-import { Proyecto, Pago, Imprevisto, PaymentMethod, MaterialProyecto, Cliente } from '@/types/database';
+import {
+  Proyecto,
+  Pago,
+  Imprevisto,
+  PaymentMethod,
+  MaterialProyecto,
+  Cliente,
+  Actividad,
+  ReclamoCambioObra,
+} from '@/types/database';
+import EstadoPagoPdfModal from '@/components/EstadoPagoPdfModal';
+import { downloadProjectExcel } from '@/lib/excel-export';
+import MaterialCatalogQuickSearch from '@/components/MaterialCatalogQuickSearch';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 
 export default function ProyectoFinanzasPage() {
@@ -98,6 +113,10 @@ export default function ProyectoFinanzasPage() {
   const [editMatUnidad, setEditMatUnidad] = useState('unidades');
   const [editMatPrecioUnit, setEditMatPrecioUnit] = useState('');
   const [editMatProveedor, setEditMatProveedor] = useState('Imperial');
+  const [actividades, setActividades] = useState<Actividad[]>([]);
+  const [cambios, setCambios] = useState<ReclamoCambioObra[]>([]);
+  const [isEdpModalOpen, setIsEdpModalOpen] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
 
   const loadData = () => {
     if (!projectId) return;
@@ -112,6 +131,8 @@ export default function ProyectoFinanzasPage() {
     setPagos(pays);
     setImprevistos(imps);
     setMateriales(mats);
+    setActividades(dataService.getActividades(projectId));
+    setCambios(dataService.getReclamosCambios(projectId));
     setIsLoading(false);
   };
 
@@ -124,9 +145,51 @@ export default function ProyectoFinanzasPage() {
     loadData();
   }, [projectId]);
 
+  useEffect(() => {
+    const onSync = () => loadData();
+    window.addEventListener('obratrack_cloud_synced', onSync);
+    return () => window.removeEventListener('obratrack_cloud_synced', onSync);
+  }, [projectId]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleExportExcel = async () => {
+    if (!proyecto || isExportingExcel) return;
+    setIsExportingExcel(true);
+    try {
+      const activeUser = dataService.getActiveUser();
+      await downloadProjectExcel({
+        proyecto,
+        cliente,
+        empresaNombre: activeUser?.empresa_nombre || 'Constructora ObraTrack',
+        actividades,
+        pagos,
+        materiales,
+        imprevistos,
+        asistencias: dataService.getAsistencias(projectId),
+      });
+      showToast('Cartola Excel (.xlsx) descargada correctamente.');
+    } catch (err) {
+      console.error(err);
+      showToast('No se pudo generar el archivo Excel.');
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
+  const handleRegistrarPagoDesdeEdp = (monto: number, nota: string) => {
+    dataService.createPago({
+      proyecto_id: projectId,
+      monto,
+      metodo: 'transferencia',
+      fecha: new Date().toISOString().split('T')[0],
+      nota,
+    });
+    loadData();
+    showToast(`Estado de pago registrado por ${formatCLP(monto)}.`);
   };
 
   // --- CRUD PAGOS ---
@@ -374,6 +437,41 @@ export default function ProyectoFinanzasPage() {
 
       <div className="p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
         
+        {/* Barra Ejecutiva: Estado de Pago Formal (EDP PDF) y Cartola Excel (.xlsx) */}
+        <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-heading font-bold text-sm text-navy-900 dark:text-white">
+              Documentos de Cobro y Control Contable
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Emite Estados de Pago formales según avance de Carta Gantt o exporta la cartola completa en Excel.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsEdpModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-obra-orange hover:bg-obra-orange-hover text-white text-xs font-bold shadow-sm transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              <span>Emitir Estado de Pago (PDF)</span>
+            </button>
+            <button
+              type="button"
+              disabled={isExportingExcel}
+              onClick={() => void handleExportExcel()}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#6B8F72] hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold shadow-sm transition-colors"
+            >
+              {isExportingExcel ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4" />
+              )}
+              <span>{isExportingExcel ? 'Generando Excel…' : 'Exportar Cartola Excel (.xlsx)'}</span>
+            </button>
+          </div>
+        </div>
+
         {/* KPI Cards & Semáforo de Rentabilidad Real */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
@@ -1188,6 +1286,17 @@ export default function ProyectoFinanzasPage() {
                   onChange={(e) => setNombreMat(e.target.value)}
                   className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange"
                 />
+                <MaterialCatalogQuickSearch
+                  query={nombreMat}
+                  cantidad={Number(cantidadMat) || 1}
+                  unidad={unidadMat}
+                  onSelect={(sel) => {
+                    setNombreMat(sel.nombre);
+                    setPrecioUnitMat(formatThousands(sel.precioUnitario));
+                    setProveedorMat(sel.proveedor);
+                    if (sel.categoria) setCategoriaMat(sel.categoria);
+                  }}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -1253,6 +1362,8 @@ export default function ProyectoFinanzasPage() {
                     onChange={(e) => setProveedorMat(e.target.value)}
                     className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
                   >
+                    <option value="Easy">Easy</option>
+                    <option value="Dimaco">Dimaco</option>
                     <option value="Imperial">Imperial</option>
                     <option value="Construmart">Construmart</option>
                     <option value="Sodimac">Sodimac Constructor</option>
@@ -1372,6 +1483,8 @@ export default function ProyectoFinanzasPage() {
                     onChange={(e) => setEditMatProveedor(e.target.value)}
                     className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
                   >
+                    <option value="Easy">Easy</option>
+                    <option value="Dimaco">Dimaco</option>
                     <option value="Imperial">Imperial</option>
                     <option value="Construmart">Construmart</option>
                     <option value="Sodimac">Sodimac Constructor</option>
@@ -1450,6 +1563,17 @@ export default function ProyectoFinanzasPage() {
           </div>
         </div>
       )}
+
+      <EstadoPagoPdfModal
+        isOpen={isEdpModalOpen}
+        onClose={() => setIsEdpModalOpen(false)}
+        proyecto={proyecto}
+        cliente={cliente}
+        actividades={actividades}
+        pagos={pagos}
+        cambios={cambios}
+        onRegistrarPago={handleRegistrarPagoDesdeEdp}
+      />
 
       {/* Modal: Visor Google Maps de la Obra */}
       <GoogleMapsProjectViewer
