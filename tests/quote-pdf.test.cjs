@@ -21,6 +21,7 @@ test('vista y exportación conservan el detalle, los totales guardados y la fech
   assert.equal(document.iva, q.estructura_financiera.iva_19);
   assert.match(document.fecha, /01.*11.*2026/);
   assert.equal(document.cliente.email, 'cliente@example.test');
+  assert.equal(buildQuoteDocument({ ...q, cliente_email: 'anterior@example.test' }, { clienteEmail: '' }).cliente.email, 'Por definir');
   assert.equal(document.validez, 'Por acordar');
   assert.match(document.filename, /^ObraTrack_Cotizacion_.*Ampliacion_de_vivienda\.pdf$/);
 });

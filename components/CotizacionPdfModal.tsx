@@ -48,9 +48,9 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
   const savedClient = visibleQuote.cliente_id ? dataService.getClientes().find((c) => c.id === visibleQuote.cliente_id) : undefined;
   const document = buildQuoteDocument(visibleQuote, {
     ...client,
-    clienteEmail: client.clienteEmail || visibleQuote.cliente_email || savedClient?.email,
-    clienteNombre: client.clienteNombre || visibleQuote.cliente_nombre || savedClient?.nombre,
-    clienteTelefono: client.clienteTelefono || visibleQuote.cliente_telefono || savedClient?.telefono,
+    clienteEmail: client.clienteEmail ?? visibleQuote.cliente_email ?? savedClient?.email,
+    clienteNombre: client.clienteNombre ?? visibleQuote.cliente_nombre ?? savedClient?.nombre,
+    clienteTelefono: client.clienteTelefono ?? visibleQuote.cliente_telefono ?? savedClient?.telefono,
     emisor,
   });
 
