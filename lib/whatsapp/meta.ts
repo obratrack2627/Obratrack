@@ -1,6 +1,7 @@
 import { AIError } from "@/lib/ai/errors";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { serverFetch } from "@/lib/server-fetch";
+import { splitWhatsAppMessage } from "./format";
 
 export function canonicalPhone(value: string) {
   let digits = value.replace(/\D/g, "");
@@ -243,7 +244,7 @@ export async function sendMetaText(to: string, text: string) {
   const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
   const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
   // WhatsApp limita cada texto a 4096 caracteres. Conservar todo el detalle en varios mensajes.
-  for (let offset = 0; offset < text.length; offset += 4000) {
+  for (const part of splitWhatsAppMessage(text)) {
     const res = await serverFetch(
       `https://graph.facebook.com/${version()}/${phone}/messages`,
       {
@@ -256,7 +257,7 @@ export async function sendMetaText(to: string, text: string) {
           messaging_product: "whatsapp",
           to,
           type: "text",
-          text: { body: text.slice(offset, offset + 4000) },
+          text: { body: part },
         }),
       },
     );

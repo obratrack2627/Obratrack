@@ -6,10 +6,12 @@ import { generateGemini } from "@/lib/ai/provider";
 import { canonicalPhone, downloadMetaMedia } from "./meta";
 import { isolatedState, planWhatsAppActions } from "./state";
 import { checkActionPermissions } from "@/lib/ai/permissions";
-import { formatCLP } from "@/lib/utils";
+import { WHATSAPP_BRAND, whatsappCard, whatsappText, quoteWhatsApp, quoteMenuChoice, materialComparisonWhatsApp } from "./format";
+export { quoteWhatsApp } from "./format";
 import { storeEvidence, evidenceActions } from "./evidence";
 import { projectIntake } from "./project-intake";
 import { prepareCampaign } from "./campaigns";
+import { isMaterialComparison } from "@/lib/materials/types";
 
 const childTables = [
   "actividades",
@@ -39,11 +41,6 @@ export function identifySender(users: any[], phone: string) {
     : [];
   return matches.length === 1 && matches[0].empresa_id ? matches[0] : null;
 }
-export function quoteWhatsApp(q: any) {
-  const f = q.estructura_financiera;
-  return `*Cotización estimada: ${q.titulo_proyecto}*\n${q.resumen_ejecutivo || ""}\n\n*Materiales*\n${q.materiales.map((m: any) => `• ${m.nombre}: ${m.cantidad} ${m.unidad}, ${formatCLP(m.subtotal)}`).join("\n")}\n\n*Mano de obra*\n${q.mano_de_obra.map((m: any) => `• ${m.rol}: ${m.cantidad_personas} personas × ${m.dias_estimados} días, ${formatCLP(m.subtotal)}`).join("\n")}${q.actividades_gantt?.length ? "\n\n*Gantt sugerido*\n" + q.actividades_gantt.map((a: any) => `• ${a.nombre}: ${a.dias} día(s)`).join("\n") : ""}\n\nGastos generales: ${formatCLP(f.gastos_generales_monto)}\nImprevistos: ${formatCLP(f.imprevistos_monto)}\nUtilidad (${f.margen_utilidad_porcentaje}%): ${formatCLP(f.margen_utilidad_monto)}\nNeto: ${formatCLP(f.precio_sugerido_neto)}\nIVA: ${formatCLP(f.iva_19)}\n*Total: ${formatCLP(f.precio_total_con_iva)}*\nPrecios estimados, sujetos a confirmación.\nDisponible también en ObraTrack → Reportes WhatsApp.\n\n¿Quieres crear esta obra con un Gantt sugerido y sus materiales? Responde «sí» para continuar; te pediré los datos del cliente que falten.`;
-}
-
 export async function processPersonalMessage(
   sb: any,
   message: any,
@@ -61,7 +58,7 @@ export async function processPersonalMessage(
   if (!user)
     return {
       respuesta:
-        "Este número no tiene una cuenta de ObraTrack vinculada de forma única. Pide al administrador registrar tu teléfono con código de país en tu ficha de usuario.",
+        whatsappCard("Vincula tu teléfono", "Este número no tiene una cuenta de ObraTrack vinculada de forma única. Pide al administrador registrar tu teléfono con código de país en tu ficha de usuario."),
       persistido: false,
     };
   const cached = checked(
@@ -114,14 +111,14 @@ export async function processPersonalMessage(
     tables.usuarios = [user];
   } else if (!["admin", "supervisor"].includes(user.rol))
     return {
-      respuesta: "Tu cuenta no tiene permisos para usar este canal.",
+      respuesta: whatsappCard("Acceso pendiente", "Tu cuenta no tiene permisos para usar este canal."),
       persistido: false,
     };
   const service = isolatedState(user, tables, company?.plan_id || "gratis");
   if (service.getActivePlan() !== "pro_ia")
     return {
       respuesta:
-        "El canal de gestión por WhatsApp requiere el plan Pro IA de tu empresa.",
+        whatsappCard("Plan de tu empresa", "El canal de gestión por WhatsApp requiere el plan Pro IA de tu empresa."),
       persistido: false,
     };
   const history = checked(
@@ -165,20 +162,27 @@ export async function processPersonalMessage(
   } else if (message.type !== "text")
     return {
       respuesta:
-        "Por este canal puedes enviar texto, notas de voz o fotos. Indica el nombre de la obra en tu mensaje.",
+        whatsappCard("Adjunto no compatible", "Por este canal puedes enviar texto, notas de voz o fotos. Indica el nombre de la obra en tu mensaje."),
       persistido: false,
     };
   if (!text.trim() || text.length > 6000)
     return {
       respuesta:
-        "Envía una instrucción de hasta 6000 caracteres e indica la obra.",
+        whatsappCard("Revisa tu mensaje", "Envía una instrucción de hasta 6000 caracteres e indica la obra."),
       persistido: false,
     };
   let result;
   let acceptCreation = false;
   let alreadyConverted = false;
   let confirmationResponse = '';
-  if (!pendingProject && history[0]?.cotizacion && acceptsQuotedProject(text)) {
+  const menuChoice = quoteMenuChoice(text, history[0]);
+  if (menuChoice === 1 && pendingProject)
+    confirmationResponse = 'Ya tienes una creación de obra pendiente. Completa sus datos o escribe «cancelar» antes de crear otra obra desde esta cotización.';
+  if (menuChoice === 2)
+    confirmationResponse = '¿Qué deseas modificar de la cotización? Indica el material, cantidad, precio o margen que quieres cambiar. No se creará una obra con esta opción.';
+  if (menuChoice === 3)
+    confirmationResponse = '¿Qué material quieres comparar? Indica presentación y cantidad si las conoces.\n\nPor ejemplo: «Busca el mejor precio de 20 sacos de cemento de 25 kg en Maipú». La búsqueda no compra ni agrega materiales a la obra.';
+  if (!pendingProject && history[0]?.cotizacion && (menuChoice === 1 || acceptsQuotedProject(text))) {
     const budget = await findBudget(sb, user.empresa_id, history[0].cotizacion.id);
     if (!budget) confirmationResponse = 'No se pudo recuperar el presupuesto guardado. Ábrelo en ObraTrack para revisarlo.';
     else if (budget.proyecto_id) { alreadyConverted = true; confirmationResponse = 'Esta cotización ya tiene una obra creada. Puedes abrir su Carta Gantt en ObraTrack.'; }
@@ -341,18 +345,28 @@ export async function processPersonalMessage(
     campaign = undefined;
   }
   if (plan.result && plan.result.tipo !== "solicitar_datos_obra")
-    response = `✅ Guardado en ObraTrack.\n${plan.result.titulo}\n${plan.result.resultado_texto || ""}${image ? `\n\n${result.respuesta}` : ""}`;
+    response = `✅ *Guardado en ObraTrack*\n*${plan.result.titulo}*\n\n${plan.result.resultado_texto || ""}${image ? `\n\n${result.respuesta}` : ""}`;
   if (result.cotizacion)
     response = plan.result
-      ? response + `\n\n${quoteWhatsApp(result.cotizacion)}`
-      : quoteWhatsApp(result.cotizacion);
+      ? response + `\n\n${quoteWhatsApp(result.cotizacion, user.rol !== "terreno")}`
+      : quoteWhatsApp(result.cotizacion, user.rol !== "terreno");
+  const comparison = "comparacion_materiales" in result ? result.comparacion_materiales : null;
+  if (isMaterialComparison(comparison)) response = materialComparisonWhatsApp(comparison);
   if (attachment)
     response += attachment.proyecto_id
-      ? "\n📸 Foto guardada en la bitácora de la obra."
-      : "\n📸 Foto recibida y guardada. Indica el nombre completo de la obra para incorporarla a su bitácora.";
+      ? "\n\n📸 Foto guardada en la bitácora de la obra."
+      : "\n\n📸 Foto recibida y guardada. Indica el nombre completo de la obra para incorporarla a su bitácora.";
   if (analysisFailed)
     response +=
-      "\nEl análisis de la imagen no estuvo disponible. La foto quedó conservada; puedes reenviarla para volver a analizarla.";
+      "\n\n⚠️ El análisis de la imagen no estuvo disponible. La foto quedó conservada; puedes reenviarla para volver a analizarla.";
+  const title = menuChoice === 2 ? "Modificar cotización" : menuChoice === 3 ? "Comparar materiales"
+    : response.startsWith("No se guardaron cambios.") ? "Solicitud pendiente"
+    : plan.result?.tipo === "solicitar_datos_obra" ? "Datos para crear la obra"
+    : campaign ? "Aviso al equipo · En cola"
+    : attachment ? "Registro fotográfico"
+    : plan.result ? "Registro de obra"
+    : "Consulta de obra";
+  response = response.startsWith(WHATSAPP_BRAND) ? whatsappText(response) : whatsappCard(title, response);
   const quoteOrigin = candidateDraft?.presupuesto_cotizacion_id || pendingProject?.presupuesto_cotizacion_id;
   const newProjects = (plan.changed.proyectos || []).filter((p: any) => !tables.proyectos.some((previous: any) => previous.id === p.id));
   if (quoteOrigin && newProjects.length === 1 && plan.result) Object.assign(plan.result, { presupuesto_cotizacion_id: quoteOrigin, presupuesto_proyecto_id: newProjects[0].id });

@@ -12,6 +12,10 @@ Se admiten texto, notas de voz y fotos JPG, PNG y WebP de hasta 10 MB. El archiv
 
 El indicador de configuración distingue las variables presentes de la conexión real con Meta. Ninguno acredita la entrega de un aviso: esa confirmación se consulta por destinatario en Avisos enviados.
 
+## Presentación de las respuestas
+
+Las nuevas respuestas usan la marca `🟧 *ObraTrack*`, títulos cortos, bloques separados, viñetas y negritas nativas de WhatsApp. Las cotizaciones muestran desglose neto, IVA y total calculados por el servidor, todas las partidas, condiciones conocidas y Gantt sugerido. El menú ofrece **1** crear, **2** indicar modificaciones y **3** consultar qué material comparar. Los números solo se interpretan como opciones inmediatamente después de una cotización que muestre ese menú; crear requiere los datos obligatorios y los permisos habituales. Terreno no recibe la opción de crear. Los enlaces de las tiendas se conservan completos y las respuestas extensas continúan en mensajes numerados, bajo el límite de Meta. Los avisos al equipo mantienen sus estados reales de cola/entrega.
+
 ## 1. Crear la prueba en Meta
 
 1. Entra en [Meta for Developers](https://developers.facebook.com/) con tu cuenta y crea una aplicación con el caso de uso de WhatsApp Business Platform (los nombres de las pantallas pueden variar).

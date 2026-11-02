@@ -771,7 +771,8 @@ test("una consulta sobre el avance de una obra no inicia una creación", async (
     },
   );
   assert.equal(result.acciones, null);
-  assert.equal(result.respuesta, "Indica la obra.");
+  assert.match(result.respuesta, /^🟧 \*ObraTrack\*/);
+  assert.ok(result.respuesta.endsWith("Indica la obra."));
 });
 
 test("leer el número en Meta no acredita un permiso de mensajería que falta en la credencial", async () => {
@@ -851,7 +852,8 @@ test("una consulta o un aviso durante la creación de una obra conserva el borra
         }),
       },
     );
-    assert.equal(reply.respuesta, "Puedo consultar tu obra.");
+    assert.match(reply.respuesta, /^🟧 \*ObraTrack\*/);
+    assert.ok(reply.respuesta.endsWith("Puedo consultar tu obra."));
     assert.equal(reply.borrador_obra.nombre, "Patio");
   }
   const notice = await processPersonalMessage(
@@ -929,4 +931,22 @@ test("la confirmación de un presupuesto asociado informa la obra existente y no
   sb.db.whatsapp_mensajes=[{message_id:'source',empresa_id:user.empresa_id,actor_id:user.id,cotizacion:q,respuesta:'¿Quieres crear la obra?',texto:'Cotiza'}];
   const response=await processPersonalMessage(sb,{id:'confirm-existing',from:'56912345678',type:'text',text:{body:'Sí'}},{chat:async()=>{throw Error('No debe llamar a Gemini')}});
   assert.match(response.respuesta,/ya tiene una obra/);assert.equal(sb.db.whatsapp_mensajes[0].acciones,null);
+});
+
+test('las opciones del presupuesto mostrado crean con confirmación o preguntan sin ejecutar cambios', async () => {
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const { quoteWhatsApp } = require('../lib/whatsapp/format.ts');
+  const q = normalizeQuote({ titulo_proyecto: 'Radier con menú', cliente_nombre: 'Cliente', cliente_email: 'cliente@example.test', cliente_telefono: '+56922223333', materiales: [{ nombre: 'Hormigón', cantidad: 1, unidad: 'm3', precio_unitario_estimado: 90000 }], mano_de_obra: [] });
+  for (const choice of ['1', '2', '3']) {
+    const sb = database();
+    sb.db.presupuestos = [{ id: 'wa:menu', empresa_id: user.empresa_id, cotizacion: q, proyecto_id: null, estado: 'borrador' }];
+    sb.db.whatsapp_mensajes = [{ message_id: 'source', empresa_id: user.empresa_id, actor_id: user.id, cotizacion: q, respuesta: quoteWhatsApp(q), texto: 'Cotiza' }];
+    const reply = await processPersonalMessage(sb, { id: 'menu-' + choice, from: '56912345678', type: 'text', text: { body: choice } }, { chat: async () => { throw Error('El menú no necesita Gemini'); } });
+    assert.match(reply.respuesta, /^🟧 \*ObraTrack\*/);
+    if (choice === '1') assert.match(reply.respuesta, /Obra Creada/);
+    else {
+      assert.equal(sb.db.whatsapp_mensajes[0].acciones, null);
+      assert.match(reply.respuesta, choice === '2' ? /Qué deseas modificar/ : /Qué material quieres comparar/);
+    }
+  }
 });
