@@ -44,6 +44,7 @@ export async function middleware(request: NextRequest) {
   // Permitir la landing/página raíz si corresponde o activos estáticos/PWA
   if (
     pathname === '/' ||
+    pathname.startsWith('/app-icons/') ||
     PUBLIC_PAGES.some((route) => pathname === route || pathname.startsWith('/_next/'))
   ) {
     return NextResponse.next();
@@ -77,6 +78,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|app-icons/).*)',
   ],
 };
