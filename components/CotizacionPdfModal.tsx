@@ -100,7 +100,7 @@ export default function CotizacionPdfModal({
   for (const [nombre, total] of [
     ['Gastos generales', cotizacion.estructura_financiera.gastos_generales_monto],
     ['Provisión de imprevistos', cotizacion.estructura_financiera.imprevistos_monto],
-    ['Utilidad', cotizacion.estructura_financiera.margen_utilidad_monto],
+    [cotizacion.estructura_financiera.tipo_utilidad==='margen_venta'?'Margen sobre venta':'Utilidad', cotizacion.estructura_financiera.margen_utilidad_monto],
   ] as [string, number][]) {
     if (total) partidasItems.push({ nombre, descripcion: '', unidad: 'gl', cantidad: 1, precioUnit: total, total });
   }
@@ -338,7 +338,7 @@ export default function CotizacionPdfModal({
                 <span>OBSERVACIONES</span>
               </div>
               <ul className="text-[11px] text-gray-600 space-y-1 pl-5 list-disc font-sans leading-relaxed">
-                <li>Precios estimados; confirmar disponibilidad y despacho con los proveedores.</li>
+                <li>Valores netos en CLP; IVA desglosado al final. Precios estimados sujetos a confirmación de disponibilidad y despacho.</li>
                 <li>
                   Los plazos de ejecución serán definidos según el cronograma de obra (estimado en{' '}
                   <strong>{cotizacion.duracion_dias_estimada || 3} días hábiles</strong>).

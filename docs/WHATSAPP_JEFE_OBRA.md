@@ -91,3 +91,6 @@ Administración y supervisión pueden consultar `GET /api/whatsapp/estado` con s
 
 
 El diagnóstico privado también consulta `whatsapp_business_messaging`: poder leer el ID del número o gestionar plantillas no acredita permiso para enviar. Si Meta rechaza un envío con `131005`, el registro queda fallido y señala revisar el permiso de mensajería y la asignación del token a la cuenta y número correctos. El administrador debe corregir esa configuración antes de reintentar. En Reportes se distingue un permiso pendiente de un canal simplemente configurado.
+
+
+El copiloto también puede consultar los catálogos públicos integrados de Easy y Dimaco. Envía precios publicados con enlaces y fecha; no garantiza el menor precio de todo el mercado, despacho ni stock local. El borrador de una obra se conserva cuando se consulta otra cosa o se envía un aviso, y se puede completar o cancelar después. Requiere `supabase/copiloto_materiales.sql`.

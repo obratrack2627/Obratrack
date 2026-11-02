@@ -75,7 +75,7 @@ export default function ProyectoIAPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const hasAccess = activePlan === 'pro_ia';
+  const hasAccess = ['pro','pro_ia'].includes(activePlan);
 
   const loadData = () => {
     if (!projectId) return;
@@ -112,7 +112,7 @@ export default function ProyectoIAPage() {
         proyecto_id: projectId,
         empresa_id: proj.empresa_id,
         remitente: 'agente',
-        texto: `👷‍♂️ **¡Hola! Soy el Agente de IA dedicado a la obra "${proj.nombre}".**\n\nTengo acceso completo en tiempo real a:\n• Presupuesto acordado: **$${(proj.monto_cotizado || 0).toLocaleString('es-CL')} CLP**\n• Cronograma y partidas de la **Carta Gantt** (${acts.length} partidas)\n• Registro de materiales, imprevistos y bitácora de terreno\n• Datos de contacto del cliente **${cli?.nombre || 'Mandante'}**\n\nPuedes pedirme consultas financieras, redactar informes para el cliente o realizar cambios directos en esta obra.`,
+        texto: `Estoy trabajando con la obra **${proj.nombre}**. Puedes consultar sus pendientes, cotizar un adicional o buscar materiales.`,
         created_at: new Date().toISOString(),
         sugerencias: [
           '¿Cuánto saldo nos queda por cobrar al cliente?',
@@ -140,8 +140,10 @@ export default function ProyectoIAPage() {
     const planHandler = (e: any) => {
       if (e.detail) setActivePlan(e.detail);
     };
+    const refresh=()=>loadData();
     window.addEventListener('obratrack_plan_changed', planHandler);
-    return () => window.removeEventListener('obratrack_plan_changed', planHandler);
+    window.addEventListener('obratrack_cloud_synced',refresh);
+    return () => {window.removeEventListener('obratrack_plan_changed', planHandler);window.removeEventListener('obratrack_cloud_synced',refresh);};
   }, [projectId]);
 
   useEffect(() => {
@@ -166,7 +168,7 @@ export default function ProyectoIAPage() {
 
   const handleEnviarMensaje = async (textoAEnviar?: string) => {
     const query = (textoAEnviar || inputTexto).trim();
-    if (!query || cargando || !proyecto || dataService.getActivePlan() !== 'pro_ia') return;
+    if (!query || cargando || !proyecto || !['pro','pro_ia'].includes(dataService.getActivePlan())) return;
 
     const userMsg: MensajeChatProyecto = {
       id: 'usr-p-' + Date.now(),
@@ -415,14 +417,13 @@ export default function ProyectoIAPage() {
 
             <div className="max-w-md space-y-2">
               <span className="px-2.5 py-1 bg-[#FF6A00]/20 text-[#FF6A00] rounded-full text-xs font-mono font-bold">
-                EXCLUSIVO PLAN PRO + ASISTENTE IA
+                PLAN PRO O PRO IA
               </span>
               <h3 className="text-xl font-heading font-black text-navy-900 dark:text-white">
-                Agente de IA Propio para cada Faena
+                Cotizaciones y consultas de tu obra
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 font-sans leading-relaxed">
-                Cada obra en ObraTrack cuenta con su propio agente inteligente que recuerda el historial completo de
-                la conversación, coordina cronogramas en vivo y redacta estados de pago directamente para el cliente.
+                Consulta materiales, prepara presupuestos y revisa la información de tu obra. Pro IA también permite registrar cambios desde el chat.
               </p>
             </div>
 
@@ -496,7 +497,7 @@ export default function ProyectoIAPage() {
                       }`}
                     >
                       <ChatMessageFormatter
-                        content={m.texto}
+                        content={m.comparacion_materiales?.resumen || (m.cotizacion_generada?m.cotizacion_generada.resumen_ejecutivo:m.texto)}
                         isUser={m.remitente === 'usuario'}
                       />
                       <AIMessageTools message={m} />
@@ -597,12 +598,13 @@ export default function ProyectoIAPage() {
                   {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                 </button>
 
-                <input
-                  type="text"
+                <textarea
+                  rows={2}
                   value={inputTexto}
                   aria-label="Mensaje para el asistente de la obra"
                   onChange={(e) => setInputTexto(e.target.value)}
-                  placeholder={`Pregunta sobre finanzas, o pide: "Agrega partida techumbre de 5 días", "Redacta WhatsApp..."`}
+                  onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void handleEnviarMensaje();}}}
+                  placeholder="Pregunta o pide una acción para esta obra"
                   disabled={cargando}
                   className="flex-1 px-4 py-2.5 bg-white dark:bg-[#1A2230] border border-gray-200 dark:border-[#263040] rounded-2xl text-xs text-navy-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-[#FF6A00] shadow-sm"
                 />

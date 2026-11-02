@@ -8,12 +8,24 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   try {
     const { client, user } = await authorizeAI(request);
-    const { data: company } = await client
+    const { data: company, error: companyError } = await client
       .from("empresas")
       .select("plan_id")
       .eq("id", user.empresa_id)
       .maybeSingle();
-    if (company?.plan_id === "gratis")
+    if (companyError || !company)
+      throw new AIError(
+        "DATABASE_READ",
+        "No se pudo confirmar el plan de tu empresa.",
+        503,
+      );
+    if (!["admin", "supervisor"].includes(user.rol))
+      throw new AIError(
+        "BUDGET_FORBIDDEN",
+        "Tu perfil no puede generar presupuestos.",
+        403,
+      );
+    if (!["pro", "pro_ia"].includes(company.plan_id))
       throw new AIError(
         "PLAN_REQUIRED",
         "El cotizador con IA requiere el Plan Pro o Plan Pro IA.",
@@ -31,14 +43,16 @@ export async function POST(request: NextRequest) {
         "Describe el trabajo que quieres cotizar.",
         400,
       );
-    const m2 = Number(body.metros_cuadrados ?? 20),
-      margen = Number(body.margen_utilidad ?? 30);
+    const m2 =
+        body.metros_cuadrados == null
+          ? undefined
+          : Number(body.metros_cuadrados),
+      margen =
+        body.margen_utilidad == null ? undefined : Number(body.margen_utilidad);
     if (
-      !Number.isFinite(m2) ||
-      m2 <= 0 ||
-      !Number.isFinite(margen) ||
-      margen < 0 ||
-      margen > 200
+      (m2 !== undefined && (!Number.isFinite(m2) || m2 <= 0)) ||
+      (margen !== undefined &&
+        (!Number.isFinite(margen) || margen < 0 || margen > 200))
     )
       throw new AIError(
         "INVALID_REQUEST",

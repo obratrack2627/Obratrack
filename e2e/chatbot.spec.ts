@@ -18,7 +18,37 @@ async function setup(
   seedProject = false,
   failPayment = false,
 ) {
-  const db: Record<string, any[]> = {};
+  const db: Record<string, any[]> = {
+    usuarios: [owner],
+    empresas: [{ id: company, plan_id: "pro_ia" }],
+    proyectos: seedProject
+      ? [
+          {
+            id: "p-existing",
+            empresa_id: company,
+            nombre: "Terraza",
+            estado: "activo",
+            monto_cotizado: 3000000,
+            fecha_inicio: "2026-10-27",
+            fecha_termino_estimada: "2026-11-20",
+          },
+        ]
+      : [],
+    actividades: seedProject
+      ? [
+          {
+            id: "act-existing",
+            proyecto_id: "p-existing",
+            nombre: "Radier",
+            fecha_inicio: "2026-10-27",
+            fecha_termino: "2026-11-10",
+            porcentaje_avance: 0,
+            estado: "pendiente",
+            orden: 1,
+          },
+        ]
+      : [],
+  };
   let failed = false;
   await page.context().addCookies([
     {
@@ -118,11 +148,29 @@ async function setup(
   );
   await page.route("**/api/supabase/sync*", (route) =>
     route.fulfill({
-      status: 503,
+      status: route.request().method() === "POST" ? 503 : 200,
       contentType: "application/json",
-      body: JSON.stringify({
-        error: "Sincronización automática no utilizada por este test",
-      }),
+      body: JSON.stringify(
+        route.request().method() === "POST"
+          ? { error: "Sincronización de escritura no utilizada por este test" }
+          : {
+              empresaId: company,
+              plan_id: db.empresas[0].plan_id,
+              proyectos: db.proyectos,
+              usuarios: db.usuarios,
+              clientes: db.clientes || [],
+              actividades: db.actividades || [],
+              pagos: db.pagos || [],
+              materiales: db.materiales_proyecto || [],
+              bitacora: db.bitacora_entradas || [],
+              imprevistos: db.imprevistos || [],
+              reclamos_cambios: db.reclamos_cambios_obra || [],
+              documentos: db.documentos_obra || [],
+              asistencias: db.asistencia_obreros || [],
+              agenda: db.agenda_eventos || [],
+              reportes_whatsapp: db.reportes_whatsapp || [],
+            },
+      ),
     }),
   );
   await page.route("**/*.supabase.co/rest/v1/**", async (route) => {
@@ -344,7 +392,8 @@ test("reintentar un pago pendiente no duplica el ingreso", async ({ page }) => {
 test("no se renderiza el chat flotante de IA, el plan gratis queda bloqueado y el botón de tema es fijo", async ({
   page,
 }) => {
-  await setup(page, {});
+  const db = await setup(page, {});
+  db.empresas[0].plan_id = "gratis";
   await page.addInitScript((companyId) => {
     localStorage.setItem(
       `obratrack_active_plan_v7_${companyId}`,
@@ -774,7 +823,7 @@ test("el celular recupera las obras creadas desde otro navegador al volver y al 
 }) => {
   let cloud = [syncedProject("cloud1", "Obra inicial")];
   const mobileContext = await browser.newContext({
-    baseURL: 'http://localhost:3000',
+    baseURL: "http://localhost:3000",
     viewport: { width: 390, height: 844 },
     isMobile: true,
     hasTouch: true,
@@ -916,4 +965,242 @@ test("un fallo de actualización conserva las obras y ofrece reintento visible",
   await expect(
     page.getByRole("button", { name: "Reintentar sincronización" }),
   ).toHaveCount(0);
+});
+
+test("la búsqueda muestra precios publicados, cantidad y enlaces reales sin ejecutar cambios", async ({
+  page,
+}) => {
+  const comparison = {
+    consulta: { producto: "taladro", cantidad: 3, unidad_cantidad: "unidad" },
+    consultado_en: "2026-11-02T14:00:00Z",
+    resumen: "Encontré dos opciones publicadas en los catálogos consultados.",
+    ofertas: [
+      {
+        id: "easy:1",
+        tienda: "Easy",
+        nombre: "Taladro 13mm Makita",
+        marca: "Makita",
+        precio: 100000,
+        unidad: "un",
+        multiplicador: 1,
+        url: "https://www.easy.cl/taladro-makita/p",
+        total_solicitado: 300000,
+      },
+      {
+        id: "dimaco:1",
+        tienda: "Dimaco",
+        nombre: "Taladro 13mm Makita",
+        marca: "Makita",
+        precio: 90000,
+        unidad: "un",
+        multiplicador: 1,
+        url: "https://www.dimaco.cl/taladro-makita/p",
+        total_solicitado: 270000,
+      },
+    ],
+    proveedores: [
+      { nombre: "Easy", estado: "consultado", url: "https://www.easy.cl" },
+      { nombre: "Dimaco", estado: "consultado", url: "https://www.dimaco.cl" },
+    ],
+    mejores_ids: ["dimaco:1"],
+  };
+  const db = await setup(page, {
+    respuesta: "Texto de comparación completo",
+    accion: null,
+    cotizacion: null,
+    comparacion_materiales: comparison,
+  });
+  await page.goto("/cotizador");
+  await send(page, "Busca tres taladros Makita de 13mm");
+  const result = page.getByRole("region", {
+    name: "Precios publicados de materiales",
+  });
+  await expect(
+    result.getByRole("link", { name: "Ver en Easy" }),
+  ).toHaveAttribute("href", "https://www.easy.cl/taladro-makita/p");
+  await expect(
+    result.getByRole("link", { name: "Ver en Dimaco" }),
+  ).toHaveAttribute("href", "https://www.dimaco.cl/taladro-makita/p");
+  await expect(result.getByText("$270.000", { exact: true })).toBeVisible();
+  await expect(
+    result.getByText(/Menor precio del mismo producto/),
+  ).toBeVisible();
+  expect(db.materiales_proyecto || []).toHaveLength(0);
+  expect(db.proyectos).toHaveLength(0);
+});
+
+test("seleccionar una obra en el copiloto usa su chat y separa la consulta general", async ({
+  page,
+}) => {
+  await setup(
+    page,
+    {
+      respuesta: "Respuesta de consulta general",
+      accion: null,
+      cotizacion: null,
+    },
+    true,
+  );
+  let requests = 0;
+  await page.route("**/api/proyectos/p-existing/chat", async (route) => {
+    requests++;
+    expect(
+      route
+        .request()
+        .postDataJSON()
+        .historial.some(
+          (m: any) => m.texto === "Respuesta de consulta general",
+        ),
+    ).toBe(false);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        respuesta: "Pendientes de Terraza",
+        accion: null,
+        cotizacion: null,
+      }),
+    });
+  });
+  await page.goto("/cotizador");
+  await send(page, "Consulta general");
+  await expect(
+    page.getByText("Respuesta de consulta general", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Obra", { exact: true }).selectOption("p-existing");
+  await send(page, "Resume los pendientes");
+  await expect(
+    page.getByText("Pendientes de Terraza", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Respuesta de consulta general", { exact: true }),
+  ).toHaveCount(0);
+  expect(requests).toBe(1);
+});
+
+test("el Plan Pro puede usar el cotizador sin quedar bloqueado por la interfaz de Pro IA", async ({
+  page,
+}) => {
+  const db = await setup(page, {
+    respuesta: "Indica las dimensiones del trabajo.",
+    accion: null,
+    cotizacion: null,
+  });
+  db.empresas[0].plan_id = "pro";
+  await page.goto("/cotizador");
+  await expect(
+    page.getByRole("button", { name: "Plan Pro", exact: true }),
+  ).toBeVisible();
+  await send(page, "Quiero cotizar una terraza");
+  await expect(
+    page.getByText("Indica las dimensiones del trabajo.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/Desbloquea Copiloto Obrero IA/)).toHaveCount(0);
+});
+
+test("el copiloto no aplica un pago sobre una caché que no pudo actualizarse", async ({
+  page,
+}) => {
+  const db = await setup(
+    page,
+    {
+      respuesta: "Preparado",
+      accion: {
+        tipo: "registrar_pago",
+        proyecto_id: "p-existing",
+        monto: 400000,
+        metodo: "transferencia",
+      },
+      cotizacion: null,
+    },
+    true,
+  );
+  await page.route("**/api/supabase/sync*", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: '{"error":"Sin conexión"}',
+    }),
+  );
+  await page.goto("/cotizador");
+  await send(page, "Registra un abono de 400000 en Terraza");
+  await expect(
+    page.getByText(
+      "No se pudieron actualizar los datos de la obra. Reintenta antes de aplicar cambios.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(db.pagos || []).toHaveLength(0);
+});
+
+test("el presupuesto del chat de una obra conserva el PDF al recargar desde la nube", async ({
+  page,
+}) => {
+  const q = normalizeQuote({
+    titulo_proyecto: "Adicional para Terraza",
+    materiales: [
+      {
+        nombre: "Cemento",
+        cantidad: 4,
+        unidad: "saco",
+        precio_unitario_estimado: 5000,
+      },
+    ],
+    mano_de_obra: [
+      {
+        rol: "Maestro",
+        cantidad_personas: 1,
+        dias_estimados: 1,
+        valor_jornal_diario: 45000,
+      },
+    ],
+    estructura_financiera: {
+      gastos_generales_porcentaje: 10,
+      imprevistos_porcentaje: 5,
+      margen_utilidad_porcentaje: 20,
+    },
+    resumen_ejecutivo: "Presupuesto adicional con supuestos indicados.",
+  });
+  const db = await setup(page, {}, true);
+  await page.route("**/api/proyectos/p-existing/chat", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        respuesta: "Presupuesto calculado",
+        accion: null,
+        cotizacion: q,
+      }),
+    }),
+  );
+  await page.goto("/proyectos/p-existing/ia");
+  await expect(
+    page.getByRole("textbox", { name: "Mensaje para el asistente de la obra" }),
+  ).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Mensaje para el asistente de la obra" })
+    .fill("Cotiza el adicional");
+  await page
+    .getByRole("button", { name: "Enviar mensaje", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Ver cotización / PDF" }),
+  ).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        db.mensajes_chat_proyecto?.find((m) => m.cotizacion_generada)
+          ?.cotizacion_generada?.id,
+    )
+    .toBe(q.id);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Ver cotización / PDF" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Ver cotización / PDF" }).click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByText("Adicional para Terraza", { exact: true }),
+  ).toBeVisible();
 });

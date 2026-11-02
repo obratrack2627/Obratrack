@@ -108,8 +108,17 @@ export function createChatHandler(
     try {
       const { client, user } = await deps.authorize(request);
       const body = await readAIRequest(request);
-      const { company, context, service, tables } = await loadAIContext(client, user);
-      if (company?.plan_id === "gratis")
+      const { company, context, service, tables } = await loadAIContext(
+        client,
+        user,
+      );
+      if (!company)
+        throw new AIError(
+          "TENANT_REQUIRED",
+          "No se pudo confirmar el plan de tu empresa. Intenta nuevamente.",
+          503,
+        );
+      if (!["pro", "pro_ia"].includes(company.plan_id))
         throw new AIError(
           "PLAN_REQUIRED",
           "El asistente de IA requiere el Plan Pro o Plan Pro IA.",
@@ -121,6 +130,12 @@ export function createChatHandler(
           result.accion,
           body.mensaje,
         );
+        if (actions.length && company.plan_id !== "pro_ia")
+          throw new AIError(
+            "PLAN_REQUIRED",
+            "Puedes cotizar y consultar precios con Pro. Los cambios por el copiloto requieren Pro IA.",
+            403,
+          );
         const broadcast = actions.find(
           (a) => a.tipo === "enviar_mensaje_equipo",
         );
@@ -164,6 +179,30 @@ export function createChatHandler(
           "Tu cuenta no tiene acceso al asistente de obras.",
           403,
         );
+      const budgetContext = async (scope?: string) => {
+        const id = body.contexto_cotizacion?.id;
+        if (typeof id !== "string" || id.length > 200) return null;
+        const { data, error } = await client
+          .from("presupuestos")
+          .select("cotizacion,proyecto_id")
+          .eq("empresa_id", user.empresa_id)
+          .eq("id", id)
+          .maybeSingle();
+        if (error)
+          throw new AIError(
+            "BUDGET_READ",
+            "No se pudo consultar el presupuesto anterior.",
+            503,
+          );
+        if (scope && data?.proyecto_id && data.proyecto_id !== scope)
+          throw new AIError(
+            "BUDGET_FORBIDDEN",
+            "Ese presupuesto pertenece a otra obra. Selecciona el presupuesto de esta obra.",
+            403,
+          );
+        return data?.cotizacion || null;
+      };
+      const capability = { acciones_habilitadas: company.plan_id === "pro_ia" };
       if (projectId) {
         if (!/^[a-zA-Z0-9_-]+$/.test(projectId))
           throw new AIError("PROJECT_INVALID", "La obra no es válida.", 400);
@@ -179,8 +218,9 @@ export function createChatHandler(
           mensajeUsuario: body.mensaje,
           contextoProyecto: {
             ...data,
-            cotizacion_actual: body.contexto_cotizacion || null,
+            cotizacion_actual: await budgetContext(projectId),
           },
+          contextoDB: { ...context, ...capability },
         });
         const queued = await finish(result, projectId);
         if (queued) return queued;
@@ -190,7 +230,8 @@ export function createChatHandler(
       }
       const result = await deps.global(body.historial, body.mensaje, {
         ...context,
-        cotizacion_actual: body.contexto_cotizacion || null,
+        ...capability,
+        cotizacion_actual: await budgetContext(),
       });
       const queued = await finish(result);
       if (queued) return queued;

@@ -1,3 +1,4 @@
+import {isMaterialComparison} from '@/lib/materials/types';
 import { supabase } from './client';
 import {
   Proyecto,
@@ -682,6 +683,8 @@ export class SupabaseService {
         texto: r.texto,
         sugerencias: r.sugerencias || undefined,
         accion_ejecutada: r.accion_ejecutada || undefined,
+        cotizacion_generada: r.cotizacion_generada || undefined,
+        comparacion_materiales: isMaterialComparison(r.comparacion_materiales)?r.comparacion_materiales:undefined,
         created_at: r.created_at,
       }));
     } catch (err) {
@@ -700,6 +703,8 @@ export class SupabaseService {
         texto: msg.texto,
         sugerencias: msg.sugerencias || null,
         accion_ejecutada: msg.accion_ejecutada || null,
+        cotizacion_generada:msg.cotizacion_generada || null,
+        comparacion_materiales:msg.comparacion_materiales || null,
         created_at: msg.created_at || new Date().toISOString(),
       };
       const { error } = await this.client.from('mensajes_chat_proyecto').upsert(payload, { onConflict: 'id' });

@@ -1,6 +1,6 @@
 # Chatbot de cotizaciones y gestión de obras
 
-El chat general (`/cotizador`), el copiloto flotante y el asistente de cada obra usan el mismo protocolo y motor de ejecución.
+El chat general (`/cotizador`) y el asistente de cada obra usan el mismo protocolo y motor de ejecución. El chat general permite elegir la obra; cada contexto conserva su conversación y presupuesto por separado. El chat flotante fue retirado. Pro permite consultas, cotizaciones y búsqueda de materiales; Pro IA agrega cambios en las obras y avisos al equipo.
 
 ## Configuración del servidor
 
@@ -35,7 +35,9 @@ La IA pregunta por información insuficiente y prepara materiales, mano de obra 
 
 **Ver cotización / PDF** muestra esos mismos datos, sin sustituirlos por una plantilla de porcelanato. Guardar PDF utiliza el diálogo nativo de impresión del navegador. El documento incluye los costos indirectos para que el detalle sume el neto. No se inventan destinatarios, teléfonos o un esquema de anticipos: las condiciones no proporcionadas quedan por acordar.
 
-Los precios de Gemini son estimaciones, no consultas verificadas en tiempo real a ferreterías. Las cotizaciones nuevas se guardan en la tabla `presupuestos` desde el servidor antes de responder. Las cotizaciones anteriores de WhatsApp se incorporan mediante una migración aditiva. El historial general conserva su caché local. Obras y proyectos incluye una pestaña de presupuestos con búsqueda, filtros, estado, asociación a obra y PDF. Aprobar un presupuesto no crea una obra ni registra pagos.
+Los precios usados al estimar un presupuesto con Gemini son referencias, sujetos a confirmación. La búsqueda de materiales es una herramienta separada: el modelo extrae producto, marca, modelo y presentación, y el servidor lee los catálogos públicos de Easy y Dimaco. El precio, fuente y fecha provienen de esa consulta, no de una cifra generada por el modelo. No cubre todo el mercado. Solo recomienda el menor precio entre productos con el mismo código comercial válido y la misma unidad de venta; los demás se presentan como opciones que deben revisarse. El despacho, IVA, condiciones comerciales y disponibilidad local se confirman en la tienda. Si una tienda no responde o no está integrada, se informa y no se reemplaza por una estimación. Los totales de compra solo se calculan cuando se conocen unidades de venta, sin convertir kg, litros o m2 en sacos o cajas por suposición.
+
+Los importes y el texto del presupuesto se recalculan en el servidor. La utilidad por defecto es un recargo sobre costos e indirectos; el margen sobre venta usa la fórmula neto = base / (1 - margen), con margen menor a 100%. Un precio de material informado explícitamente con IVA se normaliza una sola vez; los costos del presupuesto son netos y el IVA de venta se muestra separado. El cálculo de adicionales pregunta por medidas insuficientes y devuelve errores reales, sin listas ni montos de reemplazo. El PDF y la comparación se conservan en el historial nativo del chat de cada obra. Las cotizaciones nuevas se guardan en la tabla `presupuestos` desde el servidor antes de responder. Las cotizaciones anteriores de WhatsApp se incorporan mediante una migración aditiva. El historial general conserva su caché local. Obras y proyectos incluye una pestaña de presupuestos con búsqueda, filtros, estado, asociación a obra y PDF. Aprobar un presupuesto no crea una obra ni registra pagos.
 
 ## Acciones disponibles
 
@@ -88,3 +90,14 @@ La sincronización ahora requiere JWT real, obtiene la empresa de la sesión, us
 PC y celular consultan la nube al entrar, cambiar de pantalla, recuperar conexión o volver a la aplicación. Mientras la pestaña esté visible se actualizan cada 30 segundos. Las peticiones simultáneas de la misma sesión comparten la lectura o subida; una respuesta de una cuenta anterior se descarta. Se conservan las ediciones pendientes y se reintenta su subida al reconectar. Si falla la actualización, se muestra un aviso con reintento; no se presenta la caché antigua como una sincronización correcta.
 
 Aplicar `supabase/produccion_copiloto.sql` y después `supabase/whatsapp_jefe.sql` en una misma transacción. La función de WhatsApp conserva compatibilidad con llamadas anteriores mediante el parámetro opcional de adjunto. No ejecutar `schema.sql` en producción.
+
+
+## Consultas habituales
+
+- «Cotiza un radier de 20 m2 en Maipú, 10 cm de espesor, materiales y mano de obra».
+- «Cambia solo la utilidad al 25% sobre el precio de venta».
+- «Busca precio de 3 unidades del taladro percutor Makita HP1630K de 13mm en Easy y Dimaco».
+- «Resume los pendientes y el saldo de esta obra».
+- «Registra un abono de 300000 por transferencia en esta obra» (Pro IA).
+
+Aplicar `supabase/copiloto_materiales.sql` después de las migraciones existentes. Añade metadatos de presupuesto y consultas de catálogo al historial del proyecto y conserva el borrador de obra de WhatsApp cuando el usuario cambia de tarea. La función interna de guardado es exclusiva del servidor. La recepción de un aviso o consulta intermedia no obliga a cancelar ni completar el borrador.

@@ -334,6 +334,7 @@ export interface ItemMaterial {
   cantidad: number;
   unidad: string;
   precio_unitario_estimado: number;
+  precio_original_con_iva?:number;
   subtotal: number;
   mejor_tienda: string;
   precio_mas_barato: number;
@@ -365,6 +366,7 @@ export interface PartidaGanttSugerida {
 }
 
 export interface EstructuraFinanciera {
+  tipo_utilidad?: 'recargo_costos'|'margen_venta';
   costo_materiales_total: number;
   costo_mano_obra_total: number;
   costo_directo: number;
@@ -497,6 +499,7 @@ export interface AccionAsistenteIA {
 }
 
 export interface MensajeChatCotizador {
+  obra_contexto_id?: string;
   id: string;
   remitente: 'usuario' | 'agente';
   texto: string;
@@ -504,6 +507,7 @@ export interface MensajeChatCotizador {
   sugerencias?: string[];
   accion_ejecutada?: AccionAsistenteIA;
   cotizacion_generada?: CotizacionEstimacion;
+  comparacion_materiales?: import('@/lib/materials/types').ComparacionMateriales;
   pendiente_sincronizacion?: string;
 }
 
@@ -515,6 +519,7 @@ export interface MensajeChatProyecto {
   texto: string;
   sugerencias?: string[];
   cotizacion_generada?: CotizacionEstimacion;
+  comparacion_materiales?: import('@/lib/materials/types').ComparacionMateriales;
   pendiente_sincronizacion?: string;
   accion_ejecutada?: AccionAsistenteIA;
   created_at: string;

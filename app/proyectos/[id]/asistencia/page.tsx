@@ -114,9 +114,11 @@ export default function ProyectoAsistenciaPage() {
 
   const handleMarcarTodosPresentes = () => {
     if (!projectId) return;
-    const regs = dataService.marcarCuadrillaPresente(projectId, fechaSeleccionada, '08:00', '18:00');
-    loadData();
-    showToast(`✅ ${regs.length} trabajadores marcados presentes (08:00 - 18:00).`);
+    try {
+      const regs = dataService.marcarCuadrillaPresente(projectId, fechaSeleccionada, '08:00', '18:00');
+      loadData();
+      showToast(`✅ ${regs.length} trabajadores marcados presentes (08:00 - 18:00).`);
+    } catch(error){showToast(error instanceof Error?error.message:'No se pudo registrar la asistencia.');}
   };
 
   const handleAgregarObreroDia = (e: React.FormEvent) => {

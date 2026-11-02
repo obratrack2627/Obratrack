@@ -133,9 +133,12 @@ export async function processPersonalMessage(
   );
   let attachment: any = null;
   const pendingProject =
-    history[0]?.acciones?.tipo === "solicitar_datos_obra"
+    history[0]?.borrador_obra ||
+    (history[0]?.acciones?.tipo === "solicitar_datos_obra"
       ? history[0].acciones.detalles?.borrador
-      : null;
+      : null);
+  let nextDraft = pendingProject;
+  let candidateDraft: any = null;
   // Una respuesta posterior puede indicar la obra de la última foto pendiente.
   if (
     message.type === "text" &&
@@ -244,12 +247,20 @@ export async function processPersonalMessage(
         422,
       );
     let intake: ReturnType<typeof projectIntake> | undefined;
-    if (pendingProject || wantsProject || create) {
-      if (
-        pendingProject &&
-        /\b(cancela|cancelar|olvida|olvidar)\b/i.test(text)
-      ) {
+    const hasOtherActions = actions.some(
+      (a) => !["crear_proyecto", "crear_proyecto_completo"].includes(a.tipo),
+    );
+    const continuing =
+      pendingProject && !hasOtherActions && result.obra_propuesta;
+    const cancelDraft =
+      pendingProject &&
+      /^\s*(?:cancela(?:r)?|olvida(?:r)?)(?:\s+(?:la\s+|el\s+)?(?:creacion|obra|proyecto|eso|borrador)(?:\s+pendiente)?)?[.!]?\s*$/.test(
+        normalized,
+      );
+    if (cancelDraft || wantsProject || create || continuing) {
+      if (cancelDraft) {
         actions = [];
+        nextDraft = null;
         response = "La creación de la obra quedó cancelada.";
       } else {
         intake = projectIntake(
@@ -270,6 +281,8 @@ export async function processPersonalMessage(
               ),
               ...intake.actions,
             ];
+        candidateDraft = intake.draft;
+        nextDraft = intake.question ? intake.draft : null;
         if (intake.question) response = intake.question;
       }
     }
@@ -309,6 +322,7 @@ export async function processPersonalMessage(
     if (intake?.question) plan.result = intake.result;
     if (campaign) plan.result = campaign.result;
   } catch (error) {
+    nextDraft = candidateDraft || pendingProject;
     response = `No se guardaron cambios. ${(error as Error).message}`;
     plan = { changed: {}, deleted: {}, result: null };
     if (attachment) attachment.proyecto_id = null;
@@ -316,7 +330,10 @@ export async function processPersonalMessage(
   }
   if (plan.result && plan.result.tipo !== "solicitar_datos_obra")
     response = `✅ Guardado en ObraTrack.\n${plan.result.titulo}\n${plan.result.resultado_texto || ""}${image ? `\n\n${result.respuesta}` : ""}`;
-  if (result.cotizacion) response += `\n\n${quoteWhatsApp(result.cotizacion)}`;
+  if (result.cotizacion)
+    response = plan.result
+      ? response + `\n\n${quoteWhatsApp(result.cotizacion)}`
+      : quoteWhatsApp(result.cotizacion);
   if (attachment)
     response += attachment.proyecto_id
       ? "\n📸 Foto guardada en la bitácora de la obra."
@@ -337,16 +354,17 @@ export async function processPersonalMessage(
     p_deleted: plan.deleted,
     p_adjunto: attachment,
   };
-  const { data, error } = campaign
-    ? await sb.rpc("registrar_mensaje_aviso", {
-        p_mensaje: params,
-        p_aviso: {
+  const { data, error } = await sb.rpc("aplicar_lote_copiloto", {
+    ...params,
+    p_borrador: nextDraft,
+    p_aviso: campaign
+      ? {
           mensaje: campaign.mensaje,
           destinatarios: campaign.destinatarios,
           proyecto_id: campaign.proyecto_id,
-        },
-      })
-    : await sb.rpc("aplicar_lote_whatsapp", params);
+        }
+      : null,
+  });
   if (error || !data?.message_id)
     throw new AIError(
       "WHATSAPP_DATABASE_SAVE",

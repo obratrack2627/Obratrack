@@ -2,6 +2,7 @@
 import { supabase } from "@/lib/supabase/client";
 import { dataService } from "@/lib/data-service";
 import { executeAI } from "./execute";
+import { isMaterialComparison } from "@/lib/materials/types";
 import type { CotizacionEstimacion } from "@/types/database";
 
 export async function aiHeaders() {
@@ -65,7 +66,13 @@ export async function requestAI(url: string, body: any) {
 }
 export async function applyAIResponse(data: any, projectId?: string) {
   // Una obra recién creada desde WhatsApp puede no existir todavía en la caché de esta pestaña.
-  if (data.accion) await dataService.pullFromCloudServer();
+  if (data.accion) {
+    const current = await dataService.pullFromCloudServer();
+    if (!current.success)
+      throw new Error(
+        "No se pudieron actualizar los datos de la obra. Reintenta antes de aplicar cambios.",
+      );
+  }
   const action = data.accion
     ? await executeAI(data.accion, projectId)
     : undefined;
@@ -77,6 +84,9 @@ export async function applyAIResponse(data: any, projectId?: string) {
     texto: action?.warning || data.respuesta,
     accion_ejecutada: action?.result || data.accion_ejecutada,
     cotizacion_generada: cotizacion,
+    comparacion_materiales: isMaterialComparison(data.comparacion_materiales)
+      ? data.comparacion_materiales
+      : undefined,
     pendiente_sincronizacion: action?.pendingId,
     sugerencias: data.sugerencias,
   };

@@ -98,6 +98,7 @@ export function validateAction(raw: any): AIAction {
     "monto",
     "monto_cotizado",
     "precio_unitario",
+    "monto_documento",
     "impacto_monto",
   ])
     if (a[field] !== undefined) amount(a[field], field);
@@ -111,7 +112,12 @@ export function validateAction(raw: any): AIAction {
     amount(a.porcentaje_avance, "el avance") > 100
   )
     fail("El avance debe estar entre 0 y 100 %.");
-  for (const field of ["fecha", "fecha_inicio", "fecha_termino_estimada"])
+  for (const field of [
+    "fecha",
+    "fecha_inicio",
+    "fecha_termino_estimada",
+    "fecha_documento",
+  ])
     if (a[field] !== undefined && !validDate(a[field]))
       fail(`Revisa ${field.replaceAll("_", " ")}.`);
   for (const field of ["hora", "hora_entrada", "hora_salida"])
@@ -257,15 +263,26 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
     if (!text(m.nombre))
       fail("Falta identificar un material de la cotización.");
     const cantidad = amount(m.cantidad, "la cantidad", true);
-    const precio = Math.round(
+    const original = Math.round(
       amount(m.precio_unitario_estimado, "el precio del material"),
     );
+    if (!Number.isSafeInteger(original))
+      fail("El precio del material supera el rango admitido.");
+    const precio =
+      m.precio_incluye_iva === true
+        ? Number((BigInt(original) * BigInt(100) + BigInt(59)) / BigInt(119))
+        : original;
     return {
       nombre: m.nombre,
       categoria: m.categoria || "general",
       cantidad,
       unidad: m.unidad || "unidad",
       precio_unitario_estimado: precio,
+      ...(m.precio_incluye_iva === true
+        ? { precio_original_con_iva: original }
+        : typeof m.precio_original_con_iva === "number"
+          ? { precio_original_con_iva: m.precio_original_con_iva }
+          : {}),
       subtotal: roundLine(cantidad, precio),
       mejor_tienda: m.mejor_tienda || "Por cotizar",
       precio_mas_barato: precio,
@@ -313,8 +330,20 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
   const gastos_generales_monto = roundLine(gg / 100, costo_directo),
     imprevistos_monto = roundLine(im / 100, costo_directo);
   const base = costo_directo + gastos_generales_monto + imprevistos_monto;
-  const margen_utilidad_monto = roundLine(margen / 100, base),
-    precio_sugerido_neto = base + margen_utilidad_monto;
+  const tipo_utilidad =
+    f.tipo_utilidad === "margen_venta" ? "margen_venta" : "recargo_costos";
+  if (tipo_utilidad === "margen_venta" && Math.round(margen * 10000) >= 1000000)
+    fail("El margen sobre venta debe ser menor al 100%.");
+  let precio_sugerido_neto: number;
+  if (tipo_utilidad === "margen_venta") {
+    const divisor = BigInt(1000000 - Math.round(margen * 10000));
+    precio_sugerido_neto = Number(
+      (BigInt(base) * BigInt(1000000) + divisor / BigInt(2)) / divisor,
+    );
+    if (!Number.isSafeInteger(precio_sugerido_neto))
+      fail("El total supera el rango admitido.");
+  } else precio_sugerido_neto = base + roundLine(margen / 100, base);
+  const margen_utilidad_monto = precio_sugerido_neto - base;
   const iva_19 = roundLine(0.19, precio_sugerido_neto);
   return {
     id: `cot-${crypto.randomUUID()}`,
@@ -347,6 +376,7 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
     materiales,
     mano_de_obra,
     estructura_financiera: {
+      tipo_utilidad,
       costo_materiales_total,
       costo_mano_obra_total,
       costo_directo,
@@ -407,6 +437,11 @@ export function parseChatResponse(raw: string) {
   const actions = flattenActions(parsed.acciones ?? parsed.accion);
   return {
     respuesta: parsed.respuesta.trim(),
+    ...(parsed.busqueda_materiales &&
+    typeof parsed.busqueda_materiales === "object" &&
+    !Array.isArray(parsed.busqueda_materiales)
+      ? { busqueda_materiales: parsed.busqueda_materiales }
+      : {}),
     ...(parsed.obra_propuesta &&
     typeof parsed.obra_propuesta === "object" &&
     !Array.isArray(parsed.obra_propuesta)

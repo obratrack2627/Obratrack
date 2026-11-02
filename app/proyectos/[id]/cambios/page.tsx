@@ -146,11 +146,13 @@ export default function ProyectoCambiosPage() {
         body: JSON.stringify({
           titulo,
           descripcion,
+          proyecto_id:projectId,
           nombreObra: proyecto?.nombre,
         }),
       });
       const data = await res.json();
       if(!res.ok||data.error) throw new Error(data.error||'No se pudo calcular el cambio.');
+      if(data.requiere_datos){showToast(data.justificacion || 'Faltan datos para calcular los materiales.');return;}
       if (data.success && Array.isArray(data.materiales)) {
         const sugeridos: MaterialRequeridoCambio[] = data.materiales.map((m: any) => {
           const cant = Number(m.cantidad) || 1;

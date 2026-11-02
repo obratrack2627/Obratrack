@@ -44,9 +44,11 @@ export default function ControlAsistenciaGlobalPage() {
   }, []);
 
   const handleMarcarObraCompleta = (proyectoId: string) => {
-    const regs = dataService.marcarCuadrillaPresente(proyectoId, fechaFiltro, '08:00', '18:00');
-    loadData();
-    showToast(`✅ ${regs.length} obreros marcados presentes en la obra seleccionada.`);
+    try {
+      const regs = dataService.marcarCuadrillaPresente(proyectoId, fechaFiltro, '08:00', '18:00');
+      loadData();
+      showToast(`✅ ${regs.length} obreros marcados presentes en la obra seleccionada.`);
+    } catch(error){showToast(error instanceof Error?error.message:'No se pudo registrar la asistencia.');}
   };
 
   const handleExportarConsolidado = () => {

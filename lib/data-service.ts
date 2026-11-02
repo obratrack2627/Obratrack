@@ -1133,10 +1133,8 @@ export class DataService {
   ): AsistenciaObrero[] {
     const proj = this.getProyectoById(proyectoId);
     const todosUsuarios = this.getUsuarios();
-    let cuadrilla = todosUsuarios.filter((u) => proj?.trabajadores_ids?.includes(u.id));
-    if (cuadrilla.length === 0) {
-      cuadrilla = todosUsuarios.filter((u) => u.rol === 'terreno' || u.rol === 'supervisor');
-    }
+    const cuadrilla = todosUsuarios.filter((u) => proj?.trabajadores_ids?.includes(u.id));
+    if(cuadrilla.length===0)throw new Error('La obra no tiene cuadrilla asignada. Asigna los trabajadores antes de registrar su asistencia en grupo.');
 
     const resultados: AsistenciaObrero[] = [];
     cuadrilla.forEach((trabajador) => {
@@ -2017,13 +2015,13 @@ export class DataService {
           nombre: accion.nombre || accion.titulo || 'Documento registrado por IA',
           descripcion: accion.descripcion || '',
           numero_documento: accion.numero_documento || '',
-          proveedor_entidad: accion.proveedor || '',
-          monto_documento: accion.monto ? Number(accion.monto) : undefined,
+          proveedor_entidad: accion.proveedor_entidad || accion.proveedor || '',
+          monto_documento: accion.monto_documento!=null?Number(accion.monto_documento):accion.monto!=null?Number(accion.monto):undefined,
           correo_remitente: accion.correo_remitente || '',
           correo_destinatario: accion.correo_destinatario || '',
           correo_asunto: accion.correo_asunto || '',
           correo_cuerpo: accion.correo_cuerpo || '',
-          fecha_documento: accion.fecha || new Date().toISOString().split('T')[0],
+          fecha_documento: accion.fecha_documento || accion.fecha || new Date().toISOString().split('T')[0],
         });
         return {
           tipo: 'registrar_documento',

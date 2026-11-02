@@ -1,5 +1,5 @@
 require("./helpers/typescript.cjs");
-const { test, afterEach } = require("node:test");
+const { test, afterEach, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const { NextRequest } = require("next/server");
 const fixture = require("./helpers/supabase.cjs");
@@ -27,6 +27,9 @@ const authorized = async () => ({
   client: fixture.supabase,
   user: { id: "u", empresa_id: "company-a", rol: "admin" },
 });
+beforeEach(() =>
+  fixture.tables.set("empresas", [{ id: "company-a", plan_id: "pro_ia" }]),
+);
 afterEach(() => fixture.reset());
 test("una cookie inventada no autoriza solicitudes a Gemini", async () => {
   const req = new NextRequest("http://localhost/api/cotizador/chat", {
@@ -332,4 +335,71 @@ test("empresas con plan gratis no pueden utilizar los endpoints del asistente de
   assert.equal(projectRes.status, 403);
   assert.equal((await projectRes.json()).code, "PLAN_REQUIRED");
   assert.equal(calls, 0);
+});
+
+test("el Plan Pro permite cotizaciones pero bloquea cambios por el copiloto antes de escribir", async () => {
+  fixture.tables.set("empresas", [{ id: "company-a", plan_id: "pro" }]);
+  let context;
+  const read = createChatHandler({
+    authorize: authorized,
+    global: async (_, __, ctx) => {
+      context = ctx;
+      return response;
+    },
+    project: async () => response,
+  });
+  assert.equal(
+    (await read(makeRequest({ mensaje: "Quiero cotizar" }))).status,
+    200,
+  );
+  assert.equal(context.acciones_habilitadas, false);
+  const write = createChatHandler({
+    authorize: authorized,
+    global: async () => ({
+      ...response,
+      accion: { tipo: "crear_cliente", nombre: "Ana" },
+    }),
+    project: async () => response,
+  });
+  assert.equal(
+    (await write(makeRequest({ mensaje: "Crea el cliente Ana" }))).status,
+    403,
+  );
+  assert.ok(!fixture.calls.some((c) => c.mode === "upsert"));
+});
+
+test("el presupuesto anterior se lee de la base de la empresa y no de los importes del navegador", async () => {
+  fixture.tables.set("presupuestos", [
+    {
+      id: "q1",
+      empresa_id: "company-a",
+      proyecto_id: null,
+      cotizacion: {
+        titulo_proyecto: "Presupuesto nativo",
+        materiales: [{ nombre: "Original" }],
+      },
+    },
+  ]);
+  const handler = createChatHandler({
+    authorize: authorized,
+    global: async (_, __, ctx) => {
+      assert.equal(ctx.cotizacion_actual.titulo_proyecto, "Presupuesto nativo");
+      return response;
+    },
+    project: async () => response,
+  });
+  assert.equal(
+    (
+      await handler(
+        makeRequest({
+          mensaje: "Cambia la utilidad",
+          contexto_cotizacion: {
+            id: "q1",
+            titulo_proyecto: "Inventado desde navegador",
+          },
+        }),
+      )
+    ).status,
+    200,
+  );
 });

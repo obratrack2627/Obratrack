@@ -59,10 +59,9 @@ const INITIAL_CHAT_MESSAGE: MensajeChatCotizador = {
     'Hola. Puedo preparar presupuestos y ayudarte a gestionar obras, materiales, pagos y cuadrillas. ¿Qué necesitas?',
   timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
   sugerencias: [
-    'Créame una obra de radier de 35m2 en Peñalolén por 3.2M',
-    'Agrega al maestro Pedro Soto como carpintero',
-    'Agéndame una visita a terreno para el viernes a las 10:00',
-    '¿Cuánto cobrar por instalar 40m2 de porcelanato?',
+    'Quiero cotizar un trabajo',
+    'Quiero buscar el precio de un material',
+    'Ayúdame a planificar mi obra',
   ],
 };
 
@@ -84,11 +83,14 @@ export default function CopilotoObreroPage() {
   // Mensajes de chat (Persistidos por sesión de usuario)
   const [mensajesChat, setMensajesChat] = useState<MensajeChatCotizador[]>([INITIAL_CHAT_MESSAGE]);
   const [inputChat, setInputChat] = useState('');
+  const [obraSeleccionada,setObraSeleccionada]=useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
 
   // Cargar datos y restaurar historial de sesión
   const reloadData = () => {
-    setProyectos(dataService.getProyectos());
+    const current=dataService.getProyectos();
+    setProyectos(current);
+    setObraSeleccionada(selected=>selected&&!current.some(p=>p.id===selected)?'':selected);
     setUsuarios(dataService.getUsuarios());
     setClientes(dataService.getClientes());
     setEventosAgenda(dataService.getEventosAgenda());
@@ -116,7 +118,7 @@ export default function CopilotoObreroPage() {
     // Recuperar historial de la sesión activa
     const savedChat = dataService.getChatSessionHistory();
     if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
-      setMensajesChat(savedChat);
+      setMensajesChat(savedChat.map(m=>m.id?.startsWith('m-init')?{...m,texto:INITIAL_CHAT_MESSAGE.texto,sugerencias:INITIAL_CHAT_MESSAGE.sugerencias}:m));
     }
     return () => {
       window.removeEventListener('obratrack_plan_changed', planHandler);
@@ -135,26 +137,28 @@ export default function CopilotoObreroPage() {
 
   // Reiniciar conversación activa para empezar una nueva
   const handleResetChat = () => {
-    dataService.clearChatSessionHistory();
+    const remaining=mensajesChat.filter(m=>(m.obra_contexto_id||'')!==obraSeleccionada);
     const freshMessage: MensajeChatCotizador = {
       ...INITIAL_CHAT_MESSAGE,
       id: 'm-init-' + Date.now(),
+      obra_contexto_id:obraSeleccionada||undefined,
       timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
     };
-    setMensajesChat([freshMessage]);
-    dataService.saveChatSessionHistory([freshMessage]);
+    setMensajesChat([...remaining,freshMessage]);
+    dataService.saveChatSessionHistory([...remaining,freshMessage]);
     showToast('✨ Conversación reiniciada para esta sesión.');
   };
 
   // Enviar mensaje a Google Gemini y ejecutar acciones
   const handleSendChat = async (texto?: string) => {
     const msgToSend = texto || inputChat;
-    if (!msgToSend.trim() || isChatLoading || dataService.getActivePlan() !== 'pro_ia') return;
+    if (!msgToSend.trim() || isChatLoading || !['pro','pro_ia'].includes(dataService.getActivePlan())) return;
 
     const userMsg: MensajeChatCotizador = {
       id: 'm-u-' + Date.now(),
       remitente: 'usuario',
       texto: msgToSend,
+      obra_contexto_id:obraSeleccionada||undefined,
       timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
     };
 
@@ -166,9 +170,9 @@ export default function CopilotoObreroPage() {
     setIsChatLoading(true);
 
     try {
-      const ultimaCotizacion = [...mensajesChat].reverse().find(m => m.cotizacion_generada)?.cotizacion_generada;
-      const data = await requestAI('/api/cotizador/chat', {
-        mensaje: msgToSend, historial: mensajesChat.slice(-10), contexto_db: aiContext(), contexto_cotizacion: ultimaCotizacion,
+      const ultimaCotizacion = [...mensajesChat].reverse().find(m => m.cotizacion_generada&&(m.obra_contexto_id||'')===obraSeleccionada)?.cotizacion_generada;
+      const data = await requestAI(obraSeleccionada?`/api/proyectos/${obraSeleccionada}/chat`:'/api/cotizador/chat', {
+        mensaje: msgToSend, historial: mensajesChat.filter(m=>(m.obra_contexto_id||'')===obraSeleccionada).slice(-10), contexto_db: aiContext(), contexto_cotizacion: ultimaCotizacion,
       });
       const processed = await applyAIResponse(data);
       reloadData();
@@ -178,6 +182,7 @@ export default function CopilotoObreroPage() {
         id: 'm-a-' + Date.now(),
         remitente: 'agente',
         ...processed,
+        obra_contexto_id:obraSeleccionada||undefined,
         timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
       };
 
@@ -242,10 +247,10 @@ export default function CopilotoObreroPage() {
 
       <div className="p-4 md:p-6 max-w-7xl w-full mx-auto">
         <PlanLockOverlay
-          isLocked={activePlan !== 'pro_ia'}
-          featureName="Copiloto Obrero IA & Control Autónomo (Google Gemini)"
-          requiredPlan="pro_ia"
-          description="Conversa con el asistente inteligente para cotizar obras, crear proyectos en el sistema, incorporar trabajadores y agendar visitas en tiempo real."
+          isLocked={!['pro','pro_ia'].includes(activePlan)}
+          featureName="Copiloto Obrero IA"
+          requiredPlan="pro"
+          description="Cotiza trabajos, consulta materiales y organiza tu obra desde el chat."
         >
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
@@ -262,14 +267,14 @@ export default function CopilotoObreroPage() {
                   </div>
                   <div>
                     <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
-                      <span>Copiloto de Faena & Asistente IA</span>
+                      <span>Copiloto de obra</span>
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold border border-emerald-500/30 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                         Gemini IA
                       </span>
                     </h3>
                     <p className="text-[11px] text-gray-300">
-                      Escribe lo que necesitas y la IA cotizará o controlará la web por ti
+                      Cotizaciones, materiales y gestión de obras
                     </p>
                   </div>
                 </div>
@@ -285,9 +290,16 @@ export default function CopilotoObreroPage() {
                 </button>
               </div>
 
+              <div className="border-b border-kraft-200 px-4 py-3">
+                <label htmlFor="obra-copiloto" className="text-xs font-medium mr-2">Obra</label>
+                <select id="obra-copiloto" value={obraSeleccionada} onChange={e=>setObraSeleccionada(e.target.value)} disabled={isChatLoading} className="max-w-full rounded-lg border border-kraft-200 bg-white dark:bg-[#141A23] dark:border-[#263040] px-3 py-2 text-sm">
+                  <option value="">Consulta general o trabajo nuevo</option>
+                  {proyectos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </div>
               {/* Feed de Conversación */}
               <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-kraft-50/40 dark:bg-[#0B0E14] text-xs">
-                {mensajesChat.map((m) => (
+                {(mensajesChat.some(m=>(m.obra_contexto_id||'')===obraSeleccionada)?mensajesChat.filter(m=>(m.obra_contexto_id||'')===obraSeleccionada):[INITIAL_CHAT_MESSAGE]).map((m) => (
                   <div
                     key={m.id}
                     className={`flex flex-col ${m.remitente === 'usuario' ? 'items-end' : 'items-start'} w-full`}
@@ -311,7 +323,7 @@ export default function CopilotoObreroPage() {
 
                       {/* Texto del Mensaje con Formato Profesional */}
                       <ChatMessageFormatter
-                        content={m.texto}
+                        content={m.comparacion_materiales?.resumen || (m.cotizacion_generada?m.cotizacion_generada.resumen_ejecutivo:m.texto)}
                         isUser={m.remitente === 'usuario'}
                       />
 
@@ -384,7 +396,7 @@ export default function CopilotoObreroPage() {
                 {isChatLoading && (
                   <div className="flex items-center gap-2.5 text-navy-900 bg-white border border-kraft-200 px-4 py-2.5 rounded-2xl w-fit shadow-xs animate-pulse">
                     <RefreshCw className="w-4 h-4 animate-spin text-obra-orange" />
-                    <span className="font-mono text-xs font-bold">Google Gemini pensando y analizando faena...</span>
+                    <span className="font-mono text-xs font-bold">Revisando tu solicitud…</span>
                   </div>
                 )}
                 <div ref={chatBottomRef} />
@@ -392,13 +404,13 @@ export default function CopilotoObreroPage() {
 
               {/* Barra de Entrada del Chat */}
               <div className="p-3 bg-white border-t border-kraft-200 flex items-center gap-2">
-                <input
-                  type="text"
+                <textarea
+                  rows={2}
                   value={inputChat}
                   aria-label="Mensaje para el asistente"
                   onChange={(e) => setInputChat(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                  placeholder="Escribe tu instrucción (ej: Créame una obra de radier para Carlos en Peñalolén por 3.5M)..."
+                  onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void handleSendChat();}}}
+                  placeholder="Describe lo que necesitas. Puedes incluir una lista de tareas."
                   className="flex-1 min-w-0 text-xs bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-2xl px-4 py-3 text-navy-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:border-obra-orange focus:bg-white dark:focus:bg-[#141A23] transition-all shadow-inner"
                 />
                 <button

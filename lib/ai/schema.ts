@@ -30,7 +30,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
         {
           tipo: { type: "string", enum: [...ACTION_TYPES] },
           ...strings(
-            "nombre,titulo,descripcion,comuna,direccion,fecha_inicio,fecha_termino_estimada,estado,cliente_id,cliente_nombre,cliente_email,cliente_telefono,proyecto_id,proyecto_nombre,telefono,email,rut,rol,trabajador_nombre,actividad_id,metodo,nota,fecha,subtipo,tipo_bitacora,tipo_evento,prioridad,hora_entrada,hora_salida,categoria,correo_remitente,correo_destinatario,correo_asunto,correo_cuerpo,hora,comuna_lugar,resumen,mensaje,observacion,numero_documento,proveedor_entidad,fecha_documento",
+            "nombre,titulo,descripcion,comuna,direccion,fecha_inicio,fecha_termino_estimada,estado,cliente_id,cliente_nombre,cliente_email,cliente_telefono,proyecto_id,proyecto_nombre,telefono,email,rut,rol,trabajador_nombre,actividad_id,metodo,nota,fecha,subtipo,tipo_bitacora,tipo_evento,prioridad,hora_entrada,hora_salida,categoria,correo_remitente,correo_destinatario,correo_asunto,correo_cuerpo,hora,comuna_lugar,resumen,mensaje,observacion,numero_documento,proveedor,proveedor_entidad,fecha_documento",
           ),
           ...numbers(
             "monto,dias,monto_cotizado,cantidad,precio_unitario,porcentaje_avance,monto_documento",
@@ -52,6 +52,19 @@ export const CHAT_RESPONSE_SCHEMA = object(
       ),
     ),
     sugerencias: array(string),
+    busqueda_materiales: {
+      ...object(
+        {
+          ...strings(
+            "producto,marca,modelo,presentacion,ubicacion,unidad_cantidad",
+          ),
+          cantidad: number,
+          tiendas: array(string),
+        },
+        ["producto"],
+      ),
+      type: ["object", "null"],
+    },
     obra_propuesta: {
       ...object({
         ...strings(
@@ -74,6 +87,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
               {
                 ...strings("nombre,categoria,unidad"),
                 ...numbers("cantidad,precio_unitario_estimado"),
+                precio_incluye_iva: { type: "boolean" },
               },
               ["nombre", "cantidad", "precio_unitario_estimado"],
             ),
@@ -94,14 +108,25 @@ export const CHAT_RESPONSE_SCHEMA = object(
               ],
             ),
           ),
-          estructura_financiera: object(
-            numbers(
+          estructura_financiera: object({
+            ...numbers(
               "gastos_generales_porcentaje,imprevistos_porcentaje,margen_utilidad_porcentaje",
             ),
-          ),
+            tipo_utilidad: {
+              type: "string",
+              enum: ["recargo_costos", "margen_venta"],
+            },
+          }),
           actividades_gantt: array(activity),
         },
-        ["titulo_proyecto", "materiales", "mano_de_obra"],
+        [
+          "titulo_proyecto",
+          "materiales",
+          "mano_de_obra",
+          "duracion_dias_estimada",
+          "resumen_ejecutivo",
+          "estructura_financiera",
+        ],
       ),
       type: ["object", "null"],
     },
@@ -119,3 +144,24 @@ WHATSAPP_RESPONSE_SCHEMA.properties.acciones.items.properties.tipo.enum =
   ACTION_TYPES.filter(
     (tipo) => !["crear_proyecto", "crear_proyecto_completo"].includes(tipo),
   );
+
+export const MATERIAL_QUERY_SCHEMA = object(
+  {
+    respuesta: string,
+    busqueda_materiales: {
+      ...object(
+        {
+          ...strings(
+            "producto,marca,modelo,presentacion,ubicacion,unidad_cantidad",
+          ),
+          cantidad: number,
+          unidad_cantidad: { type: ["string", "null"] },
+          tiendas: array(string),
+        },
+        ["producto", "unidad_cantidad"],
+      ),
+      type: ["object", "null"],
+    },
+  },
+  ["respuesta", "busqueda_materiales"],
+);

@@ -129,6 +129,7 @@ function database() {
           respuesta: p.p_respuesta,
           cotizacion: p.p_cotizacion,
           acciones: p.p_acciones,
+          borrador_obra: p.p_borrador ?? null,
         };
         db.whatsapp_mensajes.unshift(row);
       }
@@ -696,10 +697,10 @@ test("el aviso de WhatsApp se registra atómicamente con sus destinatarios y el 
   const rpc = sb.rpc;
   let queued = 0;
   sb.rpc = async (name, p) => {
-    assert.equal(name, "registrar_mensaje_aviso");
+    assert.equal(name, "aplicar_lote_copiloto");
     queued++;
     assert.deepEqual(p.p_aviso.destinatarios, ["worker"]);
-    const result = await rpc("aplicar_lote_whatsapp", p.p_mensaje);
+    const result = await rpc("aplicar_lote_whatsapp", p);
     result.data.aviso_id = "11111111-1111-4111-a111-111111111111";
     return result;
   };
@@ -799,4 +800,101 @@ test("leer el número en Meta no acredita un permiso de mensajería que falta en
   assert.equal(result.estado, "permisos_pendientes");
   assert.equal(result.permisos_mensajeria, "pendiente");
   assert.match(result.mensaje, /whatsapp_business_messaging/);
+});
+
+test("una consulta o un aviso durante la creación de una obra conserva el borrador sin bloquear la otra tarea", async () => {
+  const sb = database();
+  sb.db.usuarios.push({
+    id: "worker",
+    empresa_id: "empresa1",
+    nombre: "Maestro",
+    rol: "terreno",
+    telefono_whatsapp: "+56912345679",
+  });
+  let queued = 0;
+  const baseRPC = sb.rpc;
+  sb.rpc = async (name, p) => {
+    if (p.p_aviso) {
+      queued++;
+      const response = await baseRPC(name, p);
+      response.data.aviso_id = "aviso-real";
+      return response;
+    }
+    return baseRPC(name, p);
+  };
+  const message = (id, body) => ({
+    id,
+    from: user.telefono_whatsapp,
+    type: "text",
+    text: { body },
+  });
+  await processPersonalMessage(
+    sb,
+    message("draft", "Crea una obra llamada Patio"),
+    {
+      chat: async () => ({
+        respuesta: "Datos",
+        accion: null,
+        cotizacion: null,
+        obra_propuesta: { nombre: "Patio" },
+      }),
+    },
+  );
+  for (let i = 0; i < 8; i++) {
+    const reply = await processPersonalMessage(
+      sb,
+      message("query" + i, "¿Qué puedes hacer?"),
+      {
+        chat: async () => ({
+          respuesta: "Puedo consultar tu obra.",
+          accion: null,
+          cotizacion: null,
+          obra_propuesta: null,
+        }),
+      },
+    );
+    assert.equal(reply.respuesta, "Puedo consultar tu obra.");
+    assert.equal(reply.borrador_obra.nombre, "Patio");
+  }
+  const notice = await processPersonalMessage(
+    sb,
+    message("notice", "Envía a terreno: mañana a las 08:00"),
+    {
+      chat: async () => ({
+        respuesta: "Aviso",
+        accion: {
+          tipo: "enviar_mensaje_equipo",
+          mensaje: "Mañana a las 08:00",
+          roles_destino: ["terreno"],
+        },
+        cotizacion: null,
+        obra_propuesta: null,
+      }),
+    },
+  );
+  assert.equal(queued, 1);
+  assert.equal(notice.acciones.tipo, "enviar_mensaje_equipo");
+  assert.equal(notice.borrador_obra.nombre, "Patio");
+  const complete = await processPersonalMessage(
+    sb,
+    message(
+      "complete",
+      "Cliente Ana, presupuesto 1500000, correo ana@example.test, teléfono +56987654321",
+    ),
+    {
+      chat: async () => ({
+        respuesta: "Datos",
+        accion: null,
+        cotizacion: null,
+        obra_propuesta: {
+          cliente_nombre: "Ana",
+          monto_cotizado: 1500000,
+          cliente_email: "ana@example.test",
+          cliente_telefono: "+56987654321",
+        },
+      }),
+    },
+  );
+  assert.match(complete.respuesta, /Obra Creada/);
+  assert.equal(complete.borrador_obra, null);
 });
