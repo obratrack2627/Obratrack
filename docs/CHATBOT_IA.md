@@ -85,4 +85,6 @@ Se retiraron el simulador de WhatsApp, el endpoint de atención externa no conec
 
 La sincronización ahora requiere JWT real, obtiene la empresa de la sesión, usa el cliente con RLS y verifica las referencias antes de escribir. Envía únicamente filas editadas, conserva pendientes al fallar y no fuerza el plan ni vuelve a subir obras eliminadas durante una lectura. Los endpoints de carga de archivos y cálculo de materiales también requieren sesión. La sincronización web de varias tablas mantiene el límite de escrituras secuenciales descrito arriba.
 
+PC y celular consultan la nube al entrar, cambiar de pantalla, recuperar conexión o volver a la aplicación. Mientras la pestaña esté visible se actualizan cada 30 segundos. Las peticiones simultáneas de la misma sesión comparten la lectura o subida; una respuesta de una cuenta anterior se descarta. Se conservan las ediciones pendientes y se reintenta su subida al reconectar. Si falla la actualización, se muestra un aviso con reintento; no se presenta la caché antigua como una sincronización correcta.
+
 Aplicar `supabase/produccion_copiloto.sql` y después `supabase/whatsapp_jefe.sql` en una misma transacción. La función de WhatsApp conserva compatibilidad con llamadas anteriores mediante el parámetro opcional de adjunto. No ejecutar `schema.sql` en producción.

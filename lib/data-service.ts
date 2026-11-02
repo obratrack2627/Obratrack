@@ -63,6 +63,8 @@ export const DATA_STORAGE_KEYS = {
 
 const KEYS = DATA_STORAGE_KEYS;
 
+type CloudPullResult = { success: boolean; message: string; updated?: boolean };
+
 const DEMO_EMPRESA_ID = 'e1111111-1111-4111-a111-111111111111';
 
 export class DataService {
@@ -2142,59 +2144,96 @@ export class DataService {
     }, 900);
   }
 
-  async pushToCloudServer(): Promise<{ success: boolean; message: string }> {
+  private cloudPush: {identity:string;promise:Promise<{success:boolean;message:string}>}|null=null;
+
+  pushToCloudServer(): Promise<{success:boolean;message:string}> {
+    const active=this.getActiveUser();
+    const identity=`${active?.id || ''}:${active?.empresa_id || ''}`;
+    if(this.cloudPush?.identity===identity)return this.cloudPush.promise;
+    const request={identity,promise:this.writeToCloudServer()};
+    this.cloudPush=request;
+    void request.promise.finally(()=>{if(this.cloudPush===request)this.cloudPush=null;});
+    return request.promise;
+  }
+
+  private async writeToCloudServer(): Promise<{ success: boolean; message: string }> {
     if (!this.isBrowser()) return { success: false, message: 'No browser' };
     try {
       const active = this.getActiveUser();
       const empresaId = active?.empresa_id || DEMO_EMPRESA_ID;
 
       if(!active?.empresa_id) return {success:false,message:'Inicia sesión para sincronizar.'};
-      const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
+      const dirtyKey=this.dirtyKey();
+      const sameSession=()=>this.getActiveUser()?.id===active.id && this.getActiveUser()?.empresa_id===empresaId;
+      const pending=this.getItem<Record<string,Record<string,any>>>(dirtyKey,{});
       const captured=JSON.parse(JSON.stringify(pending));
       const cambios=Object.fromEntries(Object.entries(captured).map(([key,rows])=>[key,Object.values(rows as object)]).filter(([,rows])=>(rows as any[]).length));
       if(!Object.keys(cambios).length) return {success:true,message:'No hay cambios pendientes.'};
       const {data,error}=await supabase.auth.getSession();
       if(error||!data.session?.access_token) return {success:false,message:'Inicia sesión para sincronizar.'};
+      if(!sameSession()) return {success:false,message:'La sesión cambió durante la sincronización.'};
       const res = await fetch('/api/supabase/sync', {
         method: 'POST',
+        signal: AbortSignal.timeout(20000),
         headers: { 'Content-Type': 'application/json',Authorization:`Bearer ${data.session.access_token}` },
         body: JSON.stringify({cambios}),
       });
 
       if (!res.ok) {
-        return { success: false, message: 'Error enviando sincronización a Supabase.' };
+        return { success: false, message: 'No se pudieron subir los cambios de este dispositivo. Se conservan para reintentar.' };
       }
-      const remaining=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
+      if(!sameSession()) return {success:false,message:'La sesión cambió durante la sincronización.'};
+      const remaining=this.getItem<Record<string,Record<string,any>>>(dirtyKey,{});
       for(const [key,rows] of Object.entries(captured) as [string,Record<string,any>][]) for(const [id,row] of Object.entries(rows)) {
         if(JSON.stringify(remaining[key]?.[id])===JSON.stringify(row)) delete remaining[key][id];
       }
-      localStorage.setItem(this.dirtyKey(),JSON.stringify(remaining));
+      localStorage.setItem(dirtyKey,JSON.stringify(remaining));
       return { success: true, message: 'Sincronizado en vivo con Supabase Cloud.' };
     } catch (err: any) {
-      return { success: false, message: err.message || 'Error de red con Supabase.' };
+      return { success: false, message: 'No se pudieron subir los cambios de este dispositivo. Revisa la conexión y reintenta.' };
     }
   }
 
   /**
    * Carga datos actuales sin reenviar la caché. Conserva únicamente las filas con ediciones pendientes.
    */
-  async pullFromCloudServer(): Promise<{ success: boolean; message: string; updated?: boolean }> {
+  private cloudPull: { identity: string; promise: Promise<CloudPullResult> } | null = null;
+
+  pullFromCloudServer(): Promise<CloudPullResult> {
+    const active = this.getActiveUser();
+    const identity = `${active?.id || ''}:${active?.empresa_id || ''}`;
+    if (this.cloudPull?.identity === identity) return this.cloudPull.promise;
+    const request = { identity, promise: this.readFromCloudServer() };
+    this.cloudPull = request;
+    void request.promise.finally(() => {
+      if (this.cloudPull === request) this.cloudPull = null;
+    });
+    return request.promise;
+  }
+
+  private async readFromCloudServer(): Promise<CloudPullResult> {
     if (!this.isBrowser()) return { success: false, message: 'No browser' };
     try {
       const active = this.getActiveUser();
-      const empresaId = active?.empresa_id || DEMO_EMPRESA_ID;
+      const empresaId = active?.empresa_id;
+      if(!active || !empresaId) return {success:false,message:'Inicia sesión para actualizar tus datos.'};
+      const sameSession = () => this.getActiveUser()?.id === active.id && this.getActiveUser()?.empresa_id === empresaId;
 
       const {data,error}=await supabase.auth.getSession();
       if(error||!data.session?.access_token) return {success:false,message:'Inicia sesión para sincronizar.'};
+      if(!sameSession()) return {success:false,message:'La sesión cambió durante la actualización.'};
       const res = await fetch(`/api/supabase/sync?empresaId=${encodeURIComponent(empresaId)}`, {
         cache: 'no-store',
+        signal: AbortSignal.timeout(20000),
         headers:{Authorization:`Bearer ${data.session.access_token}`},
       });
       if (!res.ok) {
-        return { success: false, message: 'No se pudo consultar Supabase.' };
+        return { success: false, message: res.status===401 || res.status===403 ? 'Tu sesión necesita renovarse. Vuelve a iniciar sesión.' : 'No se pudieron actualizar los datos. Mostrando la última información guardada.' };
       }
 
       const cloud = await res.json();
+      if(!sameSession()) return {success:false,message:'La sesión cambió durante la actualización.'};
+      if(cloud.empresaId !== empresaId) return {success:false,message:'La cuenta cambió. Vuelve a iniciar sesión para actualizar tus obras.'};
       const localProjs = this.getProyectos();
 
       const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
@@ -2268,7 +2307,7 @@ export class DataService {
       window.dispatchEvent(new Event('obratrack_cloud_synced'));
       return { success: true, message: 'Datos actualizados desde Supabase Cloud.', updated: true };
     } catch (err: any) {
-      return { success: false, message: err.message || 'Error consultando Supabase.' };
+      return { success: false, message: 'No se pudieron actualizar los datos. Revisa tu conexión y reintenta.' };
     }
   }
 

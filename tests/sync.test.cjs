@@ -158,6 +158,7 @@ test("leer una base vacía elimina la caché antigua y no resucita obras elimina
     if (options.method === "POST") posts++;
     return new Response(
       JSON.stringify({
+        empresaId: "a",
         proyectos: [],
         usuarios: [user],
         clientes: [],
@@ -178,4 +179,120 @@ test("leer una base vacía elimina la caché antigua y no resucita obras elimina
   assert.equal((await dataService.pullFromCloudServer()).success, true);
   assert.equal(dataService.getProyectos().length, 0);
   assert.equal(posts, 0);
+});
+
+test("actualizar la caché incorpora las tres obras y conserva solamente las ediciones locales pendientes", async () => {
+  localStorage.setItem(
+    "obratrack_proyectos_v7_a",
+    JSON.stringify([
+      { ...p1, nombre: "Cambio local pendiente" },
+      { ...p1, id: "old" },
+    ]),
+  );
+  localStorage.setItem(
+    "obratrack_dirty_v1_a",
+    JSON.stringify({
+      proyectos: { p1: { ...p1, nombre: "Cambio local pendiente" } },
+    }),
+  );
+  global.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        empresaId: "a",
+        proyectos: [p1, { ...p1, id: "p2" }, { ...p1, id: "p3" }],
+      }),
+    );
+  assert.equal((await dataService.pullFromCloudServer()).success, true);
+  assert.deepEqual(
+    dataService
+      .getProyectos()
+      .map((p) => p.id)
+      .sort(),
+    ["p1", "p2", "p3"],
+  );
+  assert.equal(
+    dataService.getProyectoById("p1").nombre,
+    "Cambio local pendiente",
+  );
+  assert.ok(
+    JSON.parse(localStorage.getItem("obratrack_dirty_v1_a")).proyectos.p1,
+  );
+});
+
+test("lecturas simultáneas comparten la petición y una respuesta de otra sesión no contamina la caché", async () => {
+  let release;
+  let requests = 0;
+  global.fetch = async () => {
+    requests++;
+    return new Promise((resolve) => {
+      release = resolve;
+    });
+  };
+  const first = dataService.pullFromCloudServer();
+  const second = dataService.pullFromCloudServer();
+  await new Promise(setImmediate);
+  assert.equal(requests, 1);
+  localStorage.setItem(
+    "obratrack_active_user_v7",
+    JSON.stringify({ ...user, id: "another", empresa_id: "b" }),
+  );
+  release(new Response(JSON.stringify({ empresaId: "a", proyectos: [p1] })));
+  assert.equal((await first).success, false);
+  assert.equal((await second).success, false);
+  assert.equal(localStorage.getItem("obratrack_proyectos_v7_b"), null);
+  assert.equal(localStorage.getItem("obratrack_proyectos_v7_a"), null);
+});
+
+test("un fallo de red conserva las obras locales y permite recuperar las tres en el siguiente intento", async () => {
+  localStorage.setItem("obratrack_proyectos_v7_a", JSON.stringify([p1]));
+  global.fetch = async () => {
+    throw Error("offline");
+  };
+  assert.equal((await dataService.pullFromCloudServer()).success, false);
+  assert.equal(dataService.getProyectos().length, 1);
+  global.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        empresaId: "a",
+        proyectos: [p1, { ...p1, id: "p2" }, { ...p1, id: "p3" }],
+      }),
+    );
+  assert.equal((await dataService.pullFromCloudServer()).success, true);
+  assert.equal(dataService.getProyectos().length, 3);
+});
+
+test("una lectura que responde con otra empresa no reemplaza los datos de la cuenta activa", async () => {
+  localStorage.setItem("obratrack_proyectos_v7_a", JSON.stringify([p1]));
+  global.fetch = async () =>
+    new Response(JSON.stringify({ empresaId: "b", proyectos: [] }));
+  assert.equal((await dataService.pullFromCloudServer()).success, false);
+  assert.equal(dataService.getProyectos().length, 1);
+});
+
+test("subidas simultáneas no reenvían dos veces los mismos cambios pendientes", async () => {
+  localStorage.setItem(
+    "obratrack_dirty_v1_a",
+    JSON.stringify({ proyectos: { p1 } }),
+  );
+  let release;
+  let requests = 0;
+  global.fetch = async () => {
+    requests++;
+    return new Promise((resolve) => {
+      release = resolve;
+    });
+  };
+  const first = dataService.pushToCloudServer();
+  const second = dataService.pushToCloudServer();
+  await new Promise(setImmediate);
+  assert.equal(requests, 1);
+  release(new Response("{}"));
+  assert.equal((await first).success, true);
+  assert.equal((await second).success, true);
+  assert.equal(
+    Object.keys(
+      JSON.parse(localStorage.getItem("obratrack_dirty_v1_a")).proyectos,
+    ).length,
+    0,
+  );
 });

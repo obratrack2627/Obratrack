@@ -3,6 +3,7 @@
 import React from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
+import CloudSync from '@/components/CloudSync';
 import ThemeProvider from '@/components/ThemeProvider';
 import ThemeToggle from '@/components/ThemeToggle';
 
@@ -33,6 +34,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <ThemeToggle />
           </div>
           <main className="flex-1 flex flex-col min-h-screen w-full pt-16 md:pt-0 md:pl-64 transition-all">
+            <CloudSync />
             <div className="flex-1 flex flex-col page-fade-enter">
               {children}
             </div>

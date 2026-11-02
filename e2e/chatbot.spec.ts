@@ -352,14 +352,20 @@ test("no se renderiza el chat flotante de IA, el plan gratis queda bloqueado y e
     );
   }, company);
   await page.goto("/dashboard");
-  await expect(page.getByRole("button", { name: /Copiloto IA/ })).toHaveCount(0);
-  const themeButtons = page.locator('button[aria-label="Cambiar tema"]:visible');
+  await expect(page.getByRole("button", { name: /Copiloto IA/ })).toHaveCount(
+    0,
+  );
+  const themeButtons = page.locator(
+    'button[aria-label="Cambiar tema"]:visible',
+  );
   await expect(themeButtons).toHaveCount(1);
   await themeButtons.first().click();
   await expect(page.locator("html")).toHaveClass(/dark/);
   await page.goto("/cotizador");
   await expect(page.getByText(/Desbloquea Copiloto Obrero IA/)).toBeVisible();
-  await expect(page.locator('button[aria-label="Cambiar tema"]:visible')).toHaveCount(1);
+  await expect(
+    page.locator('button[aria-label="Cambiar tema"]:visible'),
+  ).toHaveCount(1);
 });
 
 test("el asistente de una obra ejecuta y guarda su avance", async ({
@@ -705,4 +711,209 @@ test("los avisos muestran el estado por destinatario y permiten reintentar solo 
     .click();
   await expect(page.getByText("Pendiente: 1", { exact: true })).toBeVisible();
   expect(retried).toBe(true);
+});
+
+const syncedProject = (id: string, nombre: string) => ({
+  id,
+  nombre,
+  empresa_id: company,
+  estado: "activo",
+  monto_cotizado: 3000000,
+  fecha_inicio: "2026-10-27",
+  fecha_termino_estimada: "2026-11-20",
+});
+async function serveCloud(
+  page: Page,
+  read: () => any[],
+  write: (rows: any[]) => void = () => {},
+  failed = () => false,
+) {
+  await page.route("**/api/supabase/sync*", async (route) => {
+    expect(route.request().headers().authorization).toMatch(/^Bearer /);
+    if (failed())
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Sin conexión con la nube" }),
+      });
+    if (route.request().method() === "POST") {
+      write(route.request().postDataJSON().cambios?.proyectos || []);
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "{}",
+      });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        empresaId: company,
+        plan_id: "pro_ia",
+        proyectos: read(),
+        usuarios: [owner],
+        clientes: [],
+        actividades: [],
+        pagos: [],
+        materiales: [],
+        bitacora: [],
+        imprevistos: [],
+        reclamos_cambios: [],
+        documentos: [],
+        asistencias: [],
+        reportes_whatsapp: [],
+        agenda: [],
+      }),
+    });
+  });
+}
+
+test("el celular recupera las obras creadas desde otro navegador al volver y al recuperar conexión", async ({
+  page,
+  browser,
+}) => {
+  let cloud = [syncedProject("cloud1", "Obra inicial")];
+  const mobileContext = await browser.newContext({
+    baseURL: 'http://localhost:3000',
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  try {
+    const mobile = await mobileContext.newPage();
+    await setup(page, {});
+    await setup(mobile, {});
+    const read = () => cloud;
+    const write = (rows: any[]) => {
+      const map = new Map(cloud.map((p) => [p.id, p]));
+      rows.forEach((p) => map.set(p.id, p));
+      cloud = Array.from(map.values());
+    };
+    await serveCloud(page, read, write);
+    await serveCloud(mobile, read, write);
+    await page.goto("/proyectos");
+    await mobile.goto("/proyectos");
+    await expect(
+      mobile.getByRole("link", { name: "Obra inicial", exact: true }),
+    ).toBeVisible();
+    await page.evaluate(async () => {
+      const session = JSON.parse(
+        localStorage.getItem("sb-gaoxbkvhtdsgqxjihlrv-auth-token")!,
+      );
+      const response = await fetch("/api/supabase/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          cambios: {
+            proyectos: [
+              {
+                id: "cloud2",
+                nombre: "Obra creada desde PC",
+                empresa_id: "fixture-company",
+                estado: "activo",
+                monto_cotizado: 2000000,
+                fecha_inicio: "2026-10-27",
+                fecha_termino_estimada: "2026-11-20",
+              },
+              {
+                id: "cloud3",
+                nombre: "Tercera obra",
+                empresa_id: "fixture-company",
+                estado: "activo",
+                monto_cotizado: 1000000,
+                fecha_inicio: "2026-10-27",
+                fecha_termino_estimada: "2026-11-20",
+              },
+            ],
+          },
+        }),
+      });
+      if (!response.ok) throw Error("No se confirmó el guardado");
+    });
+    await mobile.evaluate(() =>
+      document.dispatchEvent(new Event("visibilitychange")),
+    );
+    await expect(
+      mobile.getByRole("link", { name: "Obra creada desde PC", exact: true }),
+    ).toBeVisible();
+    await expect(
+      mobile.getByRole("link", { name: "Tercera obra", exact: true }),
+    ).toBeVisible();
+    await mobileContext.setOffline(true);
+    await mobile.evaluate(() => window.dispatchEvent(new Event("offline")));
+    await expect(
+      mobile.getByText("Sin conexión. Mostrando los últimos datos guardados."),
+    ).toBeVisible();
+    cloud.push(syncedProject("cloud4", "Obra durante desconexión"));
+    await mobileContext.setOffline(false);
+    await mobile.evaluate(() => window.dispatchEvent(new Event("online")));
+    await expect(
+      mobile.getByRole("link", {
+        name: "Obra durante desconexión",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      mobile.getByText("Sin conexión. Mostrando los últimos datos guardados."),
+    ).toHaveCount(0);
+    expect(cloud).toHaveLength(4);
+  } finally {
+    await mobileContext.close();
+  }
+});
+
+test("una pestaña abierta se actualiza periódicamente sin cambiar de pantalla", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await setup(page, {});
+  let cloud = [syncedProject("cloud1", "Obra inicial")];
+  await serveCloud(page, () => cloud);
+  await page.goto("/proyectos");
+  await expect(
+    page.getByRole("link", { name: "Obra inicial", exact: true }),
+  ).toBeVisible();
+  cloud.push(syncedProject("cloud2", "Nueva obra remota"));
+  await page.clock.fastForward(31000);
+  await expect(
+    page.getByRole("link", { name: "Nueva obra remota", exact: true }),
+  ).toBeVisible();
+});
+
+test("un fallo de actualización conserva las obras y ofrece reintento visible", async ({
+  page,
+}) => {
+  await setup(page, {});
+  let failing = false;
+  let cloud = [syncedProject("cloud1", "Obra inicial")];
+  await serveCloud(
+    page,
+    () => cloud,
+    undefined,
+    () => failing,
+  );
+  await page.goto("/proyectos");
+  await expect(
+    page.getByRole("link", { name: "Obra inicial", exact: true }),
+  ).toBeVisible();
+  failing = true;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(
+    page.getByRole("button", { name: "Reintentar sincronización" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Obra inicial", exact: true }),
+  ).toBeVisible();
+  failing = false;
+  cloud.push(syncedProject("cloud2", "Obra recuperada"));
+  await page.getByRole("button", { name: "Reintentar sincronización" }).click();
+  await expect(
+    page.getByRole("link", { name: "Obra recuperada", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Reintentar sincronización" }),
+  ).toHaveCount(0);
 });
