@@ -296,3 +296,12 @@ test("subidas simultáneas no reenvían dos veces los mismos cambios pendientes"
     0,
   );
 });
+
+test('un imprevisto se sincroniza con su evidencia y monto contra el esquema de producción', async () => {
+  const { POST } = require('../app/api/supabase/sync/route.ts');
+  const response = await POST(request({ cambios: { imprevistos: [{ id: 'incident-sync', proyecto_id: p1.id, descripcion: 'Ajuste de obra', monto: 12000, origen: 'manual', estado: 'pendiente', fecha: '2026-11-02', foto_url: 'https://example.test/evidencia.png' }] } }));
+  assert.equal(response.status, 200);
+  const saved = fixture.tables.get('imprevistos').find((r) => r.id === 'incident-sync');
+  assert.equal(saved.monto_adicional,12000);
+  assert.equal(saved.foto_url,'https://example.test/evidencia.png');
+});

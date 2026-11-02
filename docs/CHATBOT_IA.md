@@ -113,3 +113,11 @@ Después de cotizar se pregunta si se desea crear la obra. El constructor puede 
 Migraciones aditivas de este flujo: `supabase/flujo_obra.sql` y `supabase/presupuesto_whatsapp_obra.sql`. `supabase/archivos_privados.sql` se aplica con la versión que renueva los enlaces ya desplegada. Esta última retira permisos anónimos de lectura, carga y borrado y protege los buckets de documentos/fotos por empresa, obra y perfil. La sincronización renueva enlaces temporales; no se debe guardar un token permanente ni marcar los buckets como públicos.
 
 Los estados de pago por avance proponen cero si no existe avance pendiente de cobrar; los anticipos acordados se introducen en modo manual. Los pagos pendientes y anulados se conservan en el registro pero no se suman como cobrados. El saldo después de materiales e imprevistos no representa una utilidad contable final. Los PDF de presupuestos y estados de pago se descargan directamente y la impresión tiene su control separado.
+
+## Permisos y registro de constructoras
+
+Aplicar `supabase/permisos_obra.sql` y después `supabase/registro_constructor.sql` antes de desplegar el cliente de autenticación actualizado. Los permisos de escritura financiera y de planificación se comprueban también en SQL, y el personal de terreno solo consulta sus obras asignadas y modifica sus propios registros de terreno. No puede cambiar perfiles, empresa ni plan desde el cliente.
+
+El registro crea empresa y perfil en una transacción de Supabase Auth, con plan Gratis. Si el correo requiere confirmación y todavía no hay sesión, el navegador no intenta crear registros relacionales ni inventa una empresa local. Al iniciar sesión consulta `completar_registro_actual`, que reutiliza el perfil propio y recupera un alta anterior incompleta cuando sus datos lo permiten. Las invitaciones de empleados continúan por el servidor. Las migraciones no reasignan los usuarios ni planes existentes.
+
+`flujo_obra.sql` también añade `foto_url` a los imprevistos: el formulario y la sincronización escriben esa evidencia, incluso cuando su valor es nulo.

@@ -1,6 +1,5 @@
 import { supabase } from './client';
 import { Usuario } from '@/types/database';
-import { isDeveloperEmail } from '@/lib/auth-utils';
 import { supabaseService } from './supabase-service';
 import { dataService } from '@/lib/data-service';
 
@@ -17,7 +16,7 @@ export function getRedirectBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location.origin) {
     return window.location.origin;
   }
-  return process.env.NEXT_PUBLIC_APP_URL || 'https://obra-track-ruddy.vercel.app';
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://obratrack-5zwn.vercel.app';
 }
 
 // Mapeo exhaustivo de errores de Supabase Auth en español
@@ -50,6 +49,18 @@ function mapSupabaseAuthError(message: string): string {
   return message || 'Ocurrió un error de autenticación en Supabase.';
 }
 
+async function ownProfile(): Promise<Usuario> {
+  const { data, error } = await supabase.rpc('completar_registro_actual');
+  const profile = Array.isArray(data) ? data[0] : data;
+  if (error || !profile?.id || !profile?.empresa_id) throw new Error('No se pudo completar el perfil de tu empresa. Revisa los datos de registro o contacta con administración.');
+  const company = await supabaseService.getEmpresaById(profile.empresa_id);
+  return { ...profile, empresa_nombre: company?.nombre || '' } as Usuario;
+}
+function activateProfile(usuario: Usuario) {
+  dataService.setActiveUser(usuario);
+  if (typeof window !== 'undefined') document.cookie = `obratrack_auth_token=${usuario.auth_user_id || usuario.id}; path=/; max-age=2592000; SameSite=Lax`;
+}
+
 /**
  * Registro de un nuevo Dueño / Contratista con aislamiento Multi-Tenant en Supabase PostgreSQL
  * y envío automático de correo de confirmación de cuenta
@@ -63,7 +74,6 @@ export async function signUpWithSupabase(
   telefono: string = '+56 9 '
 ): Promise<AuthResult> {
   const cleanEmail = email.trim().toLowerCase();
-  const isDev = isDeveloperEmail(cleanEmail);
   const baseUrl = getRedirectBaseUrl();
 
   try {
@@ -89,48 +99,12 @@ export async function signUpWithSupabase(
       };
     }
 
-    const authUserId = authData.user?.id || 'usr-' + Date.now();
-
-    // 2. Multi-tenant: empresa única para nuevo usuario, o la base si es desarrollador
-    const empresaId = isDev ? 'e1111111-1111-4111-a111-111111111111' : 'emp-' + Date.now();
-    const planId = isDev ? 'pro_ia' : 'gratis';
-
-    // 3. Crear empresa en Supabase PostgreSQL
-    await supabaseService.saveEmpresa({
-      id: empresaId,
-      nombre: isDev ? 'Constructora ObraTrack SpA' : empresaNombre.trim(),
-      rut: isDev ? '76.123.456-7' : rut.trim(),
-      plan_id: planId,
-    });
-
-    const usuario: Usuario = {
-      id: authUserId,
-      nombre: nombre.trim(),
-      email: cleanEmail,
-      rol: 'admin',
-      telefono_whatsapp: telefono.trim(),
-      rut: rut.trim(),
-      empresa_nombre: empresaNombre.trim(),
-      empresa_id: empresaId,
-      auth_user_id: authUserId,
-      is_dev: isDev,
-      created_at: new Date().toISOString(),
-    };
-
-    // 4. Crear registro en tabla relacional usuarios de Supabase
-    await supabaseService.saveUsuario(usuario);
-
-    // 5. Verificar si Supabase requiere confirmación de email (session es null al requerir confirmación)
     const emailConfirmationRequired = !authData.session;
-
+    let usuario: Usuario | undefined;
     if (!emailConfirmationRequired) {
-      // Si el proyecto tiene autoconfirmación habilitada, se inicia sesión inmediatamente
-      dataService.setActiveUser(usuario);
-      await dataService.loadTenantDataFromSupabase(empresaId);
-
-      if (typeof window !== 'undefined') {
-        document.cookie = `obratrack_auth_token=${authUserId}; path=/; max-age=2592000; SameSite=Lax`;
-      }
+      usuario = await ownProfile();
+      activateProfile(usuario);
+      await dataService.loadTenantDataFromSupabase(usuario.empresa_id);
     }
 
     return {
@@ -181,8 +155,6 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
   }
 
   try {
-    const isDev = isDeveloperEmail(resolvedEmail);
-
     // 1. Iniciar sesión contra Supabase Auth
     let authData: any = null;
     let authError: any = null;
@@ -201,38 +173,10 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
       };
     }
 
-    const authUserId = authData.user?.id || 'usr-' + Date.now();
-
-    // 2. Obtener perfil del usuario desde PostgreSQL en Supabase
-    let usuario = await supabaseService.getUsuarioByEmail(resolvedEmail);
-
-    if (!usuario) {
-      const empresaId = isDev ? 'e1111111-1111-4111-a111-111111111111' : 'emp-' + Date.now();
-      usuario = {
-        id: authUserId,
-        nombre: authData.user?.user_metadata?.display_name || resolvedEmail.split('@')[0],
-        email: resolvedEmail,
-        rol: 'admin',
-        telefono_whatsapp: '+56 9 ',
-        empresa_id: empresaId,
-        auth_user_id: authUserId,
-        is_dev: isDev,
-        created_at: new Date().toISOString(),
-      };
-      await supabaseService.saveUsuario(usuario);
-    } else {
-      if (isDev) {
-        usuario.is_dev = true;
-      }
-    }
-
-    // 3. Activar usuario y cargar datos del inquilino desde Supabase
-    dataService.setActiveUser(usuario);
+    if (!authData?.user?.id || !authData.session) return { success: false, error: 'No se pudo iniciar una sesión válida.' };
+    const usuario = await ownProfile();
+    activateProfile(usuario);
     await dataService.loadTenantDataFromSupabase(usuario.empresa_id);
-
-    if (typeof window !== 'undefined') {
-      document.cookie = `obratrack_auth_token=${authUserId}; path=/; max-age=2592000; SameSite=Lax`;
-    }
 
     return { success: true, user: usuario };
   } catch (error: any) {

@@ -1,4 +1,5 @@
 -- Conversión transaccional, con RLS, control de versión y reintentos sin duplicados.
+ALTER TABLE public.imprevistos ADD COLUMN IF NOT EXISTS foto_url TEXT;
 CREATE OR REPLACE FUNCTION public.convertir_presupuesto_obra(p_id text,p_version text,p_payload jsonb)
 RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path=public,pg_temp AS $$
 DECLARE b public.presupuestos; p public.proyectos; r jsonb; company text; actor text; role_name text; plan text;
