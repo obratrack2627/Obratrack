@@ -79,7 +79,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
       ...object(
         {
           ...strings(
-            "titulo_proyecto,tipo_obra,comuna_region,resumen_ejecutivo,cliente_id,cliente_nombre,cliente_telefono,condiciones_pago",
+            "titulo_proyecto,tipo_obra,comuna_region,resumen_ejecutivo,cliente_id,cliente_nombre,cliente_telefono,cliente_email,cliente_contacto,fecha_validez,observaciones,condiciones_pago",
           ),
           ...numbers("metros_cuadrados,duracion_dias_estimada"),
           materiales: array(
@@ -117,7 +117,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
               enum: ["recargo_costos", "margen_venta"],
             },
           }),
-          actividades_gantt: array(activity),
+          actividades_gantt: { ...array(activity), minItems: 1 },
         },
         [
           "titulo_proyecto",
@@ -126,6 +126,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
           "duracion_dias_estimada",
           "resumen_ejecutivo",
           "estructura_financiera",
+          "actividades_gantt",
         ],
       ),
       type: ["object", "null"],

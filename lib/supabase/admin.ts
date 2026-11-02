@@ -178,34 +178,36 @@ export function normalizePhoneKey(phone?: string | null): string {
 }
 
 /**
- * Sube un buffer binario a Supabase Storage y retorna su URL pública permanente.
+ * Sube un buffer binario a Supabase Storage y retorna un enlace de acceso temporal (la sincronización renueva el enlace).
  */
 export async function uploadBufferToSupabaseStorage(params: {
   bucket: 'bitacora-fotos' | 'documentos-obra';
+  client?: SupabaseClient;
   filePath: string;
   buffer: Buffer;
   contentType: string;
 }): Promise<{ publicUrl: string | null; error?: string }> {
-  const sb = getSupabaseAdmin();
+  const sb = params.client || getSupabaseAdmin();
   if (!sb) return { publicUrl: null, error: 'Cliente Supabase Admin no configurado.' };
 
   const { error } = await sb.storage.from(params.bucket).upload(params.filePath, params.buffer, {
     contentType: params.contentType,
-    upsert: true,
+    upsert: false,
   });
 
   if (error) {
     // Intentar crear bucket si no existía y reintentar
-    await sb.storage.createBucket(params.bucket, { public: true }).catch(() => {});
+    await sb.storage.createBucket(params.bucket, { public: false }).catch(() => {});
     const retry = await sb.storage.from(params.bucket).upload(params.filePath, params.buffer, {
       contentType: params.contentType,
-      upsert: true,
+      upsert: false,
     });
     if (retry.error) {
       return { publicUrl: null, error: retry.error.message };
     }
   }
 
-  const { data } = sb.storage.from(params.bucket).getPublicUrl(params.filePath);
-  return { publicUrl: data.publicUrl };
+  const { data, error: signError } = await sb.storage.from(params.bucket).createSignedUrl(params.filePath, 3600);
+  if (signError || !data?.signedUrl) return { publicUrl: null, error: 'No se pudo autorizar el acceso al archivo.' };
+  return { publicUrl: data.signedUrl };
 }

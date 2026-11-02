@@ -356,6 +356,10 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
       typeof raw.cliente_telefono === "string"
         ? raw.cliente_telefono
         : undefined,
+    cliente_email: typeof raw.cliente_email === 'string' ? raw.cliente_email : undefined,
+    cliente_contacto: typeof raw.cliente_contacto === 'string' ? raw.cliente_contacto : undefined,
+    fecha_validez: typeof raw.fecha_validez === 'string' ? raw.fecha_validez : undefined,
+    observaciones: typeof raw.observaciones === 'string' ? raw.observaciones : undefined,
     condiciones_pago:
       typeof raw.condiciones_pago === "string"
         ? raw.condiciones_pago

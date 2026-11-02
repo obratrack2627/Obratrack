@@ -40,13 +40,12 @@ export function safeOfferURL(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      ["www.easy.cl", "www.dimaco.cl"].includes(url.hostname) &&
-      url.pathname.endsWith("/p")
-      ? url.href
-      : undefined;
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) return undefined;
+    const host = url.hostname;
+    const allowed = (["www.easy.cl", "www.dimaco.cl", "www.imperial.cl"].includes(host) && url.pathname.endsWith('/p'))
+      || (host === 'www.sodimac.cl' && /^\/sodimac-cl\/articulo\/\d+\/[a-zA-Z0-9-]+\/?$/.test(url.pathname))
+      || (host === 'www.construmart.cl' && /^\/[a-zA-Z0-9-]+\/?$/.test(url.pathname));
+    return allowed ? url.href : undefined;
   } catch {
     return undefined;
   }

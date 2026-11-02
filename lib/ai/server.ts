@@ -5,7 +5,7 @@ import { AIError, aiErrorResponse } from "./errors";
 import { serverFetch } from "@/lib/server-fetch";
 import { chatAsesorObrasGemini, chatAgenteProyectoGemini } from "@/lib/gemini";
 import { loadAIContext } from "./context";
-import { saveBudget } from "@/lib/presupuestos";
+import { saveBudget, findBudget } from "@/lib/presupuestos";
 import { checkActionPermissions } from "./permissions";
 import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
 import { randomUUID } from "node:crypto";
@@ -182,18 +182,7 @@ export function createChatHandler(
       const budgetContext = async (scope?: string) => {
         const id = body.contexto_cotizacion?.id;
         if (typeof id !== "string" || id.length > 200) return null;
-        const { data, error } = await client
-          .from("presupuestos")
-          .select("cotizacion,proyecto_id")
-          .eq("empresa_id", user.empresa_id)
-          .eq("id", id)
-          .maybeSingle();
-        if (error)
-          throw new AIError(
-            "BUDGET_READ",
-            "No se pudo consultar el presupuesto anterior.",
-            503,
-          );
+        const data = await findBudget(client, user.empresa_id, id);
         if (scope && data?.proyecto_id && data.proyecto_id !== scope)
           throw new AIError(
             "BUDGET_FORBIDDEN",

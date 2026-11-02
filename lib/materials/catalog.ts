@@ -1,3 +1,5 @@
+import { sodimacProducts, construmartProducts } from "./retail";
+import { safeOfferURL } from "./types";
 import { serverFetch } from "@/lib/server-fetch";
 import { AIError } from "@/lib/ai/errors";
 import { roundLine } from "@/lib/ai/protocol";
@@ -8,9 +10,12 @@ import type {
 } from "./types";
 
 // Cuentas públicas de catálogo identificadas en las propias tiendas. Sin claves ni sesiones de clientes.
-export const catalogProviders = [
+export const catalogProviders: Array<{ nombre: string; cuenta: string; url: string; tipo?: "sodimac" | "magento" | "imperial" }> = [
   { nombre: "Easy", cuenta: "easycl", url: "https://www.easy.cl" },
   { nombre: "Dimaco", cuenta: "dimacocl", url: "https://www.dimaco.cl" },
+  { nombre: "Sodimac", cuenta: "sodimac", url: "https://www.sodimac.cl", tipo: "sodimac" },
+  { nombre: "Construmart", cuenta: "construmart", url: "https://www.construmart.cl", tipo: "magento" },
+  { nombre: "Imperial", cuenta: "imperial", url: "https://www.imperial.cl", tipo: "imperial" },
 ];
 const normalize = (s: string) =>
   s
@@ -26,6 +31,7 @@ const normalize = (s: string) =>
     .replace(/centimetros?/g, "cm")
     .replace(/litros?/g, "l")
     .replace(/[^a-z0-9.]+/g, " ")
+    .replace(/\.(?=\s|$)/g, "")
     .trim();
 
 export function validateMaterialQuery(value: any): ConsultaMaterial {
@@ -167,6 +173,12 @@ export function parseCatalogProducts(
       const full = normalize(
         `${product.productName} ${name} ${product.brand || ""}`,
       );
+      if (tokens.length === 1 && ['cemento','yeso','arena','grava','taladro','martillo','clavo','tornillo','pintura','mortero','ladrillo','bloque','sierra'].includes(tokens[0])) {
+        const nameWords = normalize(name).split(' ');
+        const at = nameWords.findIndex((word) => word === tokens[0] || word === tokens[0] + 's' || word === tokens[0] + 'es');
+        const prefixes = new Set(['de','del','el','la','saco','sacos','bolsa','bolsas','caja','cajas','pack','paquete', ...normalize(product.brand || '').split(' ')]);
+        if (at < 0 || !nameWords.slice(0, at).every((word) => prefixes.has(word))) continue;
+      }
       if (
         !tokens.every((t) =>
           full
@@ -185,7 +197,7 @@ export function parseCatalogProducts(
         continue;
       if (
         [query.marca, query.modelo, query.presentacion].some(
-          (v) => v && !matchesSpecification(v, full),
+          (v, i) => v && !(i === 0 && normalize(product.brand || "").replace(/\s/g, "") === normalize(v).replace(/\s/g, "")) && !matchesSpecification(v, full),
         )
       )
         continue;
@@ -198,7 +210,7 @@ export function parseCatalogProducts(
         !Number.isFinite(offer.Price) ||
         offer.Price <= 0 ||
         !Number.isSafeInteger(Math.round(offer.Price)) ||
-        !(offer.AvailableQuantity > 0)
+        (provider.tipo === "sodimac" ? offer.AvailableQuantity === 0 : !(offer.AvailableQuantity > 0))
       )
         continue;
       const multiplier =
@@ -217,7 +229,7 @@ export function parseCatalogProducts(
             new URL(provider.url).hostname,
             new URL(provider.url).hostname.replace(/^www\./, ""),
           ].includes(source.hostname) ||
-          !source.pathname.endsWith("/p")
+          !safeOfferURL(provider.url + source.pathname)
         )
           continue;
       } catch {
@@ -288,8 +300,17 @@ async function readCatalog(
     .join(" ");
   // Estos catálogos rechazan espacios codificados como +; usar la codificación de la búsqueda pública.
   const params = `ft=${encodeURIComponent(term)}&_from=0&_to=19`;
+  const graph = '{products(search:'+JSON.stringify(term)+',pageSize:20){items{name sku url_key stock_status price_range{minimum_price{final_price{value currency}}}}}}';
+  const endpoint = provider.tipo === 'sodimac'
+    ? `https://sodimac.falabella.com/sodimac-cl/search?Ntt=${encodeURIComponent(term)}`
+    : provider.tipo === 'magento'
+      ? `https://www.construmart.cl/graphql?query=${encodeURIComponent(graph)}`
+      : provider.tipo === 'imperial'
+        ? `https://www.imperial.cl/api/catalog_system/pub/products/search?${params}`
+        : `https://${provider.cuenta}.vtexcommercestable.com.br/api/catalog_system/pub/products/search?${params}`;
+  const maxBytes = provider.tipo === 'sodimac' ? 4500000 : 1500000;
   const response = await fetcher(
-    `https://${provider.cuenta}.vtexcommercestable.com.br/api/catalog_system/pub/products/search?${params}`,
+    endpoint,
     {
       cache: "no-store",
       headers: {
@@ -300,7 +321,7 @@ async function readCatalog(
     },
   );
   if (!response.ok) throw Error("Catálogo no disponible");
-  if (Number(response.headers.get("content-length")) > 1500000)
+  if (Number(response.headers.get("content-length")) > maxBytes)
     throw Error("Catálogo demasiado grande");
   const reader = response.body?.getReader();
   if (!reader) throw Error("Catálogo vacío");
@@ -311,14 +332,15 @@ async function readCatalog(
       const { done, value } = await reader.read();
       if (done) break;
       length += value.byteLength;
-      if (length > 1500000) throw Error("Catálogo demasiado grande");
+      if (length > maxBytes) throw Error("Catálogo demasiado grande");
       chunks.push(value);
     }
   } finally {
     await reader.cancel().catch(() => {});
   }
+  const body = Buffer.concat(chunks).toString("utf8");
   return parseCatalogProducts(
-    JSON.parse(Buffer.concat(chunks).toString("utf8")),
+    provider.tipo === "sodimac" ? sodimacProducts(body) : provider.tipo === "magento" ? construmartProducts(body) : JSON.parse(body),
     provider,
     query,
   );

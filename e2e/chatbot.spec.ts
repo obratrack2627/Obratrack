@@ -3,6 +3,37 @@ import { normalizeQuote } from "../lib/ai/protocol";
 import { reviseQuote } from "../lib/quotes/revise";
 import { readFile } from "node:fs/promises";
 
+test("el Centro de Mando prioriza obras y permite recorrer los módulos de una obra sin errores", async ({ page }) => {
+  test.setTimeout(120000);
+  await setup(page, { respuesta: 'Consulta', accion: null }, true);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/dashboard');
+  const active = page.getByRole('heading', { name: /Obras en Faena Activa/ });
+  const flow = page.getByRole('heading', { name: /Flujo Financiero por Obra/ });
+  const distribution = page.getByRole('heading', { name: 'Distribución de Cartera', exact: true });
+  await expect(active).toBeVisible();
+  const position = await active.boundingBox();
+  expect(position!.y).toBeLessThan((await flow.boundingBox())!.y);
+  expect(position!.y).toBeLessThan((await distribution.boundingBox())!.y);
+  for (const module of ['gantt','finanzas','asistencia','cambios','documentos','presupuestos','ia']) {
+    await page.goto('/proyectos/p-existing/' + module);
+    await expect(page.getByRole('heading', { name: 'Terraza', exact: true }).first()).toBeVisible();
+    if (module === 'finanzas') {
+      await page.getByRole('button', { name: 'Emitir Estado de Pago (PDF)', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Estado de Pago de Obra', exact: true });
+      await expect(dialog).toBeVisible();
+      await page.evaluate(() => { (window as any).__printCount = 0; window.print = () => { (window as any).__printCount++; }; });
+      const downloading = page.waitForEvent('download');
+      await dialog.getByRole('button', { name: 'Descargar PDF', exact: true }).click();
+      await (await downloading).saveAs('/tmp/obratrack-workflow-edp.pdf');
+      expect((await readFile('/tmp/obratrack-workflow-edp.pdf')).subarray(0, 5).toString()).toBe('%PDF-');
+      expect(await page.evaluate(() => (window as any).__printCount)).toBe(0);
+    }
+  }
+  expect(errors).toEqual([]);
+});
+
 const ownerId = "00000000-0000-0000-0000-000000000001";
 const company = "fixture-company";
 const owner = {
@@ -1289,4 +1320,32 @@ test("el presupuesto del chat de una obra conserva el PDF al recargar desde la n
       .getByRole("dialog")
       .getByText("Adicional para Terraza", { exact: true }),
   ).toBeVisible();
+});
+
+test('después de cotizar se ofrece crear obra con Gantt y materiales sin crearla automáticamente', async ({ page }) => {
+  const quote = normalizeQuote({ titulo_proyecto: 'Obra propuesta', cliente_nombre: 'Cliente', materiales: [{ nombre: 'Cemento', cantidad: 3, unidad: 'saco', precio_unitario_estimado: 5000 }], mano_de_obra: [], actividades_gantt: [{ nombre: 'Preparar terreno', dias: 1 }, { nombre: 'Ejecutar radier', dias: 2 }] });
+  const db = await setup(page, { respuesta: 'Cotización lista', accion: null, cotizacion: quote });
+  let calls = 0;
+  let budget = { id: quote.id, cotizacion: quote, estado: 'borrador', proyecto_id: null as string | null, updated_at: '2026-11-02T12:00:00Z' };
+  await page.route('**/api/presupuestos*', (route) => route.fulfill({ json: { presupuestos: [budget] } }));
+  await page.route('**/api/presupuestos/convertir', async (route) => {
+    calls++;
+    const body = route.request().postDataJSON();
+    expect(body.id).toBe(quote.id); expect(body.incluir_gantt).toBe(true); expect(body.incluir_materiales).toBe(true);
+    const project = { id: 'p-from-quote', empresa_id: company, nombre: quote.titulo_proyecto, estado: 'activo', monto_cotizado: quote.estructura_financiera.precio_total_con_iva, fecha_inicio: '2026-11-02', fecha_termino_estimada: '2026-11-05' };
+    db.proyectos.push(project);
+    budget = { ...budget, proyecto_id: project.id, estado: 'aprobada' };
+    await route.fulfill({ json: { presupuesto: budget, proyecto: project, actividadesCreadas: 2, materialesCargados: 1 } });
+  });
+  await page.goto('/cotizador');
+  await send(page, 'Cotiza el radier');
+  const proposal = page.getByRole('region', { name: 'Crear obra desde cotización' });
+  await expect(proposal).toContainText('¿Quieres crear la obra con esta cotización?');
+  await expect(proposal.getByLabel('Usar Gantt sugerido')).toBeChecked();
+  await proposal.getByText('Revisar Gantt sugerido', { exact: true }).click();
+  await expect(proposal).toContainText('Preparar terreno');
+  expect(calls).toBe(0); expect(db.proyectos).toHaveLength(0);
+  await proposal.getByRole('button', { name: 'Crear obra', exact: true }).click();
+  await expect(page.getByRole('link', { name: /Abrir.*Gantt/ }).first()).toHaveAttribute('href', '/proyectos/p-from-quote/gantt');
+  expect(calls).toBe(1); expect(db.proyectos).toHaveLength(1);
 });

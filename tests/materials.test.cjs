@@ -157,14 +157,14 @@ test("si falla una tienda conserva la fuente disponible y si fallan ambas no fab
 test("una tienda no integrada se informa sin sustituirla silenciosamente por otra", async () => {
   let called = 0;
   const result = await compareMaterialPrices(
-    { producto: "cemento", tiendas: ["Sodimac"] },
+    { producto: "cemento", tiendas: ["MTS"] },
     async () => {
       called++;
       throw Error("No debe llamar");
     },
   );
   assert.equal(called, 0);
-  assert.equal(result.proveedores[0].nombre, "Sodimac");
+  assert.equal(result.proveedores[0].nombre, "MTS");
   assert.equal(result.proveedores[0].estado, "no_disponible");
 });
 test("no multiplica un precio de catálogo ambiguo por metros o cajas y rechaza cantidades inválidas", async () => {
@@ -313,4 +313,23 @@ test("la consulta usa la codificación que aceptan los catálogos públicos, sin
     },
   );
   assert.equal(result.ofertas.length, 2);
+});
+
+test('Sodimac utiliza el precio público y excluye vendedores externos y promociones de tarjeta', async () => {
+  const { sodimacProducts } = require('../lib/materials/retail.ts');
+  const catalog = { props: { pageProps: { results: [
+    { displayName:'Cemento especial 25 kg.', brand:'BIOBIO', skuId:'sku-real', url:'https://www.sodimac.cl/sodimac-cl/articulo/123/cemento-especial-25-kg', sellerId:'SODIMAC_CHILE', prices:[{type:'cmrPrice',price:['1.000'],crossed:false},{type:'internetPrice',price:['4.990'],crossed:false}] },
+    { displayName:'Cemento',sellerId:'MARKETPLACE_OTHER',prices:[{type:'internetPrice',price:['500']}]} ] } } };
+  const html = '<script id="__NEXT_DATA__" type="application/json">'+JSON.stringify(catalog)+'</script>';
+  const p = catalogProviders.find((v) => v.nombre === 'Sodimac');
+  const offers = parseCatalogProducts(sodimacProducts(html), p, { producto:'cemento',marca:'Bío Bío',presentacion:'25kg',cantidad:3,unidad_cantidad:'sacos' });
+  assert.equal(offers.length,1); assert.equal(offers[0].precio,4990); assert.equal(offers[0].total_solicitado,14970);
+  assert.ok(safeOfferURL(offers[0].url));
+  assert.equal(safeOfferURL('https://www.sodimac.cl/redirect?url=https://evil.test'),undefined);
+});
+test('buscar cemento no mezcla jabón ni tapas color cemento con el material de construcción', () => {
+  const p=catalogProviders[0];
+  const rows=['Tapa ciega cemento','Dispensador de jabón cemento','Cemento especial 25kg'].map((name)=>product(p,{product:{productName:name},item:{nameComplete:name}}));
+  const offers=parseCatalogProducts(rows,p,{producto:'cemento'});
+  assert.equal(offers.length,1); assert.equal(offers[0].nombre,'Cemento especial 25kg');
 });

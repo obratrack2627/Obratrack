@@ -9,7 +9,6 @@ import {
   type Presupuesto,
   type BudgetStatus,
 } from "@/lib/presupuestos";
-import { convertirPresupuestoEnObra } from "@/lib/presupuestos-to-obra";
 import { formatCLP, formatDate } from "@/lib/utils";
 import CotizacionPdfModal from "./CotizacionPdfModal";
 
@@ -101,24 +100,22 @@ export default function PresupuestosPanel({
   }
 
   async function handleConvertirEnObra(row: Presupuesto) {
-    setError("");
+    if (busy) return;
+    setBusy(true); setError("");
     try {
-      const resultado = convertirPresupuestoEnObra(row.cotizacion);
-      setProjects(dataService.getProyectos());
-      window.dispatchEvent(new Event("obratrack_cloud_synced"));
-      await update(row, {
-        estado: "aprobada",
-        proyecto_id: resultado.proyecto.id,
+      const res = await fetch("/api/presupuestos/convertir", {
+        method: "POST", headers: await aiHeaders(),
+        body: JSON.stringify({ id: row.id, updated_at: row.updated_at }),
       });
-      setCreatedNotice({
-        id: resultado.proyecto.id,
-        nombre: resultado.proyecto.nombre,
-        partidas: resultado.actividadesCreadas,
-        materiales: resultado.materialesCargados,
-      });
-    } catch (e) {
-      setError((e as Error).message);
-    }
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "No se pudo convertir el presupuesto.");
+      setRows((previous) => previous.map((r) => r.id === row.id ? result.presupuesto : r));
+      setProjects((previous) => [...previous.filter((p) => p.id !== result.proyecto.id), result.proyecto]);
+      setCreatedNotice({ id: result.proyecto.id, nombre: result.proyecto.nombre, partidas: result.actividadesCreadas, materiales: result.materialesCargados });
+      const refreshed = await dataService.pullFromCloudServer();
+      if (!refreshed.success) setError("La obra quedó guardada en la nube. Actualiza la página para cargarla en este dispositivo.");
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
   }
 
   const visible = rows.filter(

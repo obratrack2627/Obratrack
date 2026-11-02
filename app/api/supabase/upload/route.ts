@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
 
     const bucket: "documentos-obra" | "bitacora-fotos" =
       bucketParam === "bitacora-fotos" ? "bitacora-fotos" : "documentos-obra";
+    if (user.rol === 'terreno' && bucket === 'documentos-obra') throw new AIError('ROLE_FORBIDDEN', 'Tu perfil puede subir fotos a la bitácora de sus obras asignadas.', 403);
     if (
       bucket === "bitacora-fotos" &&
       !["image/jpeg", "image/png", "image/webp"].includes(file.type)
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
 
     const { publicUrl, error } = await uploadBufferToSupabaseStorage({
       bucket,
+      client,
       filePath,
       buffer,
       contentType: mimeType,

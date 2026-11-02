@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { ExternalLink, Loader2, Search } from 'lucide-react';
-import { dataService } from '@/lib/data-service';
 import { aiHeaders } from '@/lib/ai/client';
 import { formatCLP } from '@/lib/utils';
 import type { OfertaMaterial } from '@/lib/materials/types';
@@ -31,14 +30,6 @@ export default function MaterialCatalogQuickSearch({
   const [lastSearchedQuery, setLastSearchedQuery] = useState('');
 
   const trimmed = query.trim();
-
-  const localSuggestions =
-    trimmed.length >= 2
-      ? dataService
-          .getCatalogoMateriales()
-          .filter((item) => item.nombre.toLowerCase().includes(trimmed.toLowerCase()))
-          .slice(0, 4)
-      : [];
 
   const handleSearchLive = async () => {
     if (!trimmed || loading) return;
@@ -70,7 +61,7 @@ export default function MaterialCatalogQuickSearch({
         );
       }
     } catch {
-      setStatusMessage('Sin conexión a tiendas en línea. Mostrando catálogo referencial local.');
+      setStatusMessage('No se pudo consultar a las tiendas. Reintenta la búsqueda.');
     } finally {
       setLoading(false);
     }
@@ -95,39 +86,9 @@ export default function MaterialCatalogQuickSearch({
           ) : (
             <Search className="w-3 h-3" />
           )}
-          <span>{loading ? 'Consultando…' : 'Comparar Easy / Dimaco'}</span>
+          <span>{loading ? 'Consultando…' : 'Comparar ferreterías'}</span>
         </button>
       </div>
-
-      {localSuggestions.length > 0 && !showLiveResults && (
-        <div className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-2 space-y-1">
-          <p className="text-[10px] font-mono uppercase text-gray-500 dark:text-gray-400">
-            Referencia rápida Chile (clic para autocompletar):
-          </p>
-          {localSuggestions.map((sug) => (
-            <button
-              key={sug.sku}
-              type="button"
-              onClick={() =>
-                onSelect({
-                  nombre: sug.nombre,
-                  precioUnitario: sug.precio_minimo,
-                  proveedor: sug.mejor_tienda,
-                  categoria: sug.categoria,
-                })
-              }
-              className="w-full text-left flex items-center justify-between gap-2 px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-[#141A23] text-xs transition-colors"
-            >
-              <span className="truncate font-medium text-navy-900 dark:text-gray-200">
-                {sug.nombre}
-              </span>
-              <span className="shrink-0 font-mono font-bold text-obra-green">
-                {formatCLP(sug.precio_minimo)} · {sug.mejor_tienda}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {statusMessage && lastSearchedQuery === trimmed && (
         <p className="text-[11px] text-amber-700 dark:text-amber-400">{statusMessage}</p>

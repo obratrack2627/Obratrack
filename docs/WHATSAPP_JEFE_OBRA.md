@@ -94,3 +94,7 @@ El diagnóstico privado también consulta `whatsapp_business_messaging`: poder l
 
 
 El copiloto también puede consultar los catálogos públicos integrados de Easy y Dimaco. Envía precios publicados con enlaces y fecha; no garantiza el menor precio de todo el mercado, despacho ni stock local. El borrador de una obra se conserva cuando se consulta otra cosa o se envía un aviso, y se puede completar o cancelar después. Requiere `supabase/copiloto_materiales.sql`.
+
+## Confirmar un presupuesto
+
+La cotización presenta materiales, mano de obra, Gantt sugerido y total y pregunta si se desea crear la obra. Responder «sí» toma ese presupuesto guardado, sin volver a cotizar. Se conservan las partidas y materiales mientras se solicitan cliente, nombre de obra, presupuesto, correo y teléfono que falten. La confirmación final vincula el mismo presupuesto con la obra en la transacción de WhatsApp. Si ya estaba asociado, se informa sin crear otro proyecto. La lógica se prueba sin enviar mensajes reales; la operación del canal requiere una conexión y permisos vigentes en Meta.

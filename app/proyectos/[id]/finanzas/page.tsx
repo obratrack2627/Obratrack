@@ -400,7 +400,7 @@ export default function ProyectoFinanzasPage() {
   }
 
   const montoCotizado = proyecto.monto_cotizado || 0;
-  const totalPagado = pagos.reduce((sum, p) => sum + Number(p.monto), 0);
+  const totalPagado = pagos.filter((p) => !p.estado || p.estado === 'completado').reduce((sum, p) => sum + Number(p.monto), 0);
   const totalImprevistos = imprevistos.reduce((sum, i) => sum + Number(i.monto), 0);
   const totalMateriales = materiales.reduce((sum, m) => sum + Number(m.subtotal || (m.cantidad * m.precio_unitario)), 0);
   const totalMaterialesComprados = materiales.filter((m) => m.comprado).reduce((sum, m) => sum + Number(m.subtotal || (m.cantidad * m.precio_unitario)), 0);
@@ -408,7 +408,7 @@ export default function ProyectoFinanzasPage() {
   const porcentajePagado = montoCotizado > 0 ? Math.min(100, Math.round((totalPagado / montoCotizado) * 100)) : 0;
 
   const totalCostosDirectos = totalMateriales + totalImprevistos;
-  const margenEstimadoCLP = Math.max(0, montoCotizado - totalCostosDirectos);
+  const margenEstimadoCLP = montoCotizado - totalCostosDirectos;
   const margenEstimadoPorcentaje = montoCotizado > 0 ? Math.round((margenEstimadoCLP / montoCotizado) * 100) : 0;
 
   const chartData = [
@@ -498,7 +498,7 @@ export default function ProyectoFinanzasPage() {
             <p className="text-[11px] text-gray-500 font-sans mt-0.5">Insumos + Imprevistos</p>
           </div>
 
-          {/* Tarjeta de Margen Real y Semáforo */}
+          {/* Tarjeta de Saldo presupuestado y Semáforo */}
           <div className={`rounded-xl p-4 sm:p-5 shadow-sm border ${
             margenEstimadoPorcentaje >= 25
               ? 'bg-[#6B8F72]/10 border-[#6B8F72]/40 text-navy-900 dark:text-white'
@@ -507,7 +507,7 @@ export default function ProyectoFinanzasPage() {
               : 'bg-red-500/10 border-red-500/40 text-navy-900 dark:text-white'
           }`}>
             <div className="flex items-center justify-between">
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400">Margen Real</p>
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400">Saldo presupuestado</p>
               <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
                 margenEstimadoPorcentaje >= 25
                   ? 'bg-[#6B8F72] text-white'
@@ -529,9 +529,9 @@ export default function ProyectoFinanzasPage() {
             </h3>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-0.5">
               {margenEstimadoPorcentaje >= 25
-                ? 'Rentabilidad Saludable'
+                ? 'Disponible tras materiales e imprevistos'
                 : margenEstimadoPorcentaje >= 10
-                ? 'Margen Ajustado'
+                ? 'Saldo ajustado tras costos registrados'
                 : 'Alerta: Costos Elevados'}
             </p>
           </div>

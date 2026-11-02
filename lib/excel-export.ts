@@ -59,7 +59,7 @@ export async function buildProjectExcelBuffer(
   } = payload;
 
   const montoCotizado = Math.round(Number(proyecto.monto_cotizado) || 0);
-  const totalPagado = pagos.reduce((s, p) => s + Math.round(Number(p.monto) || 0), 0);
+  const totalPagado = pagos.filter((p) => !p.estado || p.estado === 'completado').reduce((s, p) => s + Math.round(Number(p.monto) || 0), 0);
   const totalMateriales = materiales.reduce(
     (s, m) => s + Math.round(Number(m.subtotal || m.cantidad * m.precio_unitario) || 0),
     0
@@ -92,7 +92,7 @@ export async function buildProjectExcelBuffer(
     ['Costo Materiales Proyectados', totalMateriales, true],
     ['Costo Imprevistos Reportados', totalImprevistos, true],
     ['Total Costos Directos Registrados', costosDirectos, true],
-    ['Margen Operativo Estimado', margenEstimado, true],
+    ['Saldo tras materiales e imprevistos', margenEstimado, true],
   ];
 
   resumenRows.forEach(([campo, valor, isCurrency]) => {

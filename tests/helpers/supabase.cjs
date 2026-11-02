@@ -76,7 +76,7 @@ class Query {
     return this;
   }
   eq(key, value) {
-    this.filters.push((row) => row[key] === value);
+    this.filters.push((row) => key.includes('->>') ? row[key.split('->>')[0]]?.[key.split('->>')[1]] === value : row[key] === value);
     return this;
   }
   in(key, values) {

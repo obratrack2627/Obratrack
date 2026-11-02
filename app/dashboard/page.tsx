@@ -80,7 +80,7 @@ export default function DashboardPage() {
   const totalCobrado = proyectos.reduce((acc, p) => acc + (p.total_pagado || 0), 0);
   const totalImprevistos = proyectos.reduce((acc, p) => acc + (p.total_imprevistos || 0), 0);
   const totalMateriales = proyectos.reduce((acc, p) => acc + (p.total_materiales || 0), 0);
-  const saldoPendiente = Math.max(0, totalCotizado - totalCobrado);
+  const saldoPendiente = proyectos.reduce((sum, p) => sum + Math.max(0, p.monto_cotizado - (p.total_pagado || 0)), 0);
 
   const avancePromedio =
     obrasActivas.length > 0
@@ -137,7 +137,6 @@ export default function DashboardPage() {
   const pieDataRentabilidad = [
     { name: 'Cobrado', value: totalCobrado, color: '#6B8F72' },
     { name: 'Por Cobrar', value: saldoPendiente, color: '#FF6A00' },
-    { name: 'Imprevistos', value: totalImprevistos, color: '#D94336' },
   ].filter((d) => d.value > 0);
 
   if (loading) {
@@ -330,132 +329,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Sección Gráfica y Obras en Curso */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Gráfico de Flujo de Caja por Obra */}
-        <div className="lg:col-span-2 p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
-                Flujo Financiero por Obra (CLP)
-              </h3>
-              <p className="text-xs text-gray-500 font-mono">
-                Comparativa entre monto contratado y pagos recaudados
-              </p>
-            </div>
-            <Link
-              href="/proyectos"
-              className="text-xs font-heading font-bold text-[#FF6A00] hover:underline flex items-center gap-1"
-            >
-              <span>Ver todas</span>
-              <ArrowUpRight className="w-3 h-3" />
-            </Link>
-          </div>
-
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartDataFinanzas} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                <XAxis dataKey="nombre" stroke="#888888" fontSize={11} tickLine={false} />
-                <YAxis
-                  stroke="#888888"
-                  fontSize={11}
-                  tickLine={false}
-                  tickFormatter={(val) => `$${(val / 1000000).toFixed(1)}M`}
-                />
-                <Tooltip
-                  formatter={(val: number) => [formatCLP(val), '']}
-                  contentStyle={{
-                    backgroundColor: '#1E1E1E',
-                    border: '1px solid #333',
-                    borderRadius: '8px',
-                    color: '#fff',
-                  }}
-                />
-                <Bar dataKey="Presupuestado" fill="#FF6A00" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Cobrado" fill="#6B8F72" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="flex items-center justify-center gap-6 pt-2 border-t border-kraft-200 dark:border-gray-800 text-xs font-mono">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-[#FF6A00]"></span>
-              <span>Presupuesto Contratado</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-[#6B8F72]"></span>
-              <span>Recaudado a la Fecha</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Distribución Financiera / Pie Chart */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4 flex flex-col justify-between">
-          <div>
-            <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
-              Distribución de Cartera
-            </h3>
-            <p className="text-xs text-gray-500 font-mono">
-              Estado general de cobranza e imprevistos
-            </p>
-          </div>
-
-          <div className="h-52 w-full flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieDataRentabilidad}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={75}
-                  paddingAngle={4}
-                  dataKey="value"
-                >
-                  {pieDataRentabilidad.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(val: number) => [formatCLP(val), '']}
-                  contentStyle={{
-                    backgroundColor: '#1E1E1E',
-                    border: '1px solid #333',
-                    borderRadius: '8px',
-                    color: '#fff',
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="space-y-2 pt-2 border-t border-kraft-200 dark:border-gray-800 text-xs">
-            <div className="flex items-center justify-between font-mono">
-              <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#6B8F72]"></span>
-                Total Cobrado:
-              </span>
-              <strong className="text-[#6B8F72]">{formatCLP(totalCobrado)}</strong>
-            </div>
-            <div className="flex items-center justify-between font-mono">
-              <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FF6A00]"></span>
-                Por Cobrar:
-              </span>
-              <strong className="text-[#FF6A00]">{formatCLP(saldoPendiente)}</strong>
-            </div>
-            <div className="flex items-center justify-between font-mono">
-              <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#D94336]"></span>
-                Imprevistos:
-              </span>
-              <strong className="text-[#D94336]">{formatCLP(totalImprevistos)}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Grid Inferior: Obras Activas con Semáforo y Agenda de Faena */}
+      {/* Obras Activas y Agenda de Faena */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Obras Activas con Semáforo */}
         <div className="lg:col-span-2 p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4">
@@ -589,6 +463,132 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+      {/* Sección Gráfica y Obras en Curso */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Gráfico de Flujo de Caja por Obra */}
+        <div className="lg:col-span-2 p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
+                Flujo Financiero por Obra (CLP)
+              </h3>
+              <p className="text-xs text-gray-500 font-mono">
+                Comparativa entre monto contratado y pagos recaudados
+              </p>
+            </div>
+            <Link
+              href="/proyectos"
+              className="text-xs font-heading font-bold text-[#FF6A00] hover:underline flex items-center gap-1"
+            >
+              <span>Ver todas</span>
+              <ArrowUpRight className="w-3 h-3" />
+            </Link>
+          </div>
+
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartDataFinanzas} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+                <XAxis dataKey="nombre" stroke="#888888" fontSize={11} tickLine={false} />
+                <YAxis
+                  stroke="#888888"
+                  fontSize={11}
+                  tickLine={false}
+                  tickFormatter={(val) => `$${(val / 1000000).toFixed(1)}M`}
+                />
+                <Tooltip
+                  formatter={(val: number) => [formatCLP(val), '']}
+                  contentStyle={{
+                    backgroundColor: '#1E1E1E',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    color: '#fff',
+                  }}
+                />
+                <Bar dataKey="Presupuestado" fill="#FF6A00" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Cobrado" fill="#6B8F72" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="flex items-center justify-center gap-6 pt-2 border-t border-kraft-200 dark:border-gray-800 text-xs font-mono">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-[#FF6A00]"></span>
+              <span>Presupuesto Contratado</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-[#6B8F72]"></span>
+              <span>Recaudado a la Fecha</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Distribución Financiera / Pie Chart */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4 flex flex-col justify-between">
+          <div>
+            <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
+              Distribución de Cartera
+            </h3>
+            <p className="text-xs text-gray-500 font-mono">
+              Estado general de cobranza
+            </p>
+          </div>
+
+          <div className="h-52 w-full flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieDataRentabilidad}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={75}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {pieDataRentabilidad.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(val: number) => [formatCLP(val), '']}
+                  contentStyle={{
+                    backgroundColor: '#1E1E1E',
+                    border: '1px solid #333',
+                    borderRadius: '8px',
+                    color: '#fff',
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-kraft-200 dark:border-gray-800 text-xs">
+            <div className="flex items-center justify-between font-mono">
+              <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#6B8F72]"></span>
+                Total Cobrado:
+              </span>
+              <strong className="text-[#6B8F72]">{formatCLP(totalCobrado)}</strong>
+            </div>
+            <div className="flex items-center justify-between font-mono">
+              <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#FF6A00]"></span>
+                Por Cobrar:
+              </span>
+              <strong className="text-[#FF6A00]">{formatCLP(saldoPendiente)}</strong>
+            </div>
+            <div className="flex items-center justify-between font-mono">
+              <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#D94336]"></span>
+                Imprevistos:
+              </span>
+              <strong className="text-[#D94336]">{formatCLP(totalImprevistos)}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
     </div>
   );
 }

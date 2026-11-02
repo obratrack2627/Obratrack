@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
-import { budgetStatuses } from "@/lib/presupuestos";
+import { budgetStatuses, findBudget } from "@/lib/presupuestos";
 import { reviseQuote } from "@/lib/quotes/revise";
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,11 @@ async function access(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { client, user } = await access(request);
+    const documentId = request.nextUrl.searchParams.get('id');
+    if (documentId) {
+      const row = await findBudget(client, user.empresa_id, documentId);
+      return NextResponse.json({ presupuestos: row ? [row] : [] });
+    }
     let query = client
       .from("presupuestos")
       .select("*")
@@ -63,7 +68,7 @@ export async function PATCH(request: NextRequest) {
         .select("cotizacion").eq("empresa_id", user.empresa_id).eq("id", body.id).maybeSingle();
       if (readError) throw new AIError("BUDGET_READ", "No se pudo consultar el presupuesto guardado.", 503);
       if (!current) throw new AIError("BUDGET_FORBIDDEN", "El presupuesto no está disponible para tu cuenta.", 403);
-      if (body.cotizacion?.id !== body.id) throw new AIError("INVALID_REQUEST", "La cotización no corresponde al presupuesto.", 400);
+      if (body.cotizacion?.id !== current.cotizacion.id) throw new AIError("INVALID_REQUEST", "La cotización no corresponde al presupuesto.", 400);
       updates.cotizacion = reviseQuote(current.cotizacion, body.cotizacion);
     }
     if (Object.hasOwn(body, "proyecto_id")) {

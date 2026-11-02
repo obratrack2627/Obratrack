@@ -29,5 +29,5 @@ export function reviseQuote(original: CotizacionEstimacion, changes: any): Cotiz
   if (!f || !['recargo_costos', 'margen_venta'].includes(f.tipo_utilidad)) fail('Selecciona cómo calcular la utilidad.');
   for (const field of ['gastos_generales_porcentaje', 'imprevistos_porcentaje', 'margen_utilidad_porcentaje']) if (typeof f[field] !== 'number' || !Number.isFinite(f[field]) || f[field] < 0 || f[field] > 1000) fail('Revisa los porcentajes: deben estar entre 0 y 1000.');
   const calculated = normalizeQuote({ ...updated, materiales: changes.materiales, mano_de_obra: changes.mano_de_obra, duracion_dias_estimada: changes.duracion_dias_estimada, estructura_financiera: f });
-  return { ...updated, ...calculated, id: original.id, fecha_creacion: original.fecha_creacion, actividades_gantt: original.actividades_gantt, consejos_experto_pyme: original.consejos_experto_pyme };
+  return { ...calculated, ...updated, materiales: calculated.materiales, mano_de_obra: calculated.mano_de_obra, estructura_financiera: calculated.estructura_financiera, duracion_dias_estimada: calculated.duracion_dias_estimada, id: original.id, fecha_creacion: original.fecha_creacion };
 }

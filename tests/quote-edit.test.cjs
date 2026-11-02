@@ -32,6 +32,17 @@ test('la consulta individual devuelve solo el presupuesto de la empresa autentic
   assert.equal(body.presupuestos.length, 1);
   assert.equal(body.presupuestos[0].empresa_id, 'company-a');
 });
+test('un presupuesto de WhatsApp conserva sus IDs de registro y documento al consultarlo y editarlo', async () => {
+  const row = fixture.tables.get('presupuestos')[0];
+  row.id = 'wa:wamid-test';
+  const get = await GET(new NextRequest('http://localhost/api/presupuestos?id=' + encodeURIComponent(original.id)));
+  assert.equal((await get.json()).presupuestos[0].id, row.id);
+  const patch = await PATCH(req({ id: row.id, cotizacion: { ...original, cliente_nombre: 'Nombre actualizado' } }));
+  assert.equal(patch.status, 200);
+  const saved = (await patch.json()).presupuesto;
+  assert.equal(saved.id, 'wa:wamid-test');
+  assert.equal(saved.cotizacion.id, original.id);
+});
 test('la edición conserva ID, fecha, estado, origen y obra; ignora totales enviados y recalcula IVA', async () => {
   const draft = structuredClone(original);
   draft.materiales[0].cantidad = 3; draft.materiales[0].precio_unitario_estimado = 6000;

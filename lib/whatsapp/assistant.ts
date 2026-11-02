@@ -1,3 +1,5 @@
+import { acceptsQuotedProject, quotedProjectDraft } from "./quote-intake";
+import { findBudget } from "@/lib/presupuestos";
 import { AIError } from "@/lib/ai/errors";
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateGemini } from "@/lib/ai/provider";
@@ -39,7 +41,7 @@ export function identifySender(users: any[], phone: string) {
 }
 export function quoteWhatsApp(q: any) {
   const f = q.estructura_financiera;
-  return `*Cotización estimada: ${q.titulo_proyecto}*\n${q.resumen_ejecutivo || ""}\n\n*Materiales*\n${q.materiales.map((m: any) => `• ${m.nombre}: ${m.cantidad} ${m.unidad}, ${formatCLP(m.subtotal)}`).join("\n")}\n\n*Mano de obra*\n${q.mano_de_obra.map((m: any) => `• ${m.rol}: ${m.cantidad_personas} personas × ${m.dias_estimados} días, ${formatCLP(m.subtotal)}`).join("\n")}\n\nGastos generales: ${formatCLP(f.gastos_generales_monto)}\nImprevistos: ${formatCLP(f.imprevistos_monto)}\nUtilidad (${f.margen_utilidad_porcentaje}%): ${formatCLP(f.margen_utilidad_monto)}\nNeto: ${formatCLP(f.precio_sugerido_neto)}\nIVA: ${formatCLP(f.iva_19)}\n*Total: ${formatCLP(f.precio_total_con_iva)}*\nPrecios estimados, sujetos a confirmación.\nDisponible también en ObraTrack → Reportes WhatsApp.`;
+  return `*Cotización estimada: ${q.titulo_proyecto}*\n${q.resumen_ejecutivo || ""}\n\n*Materiales*\n${q.materiales.map((m: any) => `• ${m.nombre}: ${m.cantidad} ${m.unidad}, ${formatCLP(m.subtotal)}`).join("\n")}\n\n*Mano de obra*\n${q.mano_de_obra.map((m: any) => `• ${m.rol}: ${m.cantidad_personas} personas × ${m.dias_estimados} días, ${formatCLP(m.subtotal)}`).join("\n")}${q.actividades_gantt?.length ? "\n\n*Gantt sugerido*\n" + q.actividades_gantt.map((a: any) => `• ${a.nombre}: ${a.dias} día(s)`).join("\n") : ""}\n\nGastos generales: ${formatCLP(f.gastos_generales_monto)}\nImprevistos: ${formatCLP(f.imprevistos_monto)}\nUtilidad (${f.margen_utilidad_porcentaje}%): ${formatCLP(f.margen_utilidad_monto)}\nNeto: ${formatCLP(f.precio_sugerido_neto)}\nIVA: ${formatCLP(f.iva_19)}\n*Total: ${formatCLP(f.precio_total_con_iva)}*\nPrecios estimados, sujetos a confirmación.\nDisponible también en ObraTrack → Reportes WhatsApp.\n\n¿Quieres crear esta obra con un Gantt sugerido y sus materiales? Responde «sí» para continuar; te pediré los datos del cliente que falten.`;
 }
 
 export async function processPersonalMessage(
@@ -132,7 +134,7 @@ export async function processPersonalMessage(
       .limit(6),
   );
   let attachment: any = null;
-  const pendingProject =
+  let pendingProject =
     history[0]?.borrador_obra ||
     (history[0]?.acciones?.tipo === "solicitar_datos_obra"
       ? history[0].acciones.detalles?.borrador
@@ -173,9 +175,19 @@ export async function processPersonalMessage(
       persistido: false,
     };
   let result;
+  let acceptCreation = false;
+  let alreadyConverted = false;
+  let confirmationResponse = '';
+  if (!pendingProject && history[0]?.cotizacion && acceptsQuotedProject(text)) {
+    const budget = await findBudget(sb, user.empresa_id, history[0].cotizacion.id);
+    if (!budget) confirmationResponse = 'No se pudo recuperar el presupuesto guardado. Ábrelo en ObraTrack para revisarlo.';
+    else if (budget.proyecto_id) { alreadyConverted = true; confirmationResponse = 'Esta cotización ya tiene una obra creada. Puedes abrir su Carta Gantt en ObraTrack.'; }
+    else if (['rechazada', 'anulada'].includes(budget.estado)) confirmationResponse = 'El presupuesto está rechazado o anulado. Revisa su estado en ObraTrack antes de crear la obra.';
+    else { acceptCreation = true; pendingProject = quotedProjectDraft(budget.cotizacion); nextDraft = pendingProject; }
+  }
   let analysisFailed = false;
   try {
-    result = await deps.chat(
+    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : await deps.chat(
       history
         .slice()
         .reverse()
@@ -233,7 +245,7 @@ export async function processPersonalMessage(
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase();
-    const wantsProject =
+    const wantsProject = acceptCreation ||
       /\b(crea\w*|crees?|registra\w*|agrega\w*|abre|inicia\w*)\s+(?:(?:una?|la|el|nuev[oa])\s+){0,3}(obra|proyecto)\b|\b(obra|proyecto)\s+nuev[oa]\b/.test(
         normalized,
       ) &&
@@ -257,7 +269,7 @@ export async function processPersonalMessage(
       /^\s*(?:cancela(?:r)?|olvida(?:r)?)(?:\s+(?:la\s+|el\s+)?(?:creacion|obra|proyecto|eso|borrador)(?:\s+pendiente)?)?[.!]?\s*$/.test(
         normalized,
       );
-    if (cancelDraft || wantsProject || create || continuing) {
+    if (cancelDraft || (!alreadyConverted && !confirmationResponse && (wantsProject || create || continuing))) {
       if (cancelDraft) {
         actions = [];
         nextDraft = null;
@@ -341,6 +353,9 @@ export async function processPersonalMessage(
   if (analysisFailed)
     response +=
       "\nEl análisis de la imagen no estuvo disponible. La foto quedó conservada; puedes reenviarla para volver a analizarla.";
+  const quoteOrigin = candidateDraft?.presupuesto_cotizacion_id || pendingProject?.presupuesto_cotizacion_id;
+  const newProjects = (plan.changed.proyectos || []).filter((p: any) => !tables.proyectos.some((previous: any) => previous.id === p.id));
+  if (quoteOrigin && newProjects.length === 1 && plan.result) Object.assign(plan.result, { presupuesto_cotizacion_id: quoteOrigin, presupuesto_proyecto_id: newProjects[0].id });
   const params = {
     p_id: message.id,
     p_empresa: user.empresa_id,

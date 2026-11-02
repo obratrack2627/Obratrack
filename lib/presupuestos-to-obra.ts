@@ -17,35 +17,36 @@ export interface ConversionPresupuestoResultado {
 function resolverComunaYRegion(comunaRegionRaw?: string): {
   comuna: string;
   region: string;
-  latitud: number;
-  longitud: number;
+  latitud?: number;
+  longitud?: number;
 } {
-  const raw = (comunaRegionRaw || 'Santiago').trim();
-  const primeraParte = raw.split(',')[0]?.trim() || 'Santiago';
+  const raw = (comunaRegionRaw || 'Por definir').trim();
+  const primeraParte = raw.split(',')[0]?.trim() || 'Por definir';
 
   let comunaDetectada = primeraParte;
-  let regionDetectada = 'Región Metropolitana de Santiago';
+  let regionDetectada = '';
+  let reconocida = false;
 
-  const rawLower = raw.toLowerCase();
+  const locationKey = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/^comuna(?: de)?\s+/, '').trim();
   for (const reg of REGIONES_CHILE) {
     const comunaMatch = reg.comunas.find(
       (c) =>
-        c.toLowerCase() === primeraParte.toLowerCase() ||
-        rawLower.includes(c.toLowerCase())
+        locationKey(c) === locationKey(primeraParte)
     );
     if (comunaMatch) {
+      reconocida = true;
       comunaDetectada = comunaMatch;
       regionDetectada = reg.nombre;
       break;
     }
   }
 
-  const coords = getCoordenadasComuna(comunaDetectada);
+  const coords = reconocida ? getCoordenadasComuna(comunaDetectada) : undefined;
   return {
     comuna: comunaDetectada,
     region: regionDetectada,
-    latitud: coords.lat,
-    longitud: coords.lng,
+    latitud: coords?.lat,
+    longitud: coords?.lng,
   };
 }
 
@@ -62,6 +63,8 @@ export function convertirPresupuestoEnObra(
   options?: {
     service?: DataService;
     fechaInicio?: string;
+    incluirGantt?: boolean;
+    incluirMateriales?: boolean;
   }
 ): ConversionPresupuestoResultado {
   const service = options?.service || dataService;
@@ -71,7 +74,8 @@ export function convertirPresupuestoEnObra(
   }
 
   const activeUser = service.getActiveUser();
-  const empresaId = activeUser?.empresa_id || 'e1111111-1111-4111-a111-111111111111';
+  if (!activeUser?.empresa_id || !['admin', 'supervisor'].includes(activeUser.rol)) throw new Error('Inicia sesión con administración o supervisión para convertir un presupuesto.');
+  const empresaId = activeUser.empresa_id;
 
   // 1. Resolver o crear cliente
   let cliente: Cliente | null = null;
@@ -85,6 +89,7 @@ export function convertirPresupuestoEnObra(
         empresa_id: empresaId,
         nombre: cotizacion.cliente_nombre.trim(),
         telefono: cotizacion.cliente_telefono || '',
+        email: cotizacion.cliente_email || '',
         direccion: cotizacion.comuna_region || '',
       });
     }
@@ -105,23 +110,16 @@ export function convertirPresupuestoEnObra(
   const actividadesIniciales =
     partidasOrdenadas.length > 0
       ? partidasOrdenadas
-      : [
-          { nombre: 'Instalación de faena y trazado', dias: 3 },
-          {
-            nombre: 'Ejecución de obra principal',
-            dias: Math.max(5, (Number(cotizacion.duracion_dias_estimada) || 15) - 5),
-          },
-          { nombre: 'Terminaciones y recepción conforme', dias: 2 },
-        ];
+      : [{ nombre: 'Ejecutar alcance presupuestado', dias: Math.max(1, Math.round(Number(cotizacion.duracion_dias_estimada) || 1)) }];
 
   const sumaDiasPartidas = actividadesIniciales.reduce((acc, a) => acc + a.dias, 0);
   const duracionTotal = Math.max(
     sumaDiasPartidas,
     Math.round(Number(cotizacion.duracion_dias_estimada) || 0),
-    7
+    1
   );
 
-  const fechaInicio = options?.fechaInicio || new Date().toISOString().split('T')[0];
+  const fechaInicio = options?.fechaInicio || new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Santiago' }).format(new Date());
   const terminoDate = new Date(`${fechaInicio}T12:00:00`);
   terminoDate.setDate(terminoDate.getDate() + duracionTotal);
   const fechaTermino = terminoDate.toISOString().split('T')[0];
@@ -151,19 +149,20 @@ export function convertirPresupuestoEnObra(
       monto_cotizado: montoTotalConIva,
       trabajadores_ids: [],
     },
-    actividadesIniciales
+    options?.incluirGantt === false ? [] : actividadesIniciales
   );
 
   // 5. Precargar Materiales cubicados
   const materialesCreados: MaterialProyecto[] = [];
-  for (const mat of cotizacion.materiales || []) {
+  for (const mat of options?.incluirMateriales === false ? [] : cotizacion.materiales || []) {
     if (!mat?.nombre?.trim()) continue;
-    const cantidad = Math.max(1, Number(mat.cantidad) || 1);
+    const cantidad = Number(mat.cantidad);
+    if (!Number.isFinite(cantidad) || cantidad <= 0) throw new Error('Revisa la cantidad de los materiales del presupuesto.');
     const precioUnit = Math.max(
       0,
-      Math.round(Number(mat.precio_mas_barato || mat.precio_unitario_estimado) || 0)
+      Math.round(Number(mat.precio_mas_barato ?? mat.precio_unitario_estimado) || 0)
     );
-    const subtotal = Math.max(0, Math.round(Number(mat.subtotal) || cantidad * precioUnit));
+    const subtotal = Math.max(0, Math.round(cantidad * precioUnit));
 
     const creado = service.createMaterialProyecto({
       proyecto_id: proyecto.id,
@@ -185,7 +184,7 @@ export function convertirPresupuestoEnObra(
     usuario_id: activeUser?.id || 'u-sistema',
     autor_nombre: activeUser?.nombre || 'Administración ObraTrack',
     titulo: 'Inicio de Obra desde Presupuesto Aprobado',
-    nota: `Obra creada desde presupuesto "${cotizacion.titulo_proyecto}" por $${montoTotalConIva.toLocaleString('es-CL')} CLP (IVA incl.), con ${actividadesIniciales.length} partidas en Carta Gantt y ${materialesCreados.length} materiales cubicados.`,
+    nota: `Obra creada desde presupuesto "${cotizacion.titulo_proyecto}" por $${montoTotalConIva.toLocaleString('es-CL')} CLP (IVA incl.), con ${options?.incluirGantt === false ? 0 : actividadesIniciales.length} partidas en Carta Gantt y ${materialesCreados.length} materiales cubicados.`,
     fecha: fechaInicio,
     tipo: 'avance',
   });
@@ -195,7 +194,7 @@ export function convertirPresupuestoEnObra(
   return {
     proyecto: proyectoHidratado,
     cliente,
-    actividadesCreadas: actividadesIniciales.length,
+    actividadesCreadas: options?.incluirGantt === false ? 0 : actividadesIniciales.length,
     materialesCargados: materialesCreados.length,
   };
 }

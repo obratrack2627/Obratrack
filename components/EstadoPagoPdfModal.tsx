@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   MessageCircle,
   Printer,
+  Download,
   X,
 } from 'lucide-react';
 import Logo from './Logo';
@@ -46,6 +47,8 @@ export default function EstadoPagoPdfModal({
   const [montoCustomInput, setMontoCustomInput] = useState('');
   const [retencionPct, setRetencionPct] = useState<number>(0);
   const [observacionEdp, setObservacionEdp] = useState('');
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
 
   const emisor = typeof window !== 'undefined' ? dataService.getActiveUser() : null;
 
@@ -72,6 +75,15 @@ export default function EstadoPagoPdfModal({
     year: 'numeric',
   });
 
+  const handleDownload = async () => {
+    setDownloading(true); setDownloadError('');
+    try {
+      const { paymentPdf } = await import('@/lib/payments/pdf');
+      paymentPdf({ nombre: proyecto.nombre, cliente: cliente?.nombre || 'Por definir', fecha: fechaEmision, resumen, actividades, observacion: observacionEdp }).save(`ObraTrack_${resumen.folio}_${proyecto.id}.pdf`);
+    } catch { setDownloadError('No se pudo descargar el PDF. Reintenta.'); }
+    finally { setDownloading(false); }
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -83,13 +95,13 @@ export default function EstadoPagoPdfModal({
       `📅 *Fecha:* ${fechaEmision}\n` +
       `🏗️ *Obra:* ${proyecto.nombre}\n` +
       `👤 *Mandante:* ${cliente?.nombre || 'Cliente Particular'}\n\n` +
-      `📊 *Avance Físico Ponderado:* ${resumen.porcentajeAvanceFisico}%\n` +
+      `📊 *Avance promedio de partidas:* ${resumen.porcentajeAvanceFisico}%\n` +
       `💼 *Contrato Vigente (IVA incl.):* ${formatCLP(resumen.montoContratadoVigente)}\n` +
       `✅ *Pagos Anteriores:* ${formatCLP(resumen.totalPagadoAnterior)}\n` +
       (resumen.retencionMonto > 0
         ? `🛡️ *Retención (${resumen.retencionPorcentaje}%):* -${formatCLP(resumen.retencionMonto)}\n`
         : '') +
-      `\n💰 *NETO PERÍODO:* ${formatCLP(resumen.netoPeriodo)}\n` +
+      `\n💰 *NETO DEL MONTO A PAGAR:* ${formatCLP(resumen.netoPeriodo)}\n` +
       `🏛️ *IVA (19%):* ${formatCLP(resumen.ivaPeriodo)}\n` +
       `🔥 *LÍQUIDO A PAGAR EN ESTE EDP:* *${formatCLP(resumen.liquidoAPagarConIva)}*\n` +
       `📌 *Saldo restante tras este pago:* ${formatCLP(resumen.saldoRemanenteTrasEdp)}\n` +
@@ -158,6 +170,7 @@ export default function EstadoPagoPdfModal({
       `}</style>
 
       <div className="relative w-full max-w-4xl my-auto rounded-2xl overflow-hidden shadow-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] max-h-[92dvh] flex flex-col">
+        {downloadError && <p role="alert" className="p-3 text-red-700 bg-red-50">{downloadError}</p>}
         {/* Barra Superior Interactiva (Oculta al imprimir) */}
         <div className="print:hidden px-4 sm:px-6 py-3.5 bg-[#141A23] text-white border-b border-[#263040] flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -166,19 +179,21 @@ export default function EstadoPagoPdfModal({
               <span>Generador de Estado de Pago ({resumen.folio})</span>
             </h3>
             <p className="text-[11px] text-gray-300">
-              Ajusta modalidad de cobro o retención e imprime en PDF A4 para el mandante.
+              Ajusta el cobro y descarga el PDF para el mandante.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={handlePrint}
+              onClick={handleDownload}
+              disabled={downloading}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#FF6A00] hover:bg-[#e55f00] text-white text-xs font-bold shadow-sm transition-colors"
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Imprimir / Guardar PDF</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>{downloading ? 'Generando…' : 'Descargar PDF'}</span>
             </button>
+            <button type="button" onClick={handlePrint} className="p-2 rounded-lg bg-white/10" aria-label="Imprimir estado de pago"><Printer className="w-4 h-4" /></button>
             <button
               type="button"
               onClick={handleShareWhatsApp}
@@ -447,7 +462,7 @@ export default function EstadoPagoPdfModal({
                   </div>
                 )}
                 <div className="flex justify-between pt-1 border-t border-orange-200">
-                  <span className="text-gray-700">Monto Neto Período:</span>
+                  <span className="text-gray-700">Neto del monto a pagar:</span>
                   <span className="font-mono text-gray-900">{formatCLP(resumen.netoPeriodo)}</span>
                 </div>
                 <div className="flex justify-between">

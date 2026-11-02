@@ -20,7 +20,7 @@ export default function QuoteEditor({ id, onCancel, onSaved }: { id: string; onC
       const res = await fetch('/api/presupuestos?id=' + encodeURIComponent(id), { headers: await aiHeaders(), cache: 'no-store' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'No se pudo cargar el presupuesto.');
-      const current: Presupuesto | undefined = data.presupuestos.find((r: Presupuesto) => r.id === id);
+      const current: Presupuesto | undefined = data.presupuestos.find((r: Presupuesto) => r.id === id || r.cotizacion.id === id);
       if (!current) throw new Error('La cotización no está disponible para editar. Actualiza el listado de presupuestos.');
       setRow(current);
       setDraft({ ...current.cotizacion, estructura_financiera: { ...current.cotizacion.estructura_financiera, tipo_utilidad: current.cotizacion.estructura_financiera.tipo_utilidad || 'recargo_costos' } });
@@ -46,7 +46,7 @@ export default function QuoteEditor({ id, onCancel, onSaved }: { id: string; onC
       e.preventDefault(); if (!calculated || !row) return;
       setBusy(true); setError('');
       try {
-        const res = await fetch('/api/presupuestos', { method: 'PATCH', headers: await aiHeaders(), body: JSON.stringify({ id, updated_at: row.updated_at, cotizacion: calculated }) });
+        const res = await fetch('/api/presupuestos', { method: 'PATCH', headers: await aiHeaders(), body: JSON.stringify({ id: row.id, updated_at: row.updated_at, cotizacion: calculated }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudieron guardar los cambios.');
         onSaved(data.presupuesto);

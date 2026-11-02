@@ -46,6 +46,7 @@ export function projectIntake(
     draft.monto_cotizado = proposal.monto;
   if (Array.isArray(proposal?.partidas) && proposal.partidas.length)
     draft.partidas = proposal.partidas;
+  if (Array.isArray(proposal?.materiales) && proposal.materiales.length) draft.materiales = proposal.materiales;
   if (!draft.partidas?.length) delete draft.partidas;
   if (!Number.isInteger(draft.dias) || draft.dias <= 0) delete draft.dias;
 

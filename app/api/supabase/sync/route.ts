@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 import { loadAIContext, checkedRows } from "@/lib/ai/context";
+import { signRows } from '@/lib/supabase/private-files';
 const mapping: Record<string, string> = {
   proyectos: "proyectos",
   clientes: "clientes",
@@ -117,6 +118,16 @@ export async function GET(request: NextRequest) {
             .in("proyecto_id", ids),
         )
       : [];
+    const mediaClient = client;
+    const allowed = new Set<string>(ids);
+    const [documents, log, incidents, changes, reportFiles, payments] = await Promise.all([
+      signRows(tables.documentos_obra, ['archivo_url'], user.empresa_id, allowed, mediaClient),
+      signRows(tables.bitacora_entradas, ['foto_url'], user.empresa_id, allowed, mediaClient),
+      signRows(service.getImprevistos(), ['foto_url'], user.empresa_id, allowed, mediaClient),
+      signRows(tables.reclamos_cambios_obra, ['foto_url'], user.empresa_id, allowed, mediaClient),
+      signRows(reports, ['foto_url'], user.empresa_id, allowed, mediaClient),
+      signRows(service.getPagos(), ['comprobante_url'], user.empresa_id, allowed, mediaClient),
+    ]);
     return NextResponse.json(
       {
         success: true,
@@ -127,14 +138,14 @@ export async function GET(request: NextRequest) {
         clientes: tables.clientes,
         usuarios: tables.usuarios,
         actividades: tables.actividades,
-        pagos: service.getPagos(),
+        pagos: payments,
         materiales: tables.materiales_proyecto,
-        bitacora: tables.bitacora_entradas,
-        imprevistos: service.getImprevistos(),
-        reclamos_cambios: tables.reclamos_cambios_obra,
-        documentos: tables.documentos_obra,
+        bitacora: log,
+        imprevistos: incidents,
+        reclamos_cambios: changes,
+        documentos: documents,
         asistencias: tables.asistencia_obreros,
-        reportes_whatsapp: reports,
+        reportes_whatsapp: reportFiles,
         updated_at: new Date().toISOString(),
       },
       { headers: { "Cache-Control": "private, no-store" } },

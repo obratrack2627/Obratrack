@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CotizacionEstimacion } from "@/types/database";
 import { retryAIWrite, isAIWriteConfirmed } from "@/lib/ai/execute";
+import QuoteProjectProposal from "./QuoteProjectProposal";
 import CotizacionPdfModal from "./CotizacionPdfModal";
 import MaterialPriceComparison from "./MaterialPriceComparison";
 import { formatCLP } from "@/lib/utils";
@@ -19,10 +20,12 @@ export default function AIMessageTools({
   };
 }) {
   const [quote, setQuote] = useState(message.cotizacion_generada);
+  const [budgetProject, setBudgetProject] = useState<string | null>(null);
   const saveRevision = useRef(0);
   useEffect(() => {
     const original = message.cotizacion_generada;
     setQuote(original);
+    setBudgetProject(null);
     if (!original || !['admin', 'supervisor'].includes(dataService.getActiveUser()?.rol || '')) return;
     let active = true;
     const revision = saveRevision.current;
@@ -31,8 +34,8 @@ export default function AIMessageTools({
         const response = await fetch('/api/presupuestos?id=' + encodeURIComponent(original.id), { headers: await aiHeaders(), cache: 'no-store' });
         if (!response.ok) return;
         const body = await response.json();
-        const current = body.presupuestos?.find((row: { id: string }) => row.id === original.id);
-        if (active && current && revision === saveRevision.current) setQuote(current.cotizacion);
+        const current = body.presupuestos?.find((row: { id: string; cotizacion: CotizacionEstimacion }) => row.id === original.id || row.cotizacion.id === original.id);
+        if (active && current && revision === saveRevision.current) { setQuote(current.cotizacion); setBudgetProject(current.proyecto_id || null); }
       } catch { /* Mantener la copia disponible si falla la lectura. */ }
     })();
     return () => { active = false; };
@@ -117,6 +120,7 @@ export default function AIMessageTools({
           Ver cotización / PDF
         </button>
       )}
+      {quote && <QuoteProjectProposal key={quote.id} quote={quote} projectId={budgetProject} />}
       {message.pendiente_sincronizacion && !status.startsWith("Guardado") && (
         <button
           type="button"
@@ -147,7 +151,7 @@ export default function AIMessageTools({
           isOpen={open}
           onClose={() => setOpen(false)}
           cotizacion={quote}
-          onSaved={(row) => { saveRevision.current += 1; setQuote(row.cotizacion); }}
+          onSaved={(row) => { saveRevision.current += 1; setQuote(row.cotizacion); setBudgetProject(row.proyecto_id); }}
         />
       )}
     </>

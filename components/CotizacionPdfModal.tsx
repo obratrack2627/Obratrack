@@ -36,7 +36,7 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
         const res = await fetch('/api/presupuestos?id=' + encodeURIComponent(cotizacion.id), { headers: await aiHeaders(), cache: 'no-store' });
         if (!res.ok) return;
         const body = await res.json();
-        const saved = body.presupuestos?.find((row: Presupuesto) => row.id === cotizacion.id);
+        const saved = body.presupuestos?.find((row: Presupuesto) => row.id === cotizacion.id || row.cotizacion.id === cotizacion.id);
         if (active && saved && revision === saveRevision.current) setCurrent(saved.cotizacion);
       } catch { /* La copia disponible sigue siendo visible; editar requiere cargar la versión guardada. */ }
     })();

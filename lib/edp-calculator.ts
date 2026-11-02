@@ -48,7 +48,7 @@ export function calcularEstadoPago(input: CalculoEstadoPagoInput): ResumenEstado
     retencionPorcentaje = 0,
   } = input;
 
-  const pagosValidos = pagos.filter((p) => p.estado !== 'anulado');
+  const pagosValidos = pagos.filter((p) => p.proyecto_id === proyecto.id && (!p.estado || p.estado === 'completado'));
   const numeroCorrelativo = pagosValidos.length + 1;
   const folio = `EDP-${String(numeroCorrelativo).padStart(3, '0')}`;
 
@@ -81,10 +81,7 @@ export function calcularEstadoPago(input: CalculoEstadoPagoInput): ResumenEstado
   const valorAvanceAcumulado = Math.round((montoContratadoVigente * porcentajeAvanceFisico) / 100);
 
   const cobroSegunAvanceRaw = Math.max(0, valorAvanceAcumulado - totalPagadoAnterior);
-  const cobroSugeridoSegunAvance =
-    cobroSegunAvanceRaw > 0
-      ? Math.min(saldoPendienteContrato, cobroSegunAvanceRaw)
-      : saldoPendienteContrato;
+  const cobroSugeridoSegunAvance = Math.min(saldoPendienteContrato, cobroSegunAvanceRaw);
 
   const montoBaseSeleccionado =
     typeof montoPersonalizadoConIva === 'number' && Number.isFinite(montoPersonalizadoConIva) && montoPersonalizadoConIva >= 0

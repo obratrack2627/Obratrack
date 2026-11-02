@@ -397,7 +397,7 @@ export class DataService {
       const bits = bitacora.filter((b) => b.proyecto_id === p.id);
 
       const totalContratado = Number(p.monto_cotizado || 0);
-      const totalPagado = pgs.reduce((sum, pay) => sum + Number(pay.monto || 0), 0);
+      const totalPagado = pgs.filter((pay) => !pay.estado || pay.estado === 'completado').reduce((sum, pay) => sum + Number(pay.monto || 0), 0);
       const saldoPendiente = Math.max(0, totalContratado - totalPagado);
 
       let porcentajeAvance = 0;
@@ -466,7 +466,7 @@ export class DataService {
       const projBitacora = bitacora.filter((b) => b.proyecto_id === p.id);
       const projTrabajadores = usuarios.filter((u) => (p.trabajadores_ids || []).includes(u.id));
 
-      const total_pagado = projPagos.reduce((sum, item) => sum + Number(item.monto), 0);
+      const total_pagado = projPagos.filter((item) => !item.estado || item.estado === 'completado').reduce((sum, item) => sum + Number(item.monto), 0);
       const total_imprevistos = projImprevistos.reduce((sum, item) => sum + Number(item.monto), 0);
       const total_materiales = projMateriales.reduce(
         (sum, item) => sum + Number(item.subtotal || item.cantidad * item.precio_unitario),

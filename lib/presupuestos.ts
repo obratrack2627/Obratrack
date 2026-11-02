@@ -20,6 +20,13 @@ export interface Presupuesto {
   created_at: string;
   updated_at: string;
 }
+// WhatsApp usa un ID de registro wa:..., distinto del ID del documento cot-....
+export async function findBudget(client: any, company: string, id: string) {
+  let result = await client.from('presupuestos').select('*').eq('empresa_id', company).eq('id', id).maybeSingle();
+  if (!result.error && !result.data) result = await client.from('presupuestos').select('*').eq('empresa_id', company).eq('cotizacion->>id', id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (result.error) throw new AIError('BUDGET_READ', 'No se pudo consultar el presupuesto guardado.', 503);
+  return result.data as Presupuesto | null;
+}
 export async function saveBudget(
   client: any,
   user: any,

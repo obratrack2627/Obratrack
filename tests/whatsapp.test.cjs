@@ -87,13 +87,13 @@ function database() {
     },
     from(table) {
       let predicates = [],
-        max = Infinity;
+        max = Infinity, single = false;
       const q = {
         select() {
           return q;
         },
         eq(k, v) {
-          predicates.push((x) => x[k] === v);
+          predicates.push((x) => k.includes('->>') ? x[k.split('->>')[0]]?.[k.split('->>')[1]] === v : x[k] === v);
           return q;
         },
         in(k, v) {
@@ -107,12 +107,10 @@ function database() {
           max = n;
           return q;
         },
+        maybeSingle() { single = true; return q; },
         then(resolve, reject) {
-          return Promise.resolve({
-            data: (db[table] || [])
-              .filter((x) => predicates.every((p) => p(x)))
-              .slice(0, max),
-          }).then(resolve, reject);
+          const rows = (db[table] || []).filter((x) => predicates.every((p) => p(x))).slice(0, max);
+          return Promise.resolve({ data: single ? rows[0] || null : rows }).then(resolve, reject);
         },
       };
       return q;
@@ -897,4 +895,38 @@ test("una consulta o un aviso durante la creación de una obra conserva el borra
   );
   assert.match(complete.respuesta, /Obra Creada/);
   assert.equal(complete.borrador_obra, null);
+});
+
+test("confirmar una cotización por WhatsApp crea sus partidas y materiales sin volver a cotizar", async () => {
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const q = normalizeQuote({ titulo_proyecto:'Radier cotizado', cliente_nombre:'Cliente', cliente_email:'cliente@example.test', cliente_telefono:'+56922223333', comuna_region:'Maipú', duracion_dias_estimada:3, materiales:[{nombre:'Hormigón',cantidad:0.5,unidad:'m3',precio_unitario_estimado:100000}],mano_de_obra:[],actividades_gantt:[{nombre:'Preparación',dias:1},{nombre:'Vaciado',dias:2}] });
+  const sb = database();
+  sb.db.presupuestos = [{id:'wa:quote-source',empresa_id:user.empresa_id,cotizacion:q,proyecto_id:null,estado:'borrador'}];
+  sb.db.whatsapp_mensajes = [{message_id:'source',empresa_id:user.empresa_id,actor_id:user.id,cotizacion:q,respuesta:'¿Quieres crear la obra?',texto:'Cotiza el radier'}];
+  let committed;
+  const rpc = sb.rpc.bind(sb); sb.rpc = async (name,p) => {committed=p;return rpc(name,p)};
+  const response = await processPersonalMessage(sb,{id:'quote-confirm',from:'56912345678',type:'text',text:{body:'Sí'}},{chat:async()=>{throw Error('No debe volver a cotizar')}});
+  assert.match(response.respuesta,/Guardado en ObraTrack/);
+  assert.equal(committed.p_changed.materiales_proyecto[0].cantidad,0.5);
+  assert.equal(committed.p_changed.actividades.length,2);
+  assert.equal(committed.p_changed.clientes[0].email,'cliente@example.test');
+  assert.equal(committed.p_acciones.presupuesto_cotizacion_id,q.id);
+  assert.equal(committed.p_acciones.presupuesto_proyecto_id,committed.p_changed.proyectos[0].id);
+});
+test("aceptar una cotización sin contactos conserva materiales y pide los obligatorios antes de crear", async () => {
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const q = normalizeQuote({ titulo_proyecto:'Muro cotizado',cliente_nombre:'Cliente',materiales:[{nombre:'Ladrillos',cantidad:100,unidad:'un',precio_unitario_estimado:1000}],mano_de_obra:[] });
+  const sb=database();sb.db.presupuestos=[{id:'wa:pending',empresa_id:user.empresa_id,cotizacion:q,estado:'borrador'}];
+  sb.db.whatsapp_mensajes=[{message_id:'source',empresa_id:user.empresa_id,actor_id:user.id,cotizacion:q,respuesta:'¿Quieres crear la obra?',texto:'Cotiza'}];
+  const response=await processPersonalMessage(sb,{id:'quote-missing',from:'56912345678',type:'text',text:{body:'Sí'}},{chat:async()=>{throw Error('No debe llamar a Gemini')}});
+  assert.match(response.respuesta,/Correo electr/);assert.match(response.respuesta,/Teléfono del cliente/);
+  const draft=sb.db.whatsapp_mensajes[0].borrador_obra;assert.equal(draft.materiales.length,1);assert.equal(draft.presupuesto_cotizacion_id,q.id);
+});
+test("la confirmación de un presupuesto asociado informa la obra existente y no crea otra", async () => {
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const q=normalizeQuote({titulo_proyecto:'Obra existente',materiales:[{nombre:'Material',cantidad:1,precio_unitario_estimado:1000}],mano_de_obra:[]});
+  const sb=database();sb.db.presupuestos=[{id:'wa:existing',empresa_id:user.empresa_id,cotizacion:q,proyecto_id:'existing',estado:'aprobada'}];
+  sb.db.whatsapp_mensajes=[{message_id:'source',empresa_id:user.empresa_id,actor_id:user.id,cotizacion:q,respuesta:'¿Quieres crear la obra?',texto:'Cotiza'}];
+  const response=await processPersonalMessage(sb,{id:'confirm-existing',from:'56912345678',type:'text',text:{body:'Sí'}},{chat:async()=>{throw Error('No debe llamar a Gemini')}});
+  assert.match(response.respuesta,/ya tiene una obra/);assert.equal(sb.db.whatsapp_mensajes[0].acciones,null);
 });
