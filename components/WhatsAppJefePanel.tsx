@@ -127,6 +127,10 @@ export default function WhatsAppJefePanel() {
                 ? "Permisos de Meta pendientes"
                 : connection?.estado === "renovar_conexion"
                   ? "Renovar conexión con Meta"
+                  : connection?.estado === "numero_desactualizado"
+                    ? "Actualizar número de WhatsApp"
+                    : connection && connection.estado !== "disponible"
+                      ? "Revisar conexión con Meta"
                   : status
                     ? status.cloud_api_configurada
                       ? "Canal configurado"
@@ -134,8 +138,14 @@ export default function WhatsAppJefePanel() {
                     : "Comprobando conexión…"}
             </span>
           </p>
+          {connection && connection.estado !== "disponible" && (
+            <p className="text-sm text-amber-800 mt-2 max-w-xl" role="status">
+              {connection.mensaje}
+            </p>
+          )}
         </div>
-        {status?.cloud_api_configurada && status.numero && (
+        {status?.cloud_api_configurada && status.numero &&
+          (!connection || connection.estado === "disponible") && (
           <a
             className="inline-flex items-center gap-2 rounded-xl bg-green-700 text-white px-4 py-2 text-sm"
             href={`https://wa.me/${status.numero.replace(/\D/g, "")}`}

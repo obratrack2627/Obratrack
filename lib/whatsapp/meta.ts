@@ -23,6 +23,58 @@ export function validMetaSignature(
   );
 }
 const version = () => process.env.WHATSAPP_GRAPH_API_VERSION || "v23.0";
+// Solo se devuelve desde la ruta autenticada de administración/supervisión.
+// Permite detectar un número reemplazado sin revelar el token ni errores de Meta.
+async function diagnoseMetaNumber(fetcher: typeof fetch) {
+  const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN!;
+  const app = process.env.META_APP_ID;
+  const secret = process.env.WHATSAPP_APP_SECRET;
+  if (!app || !secret) return null;
+  const headers = { Authorization: `Bearer ${token}` };
+  try {
+    const response = await fetcher(
+      `https://graph.facebook.com/${version()}/debug_token?input_token=${encodeURIComponent(token)}`,
+      {
+        headers: { Authorization: `Bearer ${app}|${secret}` },
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    const info = (await response.json().catch(() => null))?.data;
+    if (!response.ok || !info) return null;
+    if (info.app_id !== app)
+      return { aplicacion_coincide: false };
+    if (!info.is_valid) return { token_vigente: false };
+    const targets = (info.granular_scopes || [])
+      .filter((s: any) =>
+        ["whatsapp_business_management", "whatsapp_business_messaging"].includes(s.scope),
+      )
+      .flatMap((s: any) => s.target_ids || []);
+    const accounts = Array.from(new Set<string>([
+      ...targets,
+      process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
+    ].filter((id): id is string => typeof id === "string" && /^\d+$/.test(id)))).slice(0, 4);
+    const results = await Promise.all(accounts.map(async (id) => {
+      try {
+        const res = await fetcher(
+          `https://graph.facebook.com/${version()}/${id}/phone_numbers?fields=id`,
+          { headers, signal: AbortSignal.timeout(5000) },
+        );
+        const body = await res.json().catch(() => null);
+        return res.ok && Array.isArray(body?.data)
+          ? body.data.filter((p: any) => /^\d+$/.test(p.id)).map((p: any) => String(p.id))
+          : [];
+      } catch { return []; }
+    }));
+    return {
+      token_vigente: true,
+      aplicacion_coincide: true,
+      permisos: Array.isArray(info.scopes) ? info.scopes.filter((s: unknown) =>
+        s === "whatsapp_business_messaging" || s === "whatsapp_business_management") : [],
+      otros_numeros_disponibles: results.flat().length > 0,
+      numero_configurado_accesible: results.flat().includes(process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID),
+    };
+  } catch { return null; }
+}
 export async function checkMetaConnection(fetcher: typeof fetch = serverFetch) {
   const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
   const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
@@ -62,6 +114,24 @@ export async function checkMetaConnection(fetcher: typeof fetch = serverFetch) {
             ? "concedido"
             : "pendiente";
       } catch {}
+      const account = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+      const app = process.env.META_APP_ID;
+      if (messaging !== "pendiente" && account && app) {
+        try {
+          const subscription = await fetcher(
+            `https://graph.facebook.com/${version()}/${account}/subscribed_apps`,
+            { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5000) },
+          );
+          const result = await subscription.json().catch(() => null);
+          if (subscription.ok && Array.isArray(result?.data) &&
+              !result.data.some((s: any) => s.whatsapp_business_api_data?.id === app))
+            return {
+              estado: "webhook_pendiente",
+              permisos_mensajeria: messaging,
+              mensaje: "El número está disponible, pero su cuenta de WhatsApp todavía no está suscrita a la aplicación de ObraTrack. Activa la suscripción del webhook para recibir mensajes.",
+            };
+        } catch {}
+      }
       return {
         estado:
           messaging === "pendiente" ? "permisos_pendientes" : "disponible",
@@ -84,9 +154,29 @@ export async function checkMetaConnection(fetcher: typeof fetch = serverFetch) {
         mensaje:
           "La conexión de WhatsApp necesita revisar los permisos en Meta.",
       };
+    const diagnostico = await diagnoseMetaNumber(fetcher);
+    if (diagnostico?.token_vigente === false)
+      return {
+        estado: "renovar_conexion",
+        mensaje: "La credencial de WhatsApp venció o dejó de ser válida. El administrador debe renovarla.",
+      };
+    if (diagnostico?.aplicacion_coincide === false)
+      return {
+        estado: "configuracion_incorrecta",
+        mensaje: "El token pertenece a otra aplicación de Meta. Revisa la aplicación, su secreto y el webhook antes de conectar el número.",
+        diagnostico,
+      };
+    if (diagnostico?.otros_numeros_disponibles &&
+        !diagnostico.numero_configurado_accesible)
+      return {
+        estado: "numero_desactualizado",
+        mensaje: "El token es válido, pero corresponde a otro número de WhatsApp. Actualiza el número de ObraTrack y su cuenta en la configuración del servidor.",
+        diagnostico,
+      };
     return {
       estado: "no_disponible",
-      mensaje: "Meta no pudo confirmar la conexión de WhatsApp.",
+      mensaje: "Meta no pudo confirmar el acceso al número configurado. Revisa el Phone Number ID, la cuenta de WhatsApp y los permisos del token.",
+      ...(diagnostico ? { diagnostico } : {}),
     };
   } catch {
     return {

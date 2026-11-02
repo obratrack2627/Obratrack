@@ -3,6 +3,7 @@ import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 import { checkMetaConnection } from "@/lib/whatsapp/meta";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 export async function GET(request: NextRequest) {
   try {
     const { user } = await authorizeAI(request);

@@ -43,6 +43,8 @@ En Settings → Environment Variables, para Production:
 
 Los secretos de Codex y Vercel son independientes. Guarda las variables y haz un Redeploy. No se requiere volver a pegar la clave de Gemini para cada mensaje.
 
+Si Meta reemplaza el número de prueba, actualiza juntos el Phone Number ID, la cuenta de WhatsApp Business y el teléfono visible; renovar solo el token no cambia esos datos. Confirma también la suscripción de la nueva cuenta a la misma aplicación. El diagnóstico privado identifica números desactualizados y cuentas sin suscripción; la interfaz muestra el problema y evita abrir el teléfono anterior como si estuviera conectado.
+
 ## 3. Verificar el webhook
 
 En WhatsApp → Configuration de Meta:
