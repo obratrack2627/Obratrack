@@ -558,7 +558,7 @@ function SignUpSection(props: SignUpSectionProps) {
               autoComplete="new-password"
               required
               minLength={6}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mín. 6 caracteres"
               value={props.signupPassword}
               onChange={(e) => props.onPasswordChange(e.target.value)}
               className={`${INPUT_BASE_CLASS} pl-10 pr-10`}
