@@ -43,6 +43,7 @@ export const metadata: Metadata = {
     'Control, Cotizaciones, Costos, Pagos, Avances y Georreferenciación con Inteligencia Artificial (Google Gemini), Google Maps y WhatsApp para constructoras en Chile.',
   manifest: '/manifest.webmanifest',
   icons: {
+    icon: [{ url: '/icon.svg?v=original-dark', type: 'image/svg+xml' }],
     apple: [
       { url: '/app-icons/obratrack-mobile-v3-180.png', sizes: '180x180', type: 'image/png' },
     ],
