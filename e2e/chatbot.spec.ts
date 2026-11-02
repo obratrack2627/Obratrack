@@ -45,6 +45,27 @@ const owner = {
   rol: "admin",
   telefono_whatsapp: "",
 };
+
+test("administración puede activar una cuenta nueva sin mostrarla conectada antes de la confirmación", async ({ page }) => {
+  await setup(page, { respuesta: 'Consulta', accion: null });
+  let activations = 0;
+  await page.route('**/api/webhook/whatsapp', route => route.fulfill({ json: { cloud_api_configurada: true, numero: '15556154571' } }));
+  await page.route('**/api/whatsapp/mensajes*', route => route.fulfill({ json: { mensajes: [], total: 0 } }));
+  await page.route('**/api/whatsapp/estado', async route => {
+    if (route.request().method() === 'POST') {
+      activations++;
+      expect(route.request().headers().authorization).toMatch(/^Bearer /);
+      await route.fulfill({ json: { estado: 'disponible', mensaje: 'Recepción activada.' } });
+    } else await route.fulfill({ json: { estado: 'webhook_pendiente', mensaje: 'La cuenta nueva requiere suscripción.' } });
+  });
+  await page.goto('/reportes');
+  await expect(page.getByText('La cuenta nueva requiere suscripción.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Abrir WhatsApp de ObraTrack' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Activar recepción de mensajes', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Abrir WhatsApp de ObraTrack' })).toHaveAttribute('href', 'https://wa.me/15556154571');
+  await expect(page.getByRole('button', { name: 'Activar recepción de mensajes', exact: true })).toHaveCount(0);
+  expect(activations).toBe(1);
+});
 async function setup(
   page: Page,
   reply: any,

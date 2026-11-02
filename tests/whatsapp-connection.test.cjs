@@ -1,7 +1,7 @@
 require('./helpers/typescript.cjs');
 const { test, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { checkMetaConnection } = require('../lib/whatsapp/meta.ts');
+const { checkMetaConnection, activateMetaWebhook } = require('../lib/whatsapp/meta.ts');
 const original = { ...process.env };
 afterEach(() => {
   for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
@@ -58,4 +58,55 @@ test('distingue un token de otra aplicación y no propone números ajenos', asyn
     : response({ error: { code: 100 } }, 400));
   assert.equal(result.estado, 'configuracion_incorrecta');
   assert.equal(result.diagnostico.aplicacion_coincide, false);
+});
+
+function activationMeta({ app = '333333', number = '111111', scopes = ['whatsapp_business_messaging', 'whatsapp_business_management'], active = false, accept = true } = {}) {
+  let posts = 0;
+  return {
+    get posts() { return posts; },
+    fetch: async (url, options = {}) => {
+      if (url.includes('/debug_token?')) return response({ data: { is_valid: true, app_id: app, scopes } });
+      if (url.includes('/222222/phone_numbers')) return response({ data: [{ id: number }] });
+      if (url.includes('/222222/subscribed_apps')) {
+        if (options.method === 'POST') {
+          posts++;
+          assert.equal(options.body, '{}');
+          if (!accept) return response({ error: { message: 'private-provider-detail' } }, 403);
+          active = true;
+          return response({ success: true });
+        }
+        return response({ data: active ? [{ whatsapp_business_api_data: { id: '333333' } }] : [] });
+      }
+      throw new Error('Unexpected request');
+    },
+  };
+}
+test('activa y verifica la recepción en la cuenta configurada, sin enviar mensajes y sin repetir altas', async () => {
+  setup();
+  const meta = activationMeta();
+  assert.equal((await activateMetaWebhook(meta.fetch)).estado, 'disponible');
+  assert.equal(meta.posts, 1);
+  assert.equal((await activateMetaWebhook(meta.fetch)).estado, 'disponible');
+  assert.equal(meta.posts, 1);
+});
+test('rechaza suscripciones con otra aplicación, otro número o permisos insuficientes antes de modificar Meta', async () => {
+  setup();
+  for (const [options, code] of [
+    [{ app: '999999' }, 'WHATSAPP_APPLICATION'],
+    [{ number: '999999' }, 'WHATSAPP_ACCOUNT'],
+    [{ scopes: ['whatsapp_business_messaging'] }, 'WHATSAPP_PERMISSIONS'],
+  ]) {
+    const meta = activationMeta(options);
+    await assert.rejects(activateMetaWebhook(meta.fetch), error => error.code === code);
+    assert.equal(meta.posts, 0);
+  }
+});
+test('no informa recepción activa cuando Meta rechaza el alta y oculta el detalle privado', async () => {
+  setup();
+  const meta = activationMeta({ accept: false });
+  await assert.rejects(activateMetaWebhook(meta.fetch), error => {
+    assert.equal(error.code, 'WHATSAPP_SUBSCRIPTION_WRITE');
+    assert.doesNotMatch(JSON.stringify(error), /private-provider-detail|private-token-value|private-app-secret/);
+    return true;
+  });
 });

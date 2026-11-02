@@ -35,6 +35,9 @@ const dates = (value?: string) =>
 export default function WhatsAppJefePanel() {
   const [tab, setTab] = useState<"registros" | "envios">("registros");
   const [connection, setConnection] = useState<any>(null);
+  const [canActivate, setCanActivate] = useState(false),
+    [activating, setActivating] = useState(false);
+  const [activationError, setActivationError] = useState("");
   const [status, setStatus] = useState<any>(null),
     [phone, setPhone] = useState(""),
     [staff, setStaff] = useState(false);
@@ -54,6 +57,7 @@ export default function WhatsAppJefePanel() {
     if (new URLSearchParams(window.location.search).get("tab") === "envios")
       setTab("envios");
     const user = dataService.getActiveUser();
+    setCanActivate(user?.rol === "admin");
     setPhone(user?.telefono_whatsapp || "");
     setStaff(["admin", "supervisor"].includes(user?.rol || ""));
     if (["admin", "supervisor"].includes(user?.rol || "")) {
@@ -113,6 +117,20 @@ export default function WhatsAppJefePanel() {
     setter(value);
     setPage(0);
   };
+  async function activateReception() {
+    setActivating(true);
+    setActivationError("");
+    try {
+      const response = await fetch("/api/whatsapp/estado", { method: "POST", headers: await aiHeaders() });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "No se pudo activar la recepción.");
+      setConnection(body);
+    } catch (e) {
+      setActivationError((e as Error).message);
+    } finally {
+      setActivating(false);
+    }
+  }
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border bg-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
@@ -143,6 +161,13 @@ export default function WhatsAppJefePanel() {
               {connection.mensaje}
             </p>
           )}
+          {canActivate && connection?.estado === "webhook_pendiente" && (
+            <button disabled={activating} onClick={() => void activateReception()}
+              className="mt-3 rounded-xl bg-green-700 text-white px-4 py-2 text-sm disabled:opacity-50">
+              {activating ? "Activando recepción…" : "Activar recepción de mensajes"}
+            </button>
+          )}
+          {activationError && <p role="alert" className="text-sm text-red-700 mt-2">{activationError}</p>}
         </div>
         {status?.cloud_api_configurada && status.numero &&
           (!connection || connection.estado === "disponible") && (

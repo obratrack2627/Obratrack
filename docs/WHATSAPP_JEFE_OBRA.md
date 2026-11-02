@@ -45,6 +45,8 @@ Los secretos de Codex y Vercel son independientes. Guarda las variables y haz un
 
 Si Meta reemplaza el número de prueba, actualiza juntos el Phone Number ID, la cuenta de WhatsApp Business y el teléfono visible; renovar solo el token no cambia esos datos. Confirma también la suscripción de la nueva cuenta a la misma aplicación. El diagnóstico privado identifica números desactualizados y cuentas sin suscripción; la interfaz muestra el problema y evita abrir el teléfono anterior como si estuviera conectado.
 
+Si falta la suscripción, administración puede pulsar **Activar recepción de mensajes** en Reportes WhatsApp. La ruta autenticada `POST /api/whatsapp/estado` valida que el token sea de la aplicación configurada, que el número pertenezca a la cuenta y que existan ambos permisos de WhatsApp antes de suscribirla. No acepta identificadores ni secretos desde el navegador, no envía mensajes y comprueba la suscripción después de activarla. Repetirla no vuelve a modificar una suscripción ya activa.
+
 ## 3. Verificar el webhook
 
 En WhatsApp → Configuration de Meta:

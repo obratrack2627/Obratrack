@@ -185,6 +185,60 @@ export async function checkMetaConnection(fetcher: typeof fetch = serverFetch) {
     };
   }
 }
+export async function activateMetaWebhook(fetcher: typeof fetch = serverFetch) {
+  const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
+  const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
+  const account = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID;
+  const app = process.env.META_APP_ID;
+  const secret = process.env.WHATSAPP_APP_SECRET;
+  if (!token || !phone || !account || !app || !secret)
+    throw new AIError("WHATSAPP_CONFIGURATION", "Completa la configuración de WhatsApp antes de activar la recepción.", 503);
+  const base = `https://graph.facebook.com/${version()}`;
+  const headers = { Authorization: `Bearer ${token}` };
+  const subscribed = (body: any) => Array.isArray(body?.data) &&
+    body.data.some((s: any) => s.whatsapp_business_api_data?.id === app);
+  const read = async (url: string, auth = headers) => {
+    const response = await fetcher(url, { headers: auth, signal: AbortSignal.timeout(5000) });
+    return { ok: response.ok, body: await response.json().catch(() => null) };
+  };
+  try {
+    const [debug, numbers, subscription] = await Promise.all([
+      read(`${base}/debug_token?input_token=${encodeURIComponent(token)}`, { Authorization: `Bearer ${app}|${secret}` }),
+      read(`${base}/${account}/phone_numbers?fields=id`),
+      read(`${base}/${account}/subscribed_apps`),
+    ]);
+    if (!debug.ok || !debug.body?.data?.is_valid || debug.body.data.app_id !== app)
+      throw new AIError("WHATSAPP_APPLICATION", "El token, el App Secret y la aplicación deben corresponder a la misma aplicación de Meta y estar vigentes.", 503);
+    const scopes = debug.body.data.scopes || [];
+    if (!scopes.includes("whatsapp_business_messaging") || !scopes.includes("whatsapp_business_management"))
+      throw new AIError("WHATSAPP_PERMISSIONS", "El token necesita whatsapp_business_messaging y whatsapp_business_management para activar la recepción de mensajes.", 503);
+    if (!numbers.ok || !Array.isArray(numbers.body?.data) || !numbers.body.data.some((p: any) => p.id === phone))
+      throw new AIError("WHATSAPP_ACCOUNT", "El número configurado no pertenece a la cuenta de WhatsApp accesible con este token. Revisa ambos identificadores y sus permisos.", 503);
+    if (!subscription.ok || !Array.isArray(subscription.body?.data))
+      throw new AIError("WHATSAPP_SUBSCRIPTION_READ", "Meta no permitió comprobar la suscripción. Revisa los permisos de administración del token.", 503);
+    if (!subscribed(subscription.body)) {
+      // Sin parámetros de cliente: solo se suscribe la cuenta y aplicación ya configuradas.
+      const response = await fetcher(`${base}/${account}/subscribed_apps`, {
+        method: "POST", headers: { ...headers, "Content-Type": "application/json" },
+        body: "{}", signal: AbortSignal.timeout(5000),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.success !== true)
+        throw new AIError("WHATSAPP_SUBSCRIPTION_WRITE", "Meta no permitió activar la recepción. Revisa el permiso de administración y el acceso del token a esta cuenta.", 503);
+      const verified = await read(`${base}/${account}/subscribed_apps`);
+      if (!verified.ok || !subscribed(verified.body))
+        throw new AIError("WHATSAPP_SUBSCRIPTION_VERIFY", "Meta todavía no confirma la suscripción. Vuelve a comprobar la conexión antes de enviar instrucciones.", 503);
+    }
+    return {
+      estado: "disponible",
+      permisos_mensajeria: "concedido",
+      mensaje: "La cuenta de WhatsApp está suscrita a ObraTrack y tiene permiso de mensajería. La entrega se confirma con cada mensaje.",
+    };
+  } catch (error) {
+    if (error instanceof AIError) throw error;
+    throw new AIError("WHATSAPP_CONNECTION", "No se pudo comprobar la conexión con Meta. Intenta nuevamente.", 503);
+  }
+}
 export async function sendMetaText(to: string, text: string) {
   const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
   const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
