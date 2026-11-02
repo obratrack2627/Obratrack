@@ -124,6 +124,17 @@ test("filtra una marca o presentación incorrecta, ofertas sin precio, falta de 
   assert.equal(safeOfferURL("javascript:alert(1)"), undefined);
   assert.equal(safeOfferURL("https://www.easy.cl@evil.test/p"), undefined);
 });
+test("encuentra el modelo y tamaño aunque el extractor los agrupe y el catálogo cambie su orden", () => {
+  const p = catalogProviders[1];
+  const query = { producto: "taladro percutor", marca: "Makita", modelo: "HP1630K 13mm" };
+  assert.equal(parseCatalogProducts([product(p)], p, query).length, 1);
+  assert.equal(parseCatalogProducts([product(p)], p, { ...query, modelo: "HP1630K 10mm" }).length, 0);
+  const mixedMeasures = product(p, {
+    product: { productName: "Taladro 13cm 20mm HP1630K Makita" },
+    item: { nameComplete: "Taladro 13cm 20mm HP1630K Makita" },
+  });
+  assert.equal(parseCatalogProducts([mixedMeasures], p, { producto: "taladro", presentacion: "13mm" }).length, 0);
+});
 test("si falla una tienda conserva la fuente disponible y si fallan ambas no fabrica precios", async () => {
   const partial = await compareMaterialPrices(
     { producto: "taladro" },

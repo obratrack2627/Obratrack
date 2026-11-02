@@ -120,6 +120,20 @@ function barcode(value: unknown) {
   return (10 - (sum % 10)) % 10 === check ? value.padStart(14, "0") : undefined;
 }
 
+function matchesSpecification(value: string, full: string) {
+  const wanted = normalize(value);
+  const words = new Set(full.split(" "));
+  if (!wanted.split(" ").every((word) => words.has(word))) return false;
+  // Una medida debe pertenecer a su unidad, aunque modelo y tamaño lleguen
+  // juntos y la tienda los publique en otro orden (HP1630K 13mm / 13mm HP1630K).
+  const measures = wanted.matchAll(
+    /\b\d+(?:\.\d+)?\s+(?:kg|g|mm|cm|m|ml|l|w|kw|v|ah)\b/g,
+  );
+  return Array.from(measures).every(([measure]) =>
+    ` ${full} `.includes(` ${measure} `),
+  );
+}
+
 export function parseCatalogProducts(
   products: any,
   provider: (typeof catalogProviders)[number],
@@ -171,7 +185,7 @@ export function parseCatalogProducts(
         continue;
       if (
         [query.marca, query.modelo, query.presentacion].some(
-          (v) => v && !full.includes(normalize(v)),
+          (v) => v && !matchesSpecification(v, full),
         )
       )
         continue;
