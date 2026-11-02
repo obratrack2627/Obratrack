@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 import { budgetStatuses } from "@/lib/presupuestos";
+import { reviseQuote } from "@/lib/quotes/revise";
 export const dynamic = "force-dynamic";
 
 async function access(request: NextRequest) {
@@ -24,6 +25,8 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
     const projectId = request.nextUrl.searchParams.get("proyecto_id");
     if (projectId) query = query.eq("proyecto_id", projectId);
+    const id = request.nextUrl.searchParams.get("id");
+    if (id) query = query.eq("id", id);
     const { data, error } = await query;
     if (error)
       throw new AIError(
@@ -39,10 +42,13 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const { client, user } = await access(request);
-    const body = await request.json().catch(() => null);
+    const raw = await request.text();
+    if (raw.length > 400000) throw new AIError("REQUEST_TOO_LARGE", "El presupuesto es demasiado extenso.", 413);
+    let body: any;
+    try { body = JSON.parse(raw); } catch { body = null; }
     if (
       typeof body?.id !== "string" ||
-      !budgetStatuses.includes(body.estado) ||
+      (Object.hasOwn(body, "estado") && !budgetStatuses.includes(body.estado)) ||
       typeof body.updated_at !== "string"
     )
       throw new AIError(
@@ -50,7 +56,16 @@ export async function PATCH(request: NextRequest) {
         "Revisa el estado del presupuesto.",
         400,
       );
-    const updates: Record<string, any> = { estado: body.estado };
+    const updates: Record<string, any> = {};
+    if (Object.hasOwn(body, "estado")) updates.estado = body.estado;
+    if (Object.hasOwn(body, "cotizacion")) {
+      const { data: current, error: readError } = await client.from("presupuestos")
+        .select("cotizacion").eq("empresa_id", user.empresa_id).eq("id", body.id).maybeSingle();
+      if (readError) throw new AIError("BUDGET_READ", "No se pudo consultar el presupuesto guardado.", 503);
+      if (!current) throw new AIError("BUDGET_FORBIDDEN", "El presupuesto no está disponible para tu cuenta.", 403);
+      if (body.cotizacion?.id !== body.id) throw new AIError("INVALID_REQUEST", "La cotización no corresponde al presupuesto.", 400);
+      updates.cotizacion = reviseQuote(current.cotizacion, body.cotizacion);
+    }
     if (Object.hasOwn(body, "proyecto_id")) {
       if (
         body.proyecto_id !== null &&
@@ -77,6 +92,7 @@ export async function PATCH(request: NextRequest) {
       }
       updates.proyecto_id = body.proyecto_id;
     }
+    if (!Object.keys(updates).length) throw new AIError("INVALID_REQUEST", "No hay cambios para guardar.", 400);
     const { data, error } = await client
       .from("presupuestos")
       .update(updates)

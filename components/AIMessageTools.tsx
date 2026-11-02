@@ -1,11 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CotizacionEstimacion } from "@/types/database";
 import { retryAIWrite, isAIWriteConfirmed } from "@/lib/ai/execute";
 import CotizacionPdfModal from "./CotizacionPdfModal";
 import MaterialPriceComparison from "./MaterialPriceComparison";
 import { formatCLP } from "@/lib/utils";
 import { profitLabel } from "@/lib/ai/quote-format";
+import { aiHeaders } from "@/lib/ai/client";
+import { dataService } from "@/lib/data-service";
 
 export default function AIMessageTools({
   message,
@@ -16,6 +18,25 @@ export default function AIMessageTools({
     pendiente_sincronizacion?: string;
   };
 }) {
+  const [quote, setQuote] = useState(message.cotizacion_generada);
+  const saveRevision = useRef(0);
+  useEffect(() => {
+    const original = message.cotizacion_generada;
+    setQuote(original);
+    if (!original || !['admin', 'supervisor'].includes(dataService.getActiveUser()?.rol || '')) return;
+    let active = true;
+    const revision = saveRevision.current;
+    void (async () => {
+      try {
+        const response = await fetch('/api/presupuestos?id=' + encodeURIComponent(original.id), { headers: await aiHeaders(), cache: 'no-store' });
+        if (!response.ok) return;
+        const body = await response.json();
+        const current = body.presupuestos?.find((row: { id: string }) => row.id === original.id);
+        if (active && current && revision === saveRevision.current) setQuote(current.cotizacion);
+      } catch { /* Mantener la copia disponible si falla la lectura. */ }
+    })();
+    return () => { active = false; };
+  }, [message.cotizacion_generada]);
   const [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [status, setStatus] = useState(
@@ -29,17 +50,17 @@ export default function AIMessageTools({
       {message.comparacion_materiales && (
         <MaterialPriceComparison data={message.comparacion_materiales} />
       )}
-      {message.cotizacion_generada && (
+      {quote && (
         <section
           aria-label="Resumen del presupuesto"
           className="rounded-xl border border-kraft-200 dark:border-gray-700 p-3 space-y-2"
         >
           <p className="text-xs font-semibold">
-            Presupuesto estimado · {message.cotizacion_generada.titulo_proyecto}
+            Presupuesto estimado · {quote.titulo_proyecto}
           </p>
           <p className="text-lg font-bold">
             {formatCLP(
-              message.cotizacion_generada.estructura_financiera
+              quote.estructura_financiera
                 .precio_total_con_iva,
             )}{" "}
             <span className="text-xs font-normal">IVA incluido</span>
@@ -50,32 +71,32 @@ export default function AIMessageTools({
               {[
                 [
                   "Materiales",
-                  message.cotizacion_generada.estructura_financiera
+                  quote.estructura_financiera
                     .costo_materiales_total,
                 ],
                 [
                   "Mano de obra",
-                  message.cotizacion_generada.estructura_financiera
+                  quote.estructura_financiera
                     .costo_mano_obra_total,
                 ],
                 [
                   "Gastos generales",
-                  message.cotizacion_generada.estructura_financiera
+                  quote.estructura_financiera
                     .gastos_generales_monto,
                 ],
                 [
                   "Imprevistos",
-                  message.cotizacion_generada.estructura_financiera
+                  quote.estructura_financiera
                     .imprevistos_monto,
                 ],
                 [
-                  profitLabel(message.cotizacion_generada),
-                  message.cotizacion_generada.estructura_financiera
+                  profitLabel(quote),
+                  quote.estructura_financiera
                     .margen_utilidad_monto,
                 ],
                 [
                   "IVA (19%)",
-                  message.cotizacion_generada.estructura_financiera.iva_19,
+                  quote.estructura_financiera.iva_19,
                 ],
               ].map(([label, value]) => (
                 <div key={String(label)} className="flex justify-between gap-3">
@@ -87,7 +108,7 @@ export default function AIMessageTools({
           </details>
         </section>
       )}
-      {message.cotizacion_generada && (
+      {quote && (
         <button
           type="button"
           className="mt-2 px-3 py-2 bg-[#FF6A00] text-white rounded-lg text-xs font-bold"
@@ -121,13 +142,12 @@ export default function AIMessageTools({
           {status}
         </p>
       )}
-      {message.cotizacion_generada && (
+      {quote && (
         <CotizacionPdfModal
           isOpen={open}
           onClose={() => setOpen(false)}
-          cotizacion={message.cotizacion_generada}
-          clienteNombre={message.cotizacion_generada.cliente_nombre}
-          clienteTelefono={message.cotizacion_generada.cliente_telefono}
+          cotizacion={quote}
+          onSaved={(row) => { saveRevision.current += 1; setQuote(row.cotizacion); }}
         />
       )}
     </>

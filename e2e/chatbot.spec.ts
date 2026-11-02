@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { normalizeQuote } from "../lib/ai/protocol";
+import { reviseQuote } from "../lib/quotes/revise";
+import { readFile } from "node:fs/promises";
 
 const ownerId = "00000000-0000-0000-0000-000000000001";
 const company = "fixture-company";
@@ -269,6 +271,21 @@ test("cotización generada se muestra en PDF con los mismos costos, IVA y client
   );
   await expect(dialog).not.toContainText("Carlos Henríquez");
   await expect(dialog).not.toContainText("720.818");
+  await page.evaluate(() => {
+    (window as any).__printCount = 0;
+    window.print = () => { (window as any).__printCount += 1; };
+  });
+  const downloading = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Descargar PDF", exact: true }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toMatch(/^ObraTrack_Cotizacion_.*\.pdf$/);
+  await download.saveAs("/tmp/obratrack-downloaded-cotizacion.pdf");
+  const bytes = await readFile("/tmp/obratrack-downloaded-cotizacion.pdf");
+  expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(await page.evaluate(() => (window as any).__printCount)).toBe(0);
+  await page.locator("#obratrack-cotizacion-pdf").screenshot({ path: "/tmp/obratrack-quote-preview.png" });
+  await dialog.getByRole("button", { name: "Imprimir", exact: true }).click();
+  expect(await page.evaluate(() => (window as any).__printCount)).toBe(1);
   await page.emulateMedia({ media: "print" });
   await expect(page.getByRole("navigation")).toBeHidden();
   await page.pdf({
@@ -512,7 +529,7 @@ test("la bandeja del jefe muestra conexión pendiente y abre una cotización rec
       .getByText("Radier por WhatsApp", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Guardar PDF", exact: true }),
+    page.getByRole("button", { name: "Descargar PDF", exact: true }),
   ).toBeVisible();
 });
 
@@ -566,6 +583,75 @@ test("presupuestos en Obras permite filtrar, cambiar estado y abrir el PDF", asy
   await expect(
     page.getByRole("dialog", { name: "Cotización generada" }),
   ).toContainText("Cliente del presupuesto");
+});
+
+test("editar un presupuesto conserva el registro, recalcula montos y descarga la versión guardada sin llamar a la IA", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await setup(page, { respuesta: "No se debe llamar a la IA", accion: null });
+  const quote = normalizeQuote({ titulo_proyecto: "Presupuesto editable", materiales: [{ nombre: "Cemento", cantidad: 2, unidad: "saco", precio_unitario_estimado: 5000 }], mano_de_obra: [] });
+  let budget = { id: quote.id, empresa_id: company, creado_por: ownerId, estado: "aprobada", origen: "whatsapp", proyecto_id: null, cotizacion: quote, created_at: "2026-10-29T12:00:00Z", updated_at: "2026-10-29T12:00:00Z" };
+  let writes = 0, aiCalls = 0;
+  page.on("request", (request) => { if (request.url().includes("/api/cotizador/chat")) aiCalls++; });
+  await page.route("**/api/presupuestos*", async (route) => {
+    if (route.request().method() === "PATCH") {
+      const body = route.request().postDataJSON();
+      expect(body.id).toBe(quote.id);
+      expect(body.updated_at).toBe(budget.updated_at);
+      expect(body.estado).toBeUndefined();
+      writes++;
+      budget = { ...budget, cotizacion: body.cotizacion, updated_at: "2026-11-02T12:00:00Z" };
+      await route.fulfill({ json: { presupuesto: budget } });
+    } else await route.fulfill({ json: { presupuestos: [budget] } });
+  });
+  await page.goto("/proyectos");
+  await page.getByRole("tab", { name: "Presupuestos", exact: true }).click();
+  await page.getByRole("button", { name: "Editar", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Cotización generada" });
+  const editor = dialog.getByRole("region", { name: "Editar cotización" });
+  await expect(editor.getByLabel("Nombre del proyecto")).toHaveValue("Presupuesto editable");
+  await editor.getByLabel("Precio material 1", { exact: true }).fill("6000");
+  await expect(editor.getByLabel("Precio material 1", { exact: true })).toHaveValue("6.000");
+  await editor.getByLabel("Cantidad material 1", { exact: true }).fill("3");
+  await editor.getByLabel("Correo del cliente", { exact: true }).fill("cliente@example.test");
+  await editor.getByLabel("Condiciones de pago", { exact: true }).fill("Pago del 50% al iniciar la obra.");
+  await editor.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(dialog.getByRole("table")).toContainText("6.000");
+  await expect(dialog).toContainText("cliente@example.test");
+  const closeBounds = await dialog.getByRole("button", { name: "Cerrar cotización", exact: true }).boundingBox();
+  expect(closeBounds && closeBounds.x + closeBounds.width).toBeLessThanOrEqual(375);
+  expect(budget.cotizacion.id).toBe(quote.id);
+  expect(budget.cotizacion.fecha_creacion).toBe(quote.fecha_creacion);
+  expect(budget.estado).toBe("aprobada");
+  expect(writes).toBe(1); expect(aiCalls).toBe(0);
+  const downloading = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Descargar PDF", exact: true }).click();
+  await (await downloading).saveAs("/tmp/obratrack-edited-cotizacion.pdf");
+  await dialog.getByRole("button", { name: "Editar cotización", exact: true }).click();
+  await editor.getByLabel("Cantidad material 1", { exact: true }).fill("99");
+  await editor.getByRole("button", { name: "Cancelar", exact: true }).click();
+  expect(writes).toBe(1);
+  await dialog.getByRole("button", { name: "Cerrar cotización", exact: true }).click();
+  await page.reload();
+  await page.getByRole("tab", { name: "Presupuestos", exact: true }).click();
+  await page.getByRole("button", { name: "Ver / PDF", exact: true }).click();
+  await expect(dialog.getByRole("table")).toContainText("6.000");
+  await expect(dialog).toContainText("Pago del 50% al iniciar la obra.");
+  expect(budget.cotizacion.materiales[0].cantidad).toBe(3);
+});
+
+test("el chat abre la versión editada del presupuesto aunque el mensaje conserve una copia anterior", async ({ page }) => {
+  const original = normalizeQuote({ titulo_proyecto: "Presupuesto vigente", materiales: [{ nombre: "Cemento", cantidad: 2, unidad: "saco", precio_unitario_estimado: 5000 }], mano_de_obra: [] });
+  const revised = reviseQuote(original, { ...original, materiales: original.materiales.map((m) => ({ ...m, precio_unitario_estimado: 9000 })), condiciones_pago: "Condiciones actualizadas" });
+  await setup(page, { respuesta: "Cotización preparada", accion: null, cotizacion: original });
+  await page.route("**/api/presupuestos*", (route) => route.fulfill({ json: { presupuestos: [{ id: original.id, cotizacion: revised }] } }));
+  await page.goto("/cotizador");
+  await send(page, "Cotiza el proyecto");
+  await expect(page.getByRole("region", { name: "Resumen del presupuesto" })).toContainText(revised.estructura_financiera.precio_total_con_iva.toLocaleString("es-CL"));
+  await page.getByRole("button", { name: "Ver cotización / PDF", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Cotización generada" });
+  await expect(dialog.getByRole("table")).toContainText("9.000");
+  await expect(dialog).toContainText("Condiciones actualizadas");
 });
 
 test("reportes muestra el canal real y las imágenes recibidas sin herramientas de simulación", async ({

@@ -1,424 +1,183 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Download, Printer, X, MessageCircle, User, Briefcase, FileText, DollarSign, Loader2, Pencil } from 'lucide-react';
 import { dataService } from '@/lib/data-service';
-import {
-  Download,
-  Printer,
-  X,
-  MessageCircle,
-  User,
-  Briefcase,
-  FileText,
-  DollarSign,
-  MapPin,
-  Phone,
-  Mail,
-  Globe,
-  Loader2,
-} from 'lucide-react';
-import { CotizacionEstimacion } from '@/types/database';
+import type { CotizacionEstimacion } from '@/types/database';
+import { buildQuoteDocument, quoteMoney, type QuoteDocumentOptions } from '@/lib/quotes/document';
 import Logo from './Logo';
+import QuoteEditor from './QuoteEditor';
+import { aiHeaders } from '@/lib/ai/client';
+import type { Presupuesto } from '@/lib/presupuestos';
 
-interface CotizacionPdfModalProps {
+interface CotizacionPdfModalProps extends Omit<QuoteDocumentOptions, 'emisor'> {
   isOpen: boolean;
   onClose: () => void;
   cotizacion: CotizacionEstimacion | null;
-  clienteNombre?: string;
-  clienteContacto?: string;
-  clienteEmail?: string;
-  clienteTelefono?: string;
+  onSaved?: (row: Presupuesto) => void;
+  startEditing?: boolean;
 }
 
-export default function CotizacionPdfModal({
-  isOpen,
-  onClose,
-  cotizacion,
-  clienteNombre = '',
-  clienteContacto = '',
-  clienteEmail = '',
-  clienteTelefono = '',
-}: CotizacionPdfModalProps) {
-  const printAreaRef = useRef<HTMLDivElement>(null);
-  const emisor = dataService.getActiveUser();
-
+export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSaved, startEditing = false, ...client }: CotizacionPdfModalProps) {
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState('');
+  const [current, setCurrent] = useState<CotizacionEstimacion | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [notice, setNotice] = useState('');
+  const saveRevision = useRef(0);
+  useEffect(() => {
+    setCurrent(cotizacion); setEditing(startEditing); setNotice('');
+    if (!isOpen || !cotizacion || !['admin', 'supervisor'].includes(dataService.getActiveUser()?.rol || '')) return;
+    let active = true;
+    const revision = saveRevision.current;
+    void (async () => {
+      try {
+        const res = await fetch('/api/presupuestos?id=' + encodeURIComponent(cotizacion.id), { headers: await aiHeaders(), cache: 'no-store' });
+        if (!res.ok) return;
+        const body = await res.json();
+        const saved = body.presupuestos?.find((row: Presupuesto) => row.id === cotizacion.id);
+        if (active && saved && revision === saveRevision.current) setCurrent(saved.cotizacion);
+      } catch { /* La copia disponible sigue siendo visible; editar requiere cargar la versión guardada. */ }
+    })();
+    return () => { active = false; };
+  }, [isOpen, cotizacion?.id, startEditing]);
   if (!isOpen || !cotizacion) return null;
-
-  const fechaHoy = new Date();
-  const fechaEmision = fechaHoy.toLocaleDateString('es-CL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
+  const visibleQuote = current?.id === cotizacion.id ? current : cotizacion;
+  const emisor = dataService.getActiveUser();
+  const savedClient = visibleQuote.cliente_id ? dataService.getClientes().find((c) => c.id === visibleQuote.cliente_id) : undefined;
+  const document = buildQuoteDocument(visibleQuote, {
+    ...client,
+    clienteEmail: client.clienteEmail || visibleQuote.cliente_email || savedClient?.email,
+    clienteNombre: client.clienteNombre || visibleQuote.cliente_nombre || savedClient?.nombre,
+    clienteTelefono: client.clienteTelefono || visibleQuote.cliente_telefono || savedClient?.telefono,
+    emisor,
   });
 
-  const fechaValidezObj = new Date(fechaHoy.getTime() + 30 * 24 * 60 * 60 * 1000);
-  const fechaValidez = fechaValidezObj.toLocaleDateString('es-CL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-
-  const folioNum = cotizacion.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '000000';
-
-  const totalConIva = cotizacion.estructura_financiera?.precio_total_con_iva ?? 0;
-  const subtotalNeto = cotizacion.estructura_financiera?.precio_sugerido_neto || Math.round(totalConIva / 1.19);
-  const iva = cotizacion.estructura_financiera?.iva_19 || Math.round(subtotalNeto * 0.19);
-
-  // Unificar partidas combinando materiales y mano de obra
-  const partidasItems: Array<{
-    nombre: string;
-    descripcion: string;
-    unidad: string;
-    cantidad: number | string;
-    precioUnit: number;
-    total: number;
-  }> = [];
-
-  (cotizacion.materiales || []).forEach((mat) => {
-    partidasItems.push({
-      nombre: mat.nombre,
-      descripcion: mat.alternativa_economica || `Precio estimado · ${mat.mejor_tienda || 'Proveedor por confirmar'}`,
-      unidad: mat.unidad || 'un',
-      cantidad: mat.cantidad || 1,
-      precioUnit: mat.precio_mas_barato || mat.precio_unitario_estimado || 0,
-      total: mat.subtotal || 0,
-    });
-  });
-
-  (cotizacion.mano_de_obra || []).forEach((mo) => {
-    partidasItems.push({
-      nombre: `Mano de Obra: ${mo.rol}`,
-      descripcion: `Cuadrilla de ${mo.cantidad_personas} persona(s) por ${mo.dias_estimados} días`,
-      unidad: 'gl',
-      cantidad: 1,
-      precioUnit: mo.subtotal || 0,
-      total: mo.subtotal || 0,
-    });
-  });
-
-  for (const [nombre, total] of [
-    ['Gastos generales', cotizacion.estructura_financiera.gastos_generales_monto],
-    ['Provisión de imprevistos', cotizacion.estructura_financiera.imprevistos_monto],
-    [cotizacion.estructura_financiera.tipo_utilidad==='margen_venta'?'Margen sobre venta':'Utilidad', cotizacion.estructura_financiera.margen_utilidad_monto],
-  ] as [string, number][]) {
-    if (total) partidasItems.push({ nombre, descripcion: '', unidad: 'gl', cantidad: 1, precioUnit: total, total });
-  }
-
-  // Si no hay partidas suficientes, poblar con las partidas de la cotización
-  if (partidasItems.length === 0) {
-    partidasItems.push({
-      nombre: cotizacion.titulo_proyecto,
-      descripcion: cotizacion.resumen_ejecutivo,
-      unidad: 'gl',
-      cantidad: 1,
-      precioUnit: subtotalNeto,
-      total: subtotalNeto,
-    });
-  }
-
-  // Impresión nativa: permite guardar PDF sin depender de una CDN externa.
-  const handleDownloadPdf = () => window.print();
-
-  const handlePrint = () => {
-    window.print();
+  const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    setError('');
+    try {
+      // Carga el generador solo al descargar; no abre el diálogo de impresión.
+      const { downloadQuotePdf } = await import('@/lib/quotes/pdf');
+      downloadQuotePdf(document);
+    } catch {
+      setError('No se pudo generar el PDF. Intenta descargarlo nuevamente.');
+    } finally {
+      setDownloading(false);
+    }
   };
-
-  const handleShareWhatsApp = () => {
-    const cleanPhone = clienteTelefono.replace(/[^0-9]/g, '');
-    const msg = `🏗️ *COTIZACIÓN OFICIAL OBRATRACK*\n📄 *N.°:* ${folioNum}\n📅 *Fecha:* ${fechaEmision}\n\nEstimado(a) *${clienteNombre}*,\nLe compartimos la propuesta formal para:\n📌 *${cotizacion.titulo_proyecto}*\n📍 *Ubicación:* ${cotizacion.comuna_region || 'Por definir'}\n\n💰 *SUBTOTAL:* $${subtotalNeto.toLocaleString('es-CL')}\n🏛️ *IVA (19%):* $${iva.toLocaleString('es-CL')}\n🔥 *TOTAL:* *$${totalConIva.toLocaleString('es-CL')} CLP*\n\n📋 *Condiciones de pago:* ${cotizacion.condiciones_pago || 'Por acordar con el cliente.'}\n\nEmitido por ObraTrack.`;
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+  const handleShare = () => {
+    const phone = document.cliente.telefono.replace(/[^0-9]/g, '');
+    const message = `*COTIZACIÓN OBRATRACK N.° ${document.folio}*\nFecha: ${document.fecha}\n\n${document.proyecto.nombre}\n${document.proyecto.ubicacion}\n\nNeto: ${quoteMoney(document.subtotal)}\nIVA (19%): ${quoteMoney(document.iva)}\n*Total: ${quoteMoney(document.total)} CLP*\n\nCondiciones: ${document.condiciones}`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
+  const fields = (rows: [string, string][]) => rows.map(([label, value]) => (
+    <div key={label} className="quote-field"><dt>{label}</dt><dd>{value}</dd></div>
+  ));
 
   return createPortal(
-    <div id="obratrack-quote-overlay" role="dialog" aria-modal="true" aria-label="Cotización generada" className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-navy-950/80 backdrop-blur-sm overflow-y-auto">
-      {/* Reglas de impresión para forzar colores y fondos exactos */}
+    <div id="obratrack-quote-overlay" role="dialog" aria-modal="true" aria-label="Cotización generada" className="fixed inset-0 z-50 flex flex-col bg-black/75 backdrop-blur-sm">
       <style jsx global>{`
+        .quote-toolbar { flex-shrink: 0; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 16px; background: #1e1e1e; }
+        .quote-toolbar button { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 10px 12px; color: white; font-size: 12px; font-weight: 700; }
+        .quote-toolbar button:disabled { opacity: .65; cursor: wait; }
+        @media (max-width: 640px) {
+          .quote-toolbar { padding: 8px; gap: 4px; }
+          .quote-toolbar button { padding: 10px 9px; font-size: 11px; }
+        }
+        .quote-scroll { flex: 1; overflow: auto; padding: 20px 12px; }
+        .quote-paper { box-sizing: border-box; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 12mm; background: white; color: #1e1e1e; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.45; box-shadow: 0 16px 50px #0003; color-scheme: light; }
+        .quote-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 18px; }
+        .quote-brand { width: 210px; flex-shrink: 0; }
+        .quote-brand .logo-carbon-bar { fill: #1e1e1e !important; }
+        .quote-brand svg { width: 40px; height: 40px; }
+        .quote-brand [class*="text-2xl"] { font-size: 26px; }
+        .quote-heading { border-left: 1px solid #ff6a00; padding-left: 20px; min-width: 186px; }
+        .quote-heading h1 { font-size: 22px; line-height: 1.1; font-weight: 800; margin: 0 0 8px; color: #1e1e1e; }
+        .quote-heading p { margin: 2px 0; font-size: 9px; color: #666; }
+        .quote-heading strong { color: #1e1e1e; }
+        .quote-info { display: grid; grid-template-columns: 1fr 1fr; background: #f7f7f6; border-radius: 6px; padding: 14px; gap: 20px; }
+        .quote-info > section { min-width: 0; }
+        .quote-info > section + section { border-left: 1px solid #e4e4e4; padding-left: 20px; }
+        .quote-section-title { color: #ff6a00; font-size: 10px; font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+        .quote-section-title svg { width: 14px; height: 14px; flex-shrink: 0; }
+        .quote-field { display: grid; grid-template-columns: 68px 1fr; gap: 5px; margin-top: 4px; font-size: 10px; }
+        .quote-field dt { font-weight: 700; }
+        .quote-field dd { margin: 0; overflow-wrap: anywhere; }
+        .quote-intro { color: #666; font-size: 9px; margin: 18px 0 8px; }
+        .quote-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; }
+        .quote-table th { background: #1e1e1e; color: white; padding: 9px 6px; text-transform: uppercase; font-size: 8px; font-weight: 700; }
+        .quote-table td { padding: 8px 6px; border: 1px solid #ededed; vertical-align: top; overflow-wrap: anywhere; }
+        .quote-table tbody tr:nth-child(even) { background: #fafafa; }
+        .quote-table td:first-child { color: #ff6a00; text-align: center; }
+        .quote-table td:nth-child(3) { text-align: center; }
+        .quote-table td:nth-child(n+4), .quote-table th:nth-child(n+4) { text-align: right; }
+        .quote-table small { display: block; color: #666; font-size: 9px; margin-top: 2px; }
+        .quote-closing { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 18px; }
+        .quote-notes { padding: 12px; border-radius: 5px; background: #f7f7f6; margin-bottom: 14px; }
+        .quote-notes ul { list-style: disc; padding-left: 14px; font-size: 9px; color: #555; }
+        .quote-notes li + li { margin-top: 5px; }
+        .quote-payment { font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .quote-totals { background: #f7f7f6; border-radius: 5px; overflow: hidden; }
+        .quote-totals > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #e4e4e4; }
+        .quote-totals > .quote-total { background: #ff6a00; color: white; font-size: 15px; font-weight: 700; border: 0; }
+        .quote-signature { text-align: center; padding-top: 45px; font-size: 10px; }
+        .quote-signature > div { width: 55mm; border-top: 1px solid #bbb; padding-top: 5px; margin: auto; }
+        .quote-signature strong { display: block; color: #ff6a00; }
+        .quote-footer { border-top: 1px solid #ff6a00; margin-top: 24px; padding-top: 10px; display: flex; justify-content: space-between; gap: 20px; color: #666; font-size: 8px; overflow-wrap: anywhere; }
+        .quote-footer strong { color: #1e1e1e; }
         @media print {
           body > *:not(#obratrack-quote-overlay) { display: none !important; }
-          #obratrack-quote-overlay { position: static !important; display: block !important; overflow: visible !important; height: auto !important; background: white !important; padding: 0 !important; backdrop-filter: none !important; }
-          #obratrack-cotizacion-pdf { width: 100% !important; max-width: none !important; max-height: none !important; overflow: visible !important; box-shadow: none !important; margin: 0 !important; }
-          #obratrack-cotizacion-pdf tr { break-inside: avoid; }
-          @page {
-            size: A4 portrait;
-            margin: 6mm;
-          }
-          body {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-            background: white !important;
-          }
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
+          #obratrack-quote-overlay { position: static !important; display: block !important; height: auto !important; background: white !important; backdrop-filter: none !important; }
+          .quote-toolbar, .quote-download-error { display: none !important; }
+          .quote-scroll { overflow: visible !important; padding: 0 !important; }
+          .quote-paper { width: 100% !important; min-height: auto !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
+          .quote-table thead { display: table-header-group; }
+          .quote-table tr, .quote-closing, .quote-footer { break-inside: avoid; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          @page { size: A4 portrait; margin: 12mm; }
         }
       `}</style>
-
-      {/* Botones de acción flotantes (ocultos al imprimir) */}
-      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 print:hidden">
-        <button
-          onClick={handleShareWhatsApp}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl font-heading font-bold text-xs shadow-lg transition-all cursor-pointer"
-        >
-          <MessageCircle className="w-4 h-4" />
-          <span className="hidden sm:inline">Enviar por WhatsApp</span>
-        </button>
-
-        <button
-          onClick={handleDownloadPdf}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-xl font-heading font-bold text-xs shadow-lg transition-all cursor-pointer disabled:opacity-75"
-        >
-          <Download className="w-4 h-4" />
-          <span>Guardar PDF</span>
-        </button>
-
-        <button
-          onClick={handlePrint}
-          className="hidden sm:flex items-center gap-2 px-3 py-2.5 bg-navy-800 hover:bg-navy-700 text-white rounded-xl font-heading font-bold text-xs shadow-lg transition-all cursor-pointer"
-          title="Imprimir"
-        >
-          <Printer className="w-4 h-4" />
-        </button>
-
-        <button
-          onClick={onClose}
-          className="p-2.5 bg-white/95 dark:bg-[#1E2634] hover:bg-white dark:hover:bg-[#263040] text-gray-800 dark:text-gray-100 rounded-xl shadow-lg transition-all cursor-pointer"
-          title="Cerrar"
-        >
-          <X className="w-5 h-5" />
-        </button>
+      <div className="quote-toolbar">
+        {!editing && <>
+        {['admin', 'supervisor'].includes(emisor?.rol || '') && <button onClick={() => setEditing(true)} className="bg-white/10 hover:bg-white/20" aria-label="Editar cotización"><Pencil size={16} /><span className="hidden sm:inline">Editar</span></button>}
+        <button onClick={handleShare} className="bg-[#178743] hover:bg-[#126c35]" aria-label="Compartir resumen por WhatsApp" title="Compartir resumen por WhatsApp"><MessageCircle size={16} /><span className="hidden sm:inline">Compartir resumen</span></button>
+        <button onClick={handleDownload} disabled={downloading} className="bg-[#FF6A00] hover:bg-[#E55F00]" aria-label="Descargar PDF">{downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}<span>{downloading ? 'Generando…' : 'Descargar PDF'}</span></button>
+        <button onClick={() => window.print()} className="bg-white/10 hover:bg-white/20" aria-label="Imprimir" title="Imprimir"><Printer size={16} /></button>
+        </>}
+        <button onClick={onClose} className="bg-white/10 hover:bg-white/20" aria-label="Cerrar cotización" title="Cerrar"><X size={18} /></button>
       </div>
-
-      {/* ========================================================================= */}
-      {/* DOCUMENTO FORMAL DE COTIZACIÓN - IDENTIDAD VISUAL 1:1 OBRATRACK */}
-      {/* ========================================================================= */}
-      <div
-        ref={printAreaRef}
-        id="obratrack-cotizacion-pdf"
-        className="pdf-paper w-full max-w-4xl bg-white text-gray-900 rounded-2xl shadow-2xl overflow-hidden my-6 p-6 sm:p-10 border border-gray-200 font-sans print:m-0 print:p-8 print:shadow-none print:w-full print:max-w-none print:rounded-none print:border-none"
-      >
-        {/* Encabezado: Logo ObraTrack a la izquierda | Folio & Fecha a la derecha */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-6 border-b border-gray-100">
-          <div className="flex-1">
-            <Logo variant="horizontal" withDescriptor={true} size="md" />
+      {error && <p role="alert" className="quote-download-error bg-red-50 text-red-800 text-sm py-2 px-4">{error}</p>}
+      {notice && <p role="status" className="quote-download-error bg-green-50 text-green-800 text-sm py-2 px-4">{notice}</p>}
+      <div className="quote-scroll">
+        {editing ? <QuoteEditor id={visibleQuote.id} onCancel={() => setEditing(false)} onSaved={(row) => {
+          saveRevision.current += 1; setCurrent(row.cotizacion); setEditing(false); setNotice('Cambios guardados en la cotización.'); onSaved?.(row);
+        }} /> :
+        <article id="obratrack-cotizacion-pdf" className="quote-paper">
+          <header className="quote-header">
+            <div className="quote-brand"><Logo variant="horizontal" size="md" /><p className="text-[7px] text-gray-500 mt-1">CONTROL · COTIZACIONES · COSTOS · PAGOS · AVANCES</p></div>
+            <div className="quote-heading"><h1>COTIZACIÓN</h1><p><strong><span className="text-[#FF6A00]">N.°</span> {document.folio}</strong></p><p>FECHA: <strong>{document.fecha}</strong></p><p>VÁLIDA HASTA: <strong>{document.validez}</strong></p></div>
+          </header>
+          <div className="quote-info">
+            <section><h2 className="quote-section-title"><User />CLIENTE</h2><dl>{fields([['Nombre:', document.cliente.nombre], ['Contacto:', document.cliente.contacto], ['Email:', document.cliente.email], ['Teléfono:', document.cliente.telefono]])}</dl></section>
+            <section><h2 className="quote-section-title"><Briefcase />PROYECTO</h2><dl>{fields([['Proyecto:', document.proyecto.nombre], ['Ubicación:', document.proyecto.ubicacion], ['Descripción:', document.proyecto.descripcion]])}</dl></section>
           </div>
-
-          <div className="border-l-2 border-[#FF6A00] pl-5 sm:pl-6 text-left sm:text-right min-w-[200px]">
-            <h1 className="font-heading font-black text-2xl sm:text-3xl tracking-wide text-gray-900 uppercase">
-              COTIZACIÓN
-            </h1>
-            <div className="font-mono text-sm font-bold text-gray-900 mt-1">
-              <span className="text-[#FF6A00]">N.°</span> {folioNum}
-            </div>
-            <div className="font-mono text-[11px] text-gray-500 mt-0.5">
-              FECHA: <span className="text-gray-800 font-semibold">{fechaEmision}</span>
-            </div>
-            <div className="font-mono text-[11px] text-gray-500">
-              VÁLIDA HASTA: <span className="text-gray-800 font-semibold">{fechaValidez}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Tarjetas de Cliente y Proyecto (2 Columnas con fondo suave) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-          {/* Tarjeta CLIENTE */}
-          <div className="bg-[#FBFBFA] border border-gray-200/80 rounded-xl p-4 sm:p-5 space-y-2">
-            <div className="flex items-center gap-2 text-[#FF6A00] font-heading font-extrabold text-xs uppercase tracking-wider">
-              <User className="w-4 h-4" />
-              <span>CLIENTE</span>
-            </div>
-            <div className="text-xs space-y-1 text-gray-700 font-sans">
-              <div className="flex">
-                <span className="font-bold text-gray-900 w-20 shrink-0">Nombre:</span>
-                <span className="text-gray-800 font-medium truncate">{clienteNombre}</span>
-              </div>
-              <div className="flex">
-                <span className="font-bold text-gray-900 w-20 shrink-0">Contacto:</span>
-                <span className="text-gray-800 truncate">{clienteContacto}</span>
-              </div>
-              <div className="flex">
-                <span className="font-bold text-gray-900 w-20 shrink-0">Email:</span>
-                <span className="text-gray-800 truncate">{clienteEmail}</span>
-              </div>
-              <div className="flex">
-                <span className="font-bold text-gray-900 w-20 shrink-0">Teléfono:</span>
-                <span className="text-gray-800 font-mono">{clienteTelefono}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Tarjeta PROYECTO */}
-          <div className="bg-[#FBFBFA] border border-gray-200/80 rounded-xl p-4 sm:p-5 space-y-2">
-            <div className="flex items-center gap-2 text-[#FF6A00] font-heading font-extrabold text-xs uppercase tracking-wider">
-              <Briefcase className="w-4 h-4" />
-              <span>PROYECTO</span>
-            </div>
-            <div className="text-xs space-y-1 text-gray-700 font-sans">
-              <div className="flex">
-                <span className="font-bold text-gray-900 w-36 shrink-0">Nombre del proyecto:</span>
-                <span className="text-gray-800 font-bold truncate">{cotizacion.titulo_proyecto}</span>
-              </div>
-              <div className="flex">
-                <span className="font-bold text-gray-900 w-36 shrink-0">Ubicación:</span>
-                <span className="text-gray-800 truncate">{cotizacion.comuna_region || 'Por definir'}</span>
-              </div>
-              <div className="flex">
-                <span className="font-bold text-gray-900 w-36 shrink-0">Descripción:</span>
-                <span className="text-gray-800 line-clamp-2">
-                  {cotizacion.resumen_ejecutivo || `Ejecución de faena (${cotizacion.metros_cuadrados || 15} m²)`}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Texto introductorio */}
-        <p className="text-xs text-gray-600 mt-6 mb-3">
-          A continuación, presentamos nuestra cotización según los requerimientos del proyecto.
-        </p>
-
-        {/* Tabla Principal de Partidas e Ítems */}
-        <div className="w-full overflow-x-auto rounded-xl border border-gray-200 shadow-2xs">
-          <table className="w-full text-left border-collapse text-xs min-w-[620px]">
-            <thead>
-              <tr className="bg-[#1E1E1E] text-white font-heading font-bold text-[11px] uppercase tracking-wider">
-                <th className="py-3 px-3 text-center w-16">ÍTEM</th>
-                <th className="py-3 px-4">DESCRIPCIÓN</th>
-                <th className="py-3 px-3 text-center w-20">UNIDAD</th>
-                <th className="py-3 px-3 text-center w-20">CANT.</th>
-                <th className="py-3 px-4 text-right w-32">PRECIO UNIT.</th>
-                <th className="py-3 px-4 text-right w-36">TOTAL</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200/80 font-sans text-xs">
-              {partidasItems.map((item, idx) => (
-                <tr
-                  key={idx}
-                  className={idx % 2 === 0 ? 'bg-white hover:bg-gray-50/50' : 'bg-[#FAFAFA] hover:bg-gray-50/50'}
-                >
-                  <td className="py-3 px-3 text-center font-mono font-bold text-[#FF6A00]">
-                    {String(idx + 1).padStart(2, '0')}
-                  </td>
-                  <td className="py-3 px-4">
-                    <div className="font-bold text-gray-900">{item.nombre}</div>
-                    {item.descripcion && (
-                      <div className="text-[10px] text-gray-500 mt-0.5">{item.descripcion}</div>
-                    )}
-                  </td>
-                  <td className="py-3 px-3 text-center font-mono text-gray-600 font-medium">
-                    {item.unidad}
-                  </td>
-                  <td className="py-3 px-3 text-center font-mono font-bold text-gray-800">
-                    {typeof item.cantidad === 'number'
-                      ? item.cantidad.toLocaleString('es-CL')
-                      : item.cantidad}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono text-gray-700">
-                    $ {Math.round(item.precioUnit).toLocaleString('es-CL')}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-gray-900">
-                    $ {Math.round(item.total).toLocaleString('es-CL')}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+          <p className="quote-intro">A continuación, presentamos nuestra cotización según los requerimientos del proyecto.</p>
+          <table className="quote-table" aria-label="Detalle de materiales y partidas">
+            <colgroup><col style={{ width: '6.5%' }} /><col style={{ width: '42.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '8%' }} /><col style={{ width: '17%' }} /><col style={{ width: '18.5%' }} /></colgroup>
+            <thead><tr>{['ÍTEM', 'DESCRIPCIÓN', 'UNIDAD', 'CANT.', 'PRECIO UNIT.', 'TOTAL'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+            <tbody>{document.items.map((item, index) => <tr key={index}><td>{String(index + 1).padStart(2, '0')}</td><td><strong>{item.nombre}</strong>{item.descripcion && <small>{item.descripcion}</small>}</td><td>{item.unidad}</td><td>{item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })}</td><td>{quoteMoney(item.precioUnit)}</td><td><strong>{quoteMoney(item.total)}</strong></td></tr>)}</tbody>
           </table>
-        </div>
-
-        {/* Sección Inferior: Observaciones & Condiciones (Izq) | Liquidación & Firma (Der) */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-6 items-start">
-          {/* Columna Izquierda (6 columnas): Observaciones y Condiciones de Pago */}
-          <div className="md:col-span-6 space-y-5">
-            {/* Observaciones */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5 text-[#FF6A00] font-heading font-extrabold text-xs uppercase tracking-wide">
-                <FileText className="w-4 h-4" />
-                <span>OBSERVACIONES</span>
-              </div>
-              <ul className="text-[11px] text-gray-600 space-y-1 pl-5 list-disc font-sans leading-relaxed">
-                <li>Valores netos en CLP; IVA desglosado al final. Precios estimados sujetos a confirmación de disponibilidad y despacho.</li>
-                <li>
-                  Los plazos de ejecución serán definidos según el cronograma de obra (estimado en{' '}
-                  <strong>{cotizacion.duracion_dias_estimada || 3} días hábiles</strong>).
-                </li>
-              </ul>
-            </div>
-
-            {/* Condiciones de Pago */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5 text-[#FF6A00] font-heading font-extrabold text-xs uppercase tracking-wide">
-                <DollarSign className="w-4 h-4" />
-                <span>CONDICIONES DE PAGO</span>
-              </div>
-              <p className="text-[11px] text-gray-700 font-sans">
-                {cotizacion.condiciones_pago || 'Por acordar con el cliente.'}
-              </p>
-              <p className="text-[10px] text-gray-500 font-mono">
-                Transferencia bancaria o estado de pago según contrato.
-              </p>
-            </div>
+          <div className="quote-closing">
+            <div><section className="quote-notes"><h2 className="quote-section-title"><FileText />OBSERVACIONES</h2><ul>{document.observaciones.map((note) => <li key={note}>{note}</li>)}</ul></section><section><h2 className="quote-section-title"><DollarSign />CONDICIONES DE PAGO</h2><p className="quote-payment">{document.condiciones}</p></section></div>
+            <div><div className="quote-totals"><div><span>SUBTOTAL</span><strong>{quoteMoney(document.subtotal)}</strong></div><div><span>IVA (19%)</span><strong>{quoteMoney(document.iva)}</strong></div><div className="quote-total"><span>TOTAL</span><strong>{quoteMoney(document.total)}</strong></div></div><div className="quote-signature"><div>Firma y sello<strong>ObraTrack</strong></div></div></div>
           </div>
-
-          {/* Columna Derecha (6 columnas): Cuadro de Totales y Firma */}
-          <div className="md:col-span-6 space-y-6">
-            {/* Tabla de Subtotal, IVA y Banner Naranja de Total */}
-            <div className="border border-gray-200 rounded-xl overflow-hidden shadow-2xs">
-              <div className="flex justify-between items-center py-2.5 px-4 bg-white border-b border-gray-100 text-xs font-mono">
-                <span className="font-heading font-bold text-gray-700 uppercase">SUBTOTAL</span>
-                <span className="font-bold text-gray-900">$ {subtotalNeto.toLocaleString('es-CL')}</span>
-              </div>
-              <div className="flex justify-between items-center py-2.5 px-4 bg-white border-b border-gray-100 text-xs font-mono">
-                <span className="font-heading font-bold text-gray-700 uppercase">IVA (19%)</span>
-                <span className="font-bold text-gray-900">$ {iva.toLocaleString('es-CL')}</span>
-              </div>
-              {/* Banner Total Oficial Naranja */}
-              <div className="flex justify-between items-center py-3.5 px-5 bg-[#FF6A00] text-white font-heading font-black">
-                <span className="text-sm tracking-wider uppercase">TOTAL</span>
-                <span className="text-lg sm:text-xl font-mono tracking-tight">
-                  $ {totalConIva.toLocaleString('es-CL')}
-                </span>
-              </div>
-            </div>
-
-            {/* Firma y Sello ObraTrack */}
-            <div className="pt-2 text-center">
-              <div className="w-56 mx-auto border-t border-gray-300 pt-2 space-y-0.5">
-                <p className="text-[11px] text-gray-600 font-sans">Firma y Sello</p>
-                <p className="font-heading font-extrabold text-xs text-[#FF6A00] tracking-wide">
-                  ObraTrack
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer Membretado Oficial */}
-        <div className="border-t-2 border-[#FF6A00] pt-4 mt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-[10px] text-gray-500 font-sans relative">
-          <div className="flex items-center gap-2 text-left">
-            <div className="w-6 h-6 rounded-full bg-orange-50 border border-[#FF6A00]/30 flex items-center justify-center text-[#FF6A00] shrink-0">
-              <MapPin className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <strong className="text-gray-800 block">{emisor?.empresa_nombre || 'Emitido con ObraTrack'}</strong>
-              <span>{emisor?.nombre || 'Presupuesto de obra'}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-4 gap-y-1 font-mono text-[10px]">
-            <span className="flex items-center gap-1 text-gray-700">
-              <Phone className="w-3 h-3 text-[#FF6A00]" /> {emisor?.telefono_whatsapp || ''}
-            </span>
-            <span className="flex items-center gap-1 text-gray-700">
-              <Mail className="w-3 h-3 text-[#FF6A00]" /> {emisor?.email || ''}
-            </span>
-            <span className="flex items-center gap-1 text-gray-700">
-              <Globe className="w-3 h-3 text-[#FF6A00]" /> ObraTrack
-            </span>
-          </div>
-        </div>
+          <footer className="quote-footer"><div><strong>{document.emisor.empresa}</strong><p>{document.emisor.nombre}</p></div><div>{document.emisor.email && <p>{document.emisor.email}</p>}{document.emisor.telefono && <p>{document.emisor.telefono}</p>}</div></footer>
+        </article>
+        }
       </div>
-    </div>, document.body
+    </div>, window.document.body,
   );
 }

@@ -396,6 +396,10 @@ export interface CotizacionEstimacion {
   cliente_id?: string;
   cliente_nombre?: string;
   cliente_telefono?: string;
+  cliente_email?: string;
+  cliente_contacto?: string;
+  fecha_validez?: string;
+  observaciones?: string;
   condiciones_pago?: string;
   id: string;
   titulo_proyecto: string;

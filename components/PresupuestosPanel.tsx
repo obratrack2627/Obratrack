@@ -38,6 +38,7 @@ export default function PresupuestosPanel({
   const [filter, setFilter] = useState("todos"),
     [search, setSearch] = useState(""),
     [selected, setSelected] = useState<Presupuesto | null>(null);
+  const [editSelected, setEditSelected] = useState(false);
   const [projects, setProjects] = useState<{ id: string; nombre: string }[]>(
     [],
   );
@@ -312,10 +313,11 @@ export default function PresupuestosPanel({
                         <button
                           type="button"
                           className="text-obra-orange font-semibold whitespace-nowrap hover:underline"
-                          onClick={() => setSelected(row)}
+                          onClick={() => { setEditSelected(false); setSelected(row); }}
                         >
                           Ver / PDF
                         </button>
+                        <button type="button" className="text-sm font-semibold hover:underline" onClick={() => { setEditSelected(true); setSelected(row); }}>Editar</button>
                         {canConvert && (
                           <button
                             type="button"
@@ -341,8 +343,8 @@ export default function PresupuestosPanel({
         isOpen={!!selected}
         onClose={() => setSelected(null)}
         cotizacion={selected?.cotizacion || null}
-        clienteNombre={selected?.cotizacion.cliente_nombre}
-        clienteTelefono={selected?.cotizacion.cliente_telefono}
+        startEditing={editSelected}
+        onSaved={(row) => { setSelected(row); setEditSelected(false); setRows((prev) => prev.map((r) => r.id === row.id ? row : r)); }}
       />
     </section>
   );
