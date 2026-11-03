@@ -171,6 +171,110 @@ async function executeResendConfirmationRequest(
   return { ok: false, message: res.error || 'No se pudo reenviar el correo.' };
 }
 
+function MinimalBrandPanel() {
+  return (
+    <>
+      {/* Barra superior compacta en móvil */}
+      <header className="lg:hidden bg-[#141920] border-b border-[#222A36] shrink-0">
+        <div className="h-[2px] w-full bg-[#FF6A00]" />
+        <div className="px-5 py-3.5 pr-16 flex items-center">
+          <Logo variant="horizontal" theme="dark" size="sm" />
+        </div>
+      </header>
+
+      {/* Panel Izquierdo Minimalista (Desktop) */}
+      <aside className="hidden lg:flex lg:col-span-5 bg-[#141920] text-white border-r border-[#222A36] flex-col justify-between relative overflow-hidden select-none">
+        <div className="h-[3px] w-full bg-[#FF6A00] shrink-0" />
+
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 pointer-events-none opacity-[0.03]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, #FFFFFF 1px, transparent 1px), linear-gradient(to bottom, #FFFFFF 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+          }}
+        />
+
+        <div className="relative z-10 flex-1 flex flex-col justify-between p-10 xl:p-12">
+          <div>
+            <Logo variant="horizontal" theme="dark" size="md" />
+          </div>
+
+          <div className="my-auto py-8 max-w-[420px]">
+            <h2 className="font-heading text-[28px] xl:text-[32px] font-semibold leading-[1.18] tracking-tight text-white">
+              Tus obras bajo control,
+              <br />
+              <span className="text-[#94A3B8]">de principio a fin.</span>
+            </h2>
+
+            {/* Vista visual minimalista de Carta Gantt y Estado de Obra */}
+            <div className="mt-9 rounded-2xl bg-[#1A212B] border border-[#283241] p-5 shadow-[0_16px_36px_-12px_rgba(0,0,0,0.45)]">
+              <div className="flex items-center justify-between gap-3 pb-4 border-b border-[#252F3E]">
+                <span className="text-[13px] font-medium text-white truncate">
+                  Remodelación Los Leones
+                </span>
+                <span className="font-mono text-[11px] font-semibold text-[#FF8533] bg-[#FF6A00]/12 border border-[#FF6A00]/25 px-2 py-0.5 rounded-md">
+                  68% avance
+                </span>
+              </div>
+
+              <div className="py-4 space-y-3.5">
+                <div>
+                  <div className="flex items-center justify-between text-[11px] mb-1.5">
+                    <span className="text-[#CBD5E1]">Obra gruesa</span>
+                    <span className="font-mono text-[#86EFAC]">100%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-[#131820] relative overflow-hidden">
+                    <div className="absolute inset-y-0 left-0 w-[48%] rounded-full bg-[#6B8F72]" />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-[11px] mb-1.5">
+                    <span className="text-[#CBD5E1]">Instalaciones</span>
+                    <span className="font-mono text-[#FF8533]">70%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-[#131820] relative overflow-hidden">
+                    <div className="absolute inset-y-0 left-[28%] w-[48%] rounded-full bg-[#2A3444] overflow-hidden">
+                      <div className="h-full w-[70%] rounded-full bg-[#FF6A00]" />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-[11px] mb-1.5">
+                    <span className="text-[#94A3B8]">Terminaciones</span>
+                    <span className="font-mono text-[#64748B]">20%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-[#131820] relative overflow-hidden">
+                    <div className="absolute inset-y-0 left-[62%] w-[38%] rounded-full bg-[#2A3444] overflow-hidden">
+                      <div className="h-full w-[20%] rounded-full bg-[#94A3B8]" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3.5 border-t border-[#252F3E] flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-[#8E9BAE]">Presupuesto</span>
+                  <span className="font-mono text-white font-medium ml-2">$42.850.000</span>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-[#86EFAC]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80]" />
+                  EDP-02 al día
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-xs text-[#5E6B7E]">© {new Date().getFullYear()} ObraTrack · Chile</div>
+        </div>
+      </aside>
+    </>
+  );
+}
+
 function PasswordToggleButton({
   visible,
   onToggle,
@@ -264,7 +368,10 @@ function SignInView(props: SignInViewProps) {
 
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <label htmlFor="login-password" className="text-[13px] font-medium text-[#3A3835] dark:text-gray-300">
+            <label
+              htmlFor="login-password"
+              className="text-[13px] font-medium text-[#3A3835] dark:text-gray-300"
+            >
               Contraseña
             </label>
             <button
@@ -385,7 +492,10 @@ function SignUpView(props: SignUpViewProps) {
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label htmlFor="signup-rut" className="text-[13px] font-medium text-[#3A3835] dark:text-gray-300">
+              <label
+                htmlFor="signup-rut"
+                className="text-[13px] font-medium text-[#3A3835] dark:text-gray-300"
+              >
                 RUT
               </label>
               {props.rut && !isRutValid && (
@@ -502,7 +612,7 @@ function SignUpView(props: SignUpViewProps) {
             <button
               type="button"
               onClick={() => props.onOpenLegalTab('terminos')}
-              className="text-[#1E1E1E] dark:text-gray-200 underline underline-offset-2 hover:text-[#FF6A00]"
+              className="text-gray-900 dark:text-gray-200 underline underline-offset-2 hover:text-[#FF6A00]"
             >
               Términos
             </button>{' '}
@@ -510,7 +620,7 @@ function SignUpView(props: SignUpViewProps) {
             <button
               type="button"
               onClick={() => props.onOpenLegalTab('privacidad')}
-              className="text-[#1E1E1E] dark:text-gray-200 underline underline-offset-2 hover:text-[#FF6A00]"
+              className="text-gray-900 dark:text-gray-200 underline underline-offset-2 hover:text-[#FF6A00]"
             >
               Política de Privacidad
             </button>
@@ -592,7 +702,7 @@ function ForgotPasswordView({
         <button
           type="button"
           onClick={onBack}
-          className="text-[13px] font-medium text-[#7D776E] hover:text-[#1E1E1E] dark:text-gray-400 dark:hover:text-white transition-colors"
+          className="text-[13px] font-medium text-[#7D776E] hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
         >
           Volver a iniciar sesión
         </button>
@@ -620,7 +730,7 @@ function ConfirmEmailView({
         </h1>
         <p className="text-[13px] text-[#7D776E] dark:text-gray-400 mt-1.5 leading-relaxed">
           Enviamos un enlace de activación a{' '}
-          <span className="font-medium text-[#1E1E1E] dark:text-gray-200 break-all">
+          <span className="font-medium text-gray-900 dark:text-gray-200 break-all">
             {signupEmail || 'tu correo'}
           </span>
           .
@@ -636,7 +746,7 @@ function ConfirmEmailView({
           type="button"
           onClick={onResend}
           disabled={isResending}
-          className="h-10 w-full text-xs font-medium text-[#7D776E] hover:text-[#1E1E1E] dark:text-gray-400 dark:hover:text-white transition-colors disabled:opacity-50"
+          className="h-10 w-full text-xs font-medium text-[#7D776E] hover:text-gray-900 dark:text-gray-400 dark:hover:text-white disabled:opacity-50"
         >
           {isResending ? 'Reenviando...' : 'Reenviar correo de activación'}
         </button>
@@ -782,17 +892,13 @@ function LoginForm() {
     else setErrorMsg(outcome.message);
   };
 
-  const cardWidthClass = mode === 'signup' ? 'max-w-[440px]' : 'max-w-[392px]';
+  const cardWidthClass = mode === 'signup' ? 'max-w-[440px]' : 'max-w-[396px]';
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-[#FAF8F5] dark:bg-[#0B0E14]">
-      <div className="h-[2px] w-full bg-[#FF6A00] shrink-0" />
+    <div className="min-h-screen w-full flex flex-col lg:grid lg:grid-cols-12 bg-[#FAF8F5] dark:bg-[#0B0E14]">
+      <MinimalBrandPanel />
 
-      <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-10">
-        <div className="mb-8">
-          <Logo variant="horizontal" size="md" />
-        </div>
-
+      <section className="flex-1 lg:col-span-7 flex flex-col items-center justify-center px-5 sm:px-10 py-10">
         <div
           className={`w-full ${cardWidthClass} bg-white dark:bg-[#141A23] border border-[#E7E2D8] dark:border-[#232C3B] rounded-2xl p-7 sm:p-8 shadow-[0_2px_20px_-6px_rgba(20,25,32,0.06)] dark:shadow-[0_12px_32px_-10px_rgba(0,0,0,0.5)] transition-all duration-200`}
         >
@@ -870,7 +976,7 @@ function LoginForm() {
           <button
             type="button"
             onClick={() => openLegalTab('terminos')}
-            className="hover:text-[#1E1E1E] dark:hover:text-gray-300 transition-colors"
+            className="hover:text-gray-900 dark:hover:text-gray-300"
           >
             Términos
           </button>
@@ -878,7 +984,7 @@ function LoginForm() {
           <button
             type="button"
             onClick={() => openLegalTab('privacidad')}
-            className="hover:text-[#1E1E1E] dark:hover:text-gray-300 transition-colors"
+            className="hover:text-gray-900 dark:hover:text-gray-300"
           >
             Privacidad
           </button>
@@ -886,12 +992,12 @@ function LoginForm() {
           <button
             type="button"
             onClick={() => openLegalTab('ciberseguridad')}
-            className="hover:text-[#1E1E1E] dark:hover:text-gray-300 transition-colors"
+            className="hover:text-gray-900 dark:hover:text-gray-300"
           >
             Seguridad
           </button>
         </footer>
-      </div>
+      </section>
 
       <LegalTermsModal
         isOpen={isLegalModalOpen}
