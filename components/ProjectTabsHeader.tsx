@@ -101,7 +101,7 @@ export default function ProjectTabsHeader({
     },
     {
       id: 'ia',
-      label: 'Copiloto IA',
+      label: 'ObraBot',
       href: `/proyectos/${proyecto.id}/ia`,
       icon: Sparkles,
       highlight: true,

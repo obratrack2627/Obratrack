@@ -1,4 +1,5 @@
 'use client';
+import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
@@ -619,7 +620,7 @@ export default function ProyectoCambiosPage() {
 
       {/* Modal Crear Solicitud de Cambio / Reclamo / Incidente */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white dark:bg-[#141A23] rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-kraft-200 dark:border-[#263040] my-auto max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-kraft-100 dark:border-[#263040]">
               <h3 className="text-base sm:text-lg font-heading font-bold text-navy-900 dark:text-white">
@@ -858,12 +859,12 @@ export default function ProyectoCambiosPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* Visor de Foto */}
       {previewPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="relative max-w-2xl w-full bg-white dark:bg-[#141A23] rounded-2xl p-4">
             <button
               onClick={() => setPreviewPhoto(null)}
@@ -877,7 +878,7 @@ export default function ProyectoCambiosPage() {
               className="w-full max-h-[75vh] object-contain rounded-xl"
             />
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       <GoogleMapsProjectViewer

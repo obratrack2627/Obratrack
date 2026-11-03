@@ -10,7 +10,7 @@ interface NavbarProps {
 
 export default function Navbar({ title, subtitle, action }: NavbarProps) {
   return (
-    <header className="bg-[#FAF8F5] dark:bg-[#141A23] border-b border-[#E5DFC9] dark:border-[#263040] px-4 sm:px-6 md:pr-16 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sticky top-0 z-30 shadow-sm backdrop-blur-md bg-opacity-95 dark:bg-opacity-95 transition-colors duration-200 print:hidden">
+    <header className="bg-[#FAF8F5] dark:bg-[#141A23] border-b border-[#E5DFC9] dark:border-[#263040] px-4 sm:px-6 md:pr-16 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sticky top-16 md:top-0 z-30 shadow-sm backdrop-blur-md bg-opacity-95 dark:bg-opacity-95 transition-colors duration-200 print:hidden">
       <div className="min-w-0 flex-1">
         <h1 className="text-lg sm:text-2xl font-black text-[#1E1E1E] dark:text-white tracking-tight font-heading flex items-center gap-2 truncate">
           {title}

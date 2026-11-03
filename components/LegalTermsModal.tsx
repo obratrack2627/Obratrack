@@ -1,4 +1,5 @@
 ﻿'use client';
+import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState } from 'react';
 import {
@@ -31,7 +32,7 @@ export default function LegalTermsModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <ModalOverlay onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-2xl my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95">
         
         {/* Header */}
@@ -241,6 +242,6 @@ export default function LegalTermsModal({
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   Sparkles,
   Bot,
@@ -56,7 +55,7 @@ const INITIAL_CHAT_MESSAGE: MensajeChatCotizador = {
   id: 'm-init',
   remitente: 'agente',
   texto:
-    'Hola. Puedo preparar presupuestos y ayudarte a gestionar obras, materiales, pagos y cuadrillas. ¿Qué necesitas?',
+    'Hola, soy ObraBot. Puedo preparar presupuestos y ayudarte a gestionar obras, materiales, pagos y cuadrillas. ¿Qué necesitas?',
   timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
   sugerencias: [
     'Quiero cotizar un trabajo',
@@ -66,7 +65,6 @@ const INITIAL_CHAT_MESSAGE: MensajeChatCotizador = {
 };
 
 export default function CopilotoObreroPage() {
-  const router = useRouter();
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Estados de datos
@@ -97,11 +95,6 @@ export default function CopilotoObreroPage() {
   };
 
   useEffect(() => {
-    const user = dataService.getActiveUser();
-    if (user?.rol === 'terreno') {
-      router.replace('/proyectos');
-      return;
-    }
     reloadData();
     const savedPlan = dataService.getActivePlan();
     if (savedPlan) setActivePlan(savedPlan);
@@ -124,10 +117,11 @@ export default function CopilotoObreroPage() {
       window.removeEventListener('obratrack_plan_changed', planHandler);
       window.removeEventListener('obratrack_cloud_synced', syncHandler);
     };
-  }, [router]);
+  }, []);
 
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const feed = chatBottomRef.current?.parentElement;
+    if (feed) feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
   }, [mensajesChat, isChatLoading]);
 
   const showToast = (msg: string) => {
@@ -230,7 +224,7 @@ export default function CopilotoObreroPage() {
 
       {/* Navbar Superior */}
       <Navbar
-        title="Copiloto Obrero IA"
+        title="ObraBot"
         subtitle="Cotizaciones y acciones para gestionar tus obras."
         action={
           <div className="flex items-center gap-2">
@@ -248,7 +242,7 @@ export default function CopilotoObreroPage() {
       <div className="p-4 md:p-6 max-w-7xl w-full mx-auto">
         <PlanLockOverlay
           isLocked={!['pro','pro_ia'].includes(activePlan)}
-          featureName="Copiloto Obrero IA"
+          featureName="ObraBot"
           requiredPlan="pro"
           description="Cotiza trabajos, consulta materiales y organiza tu obra desde el chat."
         >
@@ -257,7 +251,7 @@ export default function CopilotoObreroPage() {
             {/* ========================================================================= */}
             {/* COLUMNA PRINCIPAL: CHAT CONVERSACIONAL CON GEMINI (8 cols) */}
             {/* ========================================================================= */}
-            <div className="lg:col-span-8 bg-white border border-kraft-200 rounded-3xl shadow-sm overflow-hidden flex flex-col h-[calc(100vh-12rem)] min-h-[580px]">
+            <div className="lg:col-span-8 bg-white border border-kraft-200 rounded-3xl shadow-sm overflow-hidden flex flex-col h-[calc(100dvh-14rem)] min-h-[340px] sm:min-h-[480px]">
 
               {/* Header del Chat con Botón de Nueva Conversación */}
               <div className="bg-navy-900 text-white px-5 py-4 border-b border-navy-700 flex items-center justify-between">
@@ -267,7 +261,7 @@ export default function CopilotoObreroPage() {
                   </div>
                   <div>
                     <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
-                      <span>Copiloto de obra</span>
+                      <span>ObraBot</span>
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold border border-emerald-500/30 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                         Gemini IA
@@ -298,7 +292,7 @@ export default function CopilotoObreroPage() {
                 </select>
               </div>
               {/* Feed de Conversación */}
-              <div className="flex-1 p-5 overflow-y-auto space-y-4 bg-kraft-50/40 dark:bg-[#0B0E14] text-xs">
+              <div className="flex-1 min-h-0 p-4 sm:p-5 overflow-y-auto space-y-4 bg-kraft-50/40 dark:bg-[#0B0E14] text-xs">
                 {(mensajesChat.some(m=>(m.obra_contexto_id||'')===obraSeleccionada)?mensajesChat.filter(m=>(m.obra_contexto_id||'')===obraSeleccionada):[INITIAL_CHAT_MESSAGE]).map((m) => (
                   <div
                     key={m.id}
@@ -317,7 +311,7 @@ export default function CopilotoObreroPage() {
                         ) : (
                           <Bot className="w-3.5 h-3.5 text-obra-orange" />
                         )}
-                        <span>{m.remitente === 'usuario' ? 'Tú (Jefe de Obra)' : 'Copiloto Obrero'}</span>
+                        <span>{m.remitente === 'usuario' ? 'Tú' : 'ObraBot'}</span>
                         <span className="ml-auto font-mono text-[9px]">{m.timestamp}</span>
                       </div>
 
@@ -403,7 +397,7 @@ export default function CopilotoObreroPage() {
               </div>
 
               {/* Barra de Entrada del Chat */}
-              <div className="p-3 bg-white border-t border-kraft-200 flex items-center gap-2">
+              <div className="shrink-0 p-3 bg-white border-t border-kraft-200 flex items-center gap-2">
                 <textarea
                   rows={2}
                   value={inputChat}

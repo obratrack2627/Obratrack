@@ -1,4 +1,5 @@
 "use client";
+import ModalOverlay from '@/components/ModalOverlay';
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -471,7 +472,7 @@ export default function WhatsAppJefePanel() {
         </section>
       )}
       {photo && (
-        <div
+        <ModalOverlay
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
           role="dialog"
           aria-label="Evidencia fotográfica"
@@ -488,7 +489,7 @@ export default function WhatsAppJefePanel() {
             alt="Evidencia fotográfica ampliada"
             className="max-h-[85vh] max-w-full rounded-xl object-contain"
           />
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

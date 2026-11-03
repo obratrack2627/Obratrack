@@ -1,4 +1,5 @@
 'use client';
+import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState } from 'react';
 import {
@@ -112,7 +113,7 @@ export default function ChangePasswordModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+    <ModalOverlay onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-3xl w-full max-w-md p-6 shadow-2xl relative animate-in zoom-in-95">
         
         {/* Header */}
@@ -258,6 +259,6 @@ export default function ChangePasswordModal({
           <span>Cifrado y validación directa en Supabase Auth</span>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

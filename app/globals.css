@@ -85,17 +85,66 @@
 
 /* Transiciones de Página y Micro-animaciones Suaves */
 .page-fade-enter {
-  animation: pageFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: pageFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes pageFadeIn {
   0% {
     opacity: 0;
-    transform: translateY(6px);
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
+  }
+}
+
+.obrabot-launcher {
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  right: max(1rem, env(safe-area-inset-right));
+  min-height: 44px;
+}
+
+html[data-modal-open] .obrabot-launcher,
+html[data-mobile-nav-open] .obrabot-launcher {
+  display: none;
+}
+
+@media print {
+  html[data-modal-open] body {
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    width: auto !important;
+    overflow: visible !important;
+    padding-right: 0 !important;
+  }
+}
+
+@media screen {
+  .app-modal-overlay {
+    z-index: 80 !important;
+    top: var(--modal-viewport-top, 0px);
+    bottom: auto;
+    height: var(--modal-viewport-height, 100dvh);
+    max-width: 100vw;
+    overscroll-behavior: contain;
+    outline: none;
+  }
+
+  .app-modal-overlay[data-modal-layout='dialog'] {
+    overflow-y: auto;
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .app-modal-overlay[data-modal-layout='dialog'] > div:first-of-type {
+    max-height: calc(var(--modal-viewport-height, 100dvh) - max(0.75rem, env(safe-area-inset-top)) - max(0.75rem, env(safe-area-inset-bottom)));
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .page-fade-enter { animation: none; }
   }
 }
 

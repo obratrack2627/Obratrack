@@ -147,9 +147,8 @@ export default function ProyectoIAPage() {
   }, [projectId]);
 
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    const feed = messagesEndRef.current?.parentElement;
+    if (feed) feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
   }, [mensajes]);
 
   const showToast = (msg: string) => {
@@ -325,7 +324,7 @@ export default function ProyectoIAPage() {
   if (!proyecto) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center min-h-screen text-gray-500 font-sans">
-        <p>Cargando Copiloto de la Obra...</p>
+        <p>Cargando ObraBot...</p>
         <Link href="/proyectos" className="mt-4 text-xs font-bold text-[#FF6A00] hover:underline">
           &larr; Volver a Proyectos
         </Link>
@@ -439,7 +438,7 @@ export default function ProyectoIAPage() {
           </div>
         ) : (
           /* Área de Conversación Persistente del Proyecto */
-          <div className="flex-1 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-3xl shadow-sm flex flex-col overflow-hidden min-h-[500px]">
+          <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-3xl shadow-sm flex flex-col overflow-hidden h-[calc(100dvh-14rem)] min-h-[340px] sm:min-h-[480px]">
             {/* Cabecera del Agente */}
             <div className="px-6 py-3.5 bg-gradient-to-r from-[#141A23] to-[#1E2638] text-white flex items-center justify-between border-b border-[#263040]">
               <div className="flex items-center gap-3">
@@ -448,13 +447,13 @@ export default function ProyectoIAPage() {
                 </div>
                 <div>
                   <h4 className="font-heading font-bold text-xs tracking-wide flex items-center gap-2">
-                    <span>Agente Especialista: {proyecto.nombre}</span>
+                    <span>ObraBot · {proyecto.nombre}</span>
                     <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px] font-mono font-bold">
                       EN VIVO
                     </span>
                   </h4>
                   <p className="text-[10px] text-gray-400 font-sans">
-                    Historial persistente y memoria de faena sincronizada en Supabase
+                    Consulta y gestiona esta obra
                   </p>
                 </div>
               </div>
@@ -476,7 +475,7 @@ export default function ProyectoIAPage() {
             </div>
 
             {/* Mensajes */}
-            <div className="flex-1 p-6 overflow-y-auto space-y-4 text-xs font-sans">
+            <div className="flex-1 min-h-0 p-4 sm:p-6 overflow-y-auto space-y-4 text-xs font-sans">
               {mensajes.map((m) => (
                 <div
                   key={m.id}
@@ -606,7 +605,7 @@ export default function ProyectoIAPage() {
                   onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void handleEnviarMensaje();}}}
                   placeholder="Pregunta o pide una acción para esta obra"
                   disabled={cargando}
-                  className="flex-1 px-4 py-2.5 bg-white dark:bg-[#1A2230] border border-gray-200 dark:border-[#263040] rounded-2xl text-xs text-navy-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-[#FF6A00] shadow-sm"
+                  className="flex-1 min-w-0 px-4 py-2.5 bg-white dark:bg-[#1A2230] border border-gray-200 dark:border-[#263040] rounded-2xl text-xs text-navy-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-[#FF6A00] shadow-sm"
                 />
 
                 <button

@@ -284,6 +284,103 @@ async function send(page: Page, text: string) {
   await page.getByRole("button", { name: "Enviar", exact: true }).click();
 }
 
+test('las ventanas móviles aparecen dentro de la pantalla y conservan el desplazamiento al cerrar', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const db = await setup(page, { respuesta: 'Consulta', accion: null }, true);
+  db.proyectos = Array.from({ length: 12 }, (_, i) => ({ ...db.proyectos[0], id: 'mobile-' + i, nombre: 'Obra ' + i }));
+  await page.goto('/proyectos');
+  await expect(page.getByRole('button', { name: /Nuevo Proyecto/ })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 950));
+  const before = await page.evaluate(() => window.scrollY);
+  expect(before).toBeGreaterThan(500);
+  await page.getByRole('button', { name: /Nuevo Proyecto/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Registrar Nuevo Proyecto', exact: true });
+  await expect(dialog).toBeVisible();
+  await page.screenshot({ path: '/tmp/obratrack-mobile-project-modal-open.png' });
+  await expect(page.getByRole('link', { name: 'Abrir ObraBot' })).toBeHidden();
+  const card = dialog.locator(':scope > div').first();
+  for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 640 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    await expect.poll(async () => {
+      const bounds = await card.boundingBox();
+      return !!bounds && bounds.y >= 0 && bounds.y + bounds.height <= viewport.height + 1 && bounds.x >= 0 && bounds.x + bounds.width <= viewport.width + 1;
+    }).toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  // Emular la altura visible al abrir el teclado en navegadores que mantienen el layout viewport.
+  await page.evaluate(() => {
+    Object.defineProperty(window.visualViewport, 'height', { configurable: true, value: 410 });
+    window.visualViewport!.dispatchEvent(new Event('resize'));
+  });
+  await expect.poll(async () => { const box = await card.boundingBox(); return box!.y + box!.height; }).toBeLessThanOrEqual(411);
+  await dialog.getByRole('button', { name: 'Crear Proyecto', exact: true }).scrollIntoViewIfNeeded();
+  await expect(dialog.getByRole('button', { name: 'Crear Proyecto', exact: true })).toBeInViewport();
+  await page.evaluate(() => { delete (window.visualViewport as any).height; window.visualViewport!.dispatchEvent(new Event('resize')); });
+  await page.screenshot({ path: '/tmp/obratrack-mobile-project-modal.png' });
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(before);
+  await expect(page.getByRole('link', { name: 'Abrir ObraBot' })).toBeVisible();
+});
+
+test('clientes, equipo, finanzas y suscripción usan ventanas accesibles en un celular pequeño', async ({ page }) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 360, height: 640 });
+  await setup(page, { respuesta: 'Consulta', accion: null }, true);
+  for (const [path, button] of [['/clientes', /Nuevo Cliente/], ['/equipo', /Agregar Trabajador/], ['/proyectos/p-existing/finanzas', /Registrar Pago/]]) {
+    await page.goto(path as string);
+    await page.getByRole('button', { name: button as RegExp }).first().click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    const bounds = await dialog.locator(':scope > div').first().boundingBox();
+    expect(bounds!.y).toBeGreaterThanOrEqual(0);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(641);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    expect(await page.evaluate(() => document.body.style.position)).not.toBe('fixed');
+  }
+  await page.getByRole('button', { name: 'Plan Pro IA', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Tu suscripción' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('ObraBot abre el asistente correcto y su nuevo nombre aparece en la navegación móvil', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setup(page, { respuesta: 'Tienes una obra activa.', accion: null }, true);
+  await page.goto('/proyectos');
+  const launcher = page.getByRole('link', { name: 'Abrir ObraBot' });
+  await expect(launcher).toHaveAttribute('href', '/cotizador');
+  await page.getByRole('button', { name: 'Abrir menú' }).click();
+  await expect(launcher).toBeHidden();
+  await expect(page.getByRole('link', { name: /^ObraBot/ })).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir menú' }).click();
+  await launcher.click();
+  await expect(page).toHaveURL(/\/cotizador$/);
+  await expect(page.getByRole('heading', { name: 'ObraBot', exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Mensaje para el asistente' })).toBeVisible();
+  await expect(launcher).toHaveCount(0);
+  await send(page, '¿Qué obras tengo?');
+  await expect(page.getByText('Tienes una obra activa.', { exact: true })).toBeVisible();
+  await page.goto('/proyectos/p-existing/finanzas');
+  await expect(launcher).toHaveAttribute('href', '/proyectos/p-existing/ia');
+  await page.screenshot({ path: '/tmp/obratrack-mobile-obrabot-launcher.png' });
+});
+
+test('el perfil de terreno puede abrir ObraBot conservando sus permisos de obra', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const db = await setup(page, { respuesta: 'Puedo ayudarte con los avances de tu obra asignada.', accion: null }, true);
+  db.usuarios[0] = { ...db.usuarios[0], rol: 'terreno' };
+  db.proyectos[0].trabajadores_ids = [ownerId];
+  await page.addInitScript(({ owner }) => localStorage.setItem('obratrack_active_user_v7', JSON.stringify({ ...owner, rol: 'terreno' })), { owner });
+  await page.goto('/cotizador');
+  await expect(page.getByRole('heading', { name: 'ObraBot', exact: true }).first()).toBeVisible();
+  await send(page, '¿Qué puedo reportar en mi obra?');
+  await expect(page.getByText('Puedo ayudarte con los avances de tu obra asignada.', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/cotizador$/);
+});
+
 test("cotización generada se muestra en PDF con los mismos costos, IVA y cliente", async ({
   page,
 }) => {
@@ -339,6 +436,7 @@ test("cotización generada se muestra en PDF con los mismos costos, IVA y client
   await dialog.getByRole("button", { name: "Imprimir", exact: true }).click();
   expect(await page.evaluate(() => (window as any).__printCount)).toBe(1);
   await page.emulateMedia({ media: "print" });
+  expect(await page.evaluate(() => getComputedStyle(document.body).position)).toBe('static');
   await expect(page.getByRole("navigation")).toBeHidden();
   await page.pdf({
     path: "/tmp/obratrack-chat-cotizacion.pdf",
@@ -346,6 +444,9 @@ test("cotización generada se muestra en PDF con los mismos costos, IVA y client
     printBackground: true,
   });
   await page.emulateMedia({ media: "screen" });
+  expect(await page.evaluate(() => document.body.style.position)).toBe('fixed');
+  await dialog.getByRole('button', { name: 'Cerrar cotización', exact: true }).click();
+  expect(await page.evaluate(() => document.body.style.position)).not.toBe('fixed');
 });
 
 test("obra con varias partidas y materiales se guarda sin perder elementos", async ({
@@ -458,7 +559,7 @@ test("reintentar un pago pendiente no duplica el ingreso", async ({ page }) => {
   expect(db.pagos[0].monto).toBe(400000);
 });
 
-test("no se renderiza el chat flotante de IA, el plan gratis queda bloqueado y el botón de tema es fijo", async ({
+test("ObraBot respeta el bloqueo del plan gratis y mantiene el botón de tema fijo", async ({
   page,
 }) => {
   const db = await setup(page, {});
@@ -479,8 +580,9 @@ test("no se renderiza el chat flotante de IA, el plan gratis queda bloqueado y e
   await expect(themeButtons).toHaveCount(1);
   await themeButtons.first().click();
   await expect(page.locator("html")).toHaveClass(/dark/);
-  await page.goto("/cotizador");
-  await expect(page.getByText(/Desbloquea Copiloto Obrero IA/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Abrir ObraBot' })).toBeVisible();
+  await page.getByRole('link', { name: 'Abrir ObraBot' }).click();
+  await expect(page.getByText(/Desbloquea ObraBot/)).toBeVisible();
   await expect(
     page.locator('button[aria-label="Cambiar tema"]:visible'),
   ).toHaveCount(1);

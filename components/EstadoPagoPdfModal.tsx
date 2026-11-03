@@ -1,7 +1,7 @@
 'use client';
+import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import {
   CheckCircle2,
   FileSpreadsheet,
@@ -122,8 +122,8 @@ export default function EstadoPagoPdfModal({
     onClose();
   };
 
-  return createPortal(
-    <div
+  return (
+    <ModalOverlay onClose={onClose}
       id="obratrack-edp-overlay"
       role="dialog"
       aria-modal="true"
@@ -503,7 +503,6 @@ export default function EstadoPagoPdfModal({
           </div>
         </div>
       </div>
-    </div>,
-    document.body
+    </ModalOverlay>
   );
 }

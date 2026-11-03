@@ -1,4 +1,5 @@
 'use client';
+import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
@@ -509,7 +510,7 @@ export default function ProyectoDocumentosPage() {
 
       {/* Modal Subir Documento o Registrar Correo */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white dark:bg-[#141A23] rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-kraft-200 dark:border-[#263040] my-auto max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-kraft-100 dark:border-[#263040]">
               <h3 className="text-base sm:text-lg font-heading font-bold text-navy-900 dark:text-white">
@@ -719,12 +720,12 @@ export default function ProyectoDocumentosPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* Modal Vista Previa de Documento o Correo */}
       {docPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
           <div className="bg-white dark:bg-[#141A23] rounded-2xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl border border-kraft-200 dark:border-[#263040] max-h-[90vh] overflow-y-auto space-y-4">
             <div className="flex items-center justify-between border-b border-kraft-100 dark:border-[#263040] pb-3">
               <div>
@@ -797,7 +798,7 @@ export default function ProyectoDocumentosPage() {
               </div>
             )}
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       <GoogleMapsProjectViewer

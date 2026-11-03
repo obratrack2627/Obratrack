@@ -1,4 +1,5 @@
 'use client';
+import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -523,7 +524,7 @@ export default function EquipoPage() {
 
       {/* Modal de Credenciales Creadas */}
       {createdCredentials && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="relative w-full max-w-md bg-white dark:bg-[#141A23] border border-emerald-500/40 rounded-3xl p-6 shadow-2xl animate-in zoom-in-95">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
@@ -576,12 +577,12 @@ export default function EquipoPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* Modal: + Agregar Trabajador */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-md my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl sm:rounded-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6 shadow-2xl animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white flex items-center gap-2">
@@ -712,12 +713,12 @@ export default function EquipoPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* Modal: Editar Trabajador */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-md my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl sm:rounded-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6 shadow-2xl animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
@@ -814,12 +815,12 @@ export default function EquipoPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* Modal: Confirmar Eliminar Trabajador */}
       {userToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-sm my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl animate-in zoom-in-95 text-center space-y-4">
             <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
@@ -851,7 +852,7 @@ export default function EquipoPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* Modal de Cambio y Recuperación de Contraseña */}

@@ -41,6 +41,11 @@ export default function Sidebar() {
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
 
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-mobile-nav-open', mobileOpen);
+    return () => document.documentElement.removeAttribute('data-mobile-nav-open');
+  }, [mobileOpen]);
+
   const loadSidebarData = () => {
     const user = dataService.getActiveUser();
     setActiveUser(user);
@@ -110,7 +115,7 @@ export default function Sidebar() {
           badge: pendingReportsCount > 0 ? pendingReportsCount : null,
         },
         {
-          label: 'Copiloto IA Faena',
+          label: 'ObraBot',
           href: '/cotizador',
           icon: Sparkles,
           highlight: true,
@@ -123,7 +128,7 @@ export default function Sidebar() {
           icon: LayoutDashboard,
         },
         {
-          label: 'Copiloto Obrero IA',
+          label: 'ObraBot',
           href: '/cotizador',
           icon: Sparkles,
           highlight: true,
@@ -197,7 +202,7 @@ export default function Sidebar() {
       {mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
-          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-35 transition-opacity animate-in fade-in duration-200"
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[35] transition-opacity animate-in fade-in duration-200"
           aria-hidden="true"
         />
       )}

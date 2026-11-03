@@ -1,4 +1,5 @@
 'use client';
+import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState } from 'react';
 import { Actividad, Usuario } from '@/types/database';
@@ -424,7 +425,7 @@ export default function GanttChart({
 
       {/* Modal de Edición Completa de Partida */}
       {selectedActivity && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <ModalOverlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-kraft-200 dark:border-gray-800">
               <h3 className="font-heading font-black text-lg text-navy-900 dark:text-white">
@@ -612,12 +613,12 @@ export default function GanttChart({
               </div>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* Modal Confirmación Eliminación */}
       {activityToDelete && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <ModalOverlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
             <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/50 text-red-600 mx-auto flex items-center justify-center">
               <AlertTriangle className="w-6 h-6" />
@@ -650,7 +651,7 @@ export default function GanttChart({
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

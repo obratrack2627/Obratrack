@@ -1,7 +1,7 @@
 'use client';
+import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Download, Printer, X, MessageCircle, User, Briefcase, FileText, DollarSign, Loader2, Pencil } from 'lucide-react';
 import { dataService } from '@/lib/data-service';
 import type { CotizacionEstimacion } from '@/types/database';
@@ -77,8 +77,8 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
     <div key={label} className="quote-field"><dt>{label}</dt><dd>{value}</dd></div>
   ));
 
-  return createPortal(
-    <div id="obratrack-quote-overlay" role="dialog" aria-modal="true" aria-label="Cotización generada" className="fixed inset-0 z-50 flex flex-col bg-black/75 backdrop-blur-sm">
+  return (
+    <ModalOverlay onClose={onClose} id="obratrack-quote-overlay" role="dialog" aria-modal="true" aria-label="Cotización generada" className="fixed inset-0 z-50 flex flex-col bg-black/75 backdrop-blur-sm">
       <style jsx global>{`
         .quote-toolbar { flex-shrink: 0; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 16px; background: #1e1e1e; }
         .quote-toolbar button { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 10px 12px; color: white; font-size: 12px; font-weight: 700; }
@@ -178,6 +178,6 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
         </article>
         }
       </div>
-    </div>, window.document.body,
+    </ModalOverlay>
   );
 }

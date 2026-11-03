@@ -6,6 +6,7 @@ import Sidebar from '@/components/Sidebar';
 import CloudSync from '@/components/CloudSync';
 import ThemeProvider from '@/components/ThemeProvider';
 import ThemeToggle from '@/components/ThemeToggle';
+import ObraBotLauncher from '@/components/ObraBotLauncher';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -14,6 +15,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     !pathname ||
     pathname === '/' ||
     pathname === '/login' ||
+    pathname.startsWith('/auth/') ||
     pathname.startsWith('/login') ||
     pathname === '/actualizar-password' ||
     pathname.startsWith('/actualizar-password');
@@ -39,6 +41,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {children}
             </div>
           </main>
+          <ObraBotLauncher />
         </div>
       )}
     </ThemeProvider>

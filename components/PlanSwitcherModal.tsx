@@ -1,4 +1,5 @@
 "use client";
+import ModalOverlay from '@/components/ModalOverlay';
 import Link from "next/link";
 import { X } from "lucide-react";
 import { dataService } from "@/lib/data-service";
@@ -12,7 +13,7 @@ export default function PlanSwitcherModal({
 }) {
   if (!isOpen) return null;
   return (
-    <div
+    <ModalOverlay onClose={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       role="dialog"
       aria-modal="true"
@@ -39,6 +40,6 @@ export default function PlanSwitcherModal({
           Ver planes
         </Link>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
