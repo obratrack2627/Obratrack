@@ -950,3 +950,29 @@ test('las opciones del presupuesto mostrado crean con confirmación o preguntan 
     }
   }
 });
+
+test('varias alternativas por WhatsApp: un sí pide elegir y el número 2 conserva WPC al pedir contactos', async () => {
+  setup();
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const { quoteWhatsApp } = require('../lib/whatsapp/format.ts');
+  const make=(name,amount)=>normalizeQuote({titulo_proyecto:'Remodelación',nombre_alternativa:name,modo_presupuesto:'precio_acordado',tratamiento_iva:'incluido',partidas_venta:[{nombre:'Alcance',unidad:'gl',cantidad:1,precio_unitario:amount}],materiales:[{nombre:name,cantidad:2,unidad:'un',precio_unitario_estimado:5000}],mano_de_obra:[],duracion_dias_estimada:30});
+  for (const answer of ['sí','2']) {
+    const [a,b]=[make('Wall panel',8811000),make('Deck WPC',8887000)];
+    const message={...a,alternativas:[b]};
+    const sb=database();
+    sb.db.presupuestos=[a,b].map(q=>({id:q.id,empresa_id:user.empresa_id,cotizacion:q,grupo_id:'group1',estado:'borrador',proyecto_id:null}));
+    sb.db.whatsapp_mensajes.unshift({message_id:'options',empresa_id:user.empresa_id,actor_id:user.id,cotizacion:message,respuesta:quoteWhatsApp(message)});
+    const response=await processPersonalMessage(sb,{id:'choose-'+answer,from:'56912345678',type:'text',text:{body:answer}},{chat:async()=>{throw Error('Elegir no necesita generar otra cotización');}});
+    assert.equal(sb.db.proyectos.length,0);
+    if(answer==='sí') {
+      assert.match(response.respuesta,/Hay varias alternativas/);
+      assert.equal(sb.db.whatsapp_mensajes[0].borrador_obra,null);
+    } else {
+      const draft=sb.db.whatsapp_mensajes[0].borrador_obra;
+      assert.equal(draft.presupuesto_cotizacion_id,b.id);
+      assert.equal(draft.monto_cotizado,8887000);
+      assert.equal(draft.materiales[0].nombre,'Deck WPC');
+      assert.match(response.respuesta,/cliente|correo|teléfono/i);
+    }
+  }
+});

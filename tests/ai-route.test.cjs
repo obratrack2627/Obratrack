@@ -403,3 +403,24 @@ test("el presupuesto anterior se lee de la base de la empresa y no de los import
     200,
   );
 });
+
+test('pedir otra alternativa usa el presupuesto canónico como origen, conserva la obra y no ejecuta cambios', async () => {
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const q=normalizeQuote({titulo_proyecto:'Remodelación',materiales:[{nombre:'Wall panel',cantidad:1,unidad:'un',precio_unitario_estimado:10000}],mano_de_obra:[]});
+  const row={id:'wa:source',empresa_id:'company-a',proyecto_id:'p-a',grupo_id:'bg1',updated_at:'2026-11-03T12:00:00Z',cotizacion:q};
+  fixture.tables.set('proyectos',[{id:'p-a',empresa_id:'company-a',nombre:'Remodelación'}]);
+  fixture.tables.set('presupuestos',[row]);
+  fixture.handleRPC('guardar_alternativas_presupuesto',async(p)=>{
+    assert.equal(p.p_origen_id,'wa:source');assert.equal(p.p_version,row.updated_at);assert.equal(p.p_proyecto,'p-a');
+    assert.equal(p.p_cotizaciones.length,1);
+    return {data:{grupo:{id:'bg1'},presupuestos:[]},error:null};
+  });
+  const handler=createChatHandler({authorize:authorized,global:async()=>response,project:async({contextoProyecto})=>{
+    assert.equal(contextoProyecto.cotizacion_actual.id,q.id);
+    return {...response,cotizacion:normalizeQuote({...q,nombre_alternativa:'WPC'})};
+  }});
+  const res=await handler(makeRequest({mensaje:'Prepara otra alternativa con WPC',contexto_cotizacion:{id:q.id,estructura_financiera:{precio_total_con_iva:1}}}),'p-a');
+  assert.equal(res.status,200);assert.equal((await res.json()).cotizacion.grupo_presupuesto_id,'bg1');
+  assert.equal(fixture.tables.get('proyectos').length,1);
+  assert.equal(fixture.rpcCalls.length,1);
+});

@@ -1,5 +1,6 @@
 import type { CotizacionEstimacion } from "@/types/database";
 import { AIError } from "./errors";
+import { commercialLines, agreedTotals, paymentMilestones } from '@/lib/quotes/commercial';
 
 export const ACTION_TYPES = [
   "crear_proyecto",
@@ -256,7 +257,7 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
     !text(raw.titulo_proyecto) ||
     !Array.isArray(raw.materiales) ||
     !Array.isArray(raw.mano_de_obra) ||
-    (!raw.materiales.length && !raw.mano_de_obra.length)
+    (raw.modo_presupuesto !== 'precio_acordado' && !raw.materiales.length && !raw.mano_de_obra.length)
   )
     fail("La cotización debe incluir un nombre y costos desglosados.");
   const materiales = raw.materiales.map((m: any) => {
@@ -321,12 +322,15 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
   );
   const costo_directo = costo_materiales_total + costo_mano_obra_total;
   const f = raw.estructura_financiera || {};
+  const agreed = raw.modo_presupuesto === 'precio_acordado';
+  const sales = agreed ? commercialLines(raw.partidas_venta) : undefined;
+  const prices = sales ? agreedTotals(sales, raw.tratamiento_iva) : null;
   const gg = amount(
-    f.gastos_generales_porcentaje ?? 10,
+    agreed ? 0 : f.gastos_generales_porcentaje ?? 10,
     "los gastos generales",
   );
-  const im = amount(f.imprevistos_porcentaje ?? 5, "los imprevistos");
-  const margen = amount(f.margen_utilidad_porcentaje ?? 30, "la utilidad");
+  const im = amount(agreed ? 0 : f.imprevistos_porcentaje ?? 5, "los imprevistos");
+  const margen = amount(agreed ? 0 : f.margen_utilidad_porcentaje ?? 30, "la utilidad");
   const gastos_generales_monto = roundLine(gg / 100, costo_directo),
     imprevistos_monto = roundLine(im / 100, costo_directo);
   const base = costo_directo + gastos_generales_monto + imprevistos_monto;
@@ -343,9 +347,16 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
     if (!Number.isSafeInteger(precio_sugerido_neto))
       fail("El total supera el rango admitido.");
   } else precio_sugerido_neto = base + roundLine(margen / 100, base);
-  const margen_utilidad_monto = precio_sugerido_neto - base;
-  const iva_19 = roundLine(0.19, precio_sugerido_neto);
+  if (prices) precio_sugerido_neto = prices.net;
+  const margen_utilidad_monto = agreed ? 0 : precio_sugerido_neto - base;
+  const iva_19 = prices ? prices.tax : roundLine(0.19, precio_sugerido_neto);
   return {
+    modo_presupuesto: agreed ? 'precio_acordado' : 'estimado',
+    ...(sales ? { partidas_venta: sales, tratamiento_iva: raw.tratamiento_iva } : {}),
+    nombre_alternativa: typeof raw.nombre_alternativa === 'string' ? raw.nombre_alternativa.trim().slice(0, 150) : undefined,
+    mostrar_fecha: raw.mostrar_fecha !== false,
+    nombre_archivo: typeof raw.nombre_archivo === 'string' ? raw.nombre_archivo.slice(0, 150) : undefined,
+    hitos_pago: paymentMilestones(raw.hitos_pago, precio_sugerido_neto + iva_19),
     id: `cot-${crypto.randomUUID()}`,
     titulo_proyecto: raw.titulo_proyecto,
     tipo_obra: raw.tipo_obra || "General",
@@ -439,6 +450,17 @@ export function parseChatResponse(raw: string) {
       "La IA no incluyó una respuesta válida.",
     );
   const actions = flattenActions(parsed.acciones ?? parsed.accion);
+  let quote = parsed.cotizacion ? normalizeQuote(parsed.cotizacion) : null;
+  if (parsed.cotizaciones != null) {
+    if (!Array.isArray(parsed.cotizaciones) || parsed.cotizaciones.length > 4 || actions.length || parsed.cotizacion || parsed.cotizaciones_alternativas) fail('Revisa las propuestas y evita combinar la cotización con cambios de obra.');
+    const options = parsed.cotizaciones.map((q: any, i: number) => normalizeQuote({ ...q, ...(parsed.cotizaciones.length > 1 ? { nombre_alternativa: q.nombre_alternativa || `Opción ${i + 1}` } : {}) }));
+    quote = options.length ? { ...options[0], ...(options.length > 1 ? { alternativas: options.slice(1) } : {}) } : null;
+  }
+  if (parsed.cotizaciones_alternativas != null) {
+    if (!Array.isArray(parsed.cotizaciones_alternativas) || parsed.cotizaciones_alternativas.length < 2 || parsed.cotizaciones_alternativas.length > 4 || actions.length) fail('Prepara entre dos y cuatro alternativas sin ejecutar cambios de obra.');
+    const options = parsed.cotizaciones_alternativas.map((q: any, i: number) => normalizeQuote({ ...q, nombre_alternativa: q.nombre_alternativa || `Opción ${i + 1}` }));
+    quote = { ...options[0], alternativas: options.slice(1) };
+  }
   return {
     respuesta: parsed.respuesta.trim(),
     ...(parsed.busqueda_materiales &&
@@ -460,7 +482,7 @@ export function parseChatResponse(raw: string) {
     sugerencias: (Array.isArray(parsed.sugerencias) ? parsed.sugerencias : [])
       .filter((s: any) => typeof s === "string")
       .slice(0, 4),
-    cotizacion: parsed.cotizacion ? normalizeQuote(parsed.cotizacion) : null,
+    cotizacion: quote,
   };
 }
 

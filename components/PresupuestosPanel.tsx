@@ -11,6 +11,7 @@ import {
 } from "@/lib/presupuestos";
 import { formatCLP, formatDate } from "@/lib/utils";
 import CotizacionPdfModal from "./CotizacionPdfModal";
+import { BudgetCreateDialog, BudgetAlternativeDialog, BudgetChoiceDialog, BudgetGroupCard, BudgetHistoryDialog } from './BudgetAlternatives';
 
 const labels: Record<BudgetStatus, string> = {
   borrador: "Borrador",
@@ -18,6 +19,7 @@ const labels: Record<BudgetStatus, string> = {
   aprobada: "Aprobada",
   rechazada: "Rechazada",
   anulada: "Anulada",
+  no_elegida: "No elegida",
 };
 
 export default function PresupuestosPanel({
@@ -38,6 +40,11 @@ export default function PresupuestosPanel({
     [search, setSearch] = useState(""),
     [selected, setSelected] = useState<Presupuesto | null>(null);
   const [editSelected, setEditSelected] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [variantSource, setVariantSource] = useState<Presupuesto | null>(null);
+  const [history, setHistory] = useState<Presupuesto | null>(null);
+  const [groupFilter, setGroupFilter] = useState('');
+  const [choice, setChoice] = useState<Presupuesto | null>(null);
   const [projects, setProjects] = useState<{ id: string; nombre: string }[]>(
     [],
   );
@@ -64,6 +71,7 @@ export default function PresupuestosPanel({
   }
 
   useEffect(() => {
+    setGroupFilter(new URLSearchParams(window.location.search).get('grupo_id') || '');
     void refresh();
   }, [projectId]);
 
@@ -87,6 +95,7 @@ export default function PresupuestosPanel({
       const body = await res.json();
       if (!res.ok)
         throw new Error(body.error || "No se pudo guardar el cambio.");
+      if (row.grupo_id) { await refresh(); return body.presupuesto as Presupuesto; }
       setRows((prev) =>
         prev.map((r) => (r.id === row.id ? body.presupuesto : r)),
       );
@@ -120,8 +129,8 @@ export default function PresupuestosPanel({
 
   const visible = rows.filter(
     (r) =>
-      (filter === "todos" || r.estado === filter) &&
-      `${r.cotizacion.titulo_proyecto} ${r.cotizacion.cliente_nombre || ""}`
+      (filter === "todos" || r.estado === filter) && (!groupFilter || r.grupo_id === groupFilter) &&
+      `${r.cotizacion.titulo_proyecto} ${r.cotizacion.cliente_nombre || ""} ${r.nombre_alternativa || ''} ${r.cotizacion.nombre_alternativa || ''} ${r.grupo?.nombre || ''}`
         .toLocaleLowerCase("es")
         .includes(search.toLocaleLowerCase("es")),
   );
@@ -133,6 +142,7 @@ export default function PresupuestosPanel({
           Presupuestos
         </h2>
         <div className="flex gap-3 items-center">
+          <button type="button" className="rounded-xl border border-obra-orange px-3 py-2 text-sm font-semibold text-obra-orange" onClick={() => setCreating(true)}>Precio acordado</button>
           <button
             disabled={busy}
             onClick={refresh}
@@ -156,11 +166,10 @@ export default function PresupuestosPanel({
         >
           <div className="text-emerald-900 dark:text-emerald-200">
             <p className="font-bold">
-              Obra creada exitosamente: {createdNotice.nombre}
+              Presupuesto aplicado a {createdNotice.nombre}
             </p>
             <p className="text-xs opacity-90">
-              Se precargaron {createdNotice.partidas} partidas en Carta Gantt y{" "}
-              {createdNotice.materiales} materiales cubicados en Finanzas.
+              {createdNotice.partidas} actividades y {createdNotice.materiales} materiales incorporados.
             </p>
           </div>
           <Link
@@ -196,6 +205,7 @@ export default function PresupuestosPanel({
         </select>
       </div>
 
+      {groupFilter && <button type="button" className="text-sm text-obra-orange underline" onClick={() => setGroupFilter('')}>Ver todos los presupuestos</button>}
       {error && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">
           {error}
@@ -210,7 +220,8 @@ export default function PresupuestosPanel({
         </div>
       )}
 
-      {visible.length > 0 && (
+      {Array.from(new Set(visible.map((r) => r.grupo_id).filter(Boolean))).map((id) => <BudgetGroupCard key={id} rows={visible.filter((r) => r.grupo_id === id)} projects={projects} busy={busy} onChoose={setChoice} onHistory={setHistory} onAlternative={setVariantSource} onView={(row, edit) => { setSelected(row); setEditSelected(edit); }} onUpdate={(row, changes) => void update(row, changes)} />)}
+      {visible.some((r) => !r.grupo_id) && (
         <div className="overflow-x-auto rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23]">
           <table className="w-full text-sm text-left">
             <thead className="bg-kraft-100 dark:bg-[#0B0F14]">
@@ -229,7 +240,7 @@ export default function PresupuestosPanel({
               </tr>
             </thead>
             <tbody>
-              {visible.map((row) => {
+              {visible.filter((row) => !row.grupo_id).map((row) => {
                 const canConvert =
                   !row.proyecto_id &&
                   row.estado !== "anulada" &&
@@ -315,6 +326,9 @@ export default function PresupuestosPanel({
                           Ver / PDF
                         </button>
                         <button type="button" className="text-sm font-semibold hover:underline" onClick={() => { setEditSelected(true); setSelected(row); }}>Editar</button>
+                        <button type="button" className="text-sm text-gray-500" onClick={() => setHistory(row)}>Historial</button>
+                        <button type="button" disabled={busy} className="text-sm font-semibold text-obra-orange" onClick={() => setVariantSource(row)}>Crear alternativa</button>
+                        {row.proyecto_id && !['rechazada','anulada'].includes(row.estado) && <button type="button" disabled={busy} className="rounded-lg bg-obra-green text-white px-3 py-2 text-xs font-semibold" onClick={() => setChoice(row)}>Aplicar a la obra</button>}
                         {canConvert && (
                           <button
                             type="button"
@@ -343,6 +357,13 @@ export default function PresupuestosPanel({
         startEditing={editSelected}
         onSaved={(row) => { setSelected(row); setEditSelected(false); setRows((prev) => prev.map((r) => r.id === row.id ? row : r)); }}
       />
+      {history && <BudgetHistoryDialog row={history} onClose={() => setHistory(null)} />}
+      {creating && <BudgetCreateDialog projectId={projectId} projects={projects} onClose={() => setCreating(false)} onSaved={(row) => { setCreating(false); setSelected(row); setEditSelected(false); void refresh(); }} />}
+      {variantSource && <BudgetAlternativeDialog source={variantSource} onClose={() => setVariantSource(null)} onSaved={(row) => { setVariantSource(null); setSelected(row); setEditSelected(true); void refresh(); }} />}
+      {choice && <BudgetChoiceDialog row={choice} onClose={() => setChoice(null)} onSaved={(result) => {
+        setChoice(null); setCreatedNotice({ id: result.proyecto.id, nombre: result.proyecto.nombre, partidas: result.actividadesCreadas || 0, materiales: result.materialesCargados || 0 });
+        void refresh(); void dataService.pullFromCloudServer().then((r) => { if (!r.success) setError('El presupuesto quedó aplicado. Actualiza la página para cargar la obra.'); });
+      }} />}
     </section>
   );
 }

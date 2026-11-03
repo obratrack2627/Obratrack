@@ -17,9 +17,10 @@ interface CotizacionPdfModalProps extends Omit<QuoteDocumentOptions, 'emisor'> {
   cotizacion: CotizacionEstimacion | null;
   onSaved?: (row: Presupuesto) => void;
   startEditing?: boolean;
+  readOnly?: boolean;
 }
 
-export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSaved, startEditing = false, ...client }: CotizacionPdfModalProps) {
+export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSaved, startEditing = false, readOnly = false, ...client }: CotizacionPdfModalProps) {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
   const [current, setCurrent] = useState<CotizacionEstimacion | null>(null);
@@ -27,8 +28,8 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
   const [notice, setNotice] = useState('');
   const saveRevision = useRef(0);
   useEffect(() => {
-    setCurrent(cotizacion); setEditing(startEditing); setNotice('');
-    if (!isOpen || !cotizacion || !['admin', 'supervisor'].includes(dataService.getActiveUser()?.rol || '')) return;
+    setCurrent(cotizacion); setEditing(startEditing && !readOnly); setNotice('');
+    if (readOnly || !isOpen || !cotizacion || !['admin', 'supervisor'].includes(dataService.getActiveUser()?.rol || '')) return;
     let active = true;
     const revision = saveRevision.current;
     void (async () => {
@@ -41,7 +42,7 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
       } catch { /* La copia disponible sigue siendo visible; editar requiere cargar la versión guardada. */ }
     })();
     return () => { active = false; };
-  }, [isOpen, cotizacion?.id, startEditing]);
+  }, [isOpen, cotizacion?.id, startEditing, readOnly]);
   if (!isOpen || !cotizacion) return null;
   const visibleQuote = current?.id === cotizacion.id ? current : cotizacion;
   const emisor = dataService.getActiveUser();
@@ -70,7 +71,7 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
   };
   const handleShare = () => {
     const phone = document.cliente.telefono.replace(/[^0-9]/g, '');
-    const message = `*COTIZACIÓN OBRATRACK N.° ${document.folio}*\nFecha: ${document.fecha}\n\n${document.proyecto.nombre}\n${document.proyecto.ubicacion}\n\nNeto: ${quoteMoney(document.subtotal)}\nIVA (19%): ${quoteMoney(document.iva)}\n*Total: ${quoteMoney(document.total)} CLP*\n\nCondiciones: ${document.condiciones}`;
+    const message = `*COTIZACIÓN OBRATRACK N.° ${document.folio}*${document.fecha ? `\nFecha: ${document.fecha}` : ''}\n\n${document.proyecto.nombre}\n${document.proyecto.ubicacion}\n\nNeto: ${quoteMoney(document.subtotal)}\nIVA (19%): ${quoteMoney(document.iva)}\n*Total: ${quoteMoney(document.total)} CLP*\n\nCondiciones: ${document.condiciones}`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
   const fields = (rows: [string, string][]) => rows.map(([label, value]) => (
@@ -142,7 +143,7 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
       `}</style>
       <div className="quote-toolbar">
         {!editing && <>
-        {['admin', 'supervisor'].includes(emisor?.rol || '') && <button onClick={() => setEditing(true)} className="bg-white/10 hover:bg-white/20" aria-label="Editar cotización"><Pencil size={16} /><span className="hidden sm:inline">Editar</span></button>}
+        {!readOnly && ['admin', 'supervisor'].includes(emisor?.rol || '') && <button onClick={() => setEditing(true)} className="bg-white/10 hover:bg-white/20" aria-label="Editar cotización"><Pencil size={16} /><span className="hidden sm:inline">Editar</span></button>}
         <button onClick={handleShare} className="bg-[#178743] hover:bg-[#126c35]" aria-label="Compartir resumen por WhatsApp" title="Compartir resumen por WhatsApp"><MessageCircle size={16} /><span className="hidden sm:inline">Compartir resumen</span></button>
         <button onClick={handleDownload} disabled={downloading} className="bg-[#FF6A00] hover:bg-[#E55F00]" aria-label="Descargar PDF">{downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}<span>{downloading ? 'Generando…' : 'Descargar PDF'}</span></button>
         <button onClick={() => window.print()} className="bg-white/10 hover:bg-white/20" aria-label="Imprimir" title="Imprimir"><Printer size={16} /></button>
@@ -158,7 +159,7 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
         <article id="obratrack-cotizacion-pdf" className="quote-paper">
           <header className="quote-header">
             <div className="quote-brand"><Logo variant="horizontal" size="md" /><p className="text-[7px] text-gray-500 mt-1">CONTROL · COTIZACIONES · COSTOS · PAGOS · AVANCES</p></div>
-            <div className="quote-heading"><h1>COTIZACIÓN</h1><p><strong><span className="text-[#FF6A00]">N.°</span> {document.folio}</strong></p><p>FECHA: <strong>{document.fecha}</strong></p><p>VÁLIDA HASTA: <strong>{document.validez}</strong></p></div>
+            <div className="quote-heading"><h1>COTIZACIÓN</h1><p><strong><span className="text-[#FF6A00]">N.°</span> {document.folio}</strong></p>{document.fecha && <p>FECHA: <strong>{document.fecha}</strong></p>}<p>VÁLIDA HASTA: <strong>{document.validez}</strong></p></div>
           </header>
           <div className="quote-info">
             <section><h2 className="quote-section-title"><User />CLIENTE</h2><dl>{fields([['Nombre:', document.cliente.nombre], ['Contacto:', document.cliente.contacto], ['Email:', document.cliente.email], ['Teléfono:', document.cliente.telefono]])}</dl></section>

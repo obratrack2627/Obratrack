@@ -1,5 +1,8 @@
 import { acceptsQuotedProject, quotedProjectDraft } from "./quote-intake";
-import { findBudget } from "@/lib/presupuestos";
+import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib/presupuestos";
+import { budgetApplication } from '@/lib/quotes/application';
+import { chooseBudgetOption } from './budget-options';
+import { isAlternativeRequest } from '@/lib/ai/prompt';
 import { AIError } from "@/lib/ai/errors";
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateGemini } from "@/lib/ai/provider";
@@ -175,6 +178,31 @@ export async function processPersonalMessage(
   let acceptCreation = false;
   let alreadyConverted = false;
   let confirmationResponse = '';
+  const lastQuoteMessage = history.find((m: any) => m.cotizacion);
+  let nativeBudget: Presupuesto | null = null;
+  let candidates: Presupuesto[] = [];
+  let chosenBudget: Presupuesto | null = null;
+  let budgetSelection: { row: Presupuesto; payload: any } | null = null;
+  if (lastQuoteMessage?.cotizacion) {
+    nativeBudget = await findBudget(sb, user.empresa_id, lastQuoteMessage.cotizacion.id);
+    if (nativeBudget?.grupo_id) {
+      candidates = checked(await sb.from('presupuestos').select('*').eq('empresa_id', user.empresa_id).eq('grupo_id', nativeBudget.grupo_id).order('created_at').order('id'));
+      if (isAlternativeRequest(text)) {
+        const group = await budgetGroup(sb, user.empresa_id, nativeBudget);
+        nativeBudget = candidates.find((r) => r.id === group?.seleccionado_id) || nativeBudget;
+      }
+    }
+  }
+  const menuShown = !!history[0]?.respuesta?.includes('*ALTERNATIVAS*') || !!history[0]?.respuesta?.includes('Hay varias alternativas para esta obra.');
+  // Conservar el orden mostrado, que puede diferir del orden de inserción de los registros.
+  if (menuShown && lastQuoteMessage?.cotizacion) {
+    const shown = [lastQuoteMessage.cotizacion, ...(lastQuoteMessage.cotizacion.alternativas || [])];
+    candidates.sort((a, b) => shown.findIndex((q: any) => q.id === a.cotizacion.id) - shown.findIndex((q: any) => q.id === b.cotizacion.id));
+  }
+  if (!pendingProject && candidates.length > 1) {
+    chosenBudget = chooseBudgetOption(text, candidates, menuShown);
+    if (!chosenBudget && (acceptsQuotedProject(text) || /^(elige|aprueba|selecciona|me quedo con)\b/i.test(text.trim()))) confirmationResponse = 'Hay varias alternativas para esta obra. Indica el nombre de la opción que quieres elegir: ' + candidates.map((r) => r.cotizacion.nombre_alternativa || r.nombre_alternativa).join(', ') + '.';
+  }
   const menuChoice = quoteMenuChoice(text, history[0]);
   if (menuChoice === 1 && pendingProject)
     confirmationResponse = 'Ya tienes una creación de obra pendiente. Completa sus datos o escribe «cancelar» antes de crear otra obra desde esta cotización.';
@@ -182,13 +210,21 @@ export async function processPersonalMessage(
     confirmationResponse = '¿Qué deseas modificar de la cotización? Indica el material, cantidad, precio o margen que quieres cambiar. No se creará una obra con esta opción.';
   if (menuChoice === 3)
     confirmationResponse = '¿Qué material quieres comparar? Indica presentación y cantidad si las conoces.\n\nPor ejemplo: «Busca el mejor precio de 20 sacos de cemento de 25 kg en Maipú». La búsqueda no compra ni agrega materiales a la obra.';
-  if (!pendingProject && history[0]?.cotizacion && (menuChoice === 1 || acceptsQuotedProject(text))) {
-    const budget = await findBudget(sb, user.empresa_id, history[0].cotizacion.id);
+  if (!pendingProject && (chosenBudget || (history[0]?.cotizacion && !confirmationResponse && (menuChoice === 1 || acceptsQuotedProject(text))))) {
+    const budget = chosenBudget || nativeBudget || await findBudget(sb, user.empresa_id, history[0].cotizacion.id);
     if (!budget) confirmationResponse = 'No se pudo recuperar el presupuesto guardado. Ábrelo en ObraTrack para revisarlo.';
-    else if (budget.proyecto_id) { alreadyConverted = true; confirmationResponse = 'Esta cotización ya tiene una obra creada. Puedes abrir su Carta Gantt en ObraTrack.'; }
     else if (['rechazada', 'anulada'].includes(budget.estado)) confirmationResponse = 'El presupuesto está rechazado o anulado. Revisa su estado en ObraTrack antes de crear la obra.';
+    else if (budget.proyecto_id && budget.grupo_id) {
+      const project = service.getProyectoById(budget.proyecto_id);
+      if (!project) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible.', 403);
+      const group = await budgetGroup(sb, user.empresa_id, budget);
+      budgetSelection = { row: budget, payload: budgetApplication(budget.cotizacion, project, service.getActividades(), group, { incluir_gantt: !!group?.ejecucion?.actividades?.length, incluir_materiales: !!group?.ejecucion?.materiales_proyecto?.length }) };
+      confirmationResponse = 'Se eligió la alternativa «' + (budget.cotizacion.nombre_alternativa || budget.nombre_alternativa || budget.cotizacion.titulo_proyecto) + '» para ' + project.nombre + '. El presupuesto de la misma obra quedó actualizado.';
+    }
+    else if (budget.proyecto_id) { alreadyConverted = true; confirmationResponse = 'Esta cotización ya tiene una obra creada. Puedes abrir su Carta Gantt en ObraTrack.'; }
     else { acceptCreation = true; pendingProject = quotedProjectDraft(budget.cotizacion); nextDraft = pendingProject; }
   }
+  if (!confirmationResponse && !pendingProject && !chosenBudget && nativeBudget?.grupo_id && !candidates.length) confirmationResponse = 'No se pudieron recuperar las alternativas. Revisa el presupuesto en ObraTrack.';
   let analysisFailed = false;
   try {
     result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : await deps.chat(
@@ -204,8 +240,7 @@ export async function processPersonalMessage(
         proyectos: service.getProyectos(),
         trabajadores: tables.usuarios,
         clientes: tables.clientes,
-        cotizacion_actual:
-          history.find((m: any) => m.cotizacion)?.cotizacion || null,
+        cotizacion_actual: nativeBudget?.cotizacion || history.find((m: any) => m.cotizacion)?.cotizacion || null,
         creacion_obra_whatsapp: {
           borrador: pendingProject,
           requeridos: [
@@ -344,6 +379,9 @@ export async function processPersonalMessage(
     if (attachment) attachment.proyecto_id = null;
     campaign = undefined;
   }
+  if (result.cotizacion && nativeBudget && isAlternativeRequest(text)) {
+    Object.assign(result.cotizacion, { presupuesto_origen_id: nativeBudget.id, presupuesto_origen_version: nativeBudget.updated_at, presupuesto_proyecto_id: nativeBudget.proyecto_id });
+  }
   if (plan.result && plan.result.tipo !== "solicitar_datos_obra")
     response = `✅ *Guardado en ObraTrack*\n*${plan.result.titulo}*\n\n${plan.result.resultado_texto || ""}${image ? `\n\n${result.respuesta}` : ""}`;
   if (result.cotizacion)
@@ -370,6 +408,7 @@ export async function processPersonalMessage(
   const quoteOrigin = candidateDraft?.presupuesto_cotizacion_id || pendingProject?.presupuesto_cotizacion_id;
   const newProjects = (plan.changed.proyectos || []).filter((p: any) => !tables.proyectos.some((previous: any) => previous.id === p.id));
   if (quoteOrigin && newProjects.length === 1 && plan.result) Object.assign(plan.result, { presupuesto_cotizacion_id: quoteOrigin, presupuesto_proyecto_id: newProjects[0].id });
+  if (budgetSelection) plan.result = { tipo: 'actualizar_proyecto', titulo: 'Alternativa elegida', resultado_texto: confirmationResponse, detalles: {}, presupuesto_seleccion_id: budgetSelection.row.id, presupuesto_seleccion_version: budgetSelection.row.updated_at, presupuesto_ejecucion: budgetSelection.payload } as any;
   const params = {
     p_id: message.id,
     p_empresa: user.empresa_id,
@@ -383,7 +422,7 @@ export async function processPersonalMessage(
     p_deleted: plan.deleted,
     p_adjunto: attachment,
   };
-  const { data, error } = await sb.rpc("aplicar_lote_copiloto", {
+  let { data, error } = await sb.rpc("aplicar_lote_copiloto", {
     ...params,
     p_borrador: nextDraft,
     p_aviso: campaign
@@ -394,6 +433,12 @@ export async function processPersonalMessage(
         }
       : null,
   });
+  if (error?.message?.includes('BUDGET_')) {
+    let reason = 'No se pudo aplicar el presupuesto. Revisa sus alternativas en ObraTrack.';
+    try { budgetRPCError(error); } catch (e) { reason = (e as Error).message; }
+    const fallback = await sb.rpc('aplicar_lote_copiloto', { ...params, p_respuesta: whatsappCard('Presupuesto pendiente', reason), p_cotizacion: null, p_acciones: null, p_changed: {}, p_deleted: {}, p_borrador: pendingProject || null, p_aviso: null });
+    data = fallback.data; error = fallback.error;
+  }
   if (error || !data?.message_id)
     throw new AIError(
       "WHATSAPP_DATABASE_SAVE",

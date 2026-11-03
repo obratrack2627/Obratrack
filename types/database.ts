@@ -393,6 +393,15 @@ export interface RecomendacionCobroCliente {
 }
 
 export interface CotizacionEstimacion {
+  modo_presupuesto?: 'estimado' | 'precio_acordado';
+  tratamiento_iva?: 'neto' | 'incluido';
+  partidas_venta?: { nombre: string; unidad: string; cantidad: number; precio_unitario: number; subtotal: number }[];
+  nombre_alternativa?: string;
+  alternativas?: CotizacionEstimacion[];
+  grupo_presupuesto_id?: string;
+  mostrar_fecha?: boolean;
+  nombre_archivo?: string;
+  hitos_pago?: { nombre: string; porcentaje: number; monto: number }[];
   cliente_id?: string;
   cliente_nombre?: string;
   cliente_telefono?: string;

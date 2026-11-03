@@ -27,7 +27,7 @@ const dateLabel = (value: string) => {
 // La vista previa y el PDF consumen el mismo detalle y los mismos montos guardados.
 export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDocumentOptions = {}) {
   const f = quote.estructura_financiera;
-  const items: QuoteLine[] = [
+  const items: QuoteLine[] = quote.modo_presupuesto === 'precio_acordado' ? (quote.partidas_venta || []).map((p) => ({ nombre: p.nombre, descripcion: '', unidad: p.unidad, cantidad: p.cantidad, precioUnit: p.precio_unitario, total: p.subtotal })) : [
     ...quote.materiales.map((m) => ({
       nombre: m.nombre,
       descripcion: m.alternativa_economica || '',
@@ -47,14 +47,14 @@ export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDo
     ['Provisión de imprevistos', f.imprevistos_monto],
     [f.tipo_utilidad === 'margen_venta' ? 'Margen sobre venta' : 'Utilidad', f.margen_utilidad_monto],
   ];
-  for (const [nombre, total] of indirects) {
+  for (const [nombre, total] of quote.modo_presupuesto === 'precio_acordado' ? [] : indirects) {
     if (total) items.push({ nombre, descripcion: '', unidad: 'gl', cantidad: 1, precioUnit: total, total });
   }
   const folio = quote.id.replace(/\D/g, '').slice(-6).padStart(6, '0');
   return {
     folio,
-    filename: `ObraTrack_Cotizacion_${folio}_${quote.titulo_proyecto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 65)}.pdf`,
-    fecha: dateLabel(quote.fecha_creacion),
+    filename: (quote.nombre_archivo?.trim() ? quote.nombre_archivo.replace(/\.pdf$/i, '') : `ObraTrack_Cotizacion_${folio}_${quote.titulo_proyecto}${quote.nombre_alternativa ? '_' + quote.nombre_alternativa : ''}`).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 120) + '.pdf',
+    fecha: quote.mostrar_fecha === false ? '' : dateLabel(quote.fecha_creacion),
     validez: quote.fecha_validez ? dateLabel(quote.fecha_validez) : 'Por acordar',
     cliente: {
       nombre: (options.clienteNombre ?? quote.cliente_nombre) || 'Por definir',
@@ -62,18 +62,18 @@ export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDo
       email: (options.clienteEmail ?? quote.cliente_email) || 'Por definir',
       telefono: (options.clienteTelefono ?? quote.cliente_telefono) || 'Por definir',
     },
-    proyecto: { nombre: quote.titulo_proyecto, ubicacion: quote.comuna_region || 'Por definir', descripcion: quote.resumen_ejecutivo || 'Según detalle de partidas.' },
+    proyecto: { nombre: quote.titulo_proyecto, ubicacion: quote.comuna_region || 'Por definir', descripcion: [quote.nombre_alternativa ? `Alternativa: ${quote.nombre_alternativa}` : '', quote.resumen_ejecutivo || 'Según detalle de partidas.'].filter(Boolean).join('\n') },
     items,
     subtotal: f.precio_sugerido_neto,
     iva: f.iva_19,
     total: f.precio_total_con_iva,
     observaciones: [
-      'Valores netos en CLP. IVA del 19% desglosado al final.',
-      'Precios estimados sujetos a confirmación de cantidades, disponibilidad y despacho.',
+      quote.modo_presupuesto === 'precio_acordado' ? (quote.tratamiento_iva === 'incluido' ? 'Precios acordados en CLP, IVA incluido en las partidas.' : 'Precios acordados netos en CLP. IVA del 19% desglosado al final.') : 'Valores netos en CLP. IVA del 19% desglosado al final.',
+      ...(quote.modo_presupuesto === 'precio_acordado' ? [] : ['Precios estimados sujetos a confirmación de cantidades, disponibilidad y despacho.']),
       quote.duracion_dias_estimada ? `Plazo estimado: ${quote.duracion_dias_estimada} día(s). Cronograma a acordar.` : 'Plazo de ejecución por acordar.',
       ...(quote.observaciones ? [quote.observaciones] : []),
     ],
-    condiciones: quote.condiciones_pago || 'Por acordar con el cliente.',
+    condiciones: [...(quote.hitos_pago || []).map((h) => `${h.nombre} (${h.porcentaje}%): ${quoteMoney(h.monto)}`), ...(quote.condiciones_pago ? [quote.condiciones_pago] : [])].join('\n') || 'Por acordar con el cliente.',
     emisor: { nombre: options.emisor?.nombre || '', empresa: options.emisor?.empresa_nombre || 'Emitido con ObraTrack', email: options.emisor?.email || '', telefono: options.emisor?.telefono_whatsapp || '' },
   };
 }

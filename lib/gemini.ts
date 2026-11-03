@@ -12,9 +12,11 @@ import {
   isQuoteRevision,
   isMaterialPriceRequest,
   materialSearchPrompt,
+  isAlternativeRequest,
 } from "@/lib/ai/prompt";
 import {
   CHAT_RESPONSE_SCHEMA,
+  QUOTE_RESPONSE_SCHEMA,
   WHATSAPP_RESPONSE_SCHEMA,
   MATERIAL_QUERY_SCHEMA,
 } from "@/lib/ai/schema";
@@ -66,7 +68,7 @@ export async function chatAsesorObrasGemini(
   const quote =
     !isMaterialPriceRequest(mensajeUsuario) &&
     (isQuoteRequest(mensajeUsuario) ||
-      Boolean(contextoDB.cotizacion_actual && isQuoteRevision(mensajeUsuario)));
+      Boolean(contextoDB.cotizacion_actual && (isQuoteRevision(mensajeUsuario) || isAlternativeRequest(mensajeUsuario))));
   const priceSearch =
     isMaterialPriceRequest(mensajeUsuario) ||
     (/^(?:y |ahora (?:el|la|los|las) |(?:el|la|los|las) de )/i.test(
@@ -87,6 +89,7 @@ export async function chatAsesorObrasGemini(
   )(historial, mensajeUsuario, contextoDB);
   const schema = priceSearch
     ? MATERIAL_QUERY_SCHEMA
+    : quote ? QUOTE_RESPONSE_SCHEMA
     : contextoDB.creacion_obra_whatsapp
       ? WHATSAPP_RESPONSE_SCHEMA
       : CHAT_RESPONSE_SCHEMA;

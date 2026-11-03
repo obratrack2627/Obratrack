@@ -9,6 +9,7 @@ import { formatCLP } from "@/lib/utils";
 import { profitLabel } from "@/lib/ai/quote-format";
 import { aiHeaders } from "@/lib/ai/client";
 import { dataService } from "@/lib/data-service";
+import Link from 'next/link';
 
 export default function AIMessageTools({
   message,
@@ -31,11 +32,11 @@ export default function AIMessageTools({
     const revision = saveRevision.current;
     void (async () => {
       try {
-        const response = await fetch('/api/presupuestos?id=' + encodeURIComponent(original.id), { headers: await aiHeaders(), cache: 'no-store' });
+        const response = await fetch('/api/presupuestos?id=' + encodeURIComponent(original.id) + '&alternativas=1', { headers: await aiHeaders(), cache: 'no-store' });
         if (!response.ok) return;
         const body = await response.json();
         const current = body.presupuestos?.find((row: { id: string; cotizacion: CotizacionEstimacion }) => row.id === original.id || row.cotizacion.id === original.id);
-        if (active && current && revision === saveRevision.current) { setQuote(current.cotizacion); setBudgetProject(current.proyecto_id || null); }
+        if (active && current && revision === saveRevision.current) { setQuote({ ...current.cotizacion, grupo_presupuesto_id: current.grupo_id || original.grupo_presupuesto_id, alternativas: body.alternativas?.length > 1 ? body.alternativas.filter((r: any) => r.id !== current.id).map((r: any) => ({ ...r.cotizacion, nombre_alternativa: r.nombre_alternativa || r.cotizacion.nombre_alternativa })) : original.alternativas }); setBudgetProject(current.proyecto_id || null); }
       } catch { /* Mantener la copia disponible si falla la lectura. */ }
     })();
     return () => { active = false; };
@@ -48,6 +49,8 @@ export default function AIMessageTools({
         ? "Guardado en Supabase."
         : "",
     );
+  const [alternativePreview, setAlternativePreview] = useState<CotizacionEstimacion | null>(null);
+  const options = quote?.alternativas?.length ? [quote, ...quote.alternativas] : [];
   return (
     <>
       {message.comparacion_materiales && (
@@ -59,19 +62,20 @@ export default function AIMessageTools({
           className="rounded-xl border border-kraft-200 dark:border-gray-700 p-3 space-y-2"
         >
           <p className="text-xs font-semibold">
-            Presupuesto estimado · {quote.titulo_proyecto}
+            {options.length ? 'Alternativas' : quote.modo_presupuesto === 'precio_acordado' ? 'Presupuesto' : 'Presupuesto estimado'} · {quote.titulo_proyecto}
           </p>
-          <p className="text-lg font-bold">
+          {options.length > 0 && <div className="space-y-2">{options.map((q, index) => <div key={q.id} className="rounded-lg border p-2 flex flex-wrap justify-between gap-2"><span className="text-sm">{q.nombre_alternativa || `Opción ${index + 1}`} · <strong>{formatCLP(q.estructura_financiera.precio_total_con_iva)}</strong></span><button type="button" className="text-xs text-obra-orange font-bold" onClick={() => setAlternativePreview(q)}>Ver alternativa / PDF</button></div>)}<Link href={(budgetProject ? `/proyectos/${budgetProject}/presupuestos?` : '/proyectos?tab=presupuestos&') + (quote.grupo_presupuesto_id ? 'grupo_id=' + encodeURIComponent(quote.grupo_presupuesto_id) : '')} className="inline-block rounded-lg bg-obra-orange text-white px-3 py-2 text-xs font-bold">Comparar y elegir alternativa</Link></div>}
+          {options.length ? <p className="text-xs text-gray-500">Opciones completas; sus importes no se suman.</p> : <p className="text-lg font-bold">
             {formatCLP(
               quote.estructura_financiera
                 .precio_total_con_iva,
             )}{" "}
             <span className="text-xs font-normal">IVA incluido</span>
-          </p>
-          <details className="text-xs">
+          </p>}
+          {!options.length && <details className="text-xs">
             <summary className="cursor-pointer">Ver desglose</summary>
             <dl className="mt-2 space-y-1">
-              {[
+              {(quote.modo_presupuesto === 'precio_acordado' ? (quote.partidas_venta || []).map((p) => [p.nombre, p.subtotal]) : [
                 [
                   "Materiales",
                   quote.estructura_financiera
@@ -101,14 +105,14 @@ export default function AIMessageTools({
                   "IVA (19%)",
                   quote.estructura_financiera.iva_19,
                 ],
-              ].map(([label, value]) => (
+              ]).map(([label, value]) => (
                 <div key={String(label)} className="flex justify-between gap-3">
                   <dt>{label}</dt>
                   <dd>{formatCLP(Number(value))}</dd>
                 </div>
               ))}
             </dl>
-          </details>
+          </details>}
         </section>
       )}
       {quote && (
@@ -120,7 +124,7 @@ export default function AIMessageTools({
           Ver cotización / PDF
         </button>
       )}
-      {quote && <QuoteProjectProposal key={quote.id} quote={quote} projectId={budgetProject} />}
+      {quote && !options.length && <QuoteProjectProposal key={quote.id} quote={quote} projectId={budgetProject} />}
       {message.pendiente_sincronizacion && !status.startsWith("Guardado") && (
         <button
           type="button"
@@ -146,12 +150,12 @@ export default function AIMessageTools({
           {status}
         </p>
       )}
-      {quote && (
+      {(quote || alternativePreview) && (
         <CotizacionPdfModal
-          isOpen={open}
-          onClose={() => setOpen(false)}
-          cotizacion={quote}
-          onSaved={(row) => { saveRevision.current += 1; setQuote(row.cotizacion); setBudgetProject(row.proyecto_id); }}
+          isOpen={open || !!alternativePreview}
+          onClose={() => { setOpen(false); setAlternativePreview(null); }}
+          cotizacion={alternativePreview || quote || null}
+          onSaved={(row) => { saveRevision.current += 1; if (alternativePreview && alternativePreview.id !== quote?.id) { setAlternativePreview(row.cotizacion); setQuote((q) => q ? { ...q, alternativas: q.alternativas?.map((a) => a.id === row.cotizacion.id ? row.cotizacion : a) } : q); } else setQuote((q) => ({ ...row.cotizacion, alternativas: q?.alternativas, grupo_presupuesto_id: q?.grupo_presupuesto_id })); setBudgetProject(row.proyecto_id); }}
         />
       )}
     </>

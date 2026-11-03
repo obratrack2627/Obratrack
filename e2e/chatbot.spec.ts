@@ -291,6 +291,7 @@ test('las ventanas móviles aparecen dentro de la pantalla y conservan el despla
   db.proyectos = Array.from({ length: 12 }, (_, i) => ({ ...db.proyectos[0], id: 'mobile-' + i, nombre: 'Obra ' + i }));
   await page.goto('/proyectos');
   await expect(page.getByRole('button', { name: /Nuevo Proyecto/ })).toBeVisible();
+  await expect(page.getByText('Obra 11', { exact: true })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 950));
   const before = await page.evaluate(() => window.scrollY);
   expect(before).toBeGreaterThan(500);
@@ -1450,7 +1451,7 @@ test('después de cotizar se ofrece crear obra con Gantt y materiales sin crearl
   const db = await setup(page, { respuesta: 'Cotización lista', accion: null, cotizacion: quote });
   let calls = 0;
   let budget = { id: quote.id, cotizacion: quote, estado: 'borrador', proyecto_id: null as string | null, updated_at: '2026-11-02T12:00:00Z' };
-  await page.route('**/api/presupuestos*', (route) => route.fulfill({ json: { presupuestos: [budget] } }));
+  await page.route('**/api/presupuestos**', (route) => route.fulfill({ json: { presupuestos: [budget] } }));
   await page.route('**/api/presupuestos/convertir', async (route) => {
     calls++;
     const body = route.request().postDataJSON();
@@ -1471,4 +1472,95 @@ test('después de cotizar se ofrece crear obra con Gantt y materiales sin crearl
   await proposal.getByRole('button', { name: 'Crear obra', exact: true }).click();
   await expect(page.getByRole('link', { name: /Abrir.*Gantt/ }).first()).toHaveAttribute('href', '/proyectos/p-from-quote/gantt');
   expect(calls).toBe(1); expect(db.proyectos).toHaveLength(1);
+});
+
+test('presupuesto con precio acordado: en celular guarda IVA, hitos y PDF sin cambiar el importe', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await setup(page, { respuesta: 'No utilizada', accion: null });
+  let budget: any = null;
+  let writes = 0;
+  await page.route('**/api/presupuestos**', async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON(); writes++;
+      const quote = normalizeQuote(body.cotizacion);
+      budget = { id: quote.id, cotizacion: quote, estado: 'borrador', proyecto_id: null, updated_at: '2026-11-03T12:00:00Z' };
+      await route.fulfill({ json: { presupuesto: budget } });
+    } else await route.fulfill({ json: { presupuestos: budget ? [budget] : [] } });
+  });
+  await page.goto('/proyectos?tab=presupuestos');
+  await page.getByRole('button', { name: 'Precio acordado', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Nuevo presupuesto', exact: true });
+  await expect(dialog).toBeVisible();
+  const bounds = await dialog.boundingBox(); expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  await dialog.getByLabel('Nombre del proyecto', { exact: true }).fill('Obra Padre Hurtado');
+  await dialog.getByLabel('Precio de venta 1', { exact: true }).fill('2247000');
+  await expect(dialog.getByLabel('Precio de venta 1', { exact: true })).toHaveValue('2.247.000');
+  await expect(dialog.getByRole('button', { name: 'Guardar cambios', exact: true })).toBeDisabled();
+  await dialog.getByLabel('IVA de los precios acordados').selectOption('incluido');
+  await dialog.getByText('Documento y plan de cobro', { exact: true }).click();
+  await dialog.getByLabel('Mostrar fecha de emisión en el PDF').uncheck();
+  await dialog.getByLabel('Nombre del archivo PDF').fill('Obra Padre Hurtado.pdf');
+  for (const [index,label,percentage] of [[1,'Anticipo','60'],[2,'Entrega','40']] as const) {
+    await dialog.getByRole('button', { name: 'Añadir hito de cobro' }).click();
+    await dialog.getByLabel(`Nombre del hito ${index}`, { exact: true }).fill(label);
+    await dialog.getByLabel(`Porcentaje del hito ${index}`, { exact: true }).fill(percentage);
+  }
+  await expect(dialog).toContainText('1.348.200');
+  await expect(dialog).toContainText('898.800');
+  await dialog.getByRole('button', { name: 'Guardar cambios', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const pdf = page.getByRole('dialog', { name: 'Cotización generada' });
+  await expect(pdf).toContainText('2.247.000');
+  await expect(pdf.getByText(/^FECHA:/)).toHaveCount(0);
+  const downloading = page.waitForEvent('download');
+  await pdf.getByRole('button', { name: 'Descargar PDF', exact: true }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe('Obra_Padre_Hurtado.pdf');
+  await download.saveAs('/tmp/obratrack-commercial-quote.pdf');
+  expect((await readFile('/tmp/obratrack-commercial-quote.pdf')).subarray(0,5).toString()).toBe('%PDF-');
+  expect(writes).toBe(1); expect(budget.cotizacion.estructura_financiera.precio_total_con_iva).toBe(2247000);
+});
+
+test('alternativas de una obra: compara diferencias, aplica la elegida y consulta revisiones sin sobrescribirlas', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const db = await setup(page, { respuesta: 'No utilizada', accion: null }, true);
+  const make = (label: string, amount: number) => normalizeQuote({ titulo_proyecto: 'Remodelación', nombre_alternativa: label, modo_presupuesto: 'precio_acordado', tratamiento_iva: 'incluido', partidas_venta: [{ nombre: 'Alcance completo', unidad: 'gl', cantidad: 1, precio_unitario: amount }], materiales: [], mano_de_obra: [] });
+  const quotes = [make('Wall panel',8811000), make('Deck WPC',8887000)];
+  let group = { id: 'bg1', nombre: 'Remodelación', proyecto_id: 'p-existing', tipo: 'principal', aplicado: true, seleccionado_id: quotes[0].id, monto_aplicado: 8811000, ejecucion: {} };
+  let rows: any[] = quotes.map((q,i) => ({ id:q.id, cotizacion:q, nombre_alternativa:q.nombre_alternativa, grupo_id:group.id, proyecto_id:group.proyecto_id, estado:i?'borrador':'aprobada', updated_at:'2026-11-03T12:00:00Z', grupo: group }));
+  db.proyectos[0].monto_cotizado = 8811000;
+  let selections = 0;
+  await page.route('**/api/presupuestos**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/seleccionar')) {
+      selections++;
+      const body = route.request().postDataJSON();
+      expect(body.id).toBe(quotes[1].id);expect(body.incluir_materiales).toBe(false);expect(body.incluir_gantt).toBe(false);
+      group = {...group,seleccionado_id:quotes[1].id,monto_aplicado:8887000};
+      rows = rows.map((r)=>({...r,estado:r.id===quotes[1].id?'aprobada':'no_elegida',grupo:group}));
+      db.proyectos[0].monto_cotizado = 8887000;
+      await route.fulfill({ json: { presupuesto: rows[1], grupo: group, proyecto: db.proyectos[0] } });
+    } else {
+      const id = url.searchParams.get('id');
+      const filtered = id ? rows.filter(r=>r.id===id) : rows;
+      const previous = { ...quotes[1], estructura_financiera: {...quotes[1].estructura_financiera,precio_total_con_iva:8800000} };
+      await route.fulfill({ json: { presupuestos: filtered, revisiones: url.searchParams.has('historial') ? [{id:'rev1',version:'2026-11-01T12:00:00Z',cotizacion:previous}] : [] } });
+    }
+  });
+  await page.goto('/proyectos/p-existing/presupuestos');
+  const option = page.getByRole('article', { name: 'Opción Deck WPC' });
+  await expect(option).toContainText('+'); await expect(option).toContainText('76.000');
+  await option.getByRole('button', { name: 'Elegir y aplicar', exact: true }).click();
+  const choose = page.getByRole('dialog', { name: 'Elegir presupuesto', exact: true });
+  await expect(choose).toContainText('8.887.000');
+  await choose.getByRole('button', { name: 'Elegir y actualizar obra' }).click();
+  await expect(choose).toHaveCount(0);
+  await expect(option).toContainText('Elegida para ejecución');
+  await expect(option.getByRole('button', { name: 'Editar', exact: true })).toHaveCount(0);
+  expect(db.proyectos.length).toBe(1); expect(selections).toBe(1);
+  await option.getByRole('button', { name: 'Historial' }).click();
+  await page.getByRole('button', { name: 'Ver revisión / PDF' }).click();
+  const historyPdf=page.getByRole('dialog', {name:'Cotización generada'});
+  await expect(historyPdf).toContainText('8.800.000');
+  await expect(historyPdf.getByRole('button', {name:'Editar cotización'})).toHaveCount(0);
 });

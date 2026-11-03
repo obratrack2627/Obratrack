@@ -82,6 +82,13 @@ export const CHAT_RESPONSE_SCHEMA = object(
             "titulo_proyecto,tipo_obra,comuna_region,resumen_ejecutivo,cliente_id,cliente_nombre,cliente_telefono,cliente_email,cliente_contacto,fecha_validez,observaciones,condiciones_pago",
           ),
           ...numbers("metros_cuadrados,duracion_dias_estimada"),
+          modo_presupuesto: { type: 'string', enum: ['estimado','precio_acordado'] },
+          tratamiento_iva: { type: 'string', enum: ['neto','incluido'] },
+          nombre_alternativa: string,
+          mostrar_fecha: { type: 'boolean' },
+          nombre_archivo: string,
+          partidas_venta: array(object({ nombre: string, unidad: string, cantidad: number, precio_unitario: number }, ['nombre','unidad','cantidad','precio_unitario'])),
+          hitos_pago: array(object({ nombre: string, porcentaje: number }, ['nombre','porcentaje'])),
           materiales: array(
             object(
               {
@@ -134,6 +141,15 @@ export const CHAT_RESPONSE_SCHEMA = object(
   },
   ["respuesta", "acciones", "cotizacion"],
 );
+
+// Un solo esquema de cotización evita duplicar decenas de propiedades opcionales,
+// que Gemini rechaza como INVALID_ARGUMENT. No limitar maxItems en el esquema:
+// expande su gramática para el objeto completo. El servidor valida el máximo de 4.
+export const QUOTE_RESPONSE_SCHEMA = object({
+  respuesta: string,
+  cotizaciones: { type: 'array', items: { ...(CHAT_RESPONSE_SCHEMA.properties.cotizacion as Record<string, unknown>), type: 'object' } },
+  sugerencias: array(string),
+}, ['respuesta', 'cotizaciones']);
 
 // En WhatsApp la creación pasa exclusivamente por el borrador y su validación de cinco campos.
 // El modelo no puede saltarse ese flujo emitiendo una creación directa incompleta.

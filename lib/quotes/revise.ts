@@ -10,6 +10,23 @@ export function reviseQuote(original: CotizacionEstimacion, changes: any): Cotiz
     if (!Array.isArray(changes[field]) || changes[field].length > 300) fail('El presupuesto admite hasta 300 materiales y 300 filas de mano de obra.');
   }
   const updated = { ...original };
+  if (changes.modo_presupuesto != null) {
+    if (!['estimado','precio_acordado'].includes(changes.modo_presupuesto)) fail('Selecciona el modo de presupuesto.');
+    updated.modo_presupuesto = changes.modo_presupuesto;
+  }
+  if (updated.modo_presupuesto === 'precio_acordado') {
+    updated.partidas_venta = changes.partidas_venta;
+    updated.tratamiento_iva = changes.tratamiento_iva;
+  }
+  if (Object.hasOwn(changes, 'mostrar_fecha')) {
+    if (typeof changes.mostrar_fecha !== 'boolean') fail('Revisa la fecha visible.');
+    updated.mostrar_fecha = changes.mostrar_fecha;
+  }
+  if (Object.hasOwn(changes, 'nombre_archivo') && changes.nombre_archivo !== undefined) {
+    if (typeof changes.nombre_archivo !== 'string' || changes.nombre_archivo.length > 150) fail('Revisa el nombre del archivo.');
+    updated.nombre_archivo = changes.nombre_archivo.trim();
+  }
+  if (Object.hasOwn(changes, 'hitos_pago')) updated.hitos_pago = changes.hitos_pago;
   for (const field of ['titulo_proyecto', 'comuna_region', 'resumen_ejecutivo', 'cliente_nombre', 'cliente_telefono', 'cliente_email', 'cliente_contacto', 'condiciones_pago', 'observaciones'] as const) {
     if (Object.hasOwn(changes, field) && changes[field] !== undefined) {
       if (typeof changes[field] !== 'string' || changes[field].length > (['resumen_ejecutivo', 'condiciones_pago', 'observaciones'].includes(field) ? 6000 : 300)) fail('Un campo contiene texto demasiado extenso o no válido.');
@@ -29,5 +46,5 @@ export function reviseQuote(original: CotizacionEstimacion, changes: any): Cotiz
   if (!f || !['recargo_costos', 'margen_venta'].includes(f.tipo_utilidad)) fail('Selecciona cómo calcular la utilidad.');
   for (const field of ['gastos_generales_porcentaje', 'imprevistos_porcentaje', 'margen_utilidad_porcentaje']) if (typeof f[field] !== 'number' || !Number.isFinite(f[field]) || f[field] < 0 || f[field] > 1000) fail('Revisa los porcentajes: deben estar entre 0 y 1000.');
   const calculated = normalizeQuote({ ...updated, materiales: changes.materiales, mano_de_obra: changes.mano_de_obra, duracion_dias_estimada: changes.duracion_dias_estimada, estructura_financiera: f });
-  return { ...calculated, ...updated, materiales: calculated.materiales, mano_de_obra: calculated.mano_de_obra, estructura_financiera: calculated.estructura_financiera, duracion_dias_estimada: calculated.duracion_dias_estimada, id: original.id, fecha_creacion: original.fecha_creacion };
+  return { ...calculated, ...updated, partidas_venta: calculated.partidas_venta, hitos_pago: calculated.hitos_pago, materiales: calculated.materiales, mano_de_obra: calculated.mano_de_obra, estructura_financiera: calculated.estructura_financiera, duracion_dias_estimada: calculated.duracion_dias_estimada, id: original.id, fecha_creacion: original.fecha_creacion };
 }

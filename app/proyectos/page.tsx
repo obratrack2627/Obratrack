@@ -51,6 +51,7 @@ import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 
 export default function ProyectosPage() {
   const [tab,setTab]=useState<'obras'|'presupuestos'>('obras');
+  useEffect(() => { if (new URLSearchParams(window.location.search).get('tab') === 'presupuestos') setTab('presupuestos'); }, []);
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);

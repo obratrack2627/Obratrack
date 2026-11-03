@@ -41,7 +41,7 @@ export function createQuotePdf(document: QuoteDocument) {
   pdf.setFont('helvetica', 'bold').setFontSize(17).setTextColor(INK).text('COTIZACIÓN', 147, 18);
   pdf.setFontSize(8).text(`N.° ${document.folio}`, 147, 24);
   pdf.setFont('helvetica', 'normal').setFontSize(7).setTextColor(GRAY);
-  pdf.text(`FECHA: ${document.fecha}`, 147, 28);
+  if (document.fecha) pdf.text(`FECHA: ${document.fecha}`, 147, 28);
   pdf.text(`VÁLIDA HASTA: ${document.validez}`, 147, 32);
 
   // Medir primero las fichas para que nombres, correos y alcance largos no se corten.

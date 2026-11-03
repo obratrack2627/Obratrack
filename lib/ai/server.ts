@@ -5,7 +5,8 @@ import { AIError, aiErrorResponse } from "./errors";
 import { serverFetch } from "@/lib/server-fetch";
 import { chatAsesorObrasGemini, chatAgenteProyectoGemini } from "@/lib/gemini";
 import { loadAIContext } from "./context";
-import { saveBudget, findBudget } from "@/lib/presupuestos";
+import { saveBudget, findBudget, type Presupuesto } from "@/lib/presupuestos";
+import { isAlternativeRequest } from './prompt';
 import { checkActionPermissions } from "./permissions";
 import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
 import { randomUUID } from "node:crypto";
@@ -179,6 +180,7 @@ export function createChatHandler(
           "Tu cuenta no tiene acceso al asistente de obras.",
           403,
         );
+      let canonicalBudget: Presupuesto | null = null;
       const budgetContext = async (scope?: string) => {
         const id = body.contexto_cotizacion?.id;
         if (typeof id !== "string" || id.length > 200) return null;
@@ -189,6 +191,7 @@ export function createChatHandler(
             "Ese presupuesto pertenece a otra obra. Selecciona el presupuesto de esta obra.",
             403,
           );
+        canonicalBudget = data;
         return data?.cotizacion || null;
       };
       const capability = { acciones_habilitadas: company.plan_id === "pro_ia" };
@@ -214,7 +217,7 @@ export function createChatHandler(
         const queued = await finish(result, projectId);
         if (queued) return queued;
         if (result.cotizacion)
-          await saveBudget(client, user, result.cotizacion, projectId);
+          await saveBudget(client, user, result.cotizacion, projectId, isAlternativeRequest(body.mensaje) ? canonicalBudget : null);
         return NextResponse.json(result);
       }
       const result = await deps.global(body.historial, body.mensaje, {
@@ -224,7 +227,7 @@ export function createChatHandler(
       });
       const queued = await finish(result);
       if (queued) return queued;
-      if (result.cotizacion) await saveBudget(client, user, result.cotizacion);
+      if (result.cotizacion) await saveBudget(client, user, result.cotizacion, undefined, isAlternativeRequest(body.mensaje) ? canonicalBudget : null);
       return NextResponse.json(result);
     } catch (error) {
       return errorJSON(error);
