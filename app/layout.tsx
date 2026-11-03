@@ -40,7 +40,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'ObraTrack | El copiloto digital del constructor',
   description:
-    'Control, Cotizaciones, Costos, Pagos, Avances y Georreferenciación con Inteligencia Artificial (Google Gemini), Google Maps y WhatsApp para constructoras en Chile.',
+    'Control, Cotizaciones, Costos, Pagos, Avances y Georreferenciación con ObraBot, Google Maps y WhatsApp para constructoras en Chile.',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [{ url: '/icon.svg?v=original-dark', type: 'image/svg+xml' }],

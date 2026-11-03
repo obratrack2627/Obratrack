@@ -8,7 +8,7 @@ El código prepara cotizaciones y ejecuta las mismas acciones del asistente web:
 
 Administradores y supervisores gestionan su empresa. Los perfiles de terreno ven solamente sus obras asignadas y pueden registrar avances, bitácora, su propia asistencia, solicitudes de cambio, reportes y documentos. Los números no registrados o duplicados no obtienen acceso. Este canal de gestión requiere una ficha de usuario. Las rutas y herramientas de simulación fueron retiradas de producción.
 
-Se admiten texto, notas de voz y fotos JPG, PNG y WebP de hasta 10 MB. El archivo original se guarda en el bucket privado `whatsapp-evidencias`. Gemini recibe la imagen original junto con la pregunta en una sola llamada; no trabaja sobre una descripción intermedia. No infiere porcentajes ni montos solo desde la foto. La respuesta visual se conserva en la contestación aunque se guarde una bitácora. Si falla el análisis, se guarda la evidencia y se informa que el análisis quedó pendiente, sin inventar observaciones. Si la obra es inequívoca, se registra la foto en la bitácora; si hay varias, queda pendiente y el usuario puede indicar el nombre en su siguiente mensaje. El servidor verifica sesión, empresa y permisos antes de emitir un enlace de lectura de cinco minutos. No se admiten archivos PDF entrantes ni se envía un PDF automáticamente: la cotización se envía como texto y el PDF se obtiene desde la plataforma.
+Se admiten texto, notas de voz y fotos JPG, PNG y WebP de hasta 10 MB. El archivo original se guarda en el bucket privado `whatsapp-evidencias`. El proveedor configurado recibe la imagen original junto con la pregunta en una sola llamada; no trabaja sobre una descripción intermedia. No infiere porcentajes ni montos solo desde la foto. La respuesta visual se conserva en la contestación aunque se guarde una bitácora. Si falla el análisis, se guarda la evidencia y se informa que el análisis quedó pendiente, sin inventar observaciones. Si la obra es inequívoca, se registra la foto en la bitácora; si hay varias, queda pendiente y el usuario puede indicar el nombre en su siguiente mensaje. El servidor verifica sesión, empresa y permisos antes de emitir un enlace de lectura de cinco minutos. No se admiten archivos PDF entrantes ni se envía un PDF automáticamente: la cotización se envía como texto y el PDF se obtiene desde la plataforma.
 
 El indicador de configuración distingue las variables presentes de la conexión real con Meta. Ninguno acredita la entrega de un aviso: esa confirmación se consulta por destinatario en Avisos enviados.
 
@@ -40,12 +40,14 @@ En Settings → Environment Variables, para Production:
 | `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | Un valor aleatorio privado que eliges para verificar el webhook |
 | `NEXT_PUBLIC_WHATSAPP_NUMBER` | Número visible del asistente, con código de país, para el botón de abrir chat |
 | `WHATSAPP_GRAPH_API_VERSION` | Opcional; versión soportada por tu aplicación, predeterminada `v23.0` |
-| `GEMINI_API_KEY` | Clave de Gemini del servidor |
+| `AI_PROVIDER` | Motor privado seleccionado para ObraBot |
+| `OPENAI_API_KEY` | Clave privada cuando se selecciona OpenAI |
+| `GEMINI_API_KEY` | Clave privada para el motor anterior y su respaldo |
 | `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto de Supabase |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave pública del mismo proyecto, para la plataforma |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clave privada de servidor de Supabase; no es el token personal `sbp_…` |
 
-Los secretos de Codex y Vercel son independientes. Guarda las variables y haz un Redeploy. No se requiere volver a pegar la clave de Gemini para cada mensaje.
+Los secretos de Codex y Vercel son independientes. Guarda las variables y haz un Redeploy. No se requiere volver a configurar una clave para cada mensaje. La selección, el respaldo y la reversión se explican en `CHATBOT_IA.md`.
 
 Si Meta reemplaza el número de prueba, actualiza juntos el Phone Number ID, la cuenta de WhatsApp Business y el teléfono visible; renovar solo el token no cambia esos datos. Confirma también la suscripción de la nueva cuenta a la misma aplicación. El diagnóstico privado identifica números desactualizados y cuentas sin suscripción; la interfaz muestra el problema y evita abrir el teléfono anterior como si estuviera conectado.
 

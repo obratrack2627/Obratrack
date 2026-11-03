@@ -105,7 +105,7 @@ export default function ProjectTabsHeader({
       href: `/proyectos/${proyecto.id}/ia`,
       icon: Sparkles,
       highlight: true,
-      badge: 'Gemini',
+      badge: 'IA',
     },
   ];
 

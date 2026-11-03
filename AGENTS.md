@@ -10,7 +10,7 @@
    - Base de datos relacional: **Supabase (PostgreSQL en 3FN)** con aislamiento **Multi-Tenant** estricto mediante *Row Level Security* (`RLS` filtrado por `empresa_id`).
    - Autenticación: **Supabase Auth** (`JWT` + validación de sesión por servidor en Route Handlers de `app/api/*` y guardia perimetral en `middleware.ts`).
    - Almacenamiento multimedia y documental: **Supabase Storage** (`bitacora-fotos`, `documentos-obra`).
-   - Inteligencia Artificial: **Google Gemini API** (`@google/genai` con salida estructurada `JSON Schema` y recálculo determinístico en servidor) + **Meta WhatsApp Cloud API (Graph API v23)**.
+   - Inteligencia Artificial: **OpenAI Responses / Gemini**, seleccionables en servidor mediante `AI_PROVIDER`, con salida estructurada `JSON Schema` y recálculo determinístico. Identidad pública: **ObraBot**, sin marcas del proveedor. Canal móvil: **Meta WhatsApp Cloud API (Graph API v23)**.
 
 3. **Convenciones de Interfaz & Negocio (Chile)**:
    - Moneda: Pesos Chilenos (CLP) sin decimales (`$12.990`, `$15.000.000`).

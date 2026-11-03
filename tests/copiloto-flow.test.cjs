@@ -8,10 +8,10 @@ const {
   chatAsesorObrasGemini,
   sugerirMaterialesCambioGemini,
 } = require("../lib/gemini.ts");
-const savedGenerate = provider.generateGemini,
+const savedGenerate = provider.generateAI,
   savedCompare = catalog.compareMaterialPrices;
 afterEach(() => {
-  provider.generateGemini = savedGenerate;
+  provider.generateAI = savedGenerate;
   catalog.compareMaterialPrices = savedCompare;
 });
 const completion = (extra = {}) =>
@@ -50,7 +50,7 @@ const quote = {
 };
 
 test("un fallo de Gemini en materiales adicionales produce un error, sin lista ni montos de reemplazo", async () => {
-  provider.generateGemini = async () => {
+  provider.generateAI = async () => {
     throw new AIError("AI_RATE_LIMIT", "Cuota agotada", 429);
   };
   await assert.rejects(
@@ -63,7 +63,7 @@ test("un fallo de Gemini en materiales adicionales produce un error, sin lista n
   );
 });
 test("los adicionales incompletos piden medidas y el monto del adicional se recalcula desde el desglose", async () => {
-  provider.generateGemini = async () =>
+  provider.generateAI = async () =>
     completion({ respuesta: "¿Qué largo y alto tiene el muro?" });
   const missing = await sugerirMaterialesCambioGemini({
     titulo: "Muro",
@@ -72,7 +72,7 @@ test("los adicionales incompletos piden medidas y el monto del adicional se reca
   assert.equal(missing.requiere_datos, true);
   assert.deepEqual(missing.materiales, []);
   assert.equal(missing.impacto_monto_sugerido, 0);
-  provider.generateGemini = async () => completion({ cotizacion: quote });
+  provider.generateAI = async () => completion({ cotizacion: quote });
   const result = await sugerirMaterialesCambioGemini({
     titulo: "Muro",
     descripcion: "Con medidas",
@@ -81,14 +81,14 @@ test("los adicionales incompletos piden medidas y el monto del adicional se reca
   assert.equal(result.impacto_dias_sugerido, 3);
 });
 test("el texto de la cotización utiliza los totales calculados por el servidor", async () => {
-  provider.generateGemini = async () =>
+  provider.generateAI = async () =>
     completion({ respuesta: "Total inventado: $999999999", cotizacion: quote });
   const result = await chatAsesorObrasGemini([], "Cotiza un adicional");
   assert.match(result.respuesta, /11\.495/);
   assert.doesNotMatch(result.respuesta, /999999999/);
 });
 test("buscar un precio activa el catálogo sin ejecutar escrituras ni guardar un presupuesto ficticio", async () => {
-  provider.generateGemini = async () =>
+  provider.generateAI = async () =>
     completion({
       busqueda_materiales: { producto: "cemento", presentacion: "25kg" },
     });
@@ -114,7 +114,7 @@ test("buscar un precio activa el catálogo sin ejecutar escrituras ni guardar un
   assert.ok(result.comparacion_materiales);
 });
 test("una respuesta sin catálogo no puede presentar una estimación como búsqueda de precios", async () => {
-  provider.generateGemini = async () =>
+  provider.generateAI = async () =>
     completion({ respuesta: "El mejor precio es $1000", cotizacion: quote });
   const result = await chatAsesorObrasGemini(
     [],
@@ -127,7 +127,7 @@ test("una respuesta sin catálogo no puede presentar una estimación como búsqu
 });
 test("la revisión de una cotización conserva el contexto y usa el flujo de presupuestos", async () => {
   let prompt;
-  provider.generateGemini = async (p) => {
+  provider.generateAI = async (p) => {
     prompt = p;
     return completion({ cotizacion: quote });
   };

@@ -4,15 +4,32 @@ El chat general (`/cotizador`) y el asistente de cada obra usan el mismo protoco
 
 ## Configuración del servidor
 
-- `GEMINI_API_KEY`: clave de Google AI Studio con acceso a Gemini. También se admiten `GOOGLE_API_KEY` o `GOOGLE_GENAI_API_KEY` como alternativas existentes.
-- `GEMINI_MODEL`: opcional, predeterminado `gemini-3.5-flash-lite`.
-- `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`: deben corresponder al proyecto donde los usuarios inician sesión. Se mantienen los valores públicos predeterminados del cliente existente si no se configuran.
+La identidad pública es **ObraBot**. La interfaz, los mensajes de error y los planes no muestran el fabricante ni el modelo. Los nombres técnicos se mantienen únicamente en configuración y documentación de operación.
 
-Las claves de IA se leen únicamente en el servidor. No uses `NEXT_PUBLIC_GEMINI_API_KEY`. La configuración de Next.js ya no publica las claves de Gemini/Google en los bundles del navegador.
+- `AI_PROVIDER`: `gemini` (predeterminado para conservar despliegues existentes) u `openai`. No se cambia automáticamente al encontrar una clave.
+- `OPENAI_API_KEY`: clave privada del nuevo proveedor, solo en el servidor.
+- `OPENAI_MODEL`: predeterminado `gpt-6.1-sol`, equilibrio entre capacidad y costo. Configurable sin cambiar el código.
+- `OPENAI_REASONING_EFFORT`: predeterminado `low`, para acotar latencia y consumo. Debe ser compatible con el modelo configurado.
+- `OPENAI_TRANSCRIPTION_MODEL`: predeterminado `gpt-transcribe`.
+- `AI_FALLBACK_PROVIDER`: `none` (predeterminado), `gemini` u `openai`. Solo se usa ante cuota/límites, red, timeout o indisponibilidad, dentro del tiempo total permitido. Errores de credencial, esquema, truncamiento o rechazo no se ocultan con un respaldo.
+- `GEMINI_API_KEY`: conservar para la reversión; también admite `GOOGLE_API_KEY` o `GOOGLE_GENAI_API_KEY`.
+- `GEMINI_MODEL`: conserva el predeterminado `gemini-3.5-flash-lite`.
+- `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`: proyecto donde los usuarios inician sesión.
 
-En Vercel, guarda la clave en las variables del proyecto para el entorno de despliegue correspondiente y vuelve a desplegar. Configurar secretos en Codex no los copia a Vercel, ni configurar Vercel los inyecta en una tarea ya iniciada de Codex.
+Todas las claves de IA son privadas: no usar variables `NEXT_PUBLIC_`. Codex y Vercel tienen configuraciones independientes. En Codex, guardar `OPENAI_API_KEY` como secreto con destino `api.openai.com`. El transporte respeta HTTPS_PROXY/NO_PROXY y verifica TLS. En Vercel, guardar las variables para el entorno correspondiente y desplegar de nuevo.
 
-En el entorno de Codex, guarda el secreto `GEMINI_API_KEY` con destino `generativelanguage.googleapis.com` y aplica/publica la configuración. Reinicia el servidor de desarrollo para recoger las variables nuevas. El transporte del servidor respeta HTTPS_PROXY/NO_PROXY y verifica TLS.
+### Activación y vuelta al proveedor anterior
+
+1. Guardar `OPENAI_API_KEY` y comprobar llamadas reales de texto estructurado, imagen y transcripción con datos temporales.
+2. Cambiar `AI_PROVIDER=openai`. Si se desea continuidad ante agotamiento de cuota, configurar `AI_FALLBACK_PROVIDER=gemini` y conservar la clave anterior.
+3. Para volver al motor anterior: `AI_PROVIDER=gemini`, `AI_FALLBACK_PROVIDER=none` y volver a desplegar. No requiere SQL, cambiar cotizaciones ni modificar usuarios.
+4. El commit anterior a esta migración es `6ea718b`, guardado también como etiqueta `backup/pre-openai-2026-11-03`. Sirve como referencia para una reversión completa del código si fuera necesaria; el cambio por variable es la primera opción.
+
+El respaldo solo repite la generación de una respuesta, nunca una escritura ya ejecutada. Los registros de negocio conservan sus identificadores, permisos y mecanismos de reintento. Ninguna prueba de proveedor envía mensajes reales al equipo.
+
+El nuevo adaptador usa Responses con `store:false`, salida JSON estricta y el esquema de acciones de la plataforma. Convierte los campos opcionales a nullable para el proveedor y los restaura como ausentes antes de validar el protocolo; esto evita interpretar un `null` como una instrucción para borrar datos. La imagen original y la pregunta viajan juntas. Las notas Ogg/Opus de Meta se decodifican localmente a WAV mono de 16 kHz, con tamaño y plazo limitados, para la API de transcripción. Las pruebas usan una señal de audio de 100 ms, no una conversación real.
+
+Modelos y capacidades consultados el 3 de noviembre de 2026: https://developers.openai.com/api/docs/models/gpt-6.1-sol y https://developers.openai.com/api/docs/models/gpt-transcribe . Los costos dependen del contexto y la respuesta; un saldo pequeño sirve para validación limitada, no garantiza operación continua. Verificar el consumo en el panel del proveedor.
 
 El token personal `SUPABASE_ACCESS_TOKEN` sirve para administración de Supabase; no reemplaza la sesión de usuario ni se envía desde el navegador para ejecutar las acciones del chat. El chatbot usa la sesión real de Supabase Auth y las políticas RLS, sin requerir la clave service_role para sus nuevas escrituras.
 
@@ -20,7 +37,7 @@ El token personal `SUPABASE_ACCESS_TOKEN` sirve para administración de Supabase
 
 1. El usuario inicia sesión en la plataforma y escribe su solicitud.
 2. La API verifica el token de Supabase, el perfil y, en el chat por obra, la pertenencia de la obra a la empresa y su asignación cuando el perfil es de terreno. Consulta datos actuales de SQL; descarta inventarios enviados desde el navegador.
-3. Gemini devuelve JSON con texto, acciones, sugerencias y una cotización opcional. La solicitud incluye un esquema con los tipos de acción y sus campos admitidos; el servidor vuelve a validar la respuesta.
+3. El proveedor configurado devuelve JSON con texto, acciones, sugerencias y una cotización opcional. La solicitud incluye un esquema con los tipos de acción y sus campos admitidos; el servidor vuelve a validar la respuesta.
 4. Se valida el lote completo antes de modificar registros locales. Una obra inexistente o ambigua no se sustituye por la primera de la lista.
 5. Los cambios se guardan en Supabase con la sesión del usuario, respetando claves externas. La confirmación se muestra después de que Supabase confirme el guardado.
 6. Si falla la escritura, se conserva un guardado pendiente en el dispositivo. **Reintentar guardado** reutiliza los mismos registros e IDs y no vuelve a ejecutar el pago o crear la obra.
@@ -35,7 +52,7 @@ La IA pregunta por información insuficiente y prepara materiales, mano de obra 
 
 **Ver cotización / PDF** muestra esos mismos datos, sin sustituirlos por una plantilla de porcelanato. Descargar PDF genera un archivo A4 con texto seleccionable, logo compacto y paginación automática del detalle. La descarga se realiza en el dispositivo, sin enviar el documento a servicios externos. Imprimir conserva un botón independiente para el diálogo de impresión. El documento incluye los costos indirectos para que el detalle sume el neto. No se inventan destinatarios, teléfonos o un esquema de anticipos: las condiciones no proporcionadas quedan por acordar.
 
-Los precios usados al estimar un presupuesto con Gemini son referencias, sujetos a confirmación. La búsqueda de materiales es una herramienta separada: el modelo extrae producto, marca, modelo y presentación, y el servidor lee los catálogos de Easy y Dimaco y los precios públicos de Sodimac. También consulta los endpoints públicos de Construmart e Imperial; si bloquean el acceso o no publican un precio disponible, quedan marcados como no disponibles, sin reemplazarlo con una estimación. El precio, fuente y fecha provienen de esa consulta, no de una cifra generada por el modelo. No cubre todo el mercado. Solo recomienda el menor precio entre productos con el mismo código comercial válido y la misma unidad de venta; los demás se presentan como opciones que deben revisarse. El despacho, IVA, condiciones comerciales y disponibilidad local se confirman en la tienda. Si una tienda no responde o no está integrada, se informa y no se reemplaza por una estimación. Los totales de compra solo se calculan cuando se conocen unidades de venta, sin convertir kg, litros o m2 en sacos o cajas por suposición.
+Los precios usados al estimar un presupuesto con ObraBot son referencias, sujetos a confirmación. La búsqueda de materiales es una herramienta separada: el modelo extrae producto, marca, modelo y presentación, y el servidor lee los catálogos de Easy y Dimaco y los precios públicos de Sodimac. También consulta los endpoints públicos de Construmart e Imperial; si bloquean el acceso o no publican un precio disponible, quedan marcados como no disponibles, sin reemplazarlo con una estimación. El precio, fuente y fecha provienen de esa consulta, no de una cifra generada por el modelo. No cubre todo el mercado. Solo recomienda el menor precio entre productos con el mismo código comercial válido y la misma unidad de venta; los demás se presentan como opciones que deben revisarse. El despacho, IVA, condiciones comerciales y disponibilidad local se confirman en la tienda. Si una tienda no responde o no está integrada, se informa y no se reemplaza por una estimación. Los totales de compra solo se calculan cuando se conocen unidades de venta, sin convertir kg, litros o m2 en sacos o cajas por suposición.
 
 **Editar** abre el presupuesto guardado para cambiar cliente, alcance, materiales, mano de obra, porcentajes, validez, observaciones y condiciones sin llamar a la IA. Guardar cambios recalcula los montos en el servidor y actualiza el mismo ID y fecha de emisión; conserva estado, origen y obra asociada. La versión `updated_at` evita sobrescribir una edición concurrente. Cancelar conserva el presupuesto guardado. El editor está disponible para administración y supervisión desde Presupuestos o desde la vista PDF del chat. El PDF vuelve a consultar el presupuesto vigente al abrirse.
 
@@ -73,7 +90,7 @@ En un entorno con Chromium instalado:
 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:e2e
 ```
 
-Las pruebas de proveedor y rutas usan respuestas controladas. Las pruebas de ejecución comprueban los campos enviados contra el esquema del repositorio, y las del navegador interceptan API y Supabase. Ninguna modifica datos reales ni consume cuota de Gemini. Estas pruebas no sustituyen una validación con las credenciales reales ya aplicadas y una cuenta de usuario auténtica.
+Las pruebas de proveedor y rutas usan respuestas controladas. Las pruebas de ejecución comprueban los campos enviados contra el esquema del repositorio, y las del navegador interceptan API y Supabase. Ninguna modifica datos reales ni consume cuota de los proveedores. Estas pruebas no sustituyen una validación con las credenciales reales ya aplicadas y una cuenta de usuario auténtica.
 
 Validación automatizada: pruebas de lógica, rutas y navegador, TypeScript y compilación de producción. Además se comprobó Gemini con cotización real (cantidades, margen e IVA) y un plan de acciones sin ejecutarlo sobre registros de negocio. Supabase se verificó por separado con diagnóstico transaccional y ROLLBACK. El proveedor puede devolver indisponibilidad temporal; el chat muestra ese error para permitir reintentar. No se realizó una sesión de navegador con las credenciales de una cuenta real.
 

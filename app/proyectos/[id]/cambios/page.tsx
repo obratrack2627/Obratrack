@@ -173,11 +173,11 @@ export default function ProyectoCambiosPage() {
         if (data.impacto_dias_sugerido > 0) {
           setImpactoDias(String(data.impacto_dias_sugerido));
         }
-        showToast('✨ Gemini calculó los materiales nuevos, costo adicional y plazo estimado.');
+        showToast('✨ ObraBot calculó los materiales nuevos, costo adicional y plazo estimado.');
       }
     } catch (err) {
       console.error(err);
-      showToast(err instanceof Error?err.message:'No se pudo conectar con Gemini en este momento.');
+      showToast(err instanceof Error?err.message:'No se pudo conectar con ObraBot en este momento.');
     } finally {
       setIsCalculandoIA(false);
     }
@@ -711,7 +711,7 @@ export default function ProyectoCambiosPage() {
                     <Sparkles className="w-3 h-3" />
                     <span>
                       {isCalculandoIA
-                        ? 'Calculando con Gemini...'
+                        ? 'Calculando con ObraBot...'
                         : '✨ Cubicar Materiales Nuevos con IA'}
                     </span>
                   </button>

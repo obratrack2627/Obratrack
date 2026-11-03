@@ -1,3 +1,4 @@
+import { isAIConfigured } from '@/lib/ai/provider';
 import { aiErrorResponse } from "@/lib/ai/errors";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -14,7 +15,7 @@ export function whatsappConfigured() {
       process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID &&
       process.env.NEXT_PUBLIC_SUPABASE_URL &&
       process.env.SUPABASE_SERVICE_ROLE_KEY &&
-      process.env.GEMINI_API_KEY,
+      isAIConfigured(),
   );
 }
 export async function getWhatsAppStatus(request: NextRequest) {

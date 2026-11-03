@@ -1,4 +1,4 @@
-import { generateGemini, getServerGeminiKey } from "@/lib/ai/provider";
+import { generateAI, getServerGeminiKey } from "@/lib/ai/provider";
 import { AIError } from "@/lib/ai/errors";
 import {
   parseChatResponse,
@@ -94,7 +94,7 @@ export async function chatAsesorObrasGemini(
       ? WHATSAPP_RESPONSE_SCHEMA
       : CHAT_RESPONSE_SCHEMA;
   const result = parseChatResponse(
-    await generateGemini(prompt, {
+    await generateAI(prompt, {
       json: true,
       schema,
       budgetMs: 30000,

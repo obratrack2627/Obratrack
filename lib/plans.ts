@@ -38,7 +38,7 @@ export const PLANES_SUSCRIPCION: PlanSuscripcion[] = [
     periodo: '/mes',
     usuarioObjetivo: 'Maestro / contratista habitual',
     descripcion:
-      'Para maestros y constructores que necesitan presupuestar en minutos y asegurar su margen de ganancia real con Google Gemini.',
+      'Para maestros y constructores que necesitan presupuestar en minutos y asegurar su margen de ganancia real con ObraBot.',
     limiteObrasActivas: 'ilimitadas',
     soportaCotizadorIA: true,
     soportaWhatsAppIA: false,
@@ -65,7 +65,7 @@ export const PLANES_SUSCRIPCION: PlanSuscripcion[] = [
     periodo: '/mes',
     usuarioObjetivo: 'Contratista que maneja varias obras y cuadrillas',
     descripcion:
-      'La solución integral impulsada por Google Gemini Pro IA, agentes autónomos y sincronización en tiempo real vía WhatsApp.',
+      'La solución integral con ObraBot, agentes autónomos y sincronización en tiempo real vía WhatsApp.',
     limiteObrasActivas: 'ilimitadas',
     soportaCotizadorIA: true,
     soportaWhatsAppIA: true,
@@ -75,7 +75,7 @@ export const PLANES_SUSCRIPCION: PlanSuscripcion[] = [
     colorAcento: '#6B8F72', // Verde Terreno
     caracteristicas: [
       'Todo lo incluido en el Plan Pro',
-      'Recepción y análisis de audios y reportes de terreno con Google Gemini IA',
+      'Recepción y análisis de audios y reportes de terreno con ObraBot',
       'Agente IA que extrae partidas y actualiza la Carta Gantt automáticamente',
       'Detección inteligente de compras e imprevistos desde mensajes de chat',
       'Registro de pagos, avances y fotos desde WhatsApp',

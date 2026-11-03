@@ -976,3 +976,12 @@ test('varias alternativas por WhatsApp: un sí pide elegir y el número 2 conser
     }
   }
 });
+
+test('WhatsApp puede quedar configurado con OpenAI sin requerir una clave del motor anterior', () => {
+  setup();
+  const {whatsappConfigured}=require('../lib/whatsapp/webhook.ts');
+  process.env.AI_PROVIDER='openai';process.env.OPENAI_API_KEY='fixture-openai';delete process.env.GEMINI_API_KEY;
+  assert.equal(whatsappConfigured(),true);
+  delete process.env.OPENAI_API_KEY;assert.equal(whatsappConfigured(),false);
+  process.env.AI_PROVIDER='gemini';process.env.GEMINI_API_KEY='fixture-gemini';assert.equal(whatsappConfigured(),true);
+});

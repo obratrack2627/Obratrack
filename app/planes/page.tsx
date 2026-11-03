@@ -205,7 +205,7 @@ export default function PlanesPage() {
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
                 {plan === "gratis"
                   ? "Actualiza a Pro para cotizar con IA"
-                  : "Motor Google Gemini habilitado"}
+                  : "ObraBot habilitado"}
               </p>
             </div>
           </div>

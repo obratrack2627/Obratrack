@@ -1570,3 +1570,18 @@ test('alternativas de una obra: compara diferencias, aplica la elegida y consult
   await expect(historyPdf).toContainText('8.800.000');
   await expect(historyPdf.getByRole('button', {name:'Editar cotización'})).toHaveCount(0);
 });
+
+test('la plataforma presenta ObraBot sin marcas del proveedor ni conexiones directas de IA desde el celular', async ({page}) => {
+  await page.setViewportSize({width:390,height:844});
+  await setup(page,{respuesta:'Soy ObraBot, el asistente de ObraTrack.',accion:null},true);
+  const directRequests:string[]=[];
+  page.on('request',request=>{if(/api\.openai\.com|generativelanguage\.googleapis\.com/.test(request.url()))directRequests.push(request.url());});
+  for(const path of ['/cotizador','/planes','/proyectos/p-existing/ia','/proyectos/p-existing/cambios']){
+    await page.goto(path);
+    await expect(page.locator('body')).not.toContainText(/Gemini|OpenAI|GPT-6|Google AI/i);
+  }
+  await page.goto('/cotizador');
+  await send(page,'¿Quién eres?');
+  await expect(page.getByText('Soy ObraBot, el asistente de ObraTrack.',{exact:true})).toBeVisible();
+  expect(directRequests).toEqual([]);
+});

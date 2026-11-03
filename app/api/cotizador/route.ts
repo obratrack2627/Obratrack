@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     await saveBudget(client, user, cotizacion);
     return NextResponse.json({
       success: true,
-      source: "google_gemini_ai",
+      source: "obratrack_ai",
       cotizacion,
     });
   } catch (error) {

@@ -143,7 +143,7 @@ export default function CopilotoObreroPage() {
     showToast('✨ Conversación reiniciada para esta sesión.');
   };
 
-  // Enviar mensaje a Google Gemini y ejecutar acciones
+  // Enviar mensaje a ObraBot y ejecutar acciones
   const handleSendChat = async (texto?: string) => {
     const msgToSend = texto || inputChat;
     if (!msgToSend.trim() || isChatLoading || !['pro','pro_ia'].includes(dataService.getActivePlan())) return;
@@ -249,7 +249,7 @@ export default function CopilotoObreroPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
             {/* ========================================================================= */}
-            {/* COLUMNA PRINCIPAL: CHAT CONVERSACIONAL CON GEMINI (8 cols) */}
+            {/* COLUMNA PRINCIPAL: CHAT CONVERSACIONAL CON OBRABOT (8 cols) */}
             {/* ========================================================================= */}
             <div className="lg:col-span-8 bg-white border border-kraft-200 rounded-3xl shadow-sm overflow-hidden flex flex-col h-[calc(100dvh-14rem)] min-h-[340px] sm:min-h-[480px]">
 
@@ -264,7 +264,7 @@ export default function CopilotoObreroPage() {
                       <span>ObraBot</span>
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold border border-emerald-500/30 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Gemini IA
+                        Asistente IA
                       </span>
                     </h3>
                     <p className="text-[11px] text-gray-300">
