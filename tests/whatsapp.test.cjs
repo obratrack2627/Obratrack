@@ -985,3 +985,15 @@ test('WhatsApp puede quedar configurado con OpenAI sin requerir una clave del mo
   delete process.env.OPENAI_API_KEY;assert.equal(whatsappConfigured(),false);
   process.env.AI_PROVIDER='gemini';process.env.GEMINI_API_KEY='fixture-gemini';assert.equal(whatsappConfigured(),true);
 });
+
+test('WhatsApp conserva antecedentes más antiguos que seis intercambios sin mezclar mensajes de otro actor',async()=>{
+ setup();const sb=database();
+ sb.db.whatsapp_mensajes=Array.from({length:30},(_,i)=>({message_id:'old-'+i,empresa_id:user.empresa_id,actor_id:user.id,texto:i===29?'El radier mide 6 por 4 metros y 12 cm de espesor.':'Consulta de seguimiento.',respuesta:'Seguimos con la misma obra.'}));
+ sb.db.whatsapp_mensajes.unshift({message_id:'foreign-actor',empresa_id:user.empresa_id,actor_id:'otro-usuario',texto:'Dato privado de otro actor',respuesta:'No incluir'});
+ const response=await processPersonalMessage(sb,{id:'remember-measures',from:'56912345678',type:'text',text:{body:'Recuerda las medidas del radier'}},{chat:async(history)=>{
+  assert.ok(history.some(r=>r.texto.includes('6 por 4 metros')));assert.ok(!history.some(r=>r.texto.includes('Dato privado')));
+  const {chatPrompt}=require('../lib/ai/prompt.ts');assert.ok(chatPrompt(history,'Recuerda las medidas del radier',{}).includes('12 cm'));
+  return {respuesta:'El radier indicado mide 6 por 4 metros y 12 cm de espesor.',accion:null,cotizacion:null};
+ }});
+ assert.match(response.respuesta,/6 por 4/);
+});

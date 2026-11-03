@@ -44,6 +44,18 @@ El token personal `SUPABASE_ACCESS_TOKEN` sirve para administración de Supabase
 
 Las escrituras de un lote a varias tablas no son una transacción SQL. Si un paso remoto falla, el lote queda pendiente y se reintenta con upserts de los mismos IDs. No se presenta como guardado completo.
 
+## Continuidad y contexto de obra
+
+ObraBot recupera antecedentes literales de la conversación: medidas, cliente, ubicación, materiales, cantidades, IVA, condiciones y correcciones. Selecciona turnos recientes y antecedentes relevantes dentro de un presupuesto de texto, conservando el orden cronológico y una referencia a las primeras especificaciones. No genera un resumen adicional con otra llamada de IA. Las tres rutas de interpretación (consulta/gestión, cotización y búsqueda de materiales) usan esta misma selección. Las cotizaciones admiten hasta 45 segundos de generación con respaldo dentro de ese plazo; las consultas mantienen 30 segundos. Fotos y audios de WhatsApp conservan límites más cortos para reservar tiempo al almacenamiento y al envío.
+
+La plataforma selecciona los antecedentes antes de enviarlos, en vez de limitarse a los últimos diez mensajes. Cada obra conserva su conversación separada. Los mensajes de error también mantienen ese contexto. El chat general se conserva en el navegador actual; el chat de proyecto conserva su sincronización existente con Supabase. Este cambio no agrega sincronización del chat general entre dispositivos ni memoria ilimitada.
+
+WhatsApp recupera hasta 80 intercambios recientes del mismo actor y empresa para la conversación. Las confirmaciones, menús y borradores siguen su flujo transaccional existente; ampliar el contexto no repite una creación o un pago antiguo.
+
+El servidor incluye un extracto de los registros actuales autorizados: actividades y responsables, materiales pendientes/comprados, bitácora, asistencia, cambios y, para los perfiles autorizados, pagos e imprevistos. Cada sección declara su total y si fue recortada; las coincidencias con la consulta tienen prioridad. En el chat de obra solo se incluyen sus registros y el cliente registrado, sin usar el inventario enviado por el navegador.
+
+Las reglas indican pedir únicamente lo que falta, respetar correcciones recientes y diferenciar declaraciones del usuario, estimaciones y estados guardados. Una respuesta histórica no acredita un pago; un material comprado no acredita recepción ni instalación. Las peticiones explícitas de «solo consulta» se validan en el servidor para impedir escrituras aunque el modelo proponga acciones. Ante ambigüedad o información ausente debe pedir aclaración, en vez de fingir que recuerda. Estos controles reducen errores; no garantizan que toda respuesta del modelo sea correcta.
+
 ## Cotizaciones
 
 Ejemplo: «Cotiza una terraza de 35 m² en Maipú, con estructura de madera y cubierta, margen del 25 %».

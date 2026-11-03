@@ -398,7 +398,7 @@ export async function compareMaterialPrices(
   const summary = offers.length
     ? `Encontré ${offers.length === 1 ? "una opción" : offers.length + " opciones"} con precio publicado. ${best.length ? "Marco el menor precio del mismo producto identificado en más de una tienda." : offers.length === 1 ? "Revisa marca, modelo y presentación antes de comprar." : "Son opciones que debes revisar por marca, modelo y presentación; no todas son equivalentes."}`
     : providers.every((p) => p.estado === "no_disponible")
-      ? "No pude consultar esos proveedores. Actualmente la búsqueda integrada consulta Easy y Dimaco. Puedes reintentar o revisar directamente la tienda solicitada."
+      ? `No pude consultar esos proveedores. La búsqueda integrada incluye ${catalogProviders.map((p) => p.nombre).join(", ")}. Puedes reintentar o revisar directamente la tienda solicitada.`
       : "No encontré opciones disponibles que coincidan con esa descripción en los catálogos consultados.";
   return {
     consulta: query,

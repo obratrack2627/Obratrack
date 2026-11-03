@@ -1585,3 +1585,29 @@ test('la plataforma presenta ObraBot sin marcas del proveedor ni conexiones dire
   await expect(page.getByText('Soy ObraBot, el asistente de ObraTrack.',{exact:true})).toBeVisible();
   expect(directRequests).toEqual([]);
 });
+
+test('ObraBot recupera medidas anteriores a diez mensajes y las conserva al recargar sin mezclar otra obra',async({page})=>{
+ await setup(page,{respuesta:'Conservo el radier de 6 por 4 metros y la corrección a 12 cm.',accion:null});
+ await page.addInitScript(()=>{
+  if(sessionStorage.getItem('context-fixture-seeded'))return;
+  sessionStorage.setItem('context-fixture-seeded','true');
+  const rows=[{id:'measurements',remitente:'usuario',texto:'Mi radier mide 6 por 4 metros, 10 cm de espesor y está en Maipú.',timestamp:'10:00'},
+   ...Array.from({length:24},(_,i)=>({id:'context-'+i,remitente:i%2?'agente':'usuario',texto:'Consulta de seguimiento de la preparación.',timestamp:'10:01'})),
+   {id:'other-work',remitente:'usuario',texto:'Medidas privadas de otra obra 99 metros.',obra_contexto_id:'otra-obra',timestamp:'10:02'},
+   {id:'correction',remitente:'usuario',texto:'Corrijo: serán 12 cm de espesor.',timestamp:'10:03'}];
+  localStorage.setItem('obratrack_chat_session_history_v7',JSON.stringify(rows));
+ });
+ let requests=0;
+ await page.route('**/api/cotizador/chat',async route=>{
+  const body=route.request().postDataJSON();requests++;
+  expect(body.historial.some((r:any)=>r.texto.includes('6 por 4 metros'))).toBe(true);
+  expect(body.historial.some((r:any)=>r.texto.includes('12 cm'))).toBe(true);
+  expect(body.historial.some((r:any)=>r.texto.includes('99 metros'))).toBe(false);
+  expect(JSON.stringify(body.historial).length).toBeLessThan(25000);
+  await route.fulfill({json:{respuesta:'Conservo el radier de 6 por 4 metros y la corrección a 12 cm.',accion:null}});
+ });
+ await page.goto('/cotizador');await send(page,'Cotiza el radier con esas medidas');
+ await expect(page.getByText('Conservo el radier de 6 por 4 metros y la corrección a 12 cm.',{exact:true})).toBeVisible();
+ await page.reload();await expect(page.getByText('Conservo el radier de 6 por 4 metros y la corrección a 12 cm.',{exact:true})).toBeVisible();
+ await send(page,'¿Qué espesor habíamos acordado?');expect(requests).toBe(2);
+});

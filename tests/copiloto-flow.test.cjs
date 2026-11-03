@@ -141,3 +141,12 @@ test("la revisión de una cotización conserva el contexto y usa el flujo de pre
   assert.match(prompt, /Material previo/);
   assert.match(prompt, /modificar un presupuesto previo/);
 });
+
+test('cotizar con antecedentes admite más tiempo sin superar el límite total y las fotos conservan el presupuesto del canal',async()=>{
+ const budgets=[];
+ provider.generateAI=async(p,opts)=>{budgets.push({budget:opts.budgetMs,timeout:opts.timeoutMs});return completion({cotizacion:quote});};
+ await chatAsesorObrasGemini([],'Cotiza un radier');
+ await chatAsesorObrasGemini([],'Cotiza un radier',{}, {budgetMs:30000,timeoutMs:20000,image:{mimeType:'image/png',data:'fixture'}});
+ await chatAsesorObrasGemini([],'¿Cómo va mi obra?',{}, {budgetMs:45000,timeoutMs:40000});
+ assert.deepEqual(budgets,[{budget:45000,timeout:40000},{budget:30000,timeout:20000},{budget:30000,timeout:30000}]);
+});

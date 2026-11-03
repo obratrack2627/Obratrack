@@ -15,6 +15,9 @@ export function checkActionPermissions(
   message: string,
 ) {
   const actions = flattenActions(input);
+  const current = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  if (actions.length && /^(?:solo (?:de )?consultar?|no registres ni cambies nada|sin guardar cambios|no ejecutes acciones)\b/.test(current))
+    throw new AIError('READ_ONLY_REQUEST', 'La solicitud es solo de consulta; no se ejecutaron cambios.', 422);
   if (actions.some((a) => a.tipo === "enviar_mensaje_equipo")) {
     if (actions.length !== 1)
       throw new AIError(

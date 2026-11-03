@@ -1,5 +1,6 @@
 'use client';
 
+import { conversationRequest } from '@/lib/ai/conversation';
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -243,7 +244,7 @@ export default function ProyectoIAPage() {
       };
 
       const data = await requestAI(`/api/proyectos/${projectId}/chat`, {
-        mensaje: query, historial: mensajes.slice(-10), contexto_proyecto: contextoProyecto, contexto_cotizacion: [...mensajes].reverse().find(m => m.cotizacion_generada)?.cotizacion_generada,
+        mensaje: query, historial: conversationRequest(mensajes, query), contexto_proyecto: contextoProyecto, contexto_cotizacion: [...mensajes].reverse().find(m => m.cotizacion_generada)?.cotizacion_generada,
       });
       const processed = await applyAIResponse(data, projectId);
       loadData();

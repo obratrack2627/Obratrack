@@ -6,15 +6,16 @@ import { serverFetch } from "@/lib/server-fetch";
 import { chatAsesorObrasGemini, chatAgenteProyectoGemini } from "@/lib/gemini";
 import { loadAIContext } from "./context";
 import { saveBudget, findBudget, type Presupuesto } from "@/lib/presupuestos";
+import { conversationHistory } from './conversation';
+import { operationsContext } from './operations-context';
 import { isAlternativeRequest } from './prompt';
 import { checkActionPermissions } from "./permissions";
 import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
 import { randomUUID } from "node:crypto";
 
 export async function authorizeAI(request: NextRequest) {
-  const bearer = request.headers
-    .get("authorization")
-    ?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const authorization = (request.headers.get('authorization') || '').trim().split(/\s+/);
+  const bearer = authorization.length === 2 && authorization[0].toLowerCase() === 'bearer' ? authorization[1] : undefined;
   if (!bearer)
     throw new AIError(
       "AUTH_REQUIRED",
@@ -87,13 +88,7 @@ export async function readAIRequest(request: NextRequest) {
       "Divide el mensaje en instrucciones más breves (hasta 6000 caracteres).",
       400,
     );
-  const historial = (Array.isArray(body.historial) ? body.historial : [])
-    .slice(-12)
-    .filter((h: any) => typeof h?.texto === "string")
-    .map((h: any) => ({
-      rol: h.remitente === "usuario" ? ("user" as const) : ("model" as const),
-      texto: h.texto.slice(0, 4000),
-    }));
+  const historial = conversationHistory(body.historial, body.mensaje);
   return { ...body, mensaje: body.mensaje.trim(), historial };
 }
 
@@ -212,7 +207,7 @@ export function createChatHandler(
             ...data,
             cotizacion_actual: await budgetContext(projectId),
           },
-          contextoDB: { ...context, ...capability },
+          contextoDB: { ...context, ...capability, operacion_obra: operationsContext(tables, projectId, user.rol, body.mensaje), cliente_actual: user.rol === 'terreno' ? null : tables.clientes.find((c) => c.id === data.cliente_id) || null },
         });
         const queued = await finish(result, projectId);
         if (queued) return queued;
@@ -223,6 +218,7 @@ export function createChatHandler(
       const result = await deps.global(body.historial, body.mensaje, {
         ...context,
         ...capability,
+        operacion_obra: operationsContext(tables, undefined, user.rol, body.mensaje),
         cotizacion_actual: await budgetContext(),
       });
       const queued = await finish(result);

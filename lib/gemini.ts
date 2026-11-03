@@ -95,10 +95,11 @@ export async function chatAsesorObrasGemini(
       : CHAT_RESPONSE_SCHEMA;
   const result = parseChatResponse(
     await generateAI(prompt, {
+      ...options,
       json: true,
       schema,
-      budgetMs: 30000,
-      ...options,
+      budgetMs: Math.min(options.budgetMs || (quote ? 45000 : 30000), quote ? 45000 : 30000),
+      timeoutMs: Math.min(options.timeoutMs || (quote ? 40000 : 30000), quote ? 40000 : 30000),
     }),
   );
   if (result.busqueda_materiales) {

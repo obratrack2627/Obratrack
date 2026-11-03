@@ -1,3 +1,4 @@
+import { operationsContext } from '@/lib/ai/operations-context';
 import { acceptsQuotedProject, quotedProjectDraft } from "./quote-intake";
 import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib/presupuestos";
 import { budgetApplication } from '@/lib/quotes/application';
@@ -124,15 +125,16 @@ export async function processPersonalMessage(
         whatsappCard("Plan de tu empresa", "El canal de gestión por WhatsApp requiere el plan Pro IA de tu empresa."),
       persistido: false,
     };
-  const history = checked(
+  const conversationRows = checked(
     await sb
       .from("whatsapp_mensajes")
       .select("*")
       .eq("empresa_id", user.empresa_id)
       .eq("actor_id", user.id)
       .order("created_at", { ascending: false })
-      .limit(6),
+      .limit(80),
   );
+  const history = conversationRows.slice(0, 6);
   let attachment: any = null;
   let pendingProject =
     history[0]?.borrador_obra ||
@@ -228,7 +230,7 @@ export async function processPersonalMessage(
   let analysisFailed = false;
   try {
     result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : await deps.chat(
-      history
+      conversationRows
         .slice()
         .reverse()
         .flatMap((m: any) => [
@@ -237,6 +239,7 @@ export async function processPersonalMessage(
         ]),
       text,
       {
+        operacion_obra: operationsContext(tables, undefined, user.rol, text),
         proyectos: service.getProyectos(),
         trabajadores: tables.usuarios,
         clientes: tables.clientes,
@@ -253,7 +256,7 @@ export async function processPersonalMessage(
         },
         ...(image ? { foto_adjunta: true } : {}),
       },
-      { budgetMs: 30000, timeoutMs: 20000, ...(image ? { image } : {}) },
+      { budgetMs: message.type === 'text' ? 45000 : 30000, timeoutMs: message.type === 'text' ? 40000 : 20000, ...(image ? { image } : {}) },
     );
     if (image && attachment) attachment.descripcion = result.respuesta;
   } catch (error) {

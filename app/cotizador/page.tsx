@@ -1,5 +1,6 @@
 'use client';
 
+import { conversationRequest } from '@/lib/ai/conversation';
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
@@ -166,7 +167,7 @@ export default function CopilotoObreroPage() {
     try {
       const ultimaCotizacion = [...mensajesChat].reverse().find(m => m.cotizacion_generada&&(m.obra_contexto_id||'')===obraSeleccionada)?.cotizacion_generada;
       const data = await requestAI(obraSeleccionada?`/api/proyectos/${obraSeleccionada}/chat`:'/api/cotizador/chat', {
-        mensaje: msgToSend, historial: mensajesChat.filter(m=>(m.obra_contexto_id||'')===obraSeleccionada).slice(-10), contexto_db: aiContext(), contexto_cotizacion: ultimaCotizacion,
+        mensaje: msgToSend, historial: conversationRequest(mensajesChat.filter(m=>(m.obra_contexto_id||'')===obraSeleccionada), msgToSend), contexto_db: aiContext(), contexto_cotizacion: ultimaCotizacion,
       });
       const processed = await applyAIResponse(data);
       reloadData();
@@ -187,6 +188,7 @@ export default function CopilotoObreroPage() {
       console.error(err);
       const errMsg: MensajeChatCotizador = {
         id: 'm-err-' + Date.now(),
+        obra_contexto_id:obraSeleccionada||undefined,
         remitente: 'agente',
         texto: err?.message || 'No se pudo completar la solicitud. Intenta nuevamente.',
         timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),

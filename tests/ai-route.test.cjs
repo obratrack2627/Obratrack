@@ -424,3 +424,14 @@ test('pedir otra alternativa usa el presupuesto canónico como origen, conserva 
   assert.equal(fixture.tables.get('proyectos').length,1);
   assert.equal(fixture.rpcCalls.length,1);
 });
+
+test('el chat de obra recibe sus actividades, materiales y cliente actuales del servidor en vez de pedir datos guardados',async()=>{
+ fixture.tables.set('proyectos',[{id:'p-a',empresa_id:'company-a',nombre:'Terraza',cliente_id:'c1'}]);
+ fixture.tables.set('clientes',[{id:'c1',empresa_id:'company-a',nombre:'Ana',email:'ana@example.test'}]);
+ fixture.tables.set('actividades',[{id:'act1',proyecto_id:'p-a',nombre:'Montaje',porcentaje_avance:25}]);
+ fixture.tables.set('materiales_proyecto',[{id:'m1',proyecto_id:'p-a',nombre:'Madera',comprado:false,cantidad:20}]);
+ const handler=createChatHandler({authorize:authorized,global:async()=>response,project:async({contextoDB})=>{
+  assert.equal(contextoDB.operacion_obra.registros.actividades.incluidos[0].id,'act1');assert.equal(contextoDB.operacion_obra.registros.materiales_proyecto.incluidos[0].nombre,'Madera');assert.equal(contextoDB.cliente_actual.email,'ana@example.test');return response;
+ }});
+ assert.equal((await handler(makeRequest({mensaje:'¿Qué falta comprar?',contexto_proyecto:{materiales:[{nombre:'Inventado'}]}}),'p-a')).status,200);
+});
