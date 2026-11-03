@@ -1,4 +1,5 @@
 import type { DataService } from "@/lib/data-service";
+import { contactVersion } from './contacts';
 
 export type Row = Record<string, any> & { id: string };
 export type Snapshot = Record<string, Row[]>;
@@ -12,7 +13,7 @@ const pick = (row: any, fields: string) =>
 export function snapshot(service: DataService, empresa_id: string): Snapshot {
   return {
     clientes: service.getClientes().map((x) => ({
-      ...pick(x, "id,nombre,telefono,email,direccion"),
+      ...pick(x, "id,nombre,telefono,email,direccion,comuna"),
       empresa_id,
       rut: x.rut || null,
     })),
@@ -118,7 +119,9 @@ export function changesBetween(before: Snapshot, after: Snapshot) {
     );
     changed[table] = after[table].filter(
       (x) => previous.get(x.id) !== JSON.stringify(x),
-    );
+    ).map(row => table === 'usuarios' && previous.has(row.id)
+      ? { ...row, _contacto_anterior: contactVersion(JSON.parse(previous.get(row.id)!)) }
+      : row);
     const ids = new Set(after[table].map((x) => x.id));
     deleted[table] = before[table].filter((x) => !ids.has(x.id));
   }

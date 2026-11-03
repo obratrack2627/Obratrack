@@ -29,3 +29,12 @@ test('inicio de sesión usa el perfil nativo propio y establece la sesión antes
   const result=await signInWithSupabase('constructor@example.test','Contraseña123');
   assert.equal(result.success,true);assert.equal(result.user.empresa_id,'owned-company');assert.equal(activated.auth_user_id,uid);assert.equal(calls,1);
 });
+test('ingresar por RUT usa el correo de Auth aunque WhatsApp haya corregido el de contacto',async()=>{
+  dataService.getUsuarios=()=>[{id:'legacy-user',rut:'12.345.678-5',email:'contacto-nuevo@example.test',email_acceso:'login-original@example.test'}];
+  fixture.supabase.auth.signInWithPassword=async({email})=>{
+    assert.equal(email,'login-original@example.test');
+    return{data:{user:{id:uid},session:{access_token:'fixture'}},error:null};
+  };
+  const result=await signInWithSupabase('12.345.678-5','Contraseña123');
+  assert.equal(result.success,true);
+});

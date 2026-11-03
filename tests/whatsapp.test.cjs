@@ -997,3 +997,53 @@ test('WhatsApp conserva antecedentes más antiguos que seis intercambios sin mez
  }});
  assert.match(response.respuesta,/6 por 4/);
 });
+
+test('cambiar el teléfono propio confirma, permite reintento de Meta y retira el acceso anterior', async () => {
+  const sb = database();
+  const original = sb.rpc.bind(sb);
+  let modelCalls=0;
+  sb.rpc = async (name,p) => {
+    const result=await original(name,p);
+    result.data.sender_phone=p.p_phone;
+    if (p.p_changed.usuarios?.length) sb.db.usuarios[0]={...sb.db.usuarios[0],...p.p_changed.usuarios[0]};
+    return result;
+  };
+  const deps={chat:async (_h,_m,ctx)=>{
+    modelCalls++;
+    assert.equal(ctx.usuario_actual.id,user.id);
+    return {respuesta:'Solicito cambiar el contacto.',accion:{tipo:'actualizar_trabajador',usuario_id:user.id,telefono:'+56977778888'},cotizacion:null};
+  }};
+  const message={id:'own-phone',from:'56912345678',type:'text',text:{body:'Cambia mi teléfono a +56977778888'}};
+  const first=await processPersonalMessage(sb,message,deps);
+  assert.equal(first.persistido,true);
+  assert.match(first.respuesta,/nuevo teléfono/);
+  assert.equal(sb.db.usuarios[0].telefono_whatsapp,'+56977778888');
+  const replay=await processPersonalMessage(sb,message,deps);
+  assert.equal(replay.respuesta,first.respuesta);
+  assert.equal(sb.commits,1);
+  assert.equal(modelCalls,1);
+  const old=await processPersonalMessage(sb,{...message,id:'new-id-from-old-number'},deps);
+  assert.equal(old.persistido,false);
+  assert.match(old.respuesta,/Vincula tu teléfono/);
+  assert.equal(identifySender(sb.db.usuarios,'56977778888').id,user.id);
+  const stolen=await processPersonalMessage(sb,{...message,from:'56999990000'},deps);
+  assert.equal(stolen.persistido,false);
+});
+
+test('un conflicto de contacto nativo responde sin confirmar cambios ni reintentar el lote', async () => {
+  const sb=database();
+  const original=sb.rpc.bind(sb);
+  let attempts=0;
+  sb.rpc=async(name,p)=>{
+    if(p.p_changed.usuarios?.length){attempts++;return {error:{message:'CONTACT_DUPLICATE'}};}
+    assert.deepEqual(p.p_changed,{});
+    assert.equal(p.p_acciones,null);
+    return original(name,p);
+  };
+  const out=await processPersonalMessage(sb,{id:'duplicate-native',from:'56912345678',type:'text',text:{body:'Cambia mi correo a otra@empresa.cl'}},{chat:async()=>({respuesta:'Cambio solicitado',accion:{tipo:'actualizar_trabajador',usuario_id:user.id,email:'otra@empresa.cl'},cotizacion:null})});
+  assert.equal(out.persistido,true);
+  assert.match(out.respuesta,/No se guardaron cambios/);
+  assert.match(out.respuesta,/otra cuenta/);
+  assert.doesNotMatch(out.respuesta,/Guardado en ObraTrack/);
+  assert.equal(attempts,1);
+});

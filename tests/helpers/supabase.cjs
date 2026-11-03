@@ -7,6 +7,7 @@ const schema = [
   "supabase/copiloto_materiales.sql",
   "supabase/flujo_obra.sql",
   "supabase/presupuestos_alternativas.sql",
+  "supabase/contactos_whatsapp.sql",
 ]
   .map((p) => fs.readFileSync(path.join(__dirname, "../..", p), "utf8"))
   .join("\n");

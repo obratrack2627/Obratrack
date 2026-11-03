@@ -46,6 +46,8 @@ export interface Usuario {
   empresa_id: string;
   nombre: string;
   email: string;
+  /** Solo lectura: correo de Auth para resolver el ingreso por RUT. */
+  email_acceso?: string;
   rol: UserRole;
   telefono_whatsapp: string;
   rut?: string;
@@ -477,6 +479,7 @@ export type TipoAccionIA =
   | 'eliminar_proyecto'
   | 'crear_cliente'
   | 'actualizar_cliente'
+  | 'actualizar_trabajador'
   | 'agregar_trabajador'
   | 'asignar_trabajador'
   | 'desasignar_trabajador'

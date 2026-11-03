@@ -2,14 +2,9 @@ import { AIError } from "@/lib/ai/errors";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { serverFetch } from "@/lib/server-fetch";
 import { splitWhatsAppMessage } from "./format";
+import { canonicalPhone } from '@/lib/phone';
+export { canonicalPhone } from '@/lib/phone';
 
-export function canonicalPhone(value: string) {
-  let digits = value.replace(/\D/g, "");
-  if (digits.length === 8) digits = `569${digits}`;
-  else if (digits.length === 9 && digits.startsWith("9"))
-    digits = `56${digits}`;
-  return /^\d{10,15}$/.test(digits) ? digits : "";
-}
 export function validMetaSignature(
   raw: string,
   signature: string | null,

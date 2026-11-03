@@ -140,13 +140,13 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
         const uRut = (u.rut || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         return uRut.length >= 7 && uRut === cleanDigits;
       });
-      if (match && match.email) {
-        resolvedEmail = match.email.toLowerCase();
+      if (match && (match.email_acceso || match.email)) {
+        resolvedEmail = (match.email_acceso || match.email).toLowerCase();
       } else {
         // Fallback robusto: consultar directamente a Supabase PostgreSQL
         const dbUser = await supabaseService.getUsuarioByRut(cleanDigits);
-        if (dbUser && dbUser.email) {
-          resolvedEmail = dbUser.email.toLowerCase();
+        if (dbUser && (dbUser.email_acceso || dbUser.email)) {
+          resolvedEmail = (dbUser.email_acceso || dbUser.email).toLowerCase();
         }
       }
     } catch (err) {

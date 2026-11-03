@@ -16,6 +16,7 @@ import { storeEvidence, evidenceActions } from "./evidence";
 import { projectIntake } from "./project-intake";
 import { prepareCampaign } from "./campaigns";
 import { isMaterialComparison } from "@/lib/materials/types";
+import { contactDatabaseMessage } from '@/lib/ai/contacts';
 
 const childTables = [
   "actividades",
@@ -59,6 +60,20 @@ export async function processPersonalMessage(
     throw new Error("Mensaje inválido.");
   const users = checked(await sb.from("usuarios").select("*"));
   const user = identifySender(users, message.from);
+  // Meta puede reenviar el mismo evento después de cambiar el teléfono propio.
+  // Solo repetir su confirmación: el número anterior no obtiene acceso a mensajes nuevos.
+  const previous = checked(await sb.from('whatsapp_mensajes').select('*')
+    .eq('message_id', message.id).eq('sender_phone', canonicalPhone(message.from)))[0];
+  if (previous) {
+    const actor = users.find((u: any) => u.id === previous.actor_id && u.empresa_id === previous.empresa_id);
+    const matches = users.filter((u: any) => canonicalPhone(u.telefono_whatsapp || '') === canonicalPhone(message.from));
+    const results = previous.acciones?.tipo === 'lote_acciones' ? previous.acciones.detalles?.acciones || [] : [previous.acciones];
+    const changedOwnPhone = results.some((a: any) => a?.tipo === 'actualizar_trabajador' && a.detalles?.id === previous.actor_id
+      && canonicalPhone(a.detalles?.telefono_whatsapp || '') !== canonicalPhone(message.from));
+    if (actor && ['admin', 'supervisor', 'terreno'].includes(actor.rol)
+      && ((user?.id === actor.id && user?.empresa_id === actor.empresa_id) || (!matches.length && changedOwnPhone)))
+      return { ...previous, persistido: true };
+  }
   if (!user)
     return {
       respuesta:
@@ -242,6 +257,8 @@ export async function processPersonalMessage(
         operacion_obra: operationsContext(tables, undefined, user.rol, text),
         proyectos: service.getProyectos(),
         trabajadores: tables.usuarios,
+        usuario_actual: { id: user.id, nombre: user.nombre, rol: user.rol },
+        rol: user.rol,
         clientes: tables.clientes,
         cotizacion_actual: nativeBudget?.cotizacion || history.find((m: any) => m.cotizacion)?.cotizacion || null,
         creacion_obra_whatsapp: {
@@ -436,10 +453,13 @@ export async function processPersonalMessage(
         }
       : null,
   });
-  if (error?.message?.includes('BUDGET_')) {
+  const contactError = (plan.changed.usuarios || []).some((u: any) => u._contacto_anterior)
+    ? contactDatabaseMessage(error) : null;
+  if (error && (error.message?.includes('BUDGET_') || contactError)) {
     let reason = 'No se pudo aplicar el presupuesto. Revisa sus alternativas en ObraTrack.';
-    try { budgetRPCError(error); } catch (e) { reason = (e as Error).message; }
-    const fallback = await sb.rpc('aplicar_lote_copiloto', { ...params, p_respuesta: whatsappCard('Presupuesto pendiente', reason), p_cotizacion: null, p_acciones: null, p_changed: {}, p_deleted: {}, p_borrador: pendingProject || null, p_aviso: null });
+    if (contactError) reason = `No se guardaron cambios. ${contactError}`;
+    else try { budgetRPCError(error); } catch (e) { reason = (e as Error).message; }
+    const fallback = await sb.rpc('aplicar_lote_copiloto', { ...params, p_respuesta: whatsappCard(contactError ? 'Contacto pendiente' : 'Presupuesto pendiente', reason), p_cotizacion: null, p_acciones: null, p_changed: {}, p_deleted: {}, p_borrador: pendingProject || null, p_aviso: null });
     data = fallback.data; error = fallback.error;
   }
   if (error || !data?.message_id)

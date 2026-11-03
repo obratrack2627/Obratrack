@@ -305,3 +305,14 @@ test('un imprevisto se sincroniza con su evidencia y monto contra el esquema de 
   assert.equal(saved.monto_adicional,12000);
   assert.equal(saved.foto_url,'https://example.test/evidencia.png');
 });
+
+test('actualizar desde la nube incorpora los contactos editados en WhatsApp al usuario activo', async () => {
+  const profile={...user,email:'contacto-nuevo@example.test',email_acceso:'login-original@example.test',telefono_whatsapp:'+56988887777',nombre:'Nombre corregido'};
+  global.fetch=async()=>new Response(JSON.stringify({empresaId:'a',usuarios:[profile],proyectos:[p1]}),{status:200});
+  assert.equal((await dataService.pullFromCloudServer()).success,true);
+  assert.equal(dataService.getActiveUser().email,profile.email);
+  assert.equal(dataService.getActiveUser().email_acceso,profile.email_acceso);
+  assert.equal(dataService.getUsuarios()[0].telefono_whatsapp,profile.telefono_whatsapp);
+  assert.equal(dataService.getUsuarios()[0].nombre,profile.nombre);
+  assert.equal(dataService.getActiveUser().auth_user_id,user.auth_user_id);
+});

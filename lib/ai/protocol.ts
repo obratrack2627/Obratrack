@@ -1,6 +1,7 @@
 import type { CotizacionEstimacion } from "@/types/database";
 import { AIError } from "./errors";
 import { commercialLines, agreedTotals, paymentMilestones } from '@/lib/quotes/commercial';
+import { validateContactAction } from './contacts';
 
 export const ACTION_TYPES = [
   "crear_proyecto",
@@ -9,6 +10,7 @@ export const ACTION_TYPES = [
   "eliminar_proyecto",
   "crear_cliente",
   "actualizar_cliente",
+  "actualizar_trabajador",
   "agregar_trabajador",
   "agregar_trabajadores",
   "asignar_trabajador",
@@ -156,6 +158,9 @@ export function validateAction(raw: any): AIAction {
     fail("Indica qué dato de la obra quieres actualizar.");
   if (a.tipo === "actualizar_cliente" && !text(a.nombre) && !text(a.cliente_id))
     fail("Indica el cliente que quieres actualizar.");
+  if (a.tipo === 'actualizar_trabajador' && !text(a.usuario_id) && !text(a.trabajador_nombre) && !text(a.nombre))
+    fail('Indica el integrante del equipo que quieres actualizar.');
+  if (['actualizar_cliente', 'actualizar_trabajador'].includes(a.tipo)) validateContactAction(a);
   if (a.tipo === "agregar_trabajador")
     a.rol = ["terreno", "supervisor"].includes(a.rol) ? a.rol : "terreno";
   if (a.tipo === "agregar_trabajadores") {
