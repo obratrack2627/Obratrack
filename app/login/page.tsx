@@ -18,12 +18,12 @@ type AuthMode = 'signin' | 'signup' | 'forgot_password' | 'confirm_email';
 type LegalTab = 'terminos' | 'privacidad' | 'ciberseguridad';
 
 const INPUT_CLASS =
-  'h-11 w-full px-3.5 bg-[#FFFFFF] dark:bg-[#0F141C] border border-[#DCD6CA] hover:border-[#C6BFB2] dark:border-[#263040] dark:hover:border-[#344156] rounded-xl text-sm text-[#1E1E1E] dark:text-gray-100 placeholder:text-[#A39E95] dark:placeholder:text-gray-500 focus:outline-none focus:border-[#1E1E1E] dark:focus:border-[#FF6A00] focus:ring-2 focus:ring-[#1E1E1E]/5 dark:focus:ring-[#FF6A00]/15 transition-colors';
+  'h-11 w-full px-3.5 bg-[#FFFFFF] dark:bg-[#0F141C] border border-[#DCD6CA] hover:border-[#C6BFB2] dark:border-[#263040] dark:hover:border-[#344156] rounded-xl text-sm text-[#1E1E1E] dark:text-gray-100 placeholder:text-[#A39E95] dark:placeholder:text-gray-500 focus:outline-none focus:border-[#FF6A00] dark:focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/15 transition-colors';
 
 const LABEL_CLASS = 'block text-[13px] font-medium text-[#3A3835] dark:text-gray-300 mb-1.5';
 
 const PRIMARY_BTN_CLASS =
-  'h-11 w-full bg-[#FF6A00] hover:bg-[#E65F00] active:bg-[#D15600] text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50';
+  'h-11 w-full bg-[#FF6A00] hover:bg-[#E65F00] active:bg-[#D15600] text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm';
 
 function isValidInternalRedirect(path: string | null): path is string {
   if (!path) return false;
@@ -177,98 +177,59 @@ function MinimalBrandPanel() {
       {/* Barra superior compacta en móvil */}
       <header className="lg:hidden bg-[#141920] border-b border-[#222A36] shrink-0">
         <div className="h-[2px] w-full bg-[#FF6A00]" />
-        <div className="px-5 py-3.5 pr-16 flex items-center">
+        <div className="px-5 py-3.5 pr-16 flex items-center justify-between">
           <Logo variant="horizontal" theme="dark" size="sm" />
+          <span className="text-[11px] font-mono text-[#94A3B8] hidden sm:inline uppercase tracking-wider">
+            El copiloto digital del constructor
+          </span>
         </div>
       </header>
 
-      {/* Panel Izquierdo Minimalista (Desktop) */}
+      {/* Panel Izquierdo Centrado y Sobrio (Desktop) */}
       <aside className="hidden lg:flex lg:col-span-5 bg-[#141920] text-white border-r border-[#222A36] flex-col justify-between relative overflow-hidden select-none">
         <div className="h-[3px] w-full bg-[#FF6A00] shrink-0" />
 
+        {/* Textura sutil de plano técnico arquitectónico */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 pointer-events-none opacity-[0.03]"
+          className="absolute inset-0 pointer-events-none opacity-[0.035]"
           style={{
             backgroundImage:
               'linear-gradient(to right, #FFFFFF 1px, transparent 1px), linear-gradient(to bottom, #FFFFFF 1px, transparent 1px)',
-            backgroundSize: '48px 48px',
+            backgroundSize: '40px 40px',
           }}
         />
 
-        <div className="relative z-10 flex-1 flex flex-col justify-between p-10 xl:p-12">
-          <div>
-            <Logo variant="horizontal" theme="dark" size="md" />
-          </div>
+        <div className="relative z-10 p-8 xl:p-10 flex items-center justify-between">
+          <span className="text-[10px] font-mono tracking-widest text-[#94A3B8] uppercase">
+            OBRATRACK SAAS
+          </span>
+          <span className="text-[11px] font-mono text-[#94A3B8]">CHILE</span>
+        </div>
 
-          <div className="my-auto py-8 max-w-[420px]">
-            <h2 className="font-heading text-[28px] xl:text-[32px] font-semibold leading-[1.18] tracking-tight text-white">
-              Tus obras bajo control,
-              <br />
-              <span className="text-[#94A3B8]">de principio a fin.</span>
+        {/* Contenido centrado vertical y horizontalmente */}
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-8 xl:p-12 text-center my-auto">
+          <div className="max-w-sm flex flex-col items-center">
+            <Logo variant="vertical" theme="dark" size="lg" className="mb-6" />
+
+            <h2 className="font-heading text-2xl xl:text-[28px] font-semibold text-white tracking-tight leading-tight">
+              Tus obras bajo control
             </h2>
 
-            {/* Vista visual minimalista de Carta Gantt y Estado de Obra */}
-            <div className="mt-9 rounded-2xl bg-[#1A212B] border border-[#283241] p-5 shadow-[0_16px_36px_-12px_rgba(0,0,0,0.45)]">
-              <div className="flex items-center justify-between gap-3 pb-4 border-b border-[#252F3E]">
-                <span className="text-[13px] font-medium text-white truncate">
-                  Remodelación Los Leones
-                </span>
-                <span className="font-mono text-[11px] font-semibold text-[#FF8533] bg-[#FF6A00]/12 border border-[#FF6A00]/25 px-2 py-0.5 rounded-md">
-                  68% avance
-                </span>
-              </div>
+            <p className="text-sm text-[#94A3B8] mt-2.5 font-sans leading-relaxed">
+              El copiloto digital del constructor.
+            </p>
 
-              <div className="py-4 space-y-3.5">
-                <div>
-                  <div className="flex items-center justify-between text-[11px] mb-1.5">
-                    <span className="text-[#CBD5E1]">Obra gruesa</span>
-                    <span className="font-mono text-[#86EFAC]">100%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[#131820] relative overflow-hidden">
-                    <div className="absolute inset-y-0 left-0 w-[48%] rounded-full bg-[#6B8F72]" />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between text-[11px] mb-1.5">
-                    <span className="text-[#CBD5E1]">Instalaciones</span>
-                    <span className="font-mono text-[#FF8533]">70%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[#131820] relative overflow-hidden">
-                    <div className="absolute inset-y-0 left-[28%] w-[48%] rounded-full bg-[#2A3444] overflow-hidden">
-                      <div className="h-full w-[70%] rounded-full bg-[#FF6A00]" />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between text-[11px] mb-1.5">
-                    <span className="text-[#94A3B8]">Terminaciones</span>
-                    <span className="font-mono text-[#64748B]">20%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[#131820] relative overflow-hidden">
-                    <div className="absolute inset-y-0 left-[62%] w-[38%] rounded-full bg-[#2A3444] overflow-hidden">
-                      <div className="h-full w-[20%] rounded-full bg-[#94A3B8]" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-3.5 border-t border-[#252F3E] flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-[#8E9BAE]">Presupuesto</span>
-                  <span className="font-mono text-white font-medium ml-2">$42.850.000</span>
-                </div>
-                <span className="inline-flex items-center gap-1.5 text-[11px] text-[#86EFAC]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80]" />
-                  EDP-02 al día
-                </span>
-              </div>
+            <div className="mt-8 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#1C2430] border border-[#2B3747] text-[11px] font-mono text-[#CBD5E1]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#FF6A00]" />
+              <span>CONTROL · CUBICACIONES · FAENA</span>
             </div>
           </div>
+        </div>
 
-          <div className="text-xs text-[#5E6B7E]">© {new Date().getFullYear()} ObraTrack · Chile</div>
+        {/* Pie institucional sobrio */}
+        <div className="relative z-10 p-6 text-center text-xs text-[#5E6B7E] border-t border-[#1C232E]/60">
+          © {new Date().getFullYear()} ObraTrack · Plataforma de Obras
         </div>
       </aside>
     </>
@@ -344,9 +305,12 @@ interface SignInViewProps {
 function SignInView(props: SignInViewProps) {
   return (
     <>
-      <h1 className="font-heading text-[20px] font-semibold text-[#1E1E1E] dark:text-white tracking-tight mb-6">
-        Iniciar sesión
-      </h1>
+      <div className="flex items-center gap-2.5 mb-6">
+        <div className="w-1 h-5 rounded-full bg-[#FF6A00]" />
+        <h1 className="font-heading text-[20px] font-semibold text-[#1E1E1E] dark:text-white tracking-tight">
+          Iniciar sesión
+        </h1>
+      </div>
 
       <form onSubmit={props.onSubmit} className="space-y-4">
         <div>
@@ -450,9 +414,12 @@ function SignUpView(props: SignUpViewProps) {
 
   return (
     <>
-      <h1 className="font-heading text-[20px] font-semibold text-[#1E1E1E] dark:text-white tracking-tight mb-5">
-        Registrar empresa
-      </h1>
+      <div className="flex items-center gap-2.5 mb-5">
+        <div className="w-1 h-5 rounded-full bg-[#FF6A00]" />
+        <h1 className="font-heading text-[20px] font-semibold text-[#1E1E1E] dark:text-white tracking-tight">
+          Registrar empresa
+        </h1>
+      </div>
 
       <form onSubmit={props.onSubmit} className="space-y-3.5">
         <div>
@@ -668,10 +635,13 @@ function ForgotPasswordView({
 }) {
   return (
     <>
-      <h1 className="font-heading text-[20px] font-semibold text-[#1E1E1E] dark:text-white tracking-tight mb-1.5">
-        Recuperar contraseña
-      </h1>
-      <p className="text-[13px] text-[#7D776E] dark:text-gray-400 mb-5">
+      <div className="flex items-center gap-2.5 mb-2">
+        <div className="w-1 h-5 rounded-full bg-[#FF6A00]" />
+        <h1 className="font-heading text-[20px] font-semibold text-[#1E1E1E] dark:text-white tracking-tight">
+          Recuperar contraseña
+        </h1>
+      </div>
+      <p className="text-[13px] text-[#7D776E] dark:text-gray-400 mb-5 pl-3.5">
         Enviaremos un enlace a tu correo para restablecer tu clave.
       </p>
 
@@ -724,20 +694,22 @@ function ConfirmEmailView({
 }) {
   return (
     <div className="space-y-4">
-      <div>
+      <div className="flex items-center gap-2.5">
+        <div className="w-1 h-5 rounded-full bg-[#FF6A00]" />
         <h1 className="font-heading text-[20px] font-semibold text-[#1E1E1E] dark:text-white tracking-tight">
           Confirma tu correo
         </h1>
-        <p className="text-[13px] text-[#7D776E] dark:text-gray-400 mt-1.5 leading-relaxed">
-          Enviamos un enlace de activación a{' '}
-          <span className="font-medium text-gray-900 dark:text-gray-200 break-all">
-            {signupEmail || 'tu correo'}
-          </span>
-          .
-        </p>
       </div>
 
-      <div className="pt-1 space-y-2.5">
+      <p className="text-[13px] text-[#7D776E] dark:text-gray-400 leading-relaxed pl-3.5">
+        Enviamos un enlace de activación a{' '}
+        <span className="font-medium text-gray-900 dark:text-gray-200 break-all">
+          {signupEmail || 'tu correo'}
+        </span>
+        .
+      </p>
+
+      <div className="pt-2 space-y-2.5">
         <button type="button" onClick={onGoToSignIn} className={PRIMARY_BTN_CLASS}>
           Ir a iniciar sesión
         </button>
@@ -898,9 +870,41 @@ function LoginForm() {
     <div className="min-h-screen w-full flex flex-col lg:grid lg:grid-cols-12 bg-[#FAF8F5] dark:bg-[#0B0E14]">
       <MinimalBrandPanel />
 
-      <section className="flex-1 lg:col-span-7 flex flex-col items-center justify-center px-5 sm:px-10 py-10">
+      <section className="flex-1 lg:col-span-7 flex flex-col items-center justify-center px-5 sm:px-10 py-12 relative overflow-hidden">
+        {/* Retícula técnica de dibujo de planos / Blueprint grid tenue con personalidad de obra */}
+        <svg
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full pointer-events-none opacity-40 dark:opacity-20"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <pattern id="arch-draft-grid" width="36" height="36" patternUnits="userSpaceOnUse">
+              <path
+                d="M 36 0 L 0 0 0 36"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="0.6"
+                className="text-[#D8D1C4] dark:text-[#253041]"
+              />
+              <path
+                d="M 17 18 L 19 18 M 18 17 L 18 19"
+                stroke="currentColor"
+                strokeWidth="0.8"
+                className="text-[#FF6A00]/40 dark:text-[#FF6A00]/30"
+              />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#arch-draft-grid)" />
+        </svg>
+
+        {/* Distintivo de ingeniería / faena */}
+        <div className="relative z-10 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EFEBE1]/80 dark:bg-[#141B26]/80 border border-[#DDD5C5] dark:border-[#263346] text-[11px] font-mono font-medium text-[#6B6355] dark:text-gray-300 mb-6 backdrop-blur-xs">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#FF6A00]" />
+          <span>PORTAL DE ACCESO A FAENA</span>
+        </div>
+
         <div
-          className={`w-full ${cardWidthClass} bg-white dark:bg-[#141A23] border border-[#E7E2D8] dark:border-[#232C3B] rounded-2xl p-7 sm:p-8 shadow-[0_2px_20px_-6px_rgba(20,25,32,0.06)] dark:shadow-[0_12px_32px_-10px_rgba(0,0,0,0.5)] transition-all duration-200`}
+          className={`relative z-10 w-full ${cardWidthClass} bg-white/95 dark:bg-[#141A23]/95 backdrop-blur-sm border border-[#E7E2D8] dark:border-[#232C3B] rounded-2xl p-7 sm:p-8 shadow-[0_4px_24px_-4px_rgba(20,25,32,0.06)] dark:shadow-[0_16px_36px_-12px_rgba(0,0,0,0.55)] transition-all duration-200`}
         >
           <AuthStatusBanners errorMsg={errorMsg} successMsg={successMsg} />
 
@@ -972,7 +976,7 @@ function LoginForm() {
           )}
         </div>
 
-        <footer className="mt-7 flex items-center justify-center gap-3 text-[11px] text-[#8C867C] dark:text-gray-500">
+        <footer className="relative z-10 mt-7 flex items-center justify-center gap-3 text-[11px] text-[#8C867C] dark:text-gray-500">
           <button
             type="button"
             onClick={() => openLegalTab('terminos')}
