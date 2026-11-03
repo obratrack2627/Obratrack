@@ -303,7 +303,7 @@ function SignInView(props: SignInViewProps) {
         <button
           type="button"
           onClick={props.onGoToSignUp}
-          className="font-medium text-[#1E1E1E] dark:text-white hover:text-[#FF6A00] dark:hover:text-[#FF8533] transition-colors"
+          className="font-medium text-gray-900 dark:text-white hover:text-[#FF6A00] dark:hover:text-[#FF8533]"
         >
           Registrar empresa
         </button>
@@ -376,7 +376,7 @@ function SignUpView(props: SignUpViewProps) {
               type="text"
               autoComplete="organization"
               required
-              placeholder="Constructora Los Andes"
+              placeholder="Constructora Sur SpA"
               value={props.empresaNombre}
               onChange={(e) => props.onEmpresaChange(e.target.value)}
               className={INPUT_CLASS}
@@ -534,7 +534,7 @@ function SignUpView(props: SignUpViewProps) {
         <button
           type="button"
           onClick={props.onGoToSignIn}
-          className="font-medium text-[#1E1E1E] dark:text-white hover:text-[#FF6A00] dark:hover:text-[#FF8533] transition-colors"
+          className="font-medium text-gray-900 dark:text-white hover:text-[#FF6A00] dark:hover:text-[#FF8533]"
         >
           Iniciar sesión
         </button>
