@@ -22,7 +22,7 @@ export default function ModalOverlay({ children, className = '', onClose, ...pro
       const { scrollX, scrollY } = window;
       const saved = { position: body.style.position, top: body.style.top, left: body.style.left, width: body.style.width, overflow: body.style.overflow, paddingRight: body.style.paddingRight };
       const gap = window.innerWidth - document.documentElement.clientWidth;
-      if (gap > 0) body.style.paddingRight = `${parseFloat(getComputedStyle(body).paddingRight) + gap}px`;
+      if (gap > 0) body.style.paddingRight = `${Number.parseFloat(getComputedStyle(body).paddingRight) + gap}px`;
       Object.assign(body.style, { position: 'fixed', top: `-${scrollY}px`, left: `-${scrollX}px`, width: '100%', overflow: 'hidden' });
       document.documentElement.dataset.modalOpen = 'true';
       restorePage = () => {

@@ -1,7 +1,7 @@
 'use client';
 import ModalOverlay from '@/components/ModalOverlay';
 
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   FileSpreadsheet,
@@ -43,6 +43,7 @@ export default function EstadoPagoPdfModal({
   cambios,
   onRegistrarPago,
 }: EstadoPagoPdfModalProps) {
+  const formId = useId();
   const [modoCobro, setModoCobro] = useState<'avance' | 'personalizado'>('avance');
   const [montoCustomInput, setMontoCustomInput] = useState('');
   const [retencionPct, setRetencionPct] = useState<number>(0);
@@ -226,10 +227,11 @@ export default function EstadoPagoPdfModal({
         {/* Controles rápidos de configuración del EDP (Ocultos al imprimir) */}
         <div className="print:hidden px-4 sm:px-6 py-3 bg-kraft-100 dark:bg-[#0B0F14] border-b border-kraft-200 dark:border-[#263040] grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
           <div>
-            <label className="block font-mono font-semibold text-gray-600 dark:text-gray-300 mb-1">
+            <label htmlFor={`${formId}-modo`} className="block font-mono font-semibold text-gray-600 dark:text-gray-300 mb-1">
               Modalidad de Cobro
             </label>
             <select
+              id={`${formId}-modo`}
               value={modoCobro}
               onChange={(e) => {
                 const next = e.target.value as 'avance' | 'personalizado';
@@ -246,10 +248,11 @@ export default function EstadoPagoPdfModal({
           </div>
 
           <div>
-            <label className="block font-mono font-semibold text-gray-600 dark:text-gray-300 mb-1">
+            <label htmlFor={`${formId}-monto`} className="block font-mono font-semibold text-gray-600 dark:text-gray-300 mb-1">
               Monto Bruto EDP (CLP)
             </label>
             <input
+              id={`${formId}-monto`}
               type="text"
               disabled={modoCobro !== 'personalizado'}
               value={
@@ -263,10 +266,11 @@ export default function EstadoPagoPdfModal({
           </div>
 
           <div>
-            <label className="block font-mono font-semibold text-gray-600 dark:text-gray-300 mb-1">
+            <label htmlFor={`${formId}-retencion`} className="block font-mono font-semibold text-gray-600 dark:text-gray-300 mb-1">
               Retención Garantía
             </label>
             <select
+              id={`${formId}-retencion`}
               value={retencionPct}
               onChange={(e) => setRetencionPct(Number(e.target.value))}
               className="w-full rounded-lg border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] px-2.5 py-1.5 text-xs font-mono"
@@ -278,10 +282,11 @@ export default function EstadoPagoPdfModal({
           </div>
 
           <div>
-            <label className="block font-mono font-semibold text-gray-600 dark:text-gray-300 mb-1">
+            <label htmlFor={`${formId}-glosa`} className="block font-mono font-semibold text-gray-600 dark:text-gray-300 mb-1">
               Glosa / Hito de Cobro
             </label>
             <input
+              id={`${formId}-glosa`}
               type="text"
               placeholder="Ej: Término obra gruesa"
               value={observacionEdp}

@@ -23,6 +23,12 @@ test("el Centro de Mando prioriza obras y permite recorrer los módulos de una o
       await page.getByRole('button', { name: 'Emitir Estado de Pago (PDF)', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Estado de Pago de Obra', exact: true });
       await expect(dialog).toBeVisible();
+      await expect(dialog.getByLabel('Modalidad de Cobro', { exact: true })).toHaveValue('avance');
+      await expect(dialog.getByLabel('Monto Bruto EDP (CLP)', { exact: true })).toBeDisabled();
+      await dialog.getByLabel('Modalidad de Cobro', { exact: true }).selectOption('personalizado');
+      await dialog.getByLabel('Monto Bruto EDP (CLP)', { exact: true }).fill('125000');
+      await dialog.getByLabel('Retención Garantía', { exact: true }).selectOption('5');
+      await dialog.getByLabel('Glosa / Hito de Cobro', { exact: true }).fill('Avance de obra');
       await page.evaluate(() => { (window as any).__printCount = 0; window.print = () => { (window as any).__printCount++; }; });
       const downloading = page.waitForEvent('download');
       await dialog.getByRole('button', { name: 'Descargar PDF', exact: true }).click();

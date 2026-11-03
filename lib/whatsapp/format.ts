@@ -12,10 +12,15 @@ const count = (n: number, singular: string, plural: string) => `${n.toLocaleStri
 
 export function whatsappText(text: string) {
   return text.replace(/\r\n?/g, "\n")
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s]+)\)/g, "$1\n$2")
+    // Las partes no admiten otro inicio de enlace; un Markdown incompleto
+    // no vuelve a recorrer el mismo sufijo desde cada corchete.
+    .replace(/\[([^[\]\r\n]+)\]\((https?:\/\/[^\s[\]]+)\)/g, "$1\n$2")
     .replace(/\*\*([^*]+)\*\*/g, "*$1*")
-    .replace(/^#{1,6}\s+(.+)$/gm, "*$1*")
-    .replace(/^[ \t]*[-+]\s+/gm, "• ")
+    .split("\n").map((row) => {
+      const heading = /^#{1,6}[ \t]+/.exec(row);
+      if (heading && heading[0].length < row.length) return `*${row.slice(heading[0].length)}*`;
+      return row.replace(/^[ \t]*[-+][ \t]+/, "• ");
+    }).join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }

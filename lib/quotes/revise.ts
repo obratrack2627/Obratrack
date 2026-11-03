@@ -33,7 +33,12 @@ export function reviseQuote(original: CotizacionEstimacion, changes: any): Cotiz
       updated[field] = changes[field].trim();
     }
   }
-  if (updated.cliente_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updated.cliente_email)) fail('Revisa el correo del cliente.');
+  if (updated.cliente_email) {
+    const email = updated.cliente_email;
+    const at = email.indexOf('@');
+    const dot = email.lastIndexOf('.');
+    if (at <= 0 || at !== email.lastIndexOf('@') || dot <= at + 1 || dot === email.length - 1 || /\s/.test(email)) fail('Revisa el correo del cliente.');
+  }
   if (Object.hasOwn(changes, 'fecha_validez')) {
     const value = changes.fecha_validez;
     if (value && (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)) fail('Revisa la fecha de validez.');

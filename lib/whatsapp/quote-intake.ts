@@ -1,6 +1,7 @@
 import type { CotizacionEstimacion } from '@/types/database';
+import { stripTrailingPunctuation } from './text';
 export function acceptsQuotedProject(text: string) {
-  const value = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[.!]+$/, '');
+  const value = stripTrailingPunctuation(text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(), '.!');
   return /^(?:si|si[, ]+(?:creala|crea (?:la|esa|esta) obra)(?: con (?:el |un )?gantt(?: y (?:los |sus )?materiales)?)?|creala|crea(?:r)? (?:la |esa |esta )?obra(?: con (?:el |un )?gantt(?: y (?:los |sus )?materiales)?)?)$/.test(value);
 }
 export function quotedProjectDraft(q: CotizacionEstimacion) {
