@@ -11,6 +11,7 @@ import {
   signUpWithSupabase,
   resetPasswordWithSupabase,
   resendConfirmationEmail,
+  resumeSupabaseSession,
 } from '@/lib/supabase/auth';
 import { dataService } from '@/lib/data-service';
 
@@ -69,6 +70,7 @@ function resolveUrlAuthNotice(
   cuentaConfirmada: string | null,
   errorParam: string | null
 ): { success?: string; error?: string; forceSignIn?: boolean } {
+  if (errorParam === 'acceso_whatsapp') return { error: 'Tu perfil trabaja por WhatsApp. El acceso web es exclusivo para administradores y desarrolladores.', forceSignIn: true };
   if (cuentaConfirmada === 'true') {
     return {
       success: 'Correo confirmado. Ya puedes iniciar sesión.',
@@ -753,6 +755,16 @@ function LoginForm() {
   const [isResending, setIsResending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  useEffect(() => {
+    if (searchParams.get('error') === 'acceso_whatsapp') return;
+    let current = true;
+    void resumeSupabaseSession().then(result => {
+      if (!current || !result) return;
+      if (result.success) router.replace(resolveSafeRedirect(false));
+      else setErrorMsg(result.error || 'No se pudo renovar el acceso.');
+    });
+    return () => { current = false; };
+  }, [router, searchParams]);
   const [showPassword, setShowPassword] = useState(false);
 
   const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);

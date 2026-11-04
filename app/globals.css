@@ -331,3 +331,6 @@ input:-webkit-autofill:active {
   -webkit-text-fill-color: #F3F4F6 !important;
   caret-color: #F3F4F6;
 }
+
+html[data-modal-open] #obrabot-widget,
+html[data-mobile-nav-open] #obrabot-widget { visibility: hidden; pointer-events: none; }

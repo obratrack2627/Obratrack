@@ -303,7 +303,7 @@ test("la creación de obra pide los cinco datos, conserva el borrador y permite 
     { cliente_email: "ana@example.test", cliente_telefono: "+56987654321" },
     step.draft,
     [],
-    "ana@example.test y +56987654321",
+    "ana@example.test y +56987654321, RUT 12345678-5",
   );
   assert.equal(step.question, null);
   assert.equal(step.actions.at(-1).nombre, "Terraza");
@@ -318,7 +318,7 @@ test("el borrador no acepta contactos inventados y puede usar los del cliente ya
       cliente_nombre: "Ana",
       monto_cotizado: 2000000,
       cliente_email: "inventado@example.test",
-      cliente_telefono: "+56987654321",
+      cliente_telefono: "+56987654321", cliente_rut: "12345678-5",
     },
     null,
     [],
@@ -411,7 +411,7 @@ test("los datos obligatorios etiquetados se conservan cuando la IA omite email o
     { nombre: "Terraza" },
     null,
     [],
-    "Crea una obra llamada Terraza, cliente Ana Pérez, presupuesto 2,5 millones, email ana@example.test, teléfono +56987654321",
+    "Crea una obra llamada Terraza, cliente Ana Pérez, presupuesto 2,5 millones, email ana@example.test, teléfono +56987654321, RUT 12345678-5",
   );
   assert.equal(result.question, null);
   assert.equal(result.draft.monto_cotizado, 2500000);
@@ -430,7 +430,7 @@ test("una obra con los cinco datos y campos opcionales vacíos se puede ejecutar
     { nombre: "Terraza", dias: 0, partidas: [] },
     null,
     [],
-    "Crea una obra llamada Terraza, cliente Ana Pérez, presupuesto 2500000, email ana@example.test, teléfono +56987654321",
+    "Crea una obra llamada Terraza, cliente Ana Pérez, presupuesto 2500000, email ana@example.test, teléfono +56987654321, RUT 12345678-5",
   );
   assert.equal(result.question, null);
   const service = isolatedState(

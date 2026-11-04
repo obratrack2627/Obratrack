@@ -2,6 +2,8 @@ import { supabase } from './client';
 import { Usuario } from '@/types/database';
 import { supabaseService } from './supabase-service';
 import { dataService } from '@/lib/data-service';
+import { canAccessWeb, WEB_ACCESS_ERROR } from '@/lib/auth/access';
+import { establishWebSession, clearWebSession } from '@/lib/auth/session-client';
 
 export interface AuthResult {
   success: boolean;
@@ -56,9 +58,28 @@ async function ownProfile(): Promise<Usuario> {
   const company = await supabaseService.getEmpresaById(profile.empresa_id);
   return { ...profile, empresa_nombre: company?.nombre || '' } as Usuario;
 }
-function activateProfile(usuario: Usuario) {
+async function activateProfile(usuario: Usuario, token: string) {
+  if (!canAccessWeb(usuario)) {
+    await supabase.auth.signOut();
+    await clearWebSession();
+    dataService.clearActiveUser();
+    throw new Error(WEB_ACCESS_ERROR);
+  }
+  await establishWebSession(token);
+  const previous = dataService.getActiveUser();
+  if (!previous || previous.id !== usuario.id || previous.empresa_id !== usuario.empresa_id) dataService.clearChatSessionHistory();
   dataService.setActiveUser(usuario);
-  if (typeof window !== 'undefined') document.cookie = `obratrack_auth_token=${usuario.auth_user_id || usuario.id}; path=/; max-age=2592000; SameSite=Lax`;
+}
+
+export async function resumeSupabaseSession(): Promise<AuthResult | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.access_token) return null;
+  try {
+    const usuario = await ownProfile();
+    await activateProfile(usuario, data.session.access_token);
+    await dataService.loadTenantDataFromSupabase(usuario.empresa_id);
+    return { success: true, user: usuario };
+  } catch (cause) { return { success: false, error: (cause as Error).message }; }
 }
 
 /**
@@ -103,7 +124,7 @@ export async function signUpWithSupabase(
     let usuario: Usuario | undefined;
     if (!emailConfirmationRequired) {
       usuario = await ownProfile();
-      activateProfile(usuario);
+      await activateProfile(usuario, authData.session!.access_token);
       await dataService.loadTenantDataFromSupabase(usuario.empresa_id);
     }
 
@@ -140,13 +161,13 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
         const uRut = (u.rut || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         return uRut.length >= 7 && uRut === cleanDigits;
       });
-      if (match && match.email) {
-        resolvedEmail = match.email.toLowerCase();
+      if (match && (match.email_acceso || match.email)) {
+        resolvedEmail = (match.email_acceso || match.email).toLowerCase();
       } else {
         // Fallback robusto: consultar directamente a Supabase PostgreSQL
         const dbUser = await supabaseService.getUsuarioByRut(cleanDigits);
-        if (dbUser && dbUser.email) {
-          resolvedEmail = dbUser.email.toLowerCase();
+        if (dbUser && (dbUser.email_acceso || dbUser.email)) {
+          resolvedEmail = (dbUser.email_acceso || dbUser.email).toLowerCase();
         }
       }
     } catch (err) {
@@ -175,7 +196,7 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
 
     if (!authData?.user?.id || !authData.session) return { success: false, error: 'No se pudo iniciar una sesión válida.' };
     const usuario = await ownProfile();
-    activateProfile(usuario);
+    await activateProfile(usuario, authData.session.access_token);
     await dataService.loadTenantDataFromSupabase(usuario.empresa_id);
 
     return { success: true, user: usuario };
@@ -198,9 +219,7 @@ export async function signOutSupabase(): Promise<void> {
     console.warn('Error cerrando sesión en Supabase:', err);
   } finally {
     dataService.clearActiveUser();
-    if (typeof window !== 'undefined') {
-      document.cookie = 'obratrack_auth_token=; path=/; max-age=0; SameSite=Lax';
-    }
+    await clearWebSession();
   }
 }
 

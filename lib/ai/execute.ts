@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { AccionAsistenteIA } from '@/types/database';
 import { prepareActionPlan } from './actions';
 import { snapshot as takeSnapshot, changesBetween } from './rows';
+import { contactDatabaseMessage, teamContactFields } from './contacts';
 export { changesBetween } from './rows';
 const snapshot = () => takeSnapshot(dataService, tenant());
 
@@ -75,7 +76,27 @@ async function persist(job: Pending) {
   // Orden de claves externas. Reintentar guarda los mismos IDs; no vuelve a crear pagos o partidas.
   for (const [table, rows] of Object.entries(job.changed)) {
     for (const original of rows) {
-      const { trabajadores_ids, ...row } = original;
+      const { trabajadores_ids, _contacto_anterior, ...row } = original;
+      if (table === 'usuarios' && _contacto_anterior) {
+        const { data, error } = await supabase.rpc('actualizar_contacto_equipo', {
+          p_usuario: row.id,
+          p_datos: Object.fromEntries(teamContactFields.map(key => [key, row[key] ?? null])),
+          p_anterior: _contacto_anterior,
+        });
+        if (error) throw new Error(contactDatabaseMessage(error) || 'No se pudo confirmar la edición del contacto.');
+        if (data?.id !== row.id) throw new Error('El servidor no confirmó la edición del contacto.');
+        continue;
+      }
+      if (table === 'usuarios') {
+        const project = job.changed.proyectos?.find(project => project.trabajadores_ids?.includes(row.id));
+        const { data, error } = await supabase.rpc('crear_integrante_equipo', {
+          p_datos: Object.fromEntries(['id','nombre','rut','email','telefono_whatsapp','rol'].map(key => [key,row[key] ?? null])),
+          p_proyecto: project?.id || null,
+        });
+        if (error) throw new Error(contactDatabaseMessage(error) || 'No se pudo confirmar el alta del integrante con sus datos y obra.');
+        if (data?.id !== row.id) throw new Error('El servidor no confirmó el integrante registrado.');
+        continue;
+      }
       const { data, error } = await supabase
         .from(table)
         .upsert(row, { onConflict: 'id' })

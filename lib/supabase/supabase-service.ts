@@ -101,6 +101,7 @@ export class SupabaseService {
         rut: r.rut,
         nombre: r.nombre,
         email: r.email,
+        email_acceso: r.email_acceso,
         rol: r.rol,
         telefono_whatsapp: r.telefono_whatsapp,
         is_dev: Boolean(r.is_dev),
@@ -130,6 +131,7 @@ export class SupabaseService {
         rut: data.rut,
         nombre: data.nombre,
         email: data.email,
+        email_acceso: data.email_acceso,
         rol: data.rol,
         telefono_whatsapp: data.telefono_whatsapp,
         is_dev: Boolean(data.is_dev),
@@ -164,6 +166,7 @@ export class SupabaseService {
         rut: matched.rut,
         nombre: matched.nombre,
         email: matched.email,
+        email_acceso: matched.email_acceso,
         rol: matched.rol,
         telefono_whatsapp: matched.telefono_whatsapp,
         is_dev: Boolean(matched.is_dev),
@@ -193,6 +196,7 @@ export class SupabaseService {
         rut: data.rut,
         nombre: data.nombre,
         email: data.email,
+        email_acceso: data.email_acceso,
         rol: data.rol,
         telefono_whatsapp: data.telefono_whatsapp,
         is_dev: Boolean(data.is_dev),
@@ -244,6 +248,7 @@ export class SupabaseService {
         telefono: r.telefono,
         email: r.email,
         direccion: r.direccion,
+        comuna: r.comuna,
         created_at: r.created_at,
       }));
     } catch (err) {
@@ -261,6 +266,7 @@ export class SupabaseService {
       telefono: cliente.telefono || null,
       email: cliente.email || null,
       direccion: cliente.direccion || null,
+      comuna: cliente.comuna || null,
     };
     const { error } = await this.client.from('clientes').upsert(payload, { onConflict: 'id' });
     if (error) {

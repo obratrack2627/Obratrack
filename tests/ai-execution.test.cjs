@@ -24,11 +24,13 @@ beforeEach(() => {
   fixture.reset();
   localStorage.clear();
   localStorage.setItem("obratrack_active_user_v7", JSON.stringify(active));
+  localStorage.setItem('obratrack_usuarios_v7_test-company',JSON.stringify([active,...team]));
   localStorage.setItem(
     "obratrack_active_plan_v7_test-company",
     JSON.stringify("pro"),
   );
 });
+const team = ['Maestro A','Maestro B'].map((nombre,i)=>({id:'worker-'+i,empresa_id:active.empresa_id,nombre:nombre,email:nombre.toLowerCase()+'@empresa.cl',telefono_whatsapp:'+5698000000'+i,rol:'terreno',rut:i?'11111111-1':'12345678-5'}));
 const project = {
   tipo: "crear_proyecto",
   nombre: "Terraza",
@@ -60,9 +62,8 @@ test("crea obra, cliente, partidas, materiales y cuadrilla con IDs únicos y gua
   );
   assert.equal(fixture.tables.get("materiales_proyecto").length, 2);
   assert.equal(fixture.tables.get("proyecto_trabajadores").length, 2);
-  assert.equal(fixture.tables.get("usuarios").length, 2);
-  assert.equal(fixture.tables.get("usuarios")[0].rut, null);
-  assert.equal(fixture.tables.get("usuarios")[0].email, null);
+  assert.equal(dataService.getUsuarios().length, 3);
+  assert.equal(fixture.calls.some(c => c.table === 'usuarios' && c.mode === 'upsert'), false);
   const tables = fixture.calls
     .filter((x) => x.mode === "upsert")
     .map((x) => x.table);
@@ -81,6 +82,7 @@ test("valida todo el lote antes del primer efecto local o remoto", async () => {
   assert.equal(fixture.calls.length, 0);
 });
 test("un error de plan a mitad del lote revierte los cambios locales sin escribir en Supabase", async () => {
+  localStorage.setItem('obratrack_usuarios_v7_test-company',JSON.stringify([active,...team]));
   localStorage.setItem(
     "obratrack_active_plan_v7_test-company",
     JSON.stringify("gratis"),
@@ -239,11 +241,6 @@ test("IDs de clientes y actividades prevalecen sobre coincidencias parciales de 
 
 test("registrar asistencia de toda la obra exige cuadrilla y no usa por defecto a otros trabajadores de la empresa", async () => {
   await executeAI({ ...project, trabajadores_nombres: [] });
-  await executeAI({
-    tipo: "agregar_trabajador",
-    nombre: "Maestro fuera de la obra",
-    rol: "terreno",
-  });
   const p = dataService.getProyectos()[0];
   await assert.rejects(
     () =>
@@ -275,4 +272,29 @@ test("el documento conserva proveedor, monto y fecha documentales del contrato d
   assert.equal(d.proveedor_entidad, "Proveedor de materiales");
   assert.equal(d.monto_documento, 150000);
   assert.equal(d.fecha_documento, "2026-11-02");
+});
+
+test('la edición del contacto propio usa RPC y conserva el vínculo Auth y el rol', async () => {
+  localStorage.setItem('obratrack_active_plan_v7_test-company', JSON.stringify('pro_ia'));
+  fixture.handleRPC('actualizar_contacto_equipo', p => ({ data: { id: p.p_usuario, ...p.p_datos } }));
+  const outcome = await executeAI({ tipo: 'actualizar_trabajador', usuario_id: active.id, email: 'CONTACTO@EMPRESA.CL', telefono: '912345678' });
+  assert.equal(outcome.pendingId, undefined);
+  const call = fixture.rpcCalls.find(c => c.name === 'actualizar_contacto_equipo');
+  assert.equal(call.params.p_usuario, active.id);
+  assert.equal(call.params.p_datos.email, 'contacto@empresa.cl');
+  assert.equal(call.params.p_datos.telefono_whatsapp, '+56912345678');
+  assert.equal(call.params.p_anterior.email, active.email);
+  assert.equal(call.params.p_datos.rol, undefined);
+  assert.equal(fixture.calls.some(c => c.table === 'usuarios' && c.mode === 'upsert'), false);
+  assert.equal(dataService.getActiveUser().auth_user_id, active.auth_user_id);
+  assert.equal(dataService.getActiveUser().rol, 'admin');
+  assert.match(outcome.result.resultado_texto, /inicio de sesión se conserva/);
+});
+
+test('un contacto rechazado por el servidor queda pendiente sin afirmar que se guardó', async () => {
+  fixture.handleRPC('actualizar_contacto_equipo', () => ({ error: { message: 'CONTACT_CONFLICT' } }));
+  const outcome = await executeAI({ tipo: 'actualizar_trabajador', usuario_id: active.id, email: 'nuevo@empresa.cl' });
+  assert.equal(outcome.result, undefined);
+  assert.ok(outcome.pendingId);
+  assert.match(outcome.warning, /ficha cambió/);
 });

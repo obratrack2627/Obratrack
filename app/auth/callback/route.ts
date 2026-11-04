@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
-
-function sanitizeRedirectPath(path: string | null, defaultPath = '/dashboard'): string {
-  if (!path) return defaultPath;
-  if (path.startsWith('/') && !path.startsWith('//') && !path.includes('://')) {
-    return path;
-  }
-  return defaultPath;
-}
+import { supabaseUrl,supabaseAnonKey } from '@/lib/supabase/client';
+import { createClient } from '@supabase/supabase-js';
+import { serverFetch } from '@/lib/server-fetch';
 
 export async function GET(request: NextRequest) {
+  const supabase = createClient(supabaseUrl,supabaseAnonKey,{ auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: serverFetch } });
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
   const tokenHash = requestUrl.searchParams.get('token_hash');
@@ -28,11 +23,11 @@ export async function GET(request: NextRequest) {
 
   // Determinar ruta de destino por defecto según el tipo de flujo
   const isRecovery = type === 'recovery' || nextParam?.includes('actualizar-password');
-  const defaultTarget = isRecovery ? '/actualizar-password' : '/dashboard';
-  const targetPath = sanitizeRedirectPath(nextParam, defaultTarget);
+  const targetPath = isRecovery ? '/actualizar-password' : '/login';
 
   try {
-    let authUserId: string | null = null;
+    let sessionToken: string | null = null;
+    let refreshToken: string | null = null;
 
     // 1. Flujo PKCE moderno de Supabase Auth (código de un solo uso)
     if (code) {
@@ -43,7 +38,8 @@ export async function GET(request: NextRequest) {
         loginUrl.searchParams.set('error', 'enlace_expirado');
         return NextResponse.redirect(loginUrl);
       }
-      authUserId = data.user?.id || data.session?.user?.id || null;
+      sessionToken = data.session?.access_token || null;
+      refreshToken = data.session?.refresh_token || null;
     } 
     // 2. Flujo clásico de OTP / Token Hash
     else if (tokenHash && type) {
@@ -58,7 +54,8 @@ export async function GET(request: NextRequest) {
         loginUrl.searchParams.set('error', 'enlace_expirado');
         return NextResponse.redirect(loginUrl);
       }
-      authUserId = data.user?.id || data.session?.user?.id || null;
+      sessionToken = data.session?.access_token || null;
+      refreshToken = data.session?.refresh_token || null;
     }
 
     // Preparar redirección exitosa
@@ -67,19 +64,9 @@ export async function GET(request: NextRequest) {
       redirectUrl.searchParams.set('cuenta_confirmada', 'true');
     }
 
-    const response = NextResponse.redirect(redirectUrl);
-
-    // Si se obtuvo usuario autenticado, sincronizar cookie de sesión de ObraTrack
-    if (authUserId) {
-      response.cookies.set('obratrack_auth_token', authUserId, {
-        path: '/',
-        maxAge: 60 * 60 * 24 * 30, // 30 días
-        sameSite: 'lax',
-        httpOnly: false,
-      });
-    }
-
-    return response;
+    if (isRecovery && sessionToken && refreshToken)
+      redirectUrl.hash = new URLSearchParams({ access_token: sessionToken, refresh_token: refreshToken, type: 'recovery' }).toString();
+    return NextResponse.redirect(redirectUrl);
   } catch (err: any) {
     console.error('Excepción no controlada en /auth/callback:', err);
     const loginUrl = new URL('/login', request.url);

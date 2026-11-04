@@ -15,6 +15,8 @@ export function checkActionPermissions(
   message: string,
 ) {
   const actions = flattenActions(input);
+  if (!['admin', 'supervisor', 'terreno'].includes(user.rol))
+    throw new AIError('ACTION_FORBIDDEN', 'Tu cuenta no tiene permisos para gestionar obras.', 403);
   const current = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   if (actions.length && /^(?:solo (?:de )?consultar?|no registres ni cambies nada|sin guardar cambios|no ejecutes acciones)\b/.test(current))
     throw new AIError('READ_ONLY_REQUEST', 'La solicitud es solo de consulta; no se ejecutaron cambios.', 422);

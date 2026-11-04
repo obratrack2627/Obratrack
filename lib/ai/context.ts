@@ -71,11 +71,13 @@ export async function loadAIContext(client: any, user: any) {
     tables,
     context: {
       proyectos: service.getProyectos(),
-      trabajadores: tables.usuarios.map(({ id, nombre, rol }) => ({
+      trabajadores: tables.usuarios.map(({ id, nombre, rol, email, telefono_whatsapp, rut }) => ({
         id,
         nombre,
         rol,
+        email, telefono_whatsapp, rut,
       })),
+      usuario_actual: { id: user.id, nombre: user.nombre, rol: user.rol },
       clientes: tables.clientes,
       agenda: tables.agenda_eventos,
       rol: user.rol,

@@ -46,6 +46,8 @@ export interface Usuario {
   empresa_id: string;
   nombre: string;
   email: string;
+  /** Solo lectura: correo de Auth para resolver el ingreso por RUT. */
+  email_acceso?: string;
   rol: UserRole;
   telefono_whatsapp: string;
   rut?: string;
@@ -477,6 +479,8 @@ export type TipoAccionIA =
   | 'eliminar_proyecto'
   | 'crear_cliente'
   | 'actualizar_cliente'
+  | 'actualizar_trabajador'
+  | 'solicitar_datos_persona'
   | 'agregar_trabajador'
   | 'asignar_trabajador'
   | 'desasignar_trabajador'
@@ -517,6 +521,7 @@ export interface MensajeChatCotizador {
   remitente: 'usuario' | 'agente';
   texto: string;
   timestamp: string;
+  created_at?: string;
   sugerencias?: string[];
   accion_ejecutada?: AccionAsistenteIA;
   cotizacion_generada?: CotizacionEstimacion;

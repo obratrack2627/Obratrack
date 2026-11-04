@@ -14,13 +14,14 @@ import {
 import { aiHeaders } from "@/lib/ai/client";
 import { dataService } from "@/lib/data-service";
 import AIMessageTools from "./AIMessageTools";
+import EvidenceLink from './EvidenceLink';
 import EvidenceImage from "./EvidenceImage";
 import ChatMessageFormatter from "./ChatMessageFormatter";
 import WhatsAppAvisosPanel from "./WhatsAppAvisosPanel";
 const labels: Record<string, string> = {
   consulta: "Consulta",
   registro: "Registro de obra",
-  fotografia: "Fotografía",
+  fotografia: "Evidencia",
   cotizacion: "Cotización",
   datos_obra: "Datos pendientes",
   aviso: "Aviso al equipo",
@@ -363,7 +364,7 @@ export default function WhatsAppJefePanel() {
                       ))}
                     </div>
                   )}
-                  {m.adjunto?.path && (
+                  {m.adjunto?.path && (!m.adjunto.mime_type || m.adjunto.mime_type.startsWith('image/')) && (
                     <button
                       type="button"
                       onClick={() =>
@@ -379,6 +380,7 @@ export default function WhatsAppJefePanel() {
                       />
                     </button>
                   )}
+                  {m.adjunto?.path && m.adjunto.mime_type && !m.adjunto.mime_type.startsWith('image/') && <EvidenceLink path={m.adjunto.path} name={m.adjunto.archivo_nombre || 'Archivo de obra'} />}
                   <div className="flex flex-wrap gap-2 items-center text-xs">
                     <span className="text-green-700">
                       {category === "datos_obra"

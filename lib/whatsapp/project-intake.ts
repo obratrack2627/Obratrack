@@ -2,6 +2,7 @@ import { canonicalPhone } from "./meta";
 import { resolveEntity } from "@/lib/ai/actions";
 import { AIError } from "@/lib/ai/errors";
 import type { AccionAsistenteIA } from "@/types/database";
+import { validarRutChileno } from '@/lib/utils';
 const norm = (v: string) =>
   v
     .normalize("NFD")
@@ -32,6 +33,7 @@ export function projectIntake(
     "cliente_id",
     "cliente_email",
     "cliente_telefono",
+    'cliente_rut',
     "comuna",
     "direccion",
     "descripcion",
@@ -109,6 +111,7 @@ export function projectIntake(
     draft.cliente_nombre = client.nombre;
     draft.cliente_email ||= client.email;
     draft.cliente_telefono ||= client.telefono;
+    draft.cliente_rut ||= client.rut;
   }
   // No aceptar contactos inventados por la IA. Los datos ya pedidos se conservan en el borrador.
   for (const key of ["nombre", "cliente_nombre", "cliente_email"]) {
@@ -157,6 +160,11 @@ export function projectIntake(
     else draft.cliente_telefono = "+" + phone;
   }
   const missing: string[] = [];
+  const literalRut = userText.match(/\b\d{7,8}-[\dkK]\b|\b\d{1,2}\.\d{3}\.\d{3}-[\dkK]\b/)?.[0];
+  if (literalRut && validarRutChileno(literalRut)) draft.cliente_rut = literalRut;
+  if (draft.cliente_rut && draft.cliente_rut !== previous?.cliente_rut && draft.cliente_rut !== client?.rut
+    && !userText.replace(/[.\s-]/g,'').toLowerCase().includes(draft.cliente_rut.replace(/[.\s-]/g,'').toLowerCase())) delete draft.cliente_rut;
+  if (!client && (!draft.cliente_rut || !validarRutChileno(draft.cliente_rut))) missing.push('RUT válido del nuevo cliente');
   if (!text(draft.cliente_nombre)) missing.push("Nombre del cliente");
   if (!text(draft.nombre)) missing.push("Nombre de la obra");
   if (

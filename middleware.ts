@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { verifyWebSession } from '@/lib/auth/web-session';
+import { isSessionJWT } from '@/lib/auth/access';
 
 // Rutas públicas que NO requieren autenticación previa
 const PUBLIC_PAGES = [
@@ -13,20 +15,17 @@ const PUBLIC_PAGES = [
 
 // Endpoints de API específicamente públicos (ej. webhooks externos de Meta)
 const PUBLIC_API_ROUTES = [
+  '/api/auth/session',
   '/api/whatsapp/procesar-envios',
   '/api/webhook/whatsapp', // Webhook entrante de Meta WhatsApp Cloud API
 ];
 
-const UUID_SESSION_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const JWT_SESSION_REGEX =
-  /^[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/;
 
 export function isValidAuthToken(token?: string): boolean {
   if (!token) return false;
   const trimmed = token.trim();
   if (trimmed.length < 32 || trimmed.length > 4096) return false;
-  return UUID_SESSION_REGEX.test(trimmed) || JWT_SESSION_REGEX.test(trimmed);
+  return isSessionJWT(trimmed);
 }
 
 export function sanitizeRedirectPath(path: string | null): string {
@@ -56,6 +55,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // Verificar estructura de token / identificador de sesión de ObraTrack
+  // Cada API valida Auth y el rol mediante authorizeAI; también admite Bearer para móviles.
+  if (pathname.startsWith('/api/')) return NextResponse.next();
   const authToken = request.cookies.get('obratrack_auth_token')?.value;
   const isAuthorized = isValidAuthToken(authToken);
 
@@ -73,7 +74,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  try {
+    const session = await verifyWebSession(authToken!);
+    if (session?.allowed) return NextResponse.next();
+    const login = new URL('/login', request.url);
+    if (session) login.searchParams.set('error', 'acceso_whatsapp');
+    const response = NextResponse.redirect(login);
+    response.cookies.delete('obratrack_auth_token');
+    return response;
+  } catch {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
 }
 
 export const config = {

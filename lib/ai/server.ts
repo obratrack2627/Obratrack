@@ -12,11 +12,15 @@ import { isAlternativeRequest } from './prompt';
 import { checkActionPermissions } from "./permissions";
 import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
 import { randomUUID } from "node:crypto";
+import { canAccessWeb, WEB_ACCESS_ERROR, isSessionJWT } from '@/lib/auth/access';
 
 export async function authorizeAI(request: NextRequest) {
   const authorization = (request.headers.get('authorization') || '').trim().split(/\s+/);
-  const bearer = authorization.length === 2 && authorization[0].toLowerCase() === 'bearer' ? authorization[1] : undefined;
-  if (!bearer)
+  const bearer = authorization.length === 2 && authorization[0].toLowerCase() === 'bearer' ? authorization[1] : request.cookies.get('obratrack_auth_token')?.value;
+  if (authorization.length === 1 && ['POST', 'PATCH', 'DELETE', 'PUT'].includes(request.method)
+    && request.headers.get('origin') && request.headers.get('origin') !== request.nextUrl.origin)
+    throw new AIError('ORIGIN_FORBIDDEN', 'El origen de la solicitud no está permitido.', 403);
+  if (!bearer || (authorization.length === 1 && !isSessionJWT(bearer)))
     throw new AIError(
       "AUTH_REQUIRED",
       "Inicia sesión nuevamente para usar el asistente.",
@@ -38,7 +42,7 @@ export async function authorizeAI(request: NextRequest) {
     );
   const { data: user, error: profileError } = await client
     .from("usuarios")
-    .select("id,empresa_id,rol,nombre")
+    .select("id,empresa_id,rol,nombre,is_dev")
     .or(`id.eq.${data.user.id},auth_user_id.eq.${data.user.id}`)
     .maybeSingle();
   if (profileError || !user?.empresa_id)
@@ -47,7 +51,8 @@ export async function authorizeAI(request: NextRequest) {
       "Tu cuenta no tiene una empresa disponible para gestionar obras.",
       403,
     );
-  return { client, user };
+  if (!canAccessWeb(user)) throw new AIError('WEB_ROLE_FORBIDDEN', WEB_ACCESS_ERROR, 403);
+  return { client, user: { ...user, rol: user.is_dev === true ? 'admin' : user.rol } };
 }
 
 export function errorJSON(error: unknown) {

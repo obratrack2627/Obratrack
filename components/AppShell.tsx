@@ -7,6 +7,7 @@ import CloudSync from '@/components/CloudSync';
 import ThemeProvider from '@/components/ThemeProvider';
 import ThemeToggle from '@/components/ThemeToggle';
 import ObraBotLauncher from '@/components/ObraBotLauncher';
+import WebSession from '@/components/WebSession';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -32,6 +33,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       ) : (
         <div className="min-h-screen flex flex-col md:flex-row bg-[var(--bg-page)] text-[var(--text-primary)] antialiased transition-colors duration-200">
           <Sidebar />
+          <WebSession />
           <div className="hidden md:flex fixed top-3.5 right-4 z-40 print:hidden">
             <ThemeToggle />
           </div>

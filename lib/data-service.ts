@@ -38,6 +38,7 @@ import {supabase} from './supabase/client';
 import { isDeveloperEmail } from './auth-utils';
 import { resolveEntity } from './ai/actions';
 import { roundLine } from './ai/protocol';
+import { checkTeamContact, validateContactAction } from './ai/contacts';
 
 // Claves base de almacenamiento local para persistencia
 export const DATA_STORAGE_KEYS = {
@@ -170,7 +171,7 @@ export class DataService {
           ...usuarios[existsIndex],
           ...active,
           rol: active.rol || 'admin',
-          is_dev: isDeveloperEmail(active.email),
+          is_dev: active.is_dev === true || isDeveloperEmail(active.email),
         };
       }
     }
@@ -227,7 +228,7 @@ export class DataService {
   getActiveUser(): Usuario | null {
     const user = this.getItem<Usuario | null>(KEYS.ACTIVE_USER, null);
     if (user) {
-      user.is_dev = isDeveloperEmail(user.email);
+      user.is_dev = user.is_dev === true || isDeveloperEmail(user.email);
     }
     return user;
   }
@@ -1449,27 +1450,15 @@ export class DataService {
     });
   }
 
-  asignarTrabajadorAProyecto(trabajadorIdent: string, proyectoIdent: string): boolean {
+  asignarTrabajadorAProyecto(trabajadorIdent: string, proyectoIdent: string, rut?: string): boolean {
     const proyectos = this.getProyectos();
     const proyecto = resolveEntity(proyectos, proyectoIdent);
     const usuarios = this.getUsuarios();
-    const nombre = trabajadorIdent.trim().toLowerCase();
-    let trabajador = usuarios.find(u => u.id === trabajadorIdent) || usuarios.find(u => u.nombre.toLowerCase() === nombre);
-    if (!trabajador) {
-      const candidatos = usuarios.filter(u => u.nombre.toLowerCase().includes(nombre));
-      if (candidatos.length > 1) throw new Error('Indica el nombre completo del trabajador.');
-      trabajador = candidatos[0];
-    }
+    const cleanRut = (value: string) => value.replace(/[.-]/g,'').toUpperCase();
+    const candidates = rut ? usuarios.filter(user => user.rut && cleanRut(user.rut) === cleanRut(rut)) : usuarios;
+    const trabajador = resolveEntity(candidates, rut ? candidates[0]?.id || trabajadorIdent : trabajadorIdent);
 
-    // Si el trabajador mencionado no existe en el equipo, crearlo automáticamente
-    if (!trabajador && trabajadorIdent.trim().length > 0) {
-      trabajador = this.agregarTrabajadorDesdeIA({
-        nombre: trabajadorIdent.trim(),
-        rol: 'terreno',
-      });
-    }
-
-    if (!trabajador) return false;
+    if (!trabajador) throw new Error('Registra primero al trabajador con sus datos obligatorios antes de asignarlo.');
     const trabajadorId = trabajador.id;
 
     const current = proyecto.trabajadores_ids || [];
@@ -1480,9 +1469,14 @@ export class DataService {
     return true;
   }
 
-  /**
-   * Motor Universal de Ejecución de Acciones de IA sobre toda la plataforma
-   */
+  private contactSummary(action: any) {
+    const labels: Record<string, string> = { nuevo_nombre: 'Nombre', telefono: 'Teléfono', email: 'Correo de contacto', rut: 'RUT', direccion: 'Dirección', comuna: 'Comuna' };
+    return Object.entries(labels).filter(([key]) => action[key] !== undefined)
+      .map(([key, label]) => `• ${label}: ${action[key] || 'sin registrar'}`).join('\n')
+      + (action.tipo === 'actualizar_trabajador' && action.email !== undefined ? '\nEl correo de inicio de sesión se conserva; este cambio actualiza la ficha de contacto.' : '');
+  }
+
+  /** Motor de ejecución de acciones de IA. */
   ejecutarAccionGlobalIA(accion: any, contextProyectoId?: string): AccionAsistenteIA | null {
     if (!accion || !accion.tipo) return null;
 
@@ -1562,9 +1556,12 @@ export class DataService {
       }
 
       case 'actualizar_cliente': {
+        validateContactAction(accion);
         const clis = this.getClientes();
         const cli = resolveEntity(clis, accion.cliente_id || accion.nombre);
         const updated = this.updateCliente(cli.id, {
+          nombre: accion.nuevo_nombre ?? cli.nombre,
+          rut: accion.rut ?? cli.rut,
           telefono: accion.telefono ?? cli.telefono,
           email: accion.email ?? cli.email,
           comuna: accion.comuna ?? cli.comuna,
@@ -1572,11 +1569,39 @@ export class DataService {
         });
         return {
           tipo: 'actualizar_cliente',
-          titulo: `Cliente Actualizado: ${cli.nombre}`,
+          titulo: `Cliente actualizado: ${updated?.nombre || cli.nombre}`,
           detalles: updated || cli,
-          resultado_texto: `Contacto actualizado: ${updated?.telefono || cli.telefono}`,
+          resultado_texto: this.contactSummary(accion),
           link_destino: `/clientes`,
           link_texto: 'Ver Clientes ➔',
+        };
+      }
+
+      case 'actualizar_trabajador': {
+        const active = this.getActiveUser();
+        if (!active || !['admin', 'supervisor'].includes(active.rol))
+          throw new Error('Solo administradores y supervisores pueden editar los contactos del equipo.');
+        validateContactAction(accion);
+        const users = this.getUsuarios();
+        const target = resolveEntity(users, accion.usuario_id || accion.trabajador_nombre || accion.nombre);
+        checkTeamContact(target, accion, users);
+        const updated = { ...target };
+        if (accion.nuevo_nombre !== undefined) updated.nombre = accion.nuevo_nombre;
+        if (accion.telefono !== undefined) updated.telefono_whatsapp = accion.telefono;
+        if (accion.email !== undefined) updated.email = accion.email;
+        if (accion.rut !== undefined) updated.rut = accion.rut;
+        // Mantener los permisos y la identidad de acceso: no inferir privilegios del nuevo correo.
+        this.setItem(this.getTenantKey(KEYS.USUARIOS), users.map(u => u.id === target.id ? updated : u));
+        if (active.id === target.id) this.setItem(KEYS.ACTIVE_USER, updated);
+        const phoneChanged = accion.telefono !== undefined && accion.telefono !== target.telefono_whatsapp;
+        return {
+          tipo: 'actualizar_trabajador',
+          titulo: `Contacto actualizado: ${updated.nombre}`,
+          detalles: updated,
+          resultado_texto: this.contactSummary(accion) + (phoneChanged
+            ? `\n${updated.telefono_whatsapp ? 'El acceso por WhatsApp queda vinculado al nuevo teléfono.' : 'El acceso por WhatsApp queda desvinculado hasta registrar otro teléfono.'}${active.id === target.id ? ' Tu número anterior dejará de acceder a ObraBot.' : ''}` : ''),
+          link_destino: '/equipo',
+          link_texto: 'Ver equipo',
         };
       }
 
@@ -1606,6 +1631,8 @@ export class DataService {
           });
           creados.push(u);
         });
+        if (accion.proyecto_id || accion.proyecto_nombre)
+          creados.forEach(user => this.asignarTrabajadorAProyecto(user.id, accion.proyecto_id || accion.proyecto_nombre));
 
         return {
           tipo: 'agregar_trabajador',
@@ -1631,7 +1658,7 @@ export class DataService {
         let asignadosCount = 0;
         if (proj) {
           nombres.forEach((nombre) => {
-            if (this.asignarTrabajadorAProyecto(nombre, proj.id)) {
+            if (this.asignarTrabajadorAProyecto(nombre, proj.id, accion.rut)) {
               asignadosCount++;
             }
           });
@@ -2006,6 +2033,10 @@ export class DataService {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;
         const doc = this.createDocumentoObra({
+          archivo_url: accion.archivo_url,
+          archivo_nombre: accion.archivo_nombre,
+          archivo_tamano: accion.archivo_tamano,
+          mime_type: accion.mime_type,
           proyecto_id: proj.id,
           categoria: (['contrato', 'plano', 'factura_boleta', 'correo', 'permiso_normativa', 'otro'].includes(
             accion.categoria || ''
@@ -2098,13 +2129,20 @@ export class DataService {
   }
 
   async loadProyectoChatFromSupabase(proyectoId: string): Promise<MensajeChatProyecto[]> {
+    const active = this.getActiveUser();
+    if (!active?.empresa_id) return [];
     try {
-      const active = this.getActiveUser();
-      const msgs = await supabaseService.getProyectoChatHistorial(proyectoId, active?.empresa_id);
+      const msgs = await supabaseService.getProyectoChatHistorial(proyectoId, active.empresa_id);
+      const current = this.getActiveUser();
+      if (current?.id !== active.id || current.empresa_id !== active.empresa_id) return [];
       if (msgs && msgs.length > 0) {
         const key = this.getTenantKey(`${KEYS.CHAT_PROYECTOS}_${proyectoId}`);
-        this.setItem(key, msgs);
-        return msgs;
+        const local = this.getProyectoChatHistorial(proyectoId);
+        const merged = new Map(local.map(message => [message.id,message]));
+        msgs.forEach(message => merged.set(message.id,message));
+        const history = Array.from(merged.values()).sort((a,b) => a.created_at.localeCompare(b.created_at));
+        this.setItem(key, history);
+        return history;
       }
     } catch (e) {
       console.warn('Error cargando chat de proyecto desde Supabase:', e);
@@ -2253,7 +2291,10 @@ export class DataService {
           this.setItem(this.getTenantKey(KEYS.CLIENTES), mergeById(this.getClientes(), cloud.clientes, 'clientes'));
         }
         if (Array.isArray(cloud.usuarios)) {
-          this.setItem(this.getTenantKey(KEYS.USUARIOS), mergeById(this.getUsuarios(), cloud.usuarios, 'usuarios'));
+          const usuarios = mergeById(this.getUsuarios(), cloud.usuarios, 'usuarios');
+          const profile = usuarios.find(u => u.id === active.id && u.empresa_id === empresaId);
+          if (profile) this.setItem(KEYS.ACTIVE_USER, { ...active, ...profile });
+          this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
         }
         if (Array.isArray(cloud.actividades)) {
           this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), mergeById(this.getActividades(), cloud.actividades, 'actividades'));

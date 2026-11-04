@@ -181,6 +181,7 @@ export async function POST(request: NextRequest) {
               telefono: c.telefono || null,
               email: c.email || null,
               direccion: c.direccion || null,
+              comuna: c.comuna || null,
             },
             { onConflict: "id" },
           ),

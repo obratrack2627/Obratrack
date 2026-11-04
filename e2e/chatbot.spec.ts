@@ -42,6 +42,9 @@ test("el Centro de Mando prioriza obras y permite recorrer los módulos de una o
 
 const ownerId = "00000000-0000-0000-0000-000000000001";
 const company = "fixture-company";
+function fixtureToken(role='admin',dev=false) {
+  return Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url')+'.'+Buffer.from(JSON.stringify({sub:ownerId,role:'authenticated',web_role:role,dev,exp:Math.floor(Date.now()/1000)+3600})).toString('base64url')+'.fixture-signature';
+}
 const owner = {
   id: ownerId,
   auth_user_id: ownerId,
@@ -77,9 +80,11 @@ async function setup(
   reply: any,
   seedProject = false,
   failPayment = false,
+  developer = false,
 ) {
+  const activeOwner = { ...owner, is_dev: developer };
   const db: Record<string, any[]> = {
-    usuarios: [owner],
+    usuarios: [activeOwner],
     empresas: [{ id: company, plan_id: "pro_ia" }],
     proyectos: seedProject
       ? [
@@ -113,7 +118,7 @@ async function setup(
   await page.context().addCookies([
     {
       name: "obratrack_auth_token",
-      value: ownerId,
+      value: fixtureToken('admin',developer),
       domain: "localhost",
       path: "/",
     },
@@ -164,13 +169,15 @@ async function setup(
       const payload = {
         sub: owner.id,
         role: "authenticated",
+        dev: owner.is_dev === true,
         aud: "authenticated",
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 3600,
       };
-      const token = `${btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))}.${btoa(JSON.stringify(payload))}.fixture`;
+      const encode = (value: object) => btoa(JSON.stringify(value)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
+      const token = `${encode({alg:'HS256',typ:'JWT'})}.${encode(payload)}.fixture-signature`;
       localStorage.setItem(
-        "sb-gaoxbkvhtdsgqxjihlrv-auth-token",
+        "sb-localhost-auth-token",
         JSON.stringify({
           access_token: token,
           refresh_token: "fixture-refresh",
@@ -189,7 +196,7 @@ async function setup(
         }),
       );
     },
-    { owner, company, seedProject },
+    { owner: activeOwner, company, seedProject },
   );
   await page.route("**/api/cotizador/chat", async (route) => {
     expect(route.request().headers().authorization).toMatch(/^Bearer /);
@@ -233,15 +240,17 @@ async function setup(
       ),
     }),
   );
-  await page.route("**/*.supabase.co/rest/v1/**", async (route) => {
+  await page.route("**/rest/v1/**", async (route) => {
     const url = new URL(route.request().url()),
       table = url.pathname.split("/").pop()!,
       method = route.request().method();
+    const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*','Access-Control-Allow-Methods':'GET,POST,PATCH,DELETE,OPTIONS'};
+    if(method==='OPTIONS'){await route.fulfill({status:204,headers:cors});return;}
     db[table] ||= [];
     if (table === "pagos" && method === "POST" && failPayment && !failed) {
       failed = true;
       await route.fulfill({
-        status: 500,
+        status: 500, headers: cors,
         contentType: "application/json",
         body: JSON.stringify({ code: "NETWORK", message: "Falló el guardado" }),
       });
@@ -272,7 +281,7 @@ async function setup(
       data = removed;
     }
     await route.fulfill({
-      status: 200,
+      status: 200, headers: cors,
       contentType: "application/json",
       body: JSON.stringify(data),
     });
@@ -305,7 +314,7 @@ test('las ventanas móviles aparecen dentro de la pantalla y conservan el despla
   const dialog = page.getByRole('dialog', { name: 'Registrar Nuevo Proyecto', exact: true });
   await expect(dialog).toBeVisible();
   await page.screenshot({ path: '/tmp/obratrack-mobile-project-modal-open.png' });
-  await expect(page.getByRole('link', { name: 'Abrir ObraBot' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Abrir ObraBot' })).toBeHidden();
   const card = dialog.locator(':scope > div').first();
   for (const viewport of [{ width: 390, height: 844 }, { width: 360, height: 640 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(viewport);
@@ -328,7 +337,7 @@ test('las ventanas móviles aparecen dentro de la pantalla y conservan el despla
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(before);
-  await expect(page.getByRole('link', { name: 'Abrir ObraBot' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Abrir ObraBot' })).toBeVisible();
 });
 
 test('clientes, equipo, finanzas y suscripción usan ventanas accesibles en un celular pequeño', async ({ page }) => {
@@ -353,39 +362,43 @@ test('clientes, equipo, finanzas y suscripción usan ventanas accesibles en un c
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('ObraBot abre el asistente correcto y su nuevo nombre aparece en la navegación móvil', async ({ page }) => {
+test('ObraBot abre un chat flotante contextual sin abandonar el módulo en celular', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await setup(page, { respuesta: 'Tienes una obra activa.', accion: null }, true);
+  const db = await setup(page, { respuesta: 'Tienes una obra activa.', accion: null }, true);
+  db.mensajes_chat_proyecto=[{id:'native-context',proyecto_id:'p-existing',empresa_id:company,remitente:'usuario',texto:'El radier tiene 12 cm de espesor.',created_at:'2026-11-04T12:00:00Z'}];
+  await page.route('**/api/proyectos/p-existing/chat', async route => { expect(route.request().postDataJSON().historial.some((m:any)=>m.texto.includes('12 cm'))).toBe(true);await route.fulfill({json:{respuesta:'Conservo los 12 cm de espesor.',accion:null}}); });
   await page.goto('/proyectos');
-  const launcher = page.getByRole('link', { name: 'Abrir ObraBot' });
-  await expect(launcher).toHaveAttribute('href', '/cotizador');
-  await page.getByRole('button', { name: 'Abrir menú' }).click();
-  await expect(launcher).toBeHidden();
-  await expect(page.getByRole('link', { name: /^ObraBot/ })).toBeVisible();
+  const launcher = page.getByRole('button', { name: 'Abrir ObraBot' });
+  await expect(launcher).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir menú' }).click();await expect(launcher).toBeHidden();
   await page.getByRole('button', { name: 'Abrir menú' }).click();
   await launcher.click();
-  await expect(page).toHaveURL(/\/cotizador$/);
-  await expect(page.getByRole('heading', { name: 'ObraBot', exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Mensaje para el asistente' })).toBeVisible();
-  await expect(launcher).toHaveCount(0);
-  await send(page, '¿Qué obras tengo?');
-  await expect(page.getByText('Tienes una obra activa.', { exact: true })).toBeVisible();
-  await page.goto('/proyectos/p-existing/finanzas');
-  await expect(launcher).toHaveAttribute('href', '/proyectos/p-existing/ia');
-  await page.screenshot({ path: '/tmp/obratrack-mobile-obrabot-launcher.png' });
+  const panel=page.getByRole('dialog',{name:'Chat con ObraBot'});
+  await expect(panel).toBeVisible();await expect(page).toHaveURL(/\/proyectos$/);
+  await panel.getByLabel('Mensaje a ObraBot').fill('¿Qué obras tengo?');await panel.getByRole('button',{name:'Enviar mensaje'}).click();
+  await expect(panel.getByText('Tienes una obra activa.',{exact:true})).toBeVisible();
+  const rect=await panel.boundingBox();expect(rect!.y).toBeGreaterThanOrEqual(0);expect(rect!.y+rect!.height).toBeLessThanOrEqual(844);
+  await page.screenshot({path:'/tmp/obratrack-floating-chat-mobile.png'});
+  await page.keyboard.press('Escape');await expect(panel).toHaveCount(0);
+  await page.goto('/proyectos/p-existing/finanzas');await launcher.click();
+  await expect(panel.getByLabel('Obra de la conversación')).toHaveValue('p-existing');
+  await expect(panel.getByText('Tienes una obra activa.',{exact:true})).toHaveCount(0);
+  await expect(panel.getByText('El radier tiene 12 cm de espesor.',{exact:true})).toBeVisible();
+  await panel.getByLabel('Mensaje a ObraBot').fill('¿Qué espesor acordamos?');await panel.getByRole('button',{name:'Enviar mensaje'}).click();
+  await expect(panel.getByText('Conservo los 12 cm de espesor.',{exact:true})).toBeVisible();
+  await panel.getByRole('link',{name:'Abrir chat completo'}).click();
+  await expect(page).toHaveURL(/\/proyectos\/p-existing\/ia$/);
+  await expect(page.getByText('Conservo los 12 cm de espesor.',{exact:true})).toBeVisible();
 });
 
-test('el perfil de terreno puede abrir ObraBot conservando sus permisos de obra', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const db = await setup(page, { respuesta: 'Puedo ayudarte con los avances de tu obra asignada.', accion: null }, true);
-  db.usuarios[0] = { ...db.usuarios[0], rol: 'terreno' };
-  db.proyectos[0].trabajadores_ids = [ownerId];
-  await page.addInitScript(({ owner }) => localStorage.setItem('obratrack_active_user_v7', JSON.stringify({ ...owner, rol: 'terreno' })), { owner });
-  await page.goto('/cotizador');
-  await expect(page.getByRole('heading', { name: 'ObraBot', exact: true }).first()).toBeVisible();
-  await send(page, '¿Qué puedo reportar en mi obra?');
-  await expect(page.getByText('Puedo ayudarte con los avances de tu obra asignada.', { exact: true })).toBeVisible();
-  await expect(page).toHaveURL(/\/cotizador$/);
+test('el perfil de terreno y supervisor sin Dev no pueden abrir páginas protegidas con JWT', async ({ page }) => {
+  await setup(page, {respuesta:'No debe consultarse',accion:null},true);
+  for(const role of ['terreno','supervisor']){
+    await page.context().addCookies([{name:'obratrack_auth_token',value:fixtureToken(role),domain:'localhost',path:'/'}]);
+    await page.goto('/cotizador');await expect(page).toHaveURL(/\/login\?error=acceso_whatsapp/);
+    await expect(page.getByText('Tu perfil trabaja por WhatsApp.',{exact:false})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Abrir ObraBot'})).toHaveCount(0);
+  }
 });
 
 test("cotización generada se muestra en PDF con los mismos costos, IVA y cliente", async ({
@@ -587,9 +600,10 @@ test("ObraBot respeta el bloqueo del plan gratis y mantiene el botón de tema fi
   await expect(themeButtons).toHaveCount(1);
   await themeButtons.first().click();
   await expect(page.locator("html")).toHaveClass(/dark/);
-  await expect(page.getByRole('link', { name: 'Abrir ObraBot' })).toBeVisible();
-  await page.getByRole('link', { name: 'Abrir ObraBot' }).click();
-  await expect(page.getByText(/Desbloquea ObraBot/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Abrir ObraBot' })).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir ObraBot' }).click();
+  await expect(page.getByRole('dialog',{name:'Chat con ObraBot'}).getByText('Disponible con Pro o Pro IA.',{exact:false})).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard$/);
   await expect(
     page.locator('button[aria-label="Cambiar tema"]:visible'),
   ).toHaveCount(1);
@@ -1094,7 +1108,7 @@ test("el celular recupera las obras creadas desde otro navegador al volver y al 
     ).toBeVisible();
     await page.evaluate(async () => {
       const session = JSON.parse(
-        localStorage.getItem("sb-gaoxbkvhtdsgqxjihlrv-auth-token")!,
+        localStorage.getItem("sb-localhost-auth-token")!,
       );
       const response = await fetch("/api/supabase/sync", {
         method: "POST",
@@ -1610,4 +1624,47 @@ test('ObraBot recupera medidas anteriores a diez mensajes y las conserva al reca
  await expect(page.getByText('Conservo el radier de 6 por 4 metros y la corrección a 12 cm.',{exact:true})).toBeVisible();
  await page.reload();await expect(page.getByText('Conservo el radier de 6 por 4 metros y la corrección a 12 cm.',{exact:true})).toBeVisible();
  await send(page,'¿Qué espesor habíamos acordado?');expect(requests).toBe(2);
+});
+
+test('Equipo muestra las obras con poco texto y registra trabajadores sin contraseñas ni duplicados',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ const db=await setup(page,{respuesta:'Consulta',accion:null},true);
+ db.usuarios.push({id:'worker-old',empresa_id:company,nombre:'Maestro Existente',email:'maestro@example.test',rut:'20000002-1',telefono_whatsapp:'+56911112222',rol:'terreno'});
+ db.proyectos[0].trabajadores_ids=['worker-old'];
+ await page.route('**/api/equipo/crear-usuario',async route=>{
+  const input=route.request().postDataJSON();
+  expect(input.proyecto_id).toBe('p-existing');expect(input.password).toBeUndefined();expect(input.empresa_id).toBeUndefined();
+  const user={id:'worker-new',empresa_id:company,nombre:input.nombre,email:input.email,rut:input.rut,telefono_whatsapp:input.telefono,rol:input.rol};
+  db.usuarios.push(user);db.proyectos[0].trabajadores_ids.push(user.id);
+  await route.fulfill({json:{success:true,user}});
+ });
+ await page.goto('/equipo');
+ await expect(page.getByLabel('Obras de Maestro Existente').getByRole('link',{name:'Terraza'})).toBeVisible();
+ const add=page.getByRole('button',{name:'Agregar Trabajador',exact:true});
+ await expect(add).not.toContainText('+');expect(await add.locator('svg.lucide-plus').count()).toBe(1);
+ await add.click();const dialog=page.getByRole('dialog',{name:'Agregar trabajador',exact:true});
+ await expect(dialog.getByText(/contraseña|Clave de Acceso/)).toHaveCount(0);
+ await dialog.locator('#equipo-nombre').fill('Pedro Morales');await dialog.locator('#equipo-rut').fill('12345678-5');
+ await dialog.getByLabel('Correo de contacto').fill('pedro@example.test');await dialog.locator('#equipo-telefono').fill('+56987654321');await dialog.getByLabel(/^Obra/).selectOption('p-existing');
+ await dialog.getByRole('button',{name:'Registrar trabajador',exact:true}).click();
+ await expect(dialog).toHaveCount(0);await expect(page.getByText('Pedro Morales',{exact:true})).toBeVisible();
+ expect(db.usuarios.filter(user=>user.nombre==='Pedro Morales')).toHaveLength(1);
+ await expect(page.getByLabel('Obras de Pedro Morales').getByRole('link',{name:'Terraza'})).toBeVisible();
+ await page.screenshot({path:'/tmp/obratrack-team-mobile.png',fullPage:true});
+});
+
+test('solo Developer ve el selector de planes y confirma el cambio antes de actualizar la interfaz',async({page})=>{
+ await setup(page,{respuesta:'Consulta',accion:null},true);
+ await page.goto('/planes');await expect(page.getByRole('button',{name:'Cambiar plan de desarrollo'})).toHaveCount(0);
+ const context=await page.context().browser()!.newContext();
+ try {
+  const developer=await context.newPage();
+  const db=await setup(developer,{respuesta:'Consulta',accion:null},true,false,true);
+  await developer.route('**/api/dev/plan',async route=>{const input=route.request().postDataJSON();expect(input.plan).toBe('pro');db.empresas[0].plan_id=input.plan;await route.fulfill({json:{plan_id:input.plan}})});
+  await developer.goto('/planes');await developer.getByRole('button',{name:'Cambiar plan de desarrollo'}).click();
+  await developer.getByLabel('Plan de desarrollo',{exact:true}).selectOption('pro');
+  await expect(developer.getByRole('dialog',{name:'Tu suscripción'})).toHaveCount(0);
+  await expect(developer.locator('aside').getByText('Plan Pro',{exact:true})).toBeVisible();
+  expect(db.empresas[0].plan_id).toBe('pro');
+ } finally { await context.close(); }
 });
