@@ -270,7 +270,7 @@ export async function sendMetaText(to: string, text: string) {
   }
 }
 export async function downloadMetaMedia(id: string) {
-  if (!/^[\d]+$/.test(id)) throw new Error("Adjunto no válido.");
+  if (!/^[\d]+$/.test(id)) throw new AIError('MEDIA_INVALID', 'Reenvía el archivo; su identificador no es válido.', 422);
   const headers = {
     Authorization: `Bearer ${process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN}`,
   };
@@ -292,9 +292,9 @@ export async function downloadMetaMedia(id: string) {
     throw new Error("Origen de adjunto no permitido.");
   if (
     data.file_size > 10 * 1024 * 1024 ||
-    !/^(audio|image)\//.test(data.mime_type || "")
+    (!/^(audio|image)\//.test(data.mime_type || '') && !['application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(data.mime_type))
   )
-    throw new Error("Adjunto demasiado grande o formato no admitido.");
+    throw new AIError('MEDIA_FORMAT', 'Envía JPG, PNG, WebP, PDF, Word o Excel de hasta 10 MB. También se admiten notas de voz.', 422);
   const res = await serverFetch(url, { headers });
   if (!res.ok) throw new Error("No se pudo descargar el adjunto.");
   const chunks: Uint8Array[] = [];
@@ -307,7 +307,7 @@ export async function downloadMetaMedia(id: string) {
     size += value.length;
     if (size > 10 * 1024 * 1024) {
       await reader.cancel();
-      throw new Error("Adjunto demasiado grande.");
+      throw new AIError('MEDIA_SIZE', 'El archivo debe ocupar hasta 10 MB.', 422);
     }
     chunks.push(value);
   }

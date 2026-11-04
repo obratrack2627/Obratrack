@@ -87,6 +87,16 @@ async function persist(job: Pending) {
         if (data?.id !== row.id) throw new Error('El servidor no confirmó la edición del contacto.');
         continue;
       }
+      if (table === 'usuarios') {
+        const project = job.changed.proyectos?.find(project => project.trabajadores_ids?.includes(row.id));
+        const { data, error } = await supabase.rpc('crear_integrante_equipo', {
+          p_datos: Object.fromEntries(['id','nombre','rut','email','telefono_whatsapp','rol'].map(key => [key,row[key] ?? null])),
+          p_proyecto: project?.id || null,
+        });
+        if (error) throw new Error(contactDatabaseMessage(error) || 'No se pudo confirmar el alta del integrante con sus datos y obra.');
+        if (data?.id !== row.id) throw new Error('El servidor no confirmó el integrante registrado.');
+        continue;
+      }
       const { data, error } = await supabase
         .from(table)
         .upsert(row, { onConflict: 'id' })

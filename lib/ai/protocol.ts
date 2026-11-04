@@ -161,8 +161,8 @@ export function validateAction(raw: any): AIAction {
   if (a.tipo === 'actualizar_trabajador' && !text(a.usuario_id) && !text(a.trabajador_nombre) && !text(a.nombre))
     fail('Indica el integrante del equipo que quieres actualizar.');
   if (['actualizar_cliente', 'actualizar_trabajador'].includes(a.tipo)) validateContactAction(a);
-  if (a.tipo === "agregar_trabajador")
-    a.rol = ["terreno", "supervisor"].includes(a.rol) ? a.rol : "terreno";
+  if (a.tipo === 'agregar_trabajador' && a.rol !== undefined && !['terreno','supervisor'].includes(a.rol))
+    fail('Elige terreno o supervisor para registrar al integrante.');
   if (a.tipo === "agregar_trabajadores") {
     if (!Array.isArray(a.trabajadores) || !a.trabajadores.length)
       fail("Falta la lista de trabajadores.");
@@ -468,6 +468,8 @@ export function parseChatResponse(raw: string) {
   }
   return {
     respuesta: parsed.respuesta.trim(),
+    ...(parsed.registro_propuesto && typeof parsed.registro_propuesto === 'object' && !Array.isArray(parsed.registro_propuesto)
+      ? { registro_propuesto: parsed.registro_propuesto } : {}),
     ...(parsed.busqueda_materiales &&
     typeof parsed.busqueda_materiales === "object" &&
     !Array.isArray(parsed.busqueda_materiales)

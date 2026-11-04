@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     const path = request.nextUrl.searchParams.get("path") || "";
     if (
       !path.startsWith(user.empresa_id + "/") ||
-      !/^[-\w]+\/[-\w]+\/[a-f0-9]{64}\.(jpg|png|webp)$/.test(path)
+      !/^[-\w]+\/[-\w]+\/[a-f0-9]{64}\.(jpg|png|webp|pdf|docx|xlsx)$/.test(path)
     )
       throw new AIError("IMAGE_FORBIDDEN", "La foto no está disponible.", 403);
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY)

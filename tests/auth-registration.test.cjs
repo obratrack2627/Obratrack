@@ -8,17 +8,19 @@ const { dataService } = require('../lib/data-service.ts');
 const { signUpWithSupabase, signInWithSupabase } = require('../lib/supabase/auth.ts');
 const uid='00000000-0000-0000-0000-000000000001';
 let activated, calls;
+const originalFetch=global.fetch;
 beforeEach(() => {
   calls=0; activated=null;
+  global.fetch=async (url, init)=>{assert.equal(url,'/api/auth/session');assert.equal(init.headers.Authorization,'Bearer fixture');return new Response(JSON.stringify({user:{id:uid,rol:'admin'}}),{status:200})};
   global.window={location:{origin:'http://localhost:3000'}};global.document={cookie:''};
   supabaseService.saveEmpresa=async()=>{throw Error('El navegador no debe elegir la empresa ni el plan')};
   supabaseService.saveUsuario=async()=>{throw Error('El navegador no debe asignarse un perfil')};
   supabaseService.getEmpresaById=async()=>({id:'owned-company',nombre:'Empresa propia'});
   dataService.setActiveUser=(u)=>{activated=u};
-  dataService.loadTenantDataFromSupabase=async()=>{assert.match(document.cookie,new RegExp(uid));return{success:true}};
+  dataService.loadTenantDataFromSupabase=async()=>{assert.equal(activated.auth_user_id,uid);return{success:true}};
   fixture.supabase.rpc=async(name)=>{calls++;assert.equal(name,'completar_registro_actual');return {data:{id:'legacy-user',auth_user_id:uid,empresa_id:'owned-company',nombre:'Constructor',rol:'admin'},error:null}};
 });
-afterEach(()=>{delete global.window;delete global.document});
+afterEach(()=>{delete global.window;delete global.document;global.fetch=originalFetch});
 test('registro con confirmación no intenta escrituras sin sesión ni activa un perfil inventado',async()=>{
   fixture.supabase.auth.signUp=async()=>({data:{user:{id:uid},session:null},error:null});
   const result=await signUpWithSupabase('constructor@example.test','Contraseña123','Constructor','12.345.678-5','Mi empresa');

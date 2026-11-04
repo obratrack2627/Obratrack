@@ -14,9 +14,12 @@ export async function storeEvidence(
     "image/jpeg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
+    'application/pdf': 'pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
   };
   if (!ext[media.mimeType])
-    throw new AIError("IMAGE_FORMAT", "Envía una foto JPG, PNG o WebP.", 422);
+    throw new AIError("IMAGE_FORMAT", "Envía JPG, PNG, WebP, PDF, Word o Excel.", 422);
   const buffer = Buffer.from(media.data, "base64");
   if (!buffer.length || buffer.length > 10 * 1024 * 1024)
     throw new AIError("IMAGE_SIZE", "La foto debe ocupar hasta 10 MB.", 422);
@@ -37,6 +40,8 @@ export async function storeEvidence(
     origen_message_id: messageId,
     proyecto_id: null as string | null,
     descripcion: "",
+    archivo_tamano: buffer.length,
+    archivo_nombre: `evidencia.${ext[media.mimeType]}`,
   };
 }
 
@@ -48,10 +53,11 @@ export function evidenceActions(
   text: string,
 ) {
   let project: any;
+  if (attachment.proyecto_id) project = projects.find(p => p.id === attachment.proyecto_id);
   const refs = actions
     .map((a) => a.proyecto_id || a.proyecto_nombre)
     .filter(Boolean);
-  if (new Set(refs).size === 1)
+  if (!project && new Set(refs).size === 1)
     try {
       project = resolveEntity(projects, refs[0]);
     } catch {}
@@ -72,6 +78,8 @@ export function evidenceActions(
       linked: false,
     };
   const photoUrl = evidencePrefix + attachment.path;
+  const isPhoto = attachment.mime_type?.startsWith('image/') !== false;
+  const isReceipt = /boleta|factura|comprobante|gasto/i.test(text + ' ' + (attachment.descripcion || ''));
   let used = false;
   const updated = actions.map((a) => {
     if (
@@ -80,7 +88,7 @@ export function evidenceActions(
       (a.proyecto_id === project.id || a.proyecto_nombre === project.nombre)
     ) {
       used = true;
-      return { ...a, foto_url: photoUrl };
+      return { ...a, ...(isPhoto ? { foto_url: photoUrl } : {}) };
     }
     return a;
   });
@@ -95,8 +103,14 @@ export function evidenceActions(
       tipo_bitacora: /incidente|inconveniente|problema|accidente/i.test(text)
         ? "incidente"
         : "avance",
-      foto_url: photoUrl,
+      ...(isPhoto ? { foto_url: photoUrl } : {}),
     });
+  if (!isPhoto || isReceipt) {
+    const file = { archivo_url: photoUrl, archivo_nombre: attachment.archivo_nombre || 'Documento de obra', archivo_tamano: attachment.archivo_tamano, mime_type: attachment.mime_type };
+    const existing = updated.find(a => a.tipo === 'registrar_documento' && (a.proyecto_id === project.id || a.proyecto_nombre === project.nombre));
+    if (existing) Object.assign(existing, file);
+    else updated.push({ tipo: 'registrar_documento', proyecto_id: project.id, nombre: attachment.archivo_nombre || (isReceipt ? 'Comprobante de gasto' : 'Documento recibido por WhatsApp'), categoria: isReceipt ? 'factura_boleta' : 'otro', descripcion: text.slice(0,1000), ...file });
+  }
   return {
     actions: updated,
     attachment: { ...attachment, proyecto_id: project.id },

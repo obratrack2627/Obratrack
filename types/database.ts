@@ -480,6 +480,7 @@ export type TipoAccionIA =
   | 'crear_cliente'
   | 'actualizar_cliente'
   | 'actualizar_trabajador'
+  | 'solicitar_datos_persona'
   | 'agregar_trabajador'
   | 'asignar_trabajador'
   | 'desasignar_trabajador'
@@ -520,6 +521,7 @@ export interface MensajeChatCotizador {
   remitente: 'usuario' | 'agente';
   texto: string;
   timestamp: string;
+  created_at?: string;
   sugerencias?: string[];
   accion_ejecutada?: AccionAsistenteIA;
   cotizacion_generada?: CotizacionEstimacion;

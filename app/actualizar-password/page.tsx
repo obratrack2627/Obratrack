@@ -118,14 +118,8 @@ export default function ActualizarPasswordPage() {
       setSuccessMsg('¡Contraseña actualizada con éxito! Redirigiendo a ObraTrack...');
       setIsLoading(false);
 
-      // Sincronizar cookie de sesión si existe usuario
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.id && typeof window !== 'undefined') {
-        document.cookie = `obratrack_auth_token=${session.user.id}; path=/; max-age=2592000; SameSite=Lax`;
-      }
-
       setTimeout(() => {
-        router.replace('/dashboard');
+        router.replace('/login');
       }, 1200);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error inesperado al cambiar contraseña.');

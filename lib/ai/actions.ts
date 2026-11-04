@@ -1,5 +1,6 @@
 import { flattenActions, type AIAction } from './protocol';
 import { checkTeamContact } from './contacts';
+import { registrationFields } from '@/lib/registrations';
 
 export function resolveEntity<T extends { id: string; nombre: string }>(
   items: T[],
@@ -71,6 +72,14 @@ export function prepareActionPlan(
   const actions = flattenActions(input);
   // Se verifica el lote completo antes de modificar el primer registro.
   for (const [i, a] of Array.from(actions.entries())) {
+    if (a.tipo === 'agregar_trabajador' || a.tipo === 'agregar_trabajadores') {
+      for (const worker of a.tipo === 'agregar_trabajadores' ? a.trabajadores : [a]) {
+        const assignment = actions.find(action => action.tipo === 'asignar_trabajador' && action.trabajador_nombre === worker.nombre);
+        const checked = registrationFields({ ...worker, tipo: 'trabajador', proyecto_id: a.proyecto_id || assignment?.proyecto_id, proyecto_nombre: a.proyecto_nombre || assignment?.proyecto_nombre });
+        if (checked.missing.length) throw new Error('Completa el registro antes de crearlo: ' + checked.missing.join(', '));
+        for (const field of ['nombre','rut','email','telefono','rol'] as const) worker[field] = checked.draft[field];
+      }
+    }
     if (['crear_proyecto', 'crear_proyecto_completo'].includes(a.tipo))
       projects.push({ id: `planned-${i}`, nombre: a.nombre });
     if (['crear_proyecto', 'crear_proyecto_completo'].includes(a.tipo)) {

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findNearestComuna, findRegionForComuna, REGIONES_CHILE } from '@/lib/chile-locations';
+import { authorizeAI, errorJSON } from '@/lib/ai/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    await authorizeAI(request);
     const { searchParams } = new URL(request.url);
     const latStr = searchParams.get('lat');
     const lngStr = searchParams.get('lng');
@@ -182,10 +184,6 @@ export async function GET(request: NextRequest) {
       lng,
     });
   } catch (error: any) {
-    console.error('Error in /api/geocode/reverse:', error);
-    return NextResponse.json(
-      { error: error?.message || 'Error en reverse geocoding' },
-      { status: 500 }
-    );
+    return errorJSON(error);
   }
 }

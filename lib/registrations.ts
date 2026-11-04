@@ -1,0 +1,25 @@
+import { validateContactAction } from '@/lib/ai/contacts';
+export type PersonDraft = { tipo: 'trabajador' | 'cliente'; nombre?: string; rut?: string; telefono?: string; email?: string; rol?: string; proyecto_id?: string; proyecto_nombre?: string; direccion?: string; comuna?: string };
+export function registrationFields(input: PersonDraft) {
+  const draft = { ...input };
+  const missing: string[] = [];
+  const fields: Record<string, string> = { nombre: draft.tipo === 'cliente' ? 'Nombre o razón social' : 'Nombre completo', rut: 'RUT válido', telefono: 'Teléfono con código de país', email: 'Correo electrónico' };
+  for (const [field, label] of Object.entries(fields)) {
+    const value = draft[field as keyof PersonDraft];
+    if (typeof value !== 'string' || !value.trim()) { missing.push(label); continue; }
+    if (field === 'nombre') {
+      draft.nombre = value.trim();
+      if (value.length > 150 || (draft.tipo === 'trabajador' && value.trim().split(/\s+/).length < 2)) missing.push(label);
+    } else {
+      try {
+        const action = validateContactAction({ tipo: 'actualizar_cliente', [field]: value });
+        Object.assign(draft, { [field]: action[field] });
+      } catch { missing.push(label); delete draft[field as keyof PersonDraft]; }
+    }
+  }
+  if (draft.tipo === 'trabajador') {
+    if (!['terreno', 'supervisor'].includes(draft.rol || '')) missing.push('Rol: terreno o supervisor');
+    if (draft.rol !== 'supervisor' && !draft.proyecto_id && !draft.proyecto_nombre) missing.push('Obra asignada (para terreno)');
+  }
+  return { draft, missing };
+}

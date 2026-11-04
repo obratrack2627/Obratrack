@@ -316,3 +316,15 @@ test('actualizar desde la nube incorpora los contactos editados en WhatsApp al u
   assert.equal(dataService.getUsuarios()[0].nombre,profile.nombre);
   assert.equal(dataService.getActiveUser().auth_user_id,user.auth_user_id);
 });
+
+test('el historial de proyecto pendiente no se guarda en la empresa de una sesión nueva',async()=>{
+ const {supabaseService}=require('../lib/supabase/supabase-service.ts');
+ const original=supabaseService.getProyectoChatHistorial;let finish;
+ supabaseService.getProyectoChatHistorial=()=>new Promise(resolve=>{finish=resolve});
+ try {
+  const loading=dataService.loadProyectoChatFromSupabase('p1');
+  localStorage.setItem('obratrack_active_user_v7',JSON.stringify({id:'new-user',empresa_id:'b',rol:'admin'}));
+  finish([{id:'old-private',proyecto_id:'p1',empresa_id:'a',remitente:'usuario',texto:'Contexto de otra empresa',created_at:'2026-11-04T12:00:00Z'}]);
+  assert.deepEqual(await loading,[]);assert.deepEqual(dataService.getProyectoChatHistorial('p1'),[]);
+ } finally {supabaseService.getProyectoChatHistorial=original;}
+});

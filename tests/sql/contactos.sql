@@ -31,9 +31,9 @@ BEGIN
  RAISE EXCEPTION 'Se esperaba el error %',p_error;
 END $$;
 
--- Un supervisor modifica el contacto del administrador usando su JWT, conserva Auth y permisos.
+-- El administrador modifica su contacto usando JWT, conserva Auth y permisos.
 SET LOCAL ROLE authenticated;
-SET LOCAL request.jwt.claim.sub='10000000-0000-0000-0000-000000000002';
+SET LOCAL request.jwt.claim.sub='10000000-0000-0000-0000-000000000001';
 SET LOCAL request.jwt.claim.role='authenticated';
 SELECT public.actualizar_contacto_equipo('qa-contactos-admin',pg_temp.contacto('qa-contactos-admin')||'{"email":"qa-contactos-nuevo@example.test"}',pg_temp.contacto('qa-contactos-admin'));
 -- Respuesta perdida: se acepta el mismo resultado aunque la versión previa sea antigua.
@@ -47,7 +47,7 @@ SELECT pg_temp.falla($q$SELECT public.actualizar_contacto_equipo('qa-contactos-e
 SELECT pg_temp.falla($q$SELECT public.actualizar_contacto_equipo('qa-contactos-externo','{"nombre":"Ajeno","email":null,"telefono_whatsapp":null,"rut":null}','{}')$q$,'CONTACT_FORBIDDEN');
 SELECT pg_temp.falla($q$SELECT public.actualizar_contacto_equipo_interno('qa-contactos-b','qa-contactos-externo','qa-contactos-externo','{}','{}')$q$,'permission denied');
 SET LOCAL request.jwt.claim.sub='10000000-0000-0000-0000-000000000003';
-SELECT pg_temp.falla($q$SELECT public.actualizar_contacto_equipo('qa-contactos-terreno','{}','{}')$q$,'CONTACT_FORBIDDEN');
+SELECT pg_temp.falla($q$SELECT public.actualizar_contacto_equipo('qa-contactos-terreno','{}','{}')$q$,'WEB_ROLE_FORBIDDEN');
 RESET ROLE;
 UPDATE auth.users SET email='qa-contactos-login-verificado@example.test' WHERE id='10000000-0000-0000-0000-000000000001';
 DO $$ BEGIN
@@ -81,8 +81,8 @@ DO $$ BEGIN
  IF EXISTS(SELECT 1 FROM public.whatsapp_mensajes WHERE message_id='qa-contactos-fallo') OR EXISTS(SELECT 1 FROM public.clientes WHERE id='qa-contactos-cli' AND comuna='Temuco') THEN RAISE EXCEPTION 'Lote parcialmente guardado'; END IF;
 END $$;
 -- También preserva el mecanismo de alta de integrantes nuevos, sin cuenta de acceso.
-SELECT public.aplicar_lote_copiloto('qa-contactos-nuevo','qa-contactos-a','qa-contactos-admin','56980000006','Agrega trabajador','Registrado',null,null,
- '{"usuarios":[{"id":"qa-contactos-nuevo","empresa_id":"qa-contactos-a","nombre":"Nueva persona","rol":"terreno","telefono_whatsapp":"+56980000008","email":null,"rut":null}]}','{}');
+SELECT pg_temp.falla($q$SELECT public.aplicar_lote_copiloto('qa-contactos-nuevo','qa-contactos-a','qa-contactos-admin','56980000006','Agrega trabajador','Registrado',null,null,
+ '{"usuarios":[{"id":"qa-contactos-nuevo","empresa_id":"qa-contactos-a","nombre":"Nueva persona","rol":"terreno","telefono_whatsapp":"+56980000008","email":null,"rut":null}]}','{}')$q$,'REGISTRATION_REQUIRED');
 SELECT pg_temp.falla($q$SELECT public.aplicar_lote_copiloto('qa-contactos-rol','qa-contactos-a','qa-contactos-supervisor','56980000002','Cambia rol','No permitido',null,null,jsonb_build_object('usuarios',jsonb_build_array(pg_temp.fila('qa-contactos-admin')||'{"rol":"supervisor"}')),'{}')$q$,'CONTACT_FORBIDDEN');
 RESET ROLE;
 ROLLBACK;

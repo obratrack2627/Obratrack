@@ -1,12 +1,13 @@
 /** @type {import('next').NextConfig} */
+const supabaseOrigin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://gaoxbkvhtdsgqxjihlrv.supabase.co').origin;
 const contentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.googleapis.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: blob: https:",
+  `img-src 'self' data: blob: https: ${supabaseOrigin}`,
   "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self' ws: wss: https://*.supabase.co https://*.googleapis.com",
-  "frame-src 'self' https://www.google.com https://maps.google.com https://*.google.com",
+  `connect-src 'self' ws: wss: https://*.supabase.co https://*.googleapis.com ${supabaseOrigin}`,
+  `frame-src 'self' https://www.google.com https://maps.google.com https://*.google.com ${supabaseOrigin}`,
   "frame-ancestors 'self'",
   "base-uri 'self'",
   "form-action 'self'",

@@ -22,6 +22,9 @@ import {
   Terminal,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import Link from 'next/link';
+import { registrationFields } from '@/lib/registrations';
+import { aiHeaders } from '@/lib/ai/client';
 import ChangePasswordModal from '@/components/ChangePasswordModal';
 import { dataService } from '@/lib/data-service';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
@@ -38,7 +41,8 @@ export default function EquipoPage() {
   const [editingUser, setEditingUser] = useState<Usuario | null>(null);
   const [userToDelete, setUserToDelete] = useState<Usuario | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [createdCredentials, setCreatedCredentials] = useState<{ email: string; pass: string; nombre: string } | null>(null);
+  const [projectId, setProjectId] = useState('');
+  const [saving, setSaving] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   // Filtros
@@ -49,7 +53,6 @@ export default function EquipoPage() {
   const [nombre, setNombre] = useState('');
   const [rut, setRut] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [telefono, setTelefono] = useState('+56 9 ');
   const [rol, setRol] = useState<UserRole>('terreno');
 
@@ -71,6 +74,8 @@ export default function EquipoPage() {
 
   useEffect(() => {
     loadData();
+    window.addEventListener('obratrack_cloud_synced', loadData);
+    return () => window.removeEventListener('obratrack_cloud_synced', loadData);
   }, []);
 
   const showToast = (msg: string) => {
@@ -85,77 +90,22 @@ export default function EquipoPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nombre.trim()) return;
-
-    if (!validarRutChileno(rut)) {
-      showToast('⚠️ El RUT ingresado no es válido según el formato oficial chileno.');
-      return;
-    }
-
-    if (!email.trim() || !email.includes('@')) {
-      showToast('⚠️ Debes ingresar un correo electrónico válido para el inicio de sesión del maestro.');
-      return;
-    }
-
-    if (!password || password.length < 6) {
-      showToast('⚠️ La contraseña debe tener al menos 6 caracteres.');
-      return;
-    }
-
-    const currentActive = dataService.getActiveUser();
-    const empresaId = currentActive?.empresa_id || 'e1111111-1111-4111-a111-111111111111';
-
+    const checked = registrationFields({ tipo: 'trabajador', nombre, rut, email, telefono, rol, proyecto_id: projectId });
+    if (checked.missing.length) { showToast('Completa: ' + checked.missing.join(', ')); return; }
+    setSaving(true);
     try {
-      const res = await fetch('/api/equipo/crear-usuario', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre: nombre.trim(),
-          rut: rut.trim(),
-          email: email.trim().toLowerCase(),
-          password,
-          telefono: telefono.trim(),
-          rol,
-          empresa_id: empresaId,
-        }),
+      const response = await fetch('/api/equipo/crear-usuario', {
+        method: 'POST', headers: await aiHeaders(), body: JSON.stringify(checked.draft),
       });
-
-      const resData = await res.json();
-      if (!res.ok) {
-        showToast(`⚠️ ${resData.error || 'No se pudo crear el usuario en Supabase.'}`);
-        return;
-      }
-
-      if (resData.user) {
-        dataService.createUsuario(resData.user);
-      }
-    } catch (err) {
-      console.warn('Error en api crear-usuario:', err);
-      dataService.createUsuario({
-        empresa_id: empresaId,
-        nombre: nombre.trim(),
-        email: email.trim().toLowerCase(),
-        telefono_whatsapp: telefono.trim(),
-        rut: rut.trim(),
-        rol,
-      });
-    }
-
-    setCreatedCredentials({
-      nombre: nombre.trim(),
-      email: email.trim().toLowerCase(),
-      pass: password,
-    });
-
-    setIsCreateModalOpen(false);
-    setNombre('');
-    setRut('');
-    setEmail('');
-    setPassword('');
-    setTelefono('+56 9 ');
-    setRol('terreno');
-    loadData();
-    showToast(`✅ Cuenta creada en Supabase Auth para "${nombre.trim()}".`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'No se pudo registrar el trabajador.');
+      const synced = await dataService.pullFromCloudServer();
+      setIsCreateModalOpen(false);
+      setNombre(''); setRut(''); setEmail(''); setTelefono('+56 9 '); setRol('terreno'); setProjectId('');
+      loadData();
+      showToast(synced.success ? 'Trabajador registrado y vinculado a WhatsApp.' : 'Trabajador registrado. Reintenta la sincronización para actualizar el listado.');
+    } catch (error) { showToast((error as Error).message); }
+    finally { setSaving(false); }
   };
 
   const handleOpenEdit = (user: Usuario) => {
@@ -250,7 +200,7 @@ export default function EquipoPage() {
               className="px-4 py-2 bg-obra-orange hover:bg-obra-orange-hover text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm flex items-center gap-1.5 font-heading transition-all"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Agregar Trabajador</span>
+              <span>Agregar Trabajador</span>
             </button>
           </div>
         }
@@ -505,10 +455,15 @@ export default function EquipoPage() {
                     </div>
                   </div>
 
+                  <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`Obras de ${user.nombre}`}>
+                    {obrasAsignadas.length ? obrasAsignadas.slice(0,2).map(p => <Link key={p.id} href={`/proyectos/${p.id}/gantt`} className="max-w-full truncate rounded-md bg-kraft-50 px-2 py-1 text-[11px] text-gray-600 hover:text-obra-orange" title={p.nombre}>{p.nombre}</Link>)
+                      : <span className="text-[11px] text-gray-400">Sin obra asignada</span>}
+                    {obrasAsignadas.length > 2 && <details className="text-[11px] text-gray-500"><summary className="cursor-pointer">+{obrasAsignadas.length-2} obras</summary>{obrasAsignadas.slice(2).map(p => <Link className="block py-1 hover:text-obra-orange" key={p.id} href={`/proyectos/${p.id}/gantt`}>{p.nombre}</Link>)}</details>}
+                  </div>
                   <div className="pt-4 mt-4 border-t border-kraft-200/80 flex items-center justify-between text-xs text-gray-500">
                     <span className="flex items-center gap-1 font-mono text-[11px]">
                       <HardHat className="w-3.5 h-3.5 text-obra-orange" />
-                      <span>{user.rol === 'terreno' ? 'Habilitado WhatsApp' : 'Acceso al Panel'}</span>
+                      <span>{user.rol === 'admin' || user.is_dev ? 'Panel web' : 'WhatsApp'}</span>
                     </span>
                     <span className="text-[10px] font-mono bg-kraft-100 text-navy-900 px-2 py-0.5 rounded">
                       {obrasAsignadas.length} {obrasAsignadas.length === 1 ? 'obra' : 'obras'}
@@ -522,64 +477,6 @@ export default function EquipoPage() {
 
       </div>
 
-      {/* Modal de Credenciales Creadas */}
-      {createdCredentials && (
-        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-md bg-white dark:bg-[#141A23] border border-emerald-500/40 rounded-3xl p-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-heading font-bold text-base text-gray-900 dark:text-white">
-                  ¡Cuenta de Maestro Creada!
-                </h3>
-                <p className="text-xs text-gray-500">Credenciales listas para entregar al trabajador</p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-gray-50 dark:bg-[#0F141C] border border-gray-200 dark:border-gray-800 rounded-2xl space-y-2 text-xs font-mono mb-4">
-              <div>
-                <span className="text-gray-400">Trabajador:</span>{' '}
-                <strong className="text-gray-900 dark:text-white">{createdCredentials.nombre}</strong>
-              </div>
-              <div>
-                <span className="text-gray-400">Correo / Usuario:</span>{' '}
-                <strong className="text-[#FF6A00]">{createdCredentials.email}</strong>
-              </div>
-              <div>
-                <span className="text-gray-400">Clave de Acceso:</span>{' '}
-                <strong className="text-emerald-600 dark:text-emerald-400">{createdCredentials.pass}</strong>
-              </div>
-              <div className="pt-2 text-[10px] text-gray-500 border-t border-gray-200 dark:border-gray-800">
-                El maestro podrá ingresar desde su celular o PC a la vista reducida de faena.
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const text = `👷 ObraTrack - Tus accesos a faena:\n🔗 Link: ${window.location.origin}/login\n📧 Usuario: ${createdCredentials.email}\n🔑 Clave: ${createdCredentials.pass}\n(Acceso exclusivo para reportar avances y fotos de obras asignadas)`;
-                  void navigator.clipboard.writeText(text);
-                  showToast('📋 Credenciales copiadas al portapapeles.');
-                }}
-                className="px-4 py-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl text-xs font-bold font-mono transition-colors"
-              >
-                📋 Copiar Texto
-              </button>
-              <button
-                type="button"
-                onClick={() => setCreatedCredentials(null)}
-                className="px-5 py-2 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-xl text-xs font-bold font-heading shadow-md transition-colors"
-              >
-                Entendido
-              </button>
-            </div>
-          </div>
-        </ModalOverlay>
-      )}
-
       {/* Modal: + Agregar Trabajador */}
       {isCreateModalOpen && (
         <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -587,20 +484,20 @@ export default function EquipoPage() {
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white flex items-center gap-2">
                 <Plus className="w-4 h-4 text-obra-orange" />
-                <span>Crear Cuenta de Maestro / Trabajador</span>
+                <span>Agregar trabajador</span>
               </h3>
               <button onClick={() => setIsCreateModalOpen(false)} className="text-gray-400 hover:text-gray-700 dark:hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateUser} className="space-y-3.5">
+            <form aria-busy={saving} onSubmit={handleCreateUser} className="space-y-3.5">
               <div>
-                <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
+                <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1" htmlFor="equipo-nombre">
                   Nombre Completo del Maestro *
                 </label>
                 <input
-                  type="text"
+ id="equipo-nombre"                  type="text"
                   required
                   placeholder="Ej: Pedro Morales"
                   value={nombre}
@@ -611,7 +508,7 @@ export default function EquipoPage() {
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase">
+                  <label className="text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase" htmlFor="equipo-rut">
                     RUT Chileno del Trabajador *
                   </label>
                   {rut && (
@@ -627,7 +524,7 @@ export default function EquipoPage() {
                   )}
                 </div>
                 <input
-                  type="text"
+ id="equipo-rut"                  type="text"
                   required
                   placeholder="12.345.678-9"
                   value={rut}
@@ -636,43 +533,18 @@ export default function EquipoPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-                    Correo para Acceso *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="pedro@gmail.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-gray-800 rounded-xl text-xs text-navy-900 dark:text-white focus:outline-none focus:border-obra-orange font-sans"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-                    Clave de Acceso *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    minLength={6}
-                    placeholder="Mín 6 car."
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-gray-800 rounded-xl text-xs text-navy-900 dark:text-white focus:outline-none focus:border-obra-orange font-mono"
-                  />
-                </div>
+              <div>
+                <label htmlFor="worker-email" className="block text-[11px] font-mono font-semibold mb-1">Correo de contacto *</label>
+                <input id="worker-email" type="email" required value={email} onChange={e => setEmail(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-gray-800 rounded-xl text-xs" />
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
+                <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1" htmlFor="equipo-telefono">
                   WhatsApp Contacto *
                 </label>
                 <input
-                  type="tel"
+ id="equipo-telefono"                  type="tel"
                   required
                   placeholder="+56 9 1234 5678"
                   value={telefono}
@@ -682,19 +554,27 @@ export default function EquipoPage() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
+                <label className="block text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1" htmlFor="equipo-rol">
                   Rol en la Constructora *
                 </label>
                 <select
-                  value={rol}
+ id="equipo-rol"                  value={rol}
                   onChange={(e) => setRol(e.target.value as UserRole)}
                   className="w-full px-3.5 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-gray-800 rounded-xl text-xs text-navy-900 dark:text-white focus:outline-none focus:border-obra-orange font-mono"
                 >
                   <option value="terreno">👷 Terreno (Maestro - Vista reducida móvil / Fotos de faena)</option>
-                  <option value="supervisor">📋 Supervisor (Revisión y Control de Avance)</option>
+                  <option value="supervisor">Supervisor · WhatsApp</option>
                 </select>
               </div>
 
+              <div>
+                <label htmlFor="worker-project" className="block text-[11px] font-mono font-semibold mb-1">Obra {rol === 'terreno' ? '*' : '(opcional)'}</label>
+                <select id="worker-project" required={rol === 'terreno'} value={projectId} onChange={e => setProjectId(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-gray-800 rounded-xl text-xs">
+                  <option value="">Selecciona una obra</option>
+                  {proyectos.filter(p => p.estado !== 'terminado').map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </div>
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-kraft-200 dark:border-gray-800">
                 <button
                   type="button"
@@ -705,10 +585,10 @@ export default function EquipoPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!validarRutChileno(rut) || !email || !password}
+                  disabled={saving || !validarRutChileno(rut) || !email || (rol === 'terreno' && !projectId)}
                   className="px-5 py-2.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-xs font-bold rounded-xl shadow-sm font-heading disabled:opacity-50 transition-all"
                 >
-                  Crear Cuenta de Maestro
+                  Registrar trabajador
                 </button>
               </div>
             </form>
@@ -732,11 +612,11 @@ export default function EquipoPage() {
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1" htmlFor="equipo-editNombre">
                   Nombre Completo *
                 </label>
                 <input
-                  type="text"
+ id="equipo-editNombre"                  type="text"
                   required
                   value={editNombre}
                   onChange={(e) => setEditNombre(e.target.value)}
@@ -745,11 +625,11 @@ export default function EquipoPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1" htmlFor="equipo-editRut">
                   RUT Chileno (ej: 19.123.456-3)
                 </label>
                 <input
-                  type="text"
+ id="equipo-editRut"                  type="text"
                   value={editRut}
                   onChange={(e) => setEditRut(formatRUT(e.target.value))}
                   placeholder="19.123.456-3"
@@ -758,11 +638,11 @@ export default function EquipoPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1" htmlFor="equipo-editTelefono">
                   Teléfono WhatsApp (formato E.164) *
                 </label>
                 <input
-                  type="tel"
+ id="equipo-editTelefono"                  type="tel"
                   required
                   value={editTelefono}
                   onChange={(e) => setEditTelefono(e.target.value)}
@@ -771,11 +651,11 @@ export default function EquipoPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1" htmlFor="equipo-editEmail">
                   Correo Electrónico
                 </label>
                 <input
-                  type="email"
+ id="equipo-editEmail"                  type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
                   className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-sans"
@@ -783,11 +663,11 @@ export default function EquipoPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1" htmlFor="equipo-editRol">
                   Rol en la Constructora *
                 </label>
                 <select
-                  value={editRol}
+ id="equipo-editRol"                  value={editRol}
                   onChange={(e) => setEditRol(e.target.value as UserRole)}
                   className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-mono"
                 >

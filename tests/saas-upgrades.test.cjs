@@ -35,14 +35,14 @@ beforeEach(() => {
   supabaseFixture.reset();
 });
 
-test('middleware valida estructura UUID/JWT de sesión y previene Open Redirect', () => {
+test('middleware exige JWT y rechaza identificadores UUID como credencial', () => {
   assert.equal(isValidAuthToken(undefined), false);
   assert.equal(isValidAuthToken(''), false);
   assert.equal(isValidAuthToken('12345678'), false);
   assert.equal(isValidAuthToken('inventado_token_corto'), false);
 
-  assert.equal(isValidAuthToken('00000000-0000-0000-0000-000000000001'), true);
-  assert.equal(isValidAuthToken('f47ac10b-58cc-4372-a567-0e02b2c3d479'), true);
+  assert.equal(isValidAuthToken('00000000-0000-0000-0000-000000000001'), false);
+  assert.equal(isValidAuthToken('f47ac10b-58cc-4372-a567-0e02b2c3d479'), false);
   assert.equal(
     isValidAuthToken('eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyLTEyMzQ1NiJ9.valid_signature_12345'),
     true

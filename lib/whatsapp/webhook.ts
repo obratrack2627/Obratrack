@@ -106,6 +106,7 @@ export function createWhatsAppWebhook(
               throw new Error("El lote continuará en el siguiente intento.");
             stage = "process";
             const result = await deps.process(sb, message);
+            if ('ignorado' in result && result.ignorado) continue;
             if (!result.sent_at) {
               stage = "send";
               await deps.send(message.from, result.respuesta);

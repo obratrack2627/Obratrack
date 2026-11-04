@@ -31,6 +31,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
           tipo: { type: "string", enum: [...ACTION_TYPES] },
           nuevo_nombre: string,
           usuario_id: string,
+          cliente_rut: string,
           ...strings(
             "nombre,titulo,descripcion,comuna,direccion,fecha_inicio,fecha_termino_estimada,estado,cliente_id,cliente_nombre,cliente_email,cliente_telefono,proyecto_id,proyecto_nombre,telefono,email,rut,rol,trabajador_nombre,actividad_id,metodo,nota,fecha,subtipo,tipo_bitacora,tipo_evento,prioridad,hora_entrada,hora_salida,categoria,correo_remitente,correo_destinatario,correo_asunto,correo_cuerpo,hora,comuna_lugar,resumen,mensaje,observacion,numero_documento,proveedor,proveedor_entidad,fecha_documento",
           ),
@@ -54,6 +55,10 @@ export const CHAT_RESPONSE_SCHEMA = object(
       ),
     ),
     sugerencias: array(string),
+    registro_propuesto: {
+      ...object({ tipo: { type: 'string', enum: ['trabajador', 'cliente'] }, ...strings('nombre,rut,telefono,email,rol,proyecto_id,proyecto_nombre,direccion,comuna') }, ['tipo']),
+      type: ['object', 'null'],
+    },
     busqueda_materiales: {
       ...object(
         {
@@ -73,6 +78,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
           "nombre,cliente_nombre,cliente_id,cliente_email,cliente_telefono,comuna,direccion,descripcion,fecha_inicio",
         ),
         ...numbers("monto_cotizado,dias"),
+        cliente_rut: string,
         partidas: array(activity),
       }),
       type: ["object", "null"],

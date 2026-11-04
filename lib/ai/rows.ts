@@ -1,5 +1,6 @@
 import type { DataService } from "@/lib/data-service";
 import { contactVersion } from './contacts';
+import { persistentFile } from '@/lib/supabase/private-files';
 
 export type Row = Record<string, any> & { id: string };
 export type Snapshot = Record<string, Row[]>;
@@ -8,7 +9,7 @@ const pick = (row: any, fields: string) =>
     fields
       .split(",")
       .filter((k) => row[k] !== undefined)
-      .map((k) => [k, row[k]]),
+      .map((k) => [k, ['foto_url','archivo_url','comprobante_url'].includes(k) ? persistentFile(row[k]) : row[k]]),
   ) as Row;
 export function snapshot(service: DataService, empresa_id: string): Snapshot {
   return {

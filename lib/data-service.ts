@@ -1450,27 +1450,15 @@ export class DataService {
     });
   }
 
-  asignarTrabajadorAProyecto(trabajadorIdent: string, proyectoIdent: string): boolean {
+  asignarTrabajadorAProyecto(trabajadorIdent: string, proyectoIdent: string, rut?: string): boolean {
     const proyectos = this.getProyectos();
     const proyecto = resolveEntity(proyectos, proyectoIdent);
     const usuarios = this.getUsuarios();
-    const nombre = trabajadorIdent.trim().toLowerCase();
-    let trabajador = usuarios.find(u => u.id === trabajadorIdent) || usuarios.find(u => u.nombre.toLowerCase() === nombre);
-    if (!trabajador) {
-      const candidatos = usuarios.filter(u => u.nombre.toLowerCase().includes(nombre));
-      if (candidatos.length > 1) throw new Error('Indica el nombre completo del trabajador.');
-      trabajador = candidatos[0];
-    }
+    const cleanRut = (value: string) => value.replace(/[.-]/g,'').toUpperCase();
+    const candidates = rut ? usuarios.filter(user => user.rut && cleanRut(user.rut) === cleanRut(rut)) : usuarios;
+    const trabajador = resolveEntity(candidates, rut ? candidates[0]?.id || trabajadorIdent : trabajadorIdent);
 
-    // Si el trabajador mencionado no existe en el equipo, crearlo automáticamente
-    if (!trabajador && trabajadorIdent.trim().length > 0) {
-      trabajador = this.agregarTrabajadorDesdeIA({
-        nombre: trabajadorIdent.trim(),
-        rol: 'terreno',
-      });
-    }
-
-    if (!trabajador) return false;
+    if (!trabajador) throw new Error('Registra primero al trabajador con sus datos obligatorios antes de asignarlo.');
     const trabajadorId = trabajador.id;
 
     const current = proyecto.trabajadores_ids || [];
@@ -1643,6 +1631,8 @@ export class DataService {
           });
           creados.push(u);
         });
+        if (accion.proyecto_id || accion.proyecto_nombre)
+          creados.forEach(user => this.asignarTrabajadorAProyecto(user.id, accion.proyecto_id || accion.proyecto_nombre));
 
         return {
           tipo: 'agregar_trabajador',
@@ -1668,7 +1658,7 @@ export class DataService {
         let asignadosCount = 0;
         if (proj) {
           nombres.forEach((nombre) => {
-            if (this.asignarTrabajadorAProyecto(nombre, proj.id)) {
+            if (this.asignarTrabajadorAProyecto(nombre, proj.id, accion.rut)) {
               asignadosCount++;
             }
           });
@@ -2043,6 +2033,10 @@ export class DataService {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;
         const doc = this.createDocumentoObra({
+          archivo_url: accion.archivo_url,
+          archivo_nombre: accion.archivo_nombre,
+          archivo_tamano: accion.archivo_tamano,
+          mime_type: accion.mime_type,
           proyecto_id: proj.id,
           categoria: (['contrato', 'plano', 'factura_boleta', 'correo', 'permiso_normativa', 'otro'].includes(
             accion.categoria || ''
@@ -2135,13 +2129,20 @@ export class DataService {
   }
 
   async loadProyectoChatFromSupabase(proyectoId: string): Promise<MensajeChatProyecto[]> {
+    const active = this.getActiveUser();
+    if (!active?.empresa_id) return [];
     try {
-      const active = this.getActiveUser();
-      const msgs = await supabaseService.getProyectoChatHistorial(proyectoId, active?.empresa_id);
+      const msgs = await supabaseService.getProyectoChatHistorial(proyectoId, active.empresa_id);
+      const current = this.getActiveUser();
+      if (current?.id !== active.id || current.empresa_id !== active.empresa_id) return [];
       if (msgs && msgs.length > 0) {
         const key = this.getTenantKey(`${KEYS.CHAT_PROYECTOS}_${proyectoId}`);
-        this.setItem(key, msgs);
-        return msgs;
+        const local = this.getProyectoChatHistorial(proyectoId);
+        const merged = new Map(local.map(message => [message.id,message]));
+        msgs.forEach(message => merged.set(message.id,message));
+        const history = Array.from(merged.values()).sort((a,b) => a.created_at.localeCompare(b.created_at));
+        this.setItem(key, history);
+        return history;
       }
     } catch (e) {
       console.warn('Error cargando chat de proyecto desde Supabase:', e);

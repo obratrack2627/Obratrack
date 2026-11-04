@@ -643,7 +643,7 @@ test("crear una obra por WhatsApp no guarda nada hasta reunir los cinco campos o
         obra_propuesta: {
           cliente_nombre: "Ana Pérez",
           cliente_email: "ana@example.test",
-          cliente_telefono: "+56987654321",
+          cliente_telefono: "+56987654321", cliente_rut: "12345678-5",
         },
       };
     },
@@ -670,7 +670,7 @@ test("crear una obra por WhatsApp no guarda nada hasta reunir los cinco campos o
       from: "56912345678",
       type: "text",
       text: {
-        body: "Cliente Ana Pérez, correo ana@example.test, teléfono +56987654321",
+        body: "Cliente Ana Pérez, correo ana@example.test, teléfono +56987654321, RUT 12345678-5",
       },
     },
     deps,
@@ -770,7 +770,7 @@ test("una consulta sobre el avance de una obra no inicia una creación", async (
       }),
     },
   );
-  assert.equal(result.acciones, null);
+  assert.equal(result.acciones.tipo, undefined);
   assert.match(result.respuesta, /^🟧 \*ObraTrack\*/);
   assert.ok(result.respuesta.endsWith("Indica la obra."));
 });
@@ -879,7 +879,7 @@ test("una consulta o un aviso durante la creación de una obra conserva el borra
     sb,
     message(
       "complete",
-      "Cliente Ana, presupuesto 1500000, correo ana@example.test, teléfono +56987654321",
+      "Cliente Ana, presupuesto 1500000, correo ana@example.test, teléfono +56987654321, RUT 12345678-5",
     ),
     {
       chat: async () => ({
@@ -890,7 +890,7 @@ test("una consulta o un aviso durante la creación de una obra conserva el borra
           cliente_nombre: "Ana",
           monto_cotizado: 1500000,
           cliente_email: "ana@example.test",
-          cliente_telefono: "+56987654321",
+          cliente_telefono: "+56987654321", cliente_rut: "12345678-5",
         },
       }),
     },
@@ -903,6 +903,7 @@ test("confirmar una cotización por WhatsApp crea sus partidas y materiales sin 
   const { normalizeQuote } = require('../lib/ai/protocol.ts');
   const q = normalizeQuote({ titulo_proyecto:'Radier cotizado', cliente_nombre:'Cliente', cliente_email:'cliente@example.test', cliente_telefono:'+56922223333', comuna_region:'Maipú', duracion_dias_estimada:3, materiales:[{nombre:'Hormigón',cantidad:0.5,unidad:'m3',precio_unitario_estimado:100000}],mano_de_obra:[],actividades_gantt:[{nombre:'Preparación',dias:1},{nombre:'Vaciado',dias:2}] });
   const sb = database();
+  sb.db.clientes=[{id:'quote-client',empresa_id:user.empresa_id,nombre:'Cliente',rut:'12345678-5',email:'cliente@example.test',telefono:'+56922223333'}];
   sb.db.presupuestos = [{id:'wa:quote-source',empresa_id:user.empresa_id,cotizacion:q,proyecto_id:null,estado:'borrador'}];
   sb.db.whatsapp_mensajes = [{message_id:'source',empresa_id:user.empresa_id,actor_id:user.id,cotizacion:q,respuesta:'¿Quieres crear la obra?',texto:'Cotiza el radier'}];
   let committed;
@@ -911,7 +912,7 @@ test("confirmar una cotización por WhatsApp crea sus partidas y materiales sin 
   assert.match(response.respuesta,/Guardado en ObraTrack/);
   assert.equal(committed.p_changed.materiales_proyecto[0].cantidad,0.5);
   assert.equal(committed.p_changed.actividades.length,2);
-  assert.equal(committed.p_changed.clientes[0].email,'cliente@example.test');
+  assert.equal(committed.p_changed.proyectos[0].cliente_id,'quote-client');
   assert.equal(committed.p_acciones.presupuesto_cotizacion_id,q.id);
   assert.equal(committed.p_acciones.presupuesto_proyecto_id,committed.p_changed.proyectos[0].id);
 });
@@ -930,7 +931,7 @@ test("la confirmación de un presupuesto asociado informa la obra existente y no
   const sb=database();sb.db.presupuestos=[{id:'wa:existing',empresa_id:user.empresa_id,cotizacion:q,proyecto_id:'existing',estado:'aprobada'}];
   sb.db.whatsapp_mensajes=[{message_id:'source',empresa_id:user.empresa_id,actor_id:user.id,cotizacion:q,respuesta:'¿Quieres crear la obra?',texto:'Cotiza'}];
   const response=await processPersonalMessage(sb,{id:'confirm-existing',from:'56912345678',type:'text',text:{body:'Sí'}},{chat:async()=>{throw Error('No debe llamar a Gemini')}});
-  assert.match(response.respuesta,/ya tiene una obra/);assert.equal(sb.db.whatsapp_mensajes[0].acciones,null);
+  assert.match(response.respuesta,/ya tiene una obra/);assert.equal(sb.db.whatsapp_mensajes[0].acciones.tipo,undefined);
 });
 
 test('las opciones del presupuesto mostrado crean con confirmación o preguntan sin ejecutar cambios', async () => {
@@ -938,14 +939,14 @@ test('las opciones del presupuesto mostrado crean con confirmación o preguntan 
   const { quoteWhatsApp } = require('../lib/whatsapp/format.ts');
   const q = normalizeQuote({ titulo_proyecto: 'Radier con menú', cliente_nombre: 'Cliente', cliente_email: 'cliente@example.test', cliente_telefono: '+56922223333', materiales: [{ nombre: 'Hormigón', cantidad: 1, unidad: 'm3', precio_unitario_estimado: 90000 }], mano_de_obra: [] });
   for (const choice of ['1', '2', '3']) {
-    const sb = database();
+    const sb = database(); sb.db.clientes=[{id:'existing-client',empresa_id:user.empresa_id,nombre:'Cliente',rut:'12345678-5',email:'cliente@example.test',telefono:'+56922223333'}];
     sb.db.presupuestos = [{ id: 'wa:menu', empresa_id: user.empresa_id, cotizacion: q, proyecto_id: null, estado: 'borrador' }];
     sb.db.whatsapp_mensajes = [{ message_id: 'source', empresa_id: user.empresa_id, actor_id: user.id, cotizacion: q, respuesta: quoteWhatsApp(q), texto: 'Cotiza' }];
     const reply = await processPersonalMessage(sb, { id: 'menu-' + choice, from: '56912345678', type: 'text', text: { body: choice } }, { chat: async () => { throw Error('El menú no necesita Gemini'); } });
     assert.match(reply.respuesta, /^🟧 \*ObraTrack\*/);
     if (choice === '1') assert.match(reply.respuesta, /Obra Creada/);
     else {
-      assert.equal(sb.db.whatsapp_mensajes[0].acciones, null);
+      assert.equal(sb.db.whatsapp_mensajes[0].acciones.tipo, undefined);
       assert.match(reply.respuesta, choice === '2' ? /Qué deseas modificar/ : /Qué material quieres comparar/);
     }
   }
@@ -1046,4 +1047,76 @@ test('un conflicto de contacto nativo responde sin confirmar cambios ni reintent
   assert.match(out.respuesta,/otra cuenta/);
   assert.doesNotMatch(out.respuesta,/Guardado en ObraTrack/);
   assert.equal(attempts,1);
+});
+
+test('terreno recibe solo su obra y conserva la foto aunque el modelo proponga un pago no autorizado',async()=>{
+ const sb=database(); sb.db.usuarios=[{...user,rol:'terreno'}];
+ sb.db.proyectos=[{id:'own',empresa_id:user.empresa_id,nombre:'Radier',monto_cotizado:9876543},{id:'other',empresa_id:user.empresa_id,nombre:'Obra no asignada',monto_cotizado:7777777}];
+ sb.db.proyecto_trabajadores=[{usuario_id:user.id,proyecto_id:'own'}];
+ sb.db.pagos=[{id:'money',proyecto_id:'own',monto:9876543}];
+ sb.db.whatsapp_mensajes=[{message_id:'old-admin',empresa_id:user.empresa_id,actor_id:user.id,texto:'Presupuesto 7777777',respuesta:'Datos privados',acciones:{rol_actor:'admin',proyecto_contexto_id:'own'}}];
+ const base=sb.rpc.bind(sb);let captured;sb.rpc=async(n,p)=>{captured=p;return base(n,p)};
+ const response=await processPersonalMessage(sb,{id:'scope-photo',from:'56912345678',type:'image',image:{id:'123',caption:'Avance en Radier'}},{
+  media:async()=>({mimeType:'image/jpeg',data:'aW1hZ2U='}),
+  store:async()=>({path:'empresa1/jefe/'+ 'a'.repeat(64)+'.jpg',mime_type:'image/jpeg',proyecto_id:null}),
+  chat:async(history,_text,ctx)=>{
+   assert.deepEqual(ctx.proyectos.map(p=>p.id),['own']);assert.equal(ctx.usuario_actual.rol,'terreno');
+   assert.equal(JSON.stringify(ctx).includes('9876543'),false);assert.equal(JSON.stringify(ctx).includes('7777777'),false);assert.equal(history.length,0);
+   return {respuesta:'Avance recibido',accion:{tipo:'registrar_pago',proyecto_id:'own',monto:123},cotizacion:null};
+  }
+ });
+ assert.equal(captured.p_changed.bitacora_entradas.length,1);assert.equal(captured.p_changed.bitacora_entradas[0].proyecto_id,'own');assert.equal(captured.p_changed.pagos.length,0);
+ assert.match(response.respuesta,/Foto guardada/);assert.match(response.respuesta,/perfil de terreno/);
+});
+test('PDF de boleta queda en documentos y bitácora de la obra asignada sin generar pagos',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,rol:'terreno'}];sb.db.proyectos=[{id:'own',empresa_id:user.empresa_id,nombre:'Radier'}];sb.db.proyecto_trabajadores=[{usuario_id:user.id,proyecto_id:'own'}];
+ const base=sb.rpc.bind(sb);let captured;sb.rpc=async(n,p)=>{captured=p;return base(n,p)};
+ await processPersonalMessage(sb,{id:'receipt-pdf',from:'56912345678',type:'document',document:{id:'123',filename:'boleta.pdf',caption:'Boleta de materiales'}},{media:async()=>({mimeType:'application/pdf',data:'JVBERi0='}),store:async()=>({path:'empresa1/jefe/'+ 'b'.repeat(64)+'.pdf',mime_type:'application/pdf',proyecto_id:null,archivo_tamano:5}),chat:async()=>({respuesta:'Archivo recibido',accion:null,cotizacion:null})});
+ assert.equal(captured.p_changed.documentos_obra.length,1);assert.match(captured.p_changed.documentos_obra[0].archivo_url,/^whatsapp-evidencias:/);assert.equal(captured.p_changed.documentos_obra[0].categoria,'factura_boleta');assert.equal(captured.p_changed.documentos_obra[0].mime_type,'application/pdf');assert.equal(captured.p_changed.bitacora_entradas.length,1);assert.equal(captured.p_changed.pagos.length,0);
+});
+test('con dos obras el maestro elige una y la foto pendiente se vincula en el siguiente mensaje',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,rol:'terreno'}];sb.db.proyectos=[{id:'p1',empresa_id:user.empresa_id,nombre:'Radier'},{id:'p2',empresa_id:user.empresa_id,nombre:'Terraza'}];sb.db.proyecto_trabajadores=sb.db.proyectos.map(p=>({usuario_id:user.id,proyecto_id:p.id}));
+ const base=sb.rpc.bind(sb);let captured;sb.rpc=async(n,p)=>{captured=p;const out=await base(n,p);out.data.adjunto=p.p_adjunto;return out};
+ const deps={media:async()=>({mimeType:'image/jpeg',data:'aW1hZ2U='}),store:async()=>({path:'empresa1/jefe/'+ 'c'.repeat(64)+'.jpg',mime_type:'image/jpeg',proyecto_id:null}),chat:async()=>({respuesta:'Recibido',accion:null,cotizacion:null})};
+ const first=await processPersonalMessage(sb,{id:'choose-scope',from:'56912345678',type:'image',image:{id:'123'}},deps);
+ assert.equal(captured.p_adjunto.proyecto_id,null);assert.equal(captured.p_changed.bitacora_entradas.length,0);assert.match(first.respuesta,/Indica el nombre/);
+ const second=await processPersonalMessage(sb,{id:'scope-answer',from:'56912345678',type:'text',text:{body:'Terraza'}},deps);
+ assert.equal(captured.p_changed.bitacora_entradas[0].proyecto_id,'p2');assert.equal(captured.p_adjunto.origen_message_id,undefined);assert.match(second.respuesta,/Foto guardada/);
+});
+test('el borrador de trabajador dura entre consultas y crea ficha y asignación solo con todos los datos',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'p1',empresa_id:user.empresa_id,nombre:'Radier'}];
+ const base=sb.rpc.bind(sb);let captured;sb.rpc=async(n,p)=>{captured=p;return base(n,p)};
+ const msg=(id,body)=>({id,from:'56912345678',type:'text',text:{body}});
+ const first=await processPersonalMessage(sb,msg('person-1','Agrega al maestro Pedro Morales'),{chat:async()=>({respuesta:'Datos',accion:{tipo:'agregar_trabajador',nombre:'Pedro Morales'},cotizacion:null})});
+ assert.match(first.respuesta,/RUT/);assert.equal(captured.p_changed.usuarios.length,0);assert.doesNotMatch(first.respuesta,/Guardado en ObraTrack/);
+ await processPersonalMessage(sb,msg('person-query','¿Qué obras tengo?'),{chat:async()=>({respuesta:'Radier',accion:null,cotizacion:null})});
+ assert.equal(captured.p_acciones.borrador_registro.items[0].nombre,'Pedro Morales');
+ const complete=await processPersonalMessage(sb,msg('person-2','RUT 12345678-5, correo pedro@empresa.cl, teléfono +56987654321, terreno en Radier'),{chat:async()=>({respuesta:'Datos recibidos',accion:null,cotizacion:null,registro_propuesto:{tipo:'trabajador',rut:'12345678-5',email:'pedro@empresa.cl',telefono:'+56987654321',rol:'terreno',proyecto_id:'p1'}})});
+ assert.match(complete.respuesta,/Guardado en ObraTrack/);assert.equal(captured.p_changed.usuarios.length,1);assert.equal(captured.p_changed.usuarios[0].rut,'12345678-5');assert.ok(captured.p_changed.proyectos[0].trabajadores_ids.includes(captured.p_changed.usuarios[0].id));assert.equal(captured.p_acciones.borrador_registro,null);
+});
+
+test('un reintento no expone una conversación anterior si el teléfono ahora pertenece a otra ficha',async()=>{
+ const sb=database();const old={...user,telefono_whatsapp:'+56977778888'};const current={...user,id:'other-identity'};
+ sb.db.usuarios=[old,current];sb.db.whatsapp_mensajes=[{message_id:'reassigned-replay',empresa_id:user.empresa_id,actor_id:user.id,sender_phone:'56912345678',respuesta:'Datos que no deben mostrarse',acciones:null}];
+ const result=await processPersonalMessage(sb,{id:'reassigned-replay',from:'56912345678',type:'text',text:{body:'Consulta anterior'}},{chat:async()=>{throw Error('No debe consultar IA')}});
+ assert.equal(result.ignorado,true);assert.equal(result.respuesta,'');assert.equal(sb.commits,0);
+});
+test('un formato de adjunto no admitido responde con ayuda en vez de quedar en reintentos',async()=>{
+ const {AIError}=require('../lib/ai/errors.ts');const sb=database();
+ const result=await processPersonalMessage(sb,{id:'unsupported-media',from:'56912345678',type:'document',document:{id:'123',filename:'archivo.exe'}},{media:async()=>{throw new AIError('MEDIA_FORMAT','Envía PDF, Word o Excel de hasta 10 MB.',422)},chat:async()=>{throw Error('No debe consultar IA')}});
+ assert.equal(result.persistido,false);assert.match(result.respuesta,/Revisa el archivo/);assert.match(result.respuesta,/10 MB/);
+});
+
+test('un error nativo de otra acción conserva la evidencia en bitácora al confirmar el mensaje',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'p1',empresa_id:user.empresa_id,nombre:'Radier'}];
+ const base=sb.rpc.bind(sb);let fallback;
+ sb.rpc=async(n,p)=>{if(p.p_changed.usuarios?.length)return{error:{message:'CONTACT_DUPLICATE'}};fallback=p;return base(n,p)};
+ const response=await processPersonalMessage(sb,{id:'native-failure-photo',from:'56912345678',type:'image',image:{id:'123',caption:'Corrige mi correo a nuevo@empresa.cl, foto de Radier'}},{media:async()=>({mimeType:'image/png',data:'aW1hZ2U='}),store:async()=>({path:'empresa1/jefe/'+ 'd'.repeat(64)+'.png',mime_type:'image/png',proyecto_id:null}),chat:async()=>({respuesta:'Foto recibida',accion:{tipo:'actualizar_trabajador',usuario_id:user.id,email:'nuevo@empresa.cl'},cotizacion:null})});
+ assert.equal(fallback.p_changed.bitacora_entradas.length,1);assert.equal(fallback.p_changed.bitacora_entradas[0].proyecto_id,'p1');assert.equal(fallback.p_adjunto.proyecto_id,'p1');assert.match(response.respuesta,/evidencia quedó guardada/);
+});
+test('al crear una obra con una foto la evidencia se vincula a la obra nueva y no a otra existente',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'old',empresa_id:user.empresa_id,nombre:'Obra Anterior'}];
+ const base=sb.rpc.bind(sb);let saved;sb.rpc=async(n,p)=>{saved=p;return base(n,p)};
+ await processPersonalMessage(sb,{id:'new-project-photo',from:'56912345678',type:'image',image:{id:'123',caption:'Crea una obra llamada Radier Nuevo, cliente Ana Pérez, presupuesto 1000000, correo ana@example.test, teléfono +56987654321, RUT 12345678-5'}},{media:async()=>({mimeType:'image/png',data:'aW1hZ2U='}),store:async()=>({path:'empresa1/jefe/'+ 'e'.repeat(64)+'.png',mime_type:'image/png',proyecto_id:null}),chat:async()=>({respuesta:'Datos recibidos',accion:null,cotizacion:null,obra_propuesta:{nombre:'Radier Nuevo',cliente_nombre:'Ana Pérez',monto_cotizado:1000000,cliente_email:'ana@example.test',cliente_telefono:'+56987654321',cliente_rut:'12345678-5'}})});
+ const project=saved.p_changed.proyectos.find(p=>p.nombre==='Radier Nuevo');assert.ok(project);assert.equal(saved.p_changed.bitacora_entradas[0].proyecto_id,project.id);assert.equal(saved.p_adjunto.proyecto_id,project.id);assert.equal(saved.p_acciones.proyecto_contexto_id,project.id);
 });

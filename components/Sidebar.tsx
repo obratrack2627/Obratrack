@@ -302,6 +302,9 @@ export default function Sidebar() {
               </span>
             </div>
 
+              {activeUser?.is_dev === true && <button type="button" onClick={() => setIsPlanModalOpen(true)}
+                aria-label="Cambiar plan de desarrollo" className="w-full py-1 text-[11px] text-[#FF6A00] hover:underline">Plan de desarrollo</button>}
+
               <Link
                 href="/planes"
                 className="w-full mt-1 py-1.5 px-2 bg-white/10 hover:bg-[#FF6A00] hover:text-white text-gray-300 rounded-lg text-[11px] font-heading font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"

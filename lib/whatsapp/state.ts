@@ -86,3 +86,17 @@ export function planWhatsAppActions(service: DataService, input: any) {
     return { ...changesBetween(before, snapshot(service, empresa)), result };
   });
 }
+
+export function mergeWhatsAppPlans(first: ReturnType<typeof planWhatsAppActions>, second: ReturnType<typeof planWhatsAppActions>) {
+  const changed = { ...first.changed };
+  for (const [table, rows] of Object.entries(second.changed)) {
+    const merged = new Map((changed[table] || []).map(row => [row.id,row]));
+    rows.forEach(row => merged.set(row.id,row));
+    changed[table] = Array.from(merged.values());
+  }
+  const actions = [first.result,second.result].flatMap(result => !result ? [] : result.tipo === 'lote_acciones' ? result.detalles.acciones : [result]);
+  return { changed, deleted: first.deleted, result: {
+    tipo: 'lote_acciones' as const, titulo: 'Obra y evidencia registradas', detalles: { acciones: actions },
+    resultado_texto: [first.result?.resultado_texto,second.result?.resultado_texto].filter(Boolean).join('\n\n'),
+  } };
+}
