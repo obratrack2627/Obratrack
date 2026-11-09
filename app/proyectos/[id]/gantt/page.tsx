@@ -252,10 +252,10 @@ export default function ProyectoGanttPage() {
             <div>
               <h3 className="font-heading font-black text-lg text-navy-900 flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-obra-orange" />
-                <span>Bitácora de Terreno & Evidencias</span>
+                <span>Bitácora</span>
               </h3>
               <p className="text-xs text-gray-500 font-sans mt-0.5">
-                Historial cronológico de avances, eventos climáticos, recepción de materiales y fotos de obra.
+                Avances, fotos y novedades.
               </p>
             </div>
             
@@ -264,7 +264,7 @@ export default function ProyectoGanttPage() {
               className="px-3.5 py-2 bg-navy-800 hover:bg-navy-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 font-heading self-start sm:self-auto"
             >
               <Plus className="w-3.5 h-3.5 text-obra-orange" />
-              <span>Nueva Entrada de Bitácora</span>
+              <span>Registrar avance</span>
             </button>
           </div>
 
@@ -276,7 +276,7 @@ export default function ProyectoGanttPage() {
                 onClick={() => setIsBitacoraModalOpen(true)}
                 className="text-xs font-bold text-obra-orange hover:underline"
               >
-                + Registrar el primer reporte diario
+                Registrar el primer avance
               </button>
             </div>
           ) : (
@@ -460,7 +460,7 @@ export default function ProyectoGanttPage() {
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-obra-orange" />
-                <span>Nueva Entrada de Bitácora Diaria</span>
+                <span>Registrar avance Diaria</span>
               </h3>
               <button onClick={() => setIsBitacoraModalOpen(false)} className="text-gray-400 hover:text-gray-700">
                 <X className="w-5 h-5" />

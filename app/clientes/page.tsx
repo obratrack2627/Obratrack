@@ -1,4 +1,5 @@
 'use client';
+import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -178,8 +179,8 @@ export default function ClientesPage() {
       )}
 
       <Navbar
-        title="Directorio de Clientes & Mandantes"
-        subtitle="Registro centralizado de contactos, RUT, obras contratadas y estados de pago"
+        title="Clientes"
+        subtitle="Contactos y obras asociadas."
         action={
           <button
             onClick={() => setIsCreateModalOpen(true)}
@@ -194,7 +195,7 @@ export default function ClientesPage() {
       <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
         
         {/* KPI Cards de Clientes */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
@@ -245,7 +246,7 @@ export default function ClientesPage() {
               <DollarSign className="w-6 h-6" />
             </div>
           </div>
-        </div>
+        </div></CompactSummary>
 
         {/* Barra de Filtros, Búsqueda y Selector de Vista */}
         <div className="bg-white border border-kraft-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">

@@ -9,7 +9,7 @@ test("el Centro de Mando prioriza obras y permite recorrer los módulos de una o
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/dashboard');
-  const active = page.getByRole('heading', { name: /Obras en Faena Activa/ });
+  const active = page.getByRole('heading', { name: /Obras en curso/ });
   const flow = page.getByRole('heading', { name: /Flujo Financiero por Obra/ });
   const distribution = page.getByRole('heading', { name: 'Distribución de Cartera', exact: true });
   await expect(active).toBeVisible();
@@ -20,6 +20,7 @@ test("el Centro de Mando prioriza obras y permite recorrer los módulos de una o
     await page.goto('/proyectos/p-existing/' + module);
     await expect(page.getByRole('heading', { name: 'Terraza', exact: true }).first()).toBeVisible();
     if (module === 'finanzas') {
+      await page.getByLabel('Exportaciones de la obra').click();
       await page.getByRole('button', { name: 'Emitir Estado de Pago (PDF)', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Estado de Pago de Obra', exact: true });
       await expect(dialog).toBeVisible();
@@ -291,8 +292,8 @@ async function setup(
 async function send(page: Page, text: string) {
   // Esperar los datos cargados por React: escribir antes de hidratar puede perder el texto.
   await expect(
-    page.getByText("Contratista de prueba", { exact: true }),
-  ).toBeVisible();
+    page.locator("aside").getByText("Contratista", { exact: true }),
+  ).toBeAttached();
   await page
     .getByRole("textbox", { name: "Mensaje para el asistente", exact: true })
     .fill(text);
@@ -305,13 +306,13 @@ test('las ventanas móviles aparecen dentro de la pantalla y conservan el despla
   const db = await setup(page, { respuesta: 'Consulta', accion: null }, true);
   db.proyectos = Array.from({ length: 12 }, (_, i) => ({ ...db.proyectos[0], id: 'mobile-' + i, nombre: 'Obra ' + i }));
   await page.goto('/proyectos');
-  await expect(page.getByRole('button', { name: /Nuevo Proyecto/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Nueva obra/ })).toBeVisible();
   await expect(page.getByText('Obra 11', { exact: true })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 950));
   const before = await page.evaluate(() => window.scrollY);
   expect(before).toBeGreaterThan(500);
-  await page.getByRole('button', { name: /Nuevo Proyecto/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Registrar Nuevo Proyecto', exact: true });
+  await page.getByRole('button', { name: /Nueva obra/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Crear obra', exact: true });
   await expect(dialog).toBeVisible();
   await page.screenshot({ path: '/tmp/obratrack-mobile-project-modal-open.png' });
   await expect(page.getByRole('button', { name: 'Abrir ObraBot' })).toBeHidden();
@@ -346,6 +347,7 @@ test('clientes, equipo, finanzas y suscripción usan ventanas accesibles en un c
   await setup(page, { respuesta: 'Consulta', accion: null }, true);
   for (const [path, button] of [['/clientes', /Nuevo Cliente/], ['/equipo', /Agregar Trabajador/], ['/proyectos/p-existing/finanzas', /Registrar Pago/]]) {
     await page.goto(path as string);
+    if (String(path).endsWith('/finanzas')) await page.getByRole('button', { name: 'Cobros', exact: true }).click();
     await page.getByRole('button', { name: button as RegExp }).first().click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
@@ -356,7 +358,7 @@ test('clientes, equipo, finanzas y suscripción usan ventanas accesibles en un c
     await expect(dialog).toHaveCount(0);
     expect(await page.evaluate(() => document.body.style.position)).not.toBe('fixed');
   }
-  await page.getByRole('button', { name: 'Plan Pro IA', exact: true }).click();
+  await page.getByRole('button', { name: 'Ver mi cuenta', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Tu suscripción' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -1350,8 +1352,8 @@ test("el Plan Pro puede usar el cotizador sin quedar bloqueado por la interfaz d
   db.empresas[0].plan_id = "pro";
   await page.goto("/cotizador");
   await expect(
-    page.getByRole("button", { name: "Plan Pro", exact: true }),
-  ).toBeVisible();
+    page.getByRole("textbox", { name: "Mensaje para el asistente", exact: true }),
+  ).toBeEnabled();
   await send(page, "Quiero cotizar una terraza");
   await expect(
     page.getByText("Indica las dimensiones del trabajo.", { exact: true }),
@@ -1508,6 +1510,7 @@ test('presupuesto con precio acordado: en celular guarda IVA, hitos y PDF sin ca
     } else await route.fulfill({ json: { presupuestos: budget ? [budget] : [] } });
   });
   await page.goto('/proyectos?tab=presupuestos');
+  await page.getByLabel('Crear presupuesto', { exact: true }).click();
   await page.getByRole('button', { name: 'Precio acordado', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Nuevo presupuesto', exact: true });
   await expect(dialog).toBeVisible();
@@ -1664,7 +1667,8 @@ test('solo Developer ve el selector de planes y confirma el cambio antes de actu
   await developer.goto('/planes');await developer.getByRole('button',{name:'Cambiar plan de desarrollo'}).click();
   await developer.getByLabel('Plan de desarrollo',{exact:true}).selectOption('pro');
   await expect(developer.getByRole('dialog',{name:'Tu suscripción'})).toHaveCount(0);
-  await expect(developer.locator('aside').getByText('Plan Pro',{exact:true})).toBeVisible();
+  await developer.getByRole('button',{name:'Cambiar plan de desarrollo'}).click();
+  await expect(developer.getByRole('dialog',{name:'Tu suscripción'}).getByText('Plan Pro',{exact:true})).toBeVisible();
   expect(db.empresas[0].plan_id).toBe('pro');
  } finally { await context.close(); }
 });
@@ -1710,4 +1714,64 @@ test('estado de obra se confirma, persiste al navegar y conserva el valor ante u
   await expect(page.getByRole('alert').filter({ hasText: 'No se pudo guardar' })).toBeVisible();
   await expect(state).toHaveAttribute('data-project-status', 'pendiente');
   expect(db.proyectos[0].estado).toBe('pendiente');
+});
+
+test('editar una obra conserva el formulario ante un fallo y solo confirma después de guardar', async ({ page }) => {
+  const db = await setup(page, {}, true);
+  let fail = true;
+  await page.route('**/api/supabase/sync*', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    if (fail) return route.fulfill({ status: 503, json: { error: 'No se pudo guardar la obra' } });
+    const row = route.request().postDataJSON().cambios.proyectos[0];
+    db.proyectos[0] = row;
+    await route.fulfill({ json: { success: true } });
+  });
+  await page.goto('/proyectos');
+  await page.getByLabel('Acciones de Terraza', { exact: true }).click();
+  await page.getByRole('button', { name: 'Editar obra', exact: true }).click();
+  const dialog = page.getByRole('dialog').filter({ has: page.getByLabel('Nombre de la Obra *', { exact: true }) });
+  await dialog.getByLabel('Nombre de la Obra *', { exact: true }).fill('Terraza actualizada');
+  await dialog.getByRole('button', { name: 'Guardar cambios' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('No se pudo confirmar');
+  expect(db.proyectos[0].nombre).toBe('Terraza');
+  await expect(page.getByRole('link', { name: 'Terraza', exact: true })).toBeVisible();
+  fail = false;
+  await dialog.getByRole('button', { name: 'Guardar cambios' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Terraza actualizada', exact: true })).toBeVisible();
+  expect(db.proyectos[0].nombre).toBe('Terraza actualizada');
+});
+
+test('la Carta Gantt incorpora cambios remotos sin recargar la página', async ({ page }) => {
+  await page.clock.install();
+  const db = await setup(page, {}, true);
+  await page.goto('/proyectos/p-existing/gantt');
+  await expect(page.getByRole('heading', { name: 'Terraza', exact: true }).first()).toBeVisible();
+  db.proyectos[0].nombre = 'Terraza desde WhatsApp';
+  await page.clock.fastForward(31000);
+  await expect(page.getByRole('heading', { name: 'Terraza desde WhatsApp', exact: true }).first()).toBeVisible();
+});
+
+test('la asistencia de cuadrilla respeta licencias existentes y usa el horario elegido', async ({ page }) => {
+  const db = await setup(page, {}, true);
+  db.usuarios.push(...['uno', 'dos'].map((id, index) => ({ id, empresa_id: company, nombre: `Maestro ${index + 1}`, rol: 'terreno' })));
+  db.proyectos[0].trabajadores_ids = ['uno', 'dos'];
+  const today = new Date().toISOString().slice(0, 10);
+  db.asistencia_obreros = [{ id: 'leave', empresa_id: company, proyecto_id: 'p-existing', usuario_id: 'uno', trabajador_nombre: 'Maestro 1', fecha: today, estado: 'licencia', origen: 'web' }];
+  let saved: any[] = [];
+  await page.route('**/api/supabase/sync*', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    saved = route.request().postDataJSON().cambios.asistencias || [];
+    await route.fulfill({ json: { success: true } });
+  });
+  await page.goto('/proyectos/p-existing/asistencia');
+  await expect(page.getByLabel('Estado de Maestro 1', { exact: true })).toHaveValue('licencia');
+  await page.getByRole('button', { name: 'Marcar cuadrilla', exact: true }).click();
+  await page.getByLabel('Entrada de cuadrilla', { exact: true }).fill('09:00');
+  await page.getByLabel('Salida de cuadrilla', { exact: true }).fill('17:00');
+  await page.getByRole('button', { name: 'Confirmar presencia', exact: true }).click();
+  await expect(page.getByText('Asistencia guardada para 1 persona.', { exact: true })).toBeVisible();
+  expect(saved).toHaveLength(1);
+  expect(saved[0]).toMatchObject({ usuario_id: 'dos', hora_entrada: '09:00', hora_salida: '17:00', estado: 'presente' });
+  await expect(page.getByLabel('Estado de Maestro 1', { exact: true })).toHaveValue('licencia');
 });

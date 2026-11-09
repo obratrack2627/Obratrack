@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   GanttChartSquare,
@@ -33,6 +33,7 @@ export default function ProjectTabsHeader({
   onOpenMaps,
 }: ProjectTabsHeaderProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [cambiosPendientes, setCambiosPendientes] = useState(0);
   const [estado, setEstado] = useState(proyecto?.estado || 'activo');
   const [guardandoEstado, setGuardandoEstado] = useState(false);
@@ -111,7 +112,6 @@ export default function ProjectTabsHeader({
       href: `/proyectos/${proyecto.id}/ia`,
       icon: Sparkles,
       highlight: true,
-      badge: 'IA',
     },
   ];
 
@@ -201,7 +201,12 @@ export default function ProjectTabsHeader({
       </div>
 
       {/* Fila Inferior: Pestañas de Navegación Rápida por Obra */}
-      <div className="px-4 sm:px-6 flex items-center gap-1 overflow-x-auto no-scrollbar border-t border-kraft-100 dark:border-[#1E2530] pt-1">
+      <div className="md:hidden px-4 py-2 border-t border-kraft-100 dark:border-[#1E2530]">
+        <select aria-label="Sección de la obra" value={tabs.find(tab => pathname?.startsWith(tab.href))?.href || tabs[0].href} onChange={event => router.push(event.target.value)} className="w-full rounded-lg border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] px-3 py-2 text-sm font-semibold">
+          {tabs.filter(tab => tab.id !== 'presupuestos' || ['admin','supervisor'].includes(dataService.getActiveUser()?.rol || '')).map(tab => <option key={tab.id} value={tab.href}>{tab.label}</option>)}
+        </select>
+      </div>
+      <div className="hidden md:flex px-4 sm:px-6 items-center gap-1 overflow-x-auto no-scrollbar border-t border-kraft-100 dark:border-[#1E2530] pt-1">
         {tabs.filter(tab=>tab.id!=='presupuestos'||['admin','supervisor'].includes(dataService.getActiveUser()?.rol||'')).map((tab) => {
           const Icon = tab.icon;
           const isActive = pathname?.startsWith(tab.href);

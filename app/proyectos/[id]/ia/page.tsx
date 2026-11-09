@@ -1,4 +1,5 @@
 'use client';
+import CompactSummary from '@/components/CompactSummary';
 
 import { conversationRequest } from '@/lib/ai/conversation';
 import React, { useState, useEffect, useRef } from 'react';
@@ -362,7 +363,7 @@ export default function ProyectoIAPage() {
 
       <div className="p-6 max-w-6xl w-full mx-auto space-y-6 flex-1 flex flex-col">
         {/* Barra de Métricas en Vivo de la Obra */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <CompactSummary><div className="workspace-metrics grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm">
             <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Avance Físico</p>
             <div className="flex items-baseline gap-2 mt-1">
@@ -406,7 +407,7 @@ export default function ProyectoIAPage() {
               </a>
             )}
           </div>
-        </div>
+        </div></CompactSummary>
 
         {/* Bloqueo si el usuario no tiene Plan Pro + IA */}
         {!hasAccess ? (
@@ -450,7 +451,7 @@ export default function ProyectoIAPage() {
                   <h4 className="font-heading font-bold text-xs tracking-wide flex items-center gap-2">
                     <span>ObraBot · {proyecto.nombre}</span>
                     <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px] font-mono font-bold">
-                      EN VIVO
+                      Obra seleccionada
                     </span>
                   </h4>
                   <p className="text-[10px] text-gray-400 font-sans">
@@ -460,9 +461,6 @@ export default function ProyectoIAPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-gray-400 hidden sm:inline">
-                  {mensajes.length} mensaje(s)
-                </span>
                 <button
                   type="button"
                   onClick={handleLimpiarHistorial}
@@ -510,7 +508,7 @@ export default function ProyectoIAPage() {
                       </span>
                     </div>
 
-                    {/* Tarjeta de Acción Ejecutada */}
+                    {/* Tarjeta de Cambio guardado */}
                     {m.accion_ejecutada && (
                       <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-3 space-y-1.5 text-left animate-in fade-in-50">
                         <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold font-heading text-xs">

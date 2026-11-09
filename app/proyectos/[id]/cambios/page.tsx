@@ -1,4 +1,5 @@
 'use client';
+import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect } from 'react';
@@ -240,7 +241,7 @@ export default function ProyectoCambiosPage() {
   const handleCambiarEstado = (id: string, nuevoEstado: ReclamoCambioObra['estado']) => {
     dataService.updateReclamoCambio(id, { estado: nuevoEstado });
     loadData();
-    showToast(`Estado actualizado a ${nuevoEstado.toUpperCase()}.`);
+    showToast(`Estado actualizado a ${nuevoEstado.replaceAll('_', ' ')}.`);
   };
 
   const handleEliminar = (id: string) => {
@@ -321,10 +322,10 @@ export default function ProyectoCambiosPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-lg sm:text-xl font-heading font-bold text-navy-900 dark:text-white">
-              Reclamos, Incidencias y Solicitudes de Cambio
+              Cambios e incidencias
             </h2>
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              Gestiona requerimientos nuevos del cliente, materiales adicionales, observaciones e incidentes de terreno.
+              Adicionales, observaciones e incidentes de la obra.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -333,20 +334,20 @@ export default function ProyectoCambiosPage() {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF6A00] hover:bg-[#E05E00] text-white text-xs font-heading font-bold shadow-md transition-all"
             >
               <Plus className="w-4 h-4" />
-              <span>Nueva Solicitud de Cambio / Material</span>
+              <span>Nuevo cambio</span>
             </button>
             <button
               onClick={() => handleOpenNewModal('incidente')}
               className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] hover:border-red-500 text-navy-900 dark:text-white text-xs font-heading font-bold shadow-sm transition-all"
             >
               <AlertTriangle className="w-4 h-4 text-amber-500" />
-              <span>Reportar Reclamo / Incidente</span>
+              <span>Reportar incidente</span>
             </button>
           </div>
         </div>
 
         {/* Tarjetas KPI */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
             <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
               <span>Adicionales / Cambios</span>
@@ -390,16 +391,16 @@ export default function ProyectoCambiosPage() {
             </p>
             <p className="text-[11px] text-gray-500 mt-1">Prevención de riesgos en faena</p>
           </div>
-        </div>
+        </div></CompactSummary>
 
         {/* Filtros por Tipo */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {[
             { id: 'todos', label: `Todos (${registros.length})` },
-            { id: 'solicitud_cambio', label: '🔄 Solicitudes de Cambio' },
-            { id: 'reclamo', label: '📢 Reclamos Cliente' },
+            { id: 'solicitud_cambio', label: 'Solicitudes de Cambio' },
+            { id: 'reclamo', label: 'Reclamos Cliente' },
             { id: 'incidente', label: '⚠️ Incidencias Terreno' },
-            { id: 'accidente', label: '🚨 Accidentes' },
+            { id: 'accidente', label: 'Accidentes' },
           ].map((f) => (
             <button
               key={f.id}
@@ -476,7 +477,7 @@ export default function ProyectoCambiosPage() {
                               : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
                           }`}
                         >
-                          {item.estado}
+                          {item.estado.replaceAll('_', ' ')}
                         </span>
 
                         {item.origen === 'whatsapp_ia' && (
@@ -646,10 +647,10 @@ export default function ProyectoCambiosPage() {
                     onChange={(e) => setTipo(e.target.value as TipoReclamoCambio)}
                     className="w-full px-3 py-2 rounded-xl border border-kraft-200 dark:border-[#263040] bg-[#FAF8F5] dark:bg-[#1E2530] text-xs font-medium text-navy-900 dark:text-white"
                   >
-                    <option value="solicitud_cambio">🔄 Solicitud de Cambio / Adicional</option>
-                    <option value="reclamo">📢 Reclamo de Cliente</option>
+                    <option value="solicitud_cambio">Solicitud de Cambio / Adicional</option>
+                    <option value="reclamo">Reclamo de Cliente</option>
                     <option value="incidente">⚠️ Incidencia en Terreno</option>
-                    <option value="accidente">🚨 Accidente / Seguridad</option>
+                    <option value="accidente">Accidente / Seguridad</option>
                   </select>
                 </div>
 

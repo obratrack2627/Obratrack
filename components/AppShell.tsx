@@ -24,7 +24,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       {isAuthPage ? (
-        <main className="min-h-screen w-full bg-[var(--bg-page)] text-[var(--text-primary)] antialiased page-fade-enter transition-colors duration-200">
+        <main className="min-h-screen w-full bg-[var(--bg-page)] text-[var(--text-primary)] antialiased workspace-ui page-fade-enter transition-colors duration-200">
           <div className="fixed top-4 right-4 z-40 print:hidden">
             <ThemeToggle />
           </div>
@@ -37,7 +37,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="hidden md:flex fixed top-3.5 right-4 z-40 print:hidden">
             <ThemeToggle />
           </div>
-          <main className="flex-1 flex flex-col min-h-screen w-full pt-16 md:pt-0 md:pl-64 transition-all">
+          <main className="workspace-ui flex-1 flex flex-col min-h-screen w-full pt-16 md:pt-0 md:pl-64 transition-all">
             <CloudSync />
             <div className="flex-1 flex flex-col page-fade-enter">
               {children}

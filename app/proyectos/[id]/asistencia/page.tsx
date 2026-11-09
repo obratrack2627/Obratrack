@@ -1,4 +1,5 @@
 'use client';
+import CompactSummary from '@/components/CompactSummary';
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
@@ -44,6 +45,11 @@ export default function ProyectoAsistenciaPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Registro rápido de obrero eventual / externo
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkStart, setBulkStart] = useState('08:00');
+  const [bulkEnd, setBulkEnd] = useState('18:00');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState('');
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoRol, setNuevoRol] = useState('Maestro / Jornal');
 
@@ -112,13 +118,21 @@ export default function ProyectoAsistenciaPage() {
     loadData();
   };
 
-  const handleMarcarTodosPresentes = () => {
-    if (!projectId) return;
+  const handleMarcarTodosPresentes = async () => {
+    if (!projectId || bulkBusy) return;
+    if (!bulkStart || !bulkEnd || bulkEnd <= bulkStart) { setBulkError('Revisa el horario de entrada y salida.'); return; }
+    const existing = dataService.getAsistencias(projectId, fechaSeleccionada);
+    const targets = todosUsuarios.filter(user => proyecto?.trabajadores_ids?.includes(user.id) && !existing.some(row => row.usuario_id === user.id || row.trabajador_nombre.toLowerCase() === user.nombre.toLowerCase()));
+    if (!targets.length) { setBulkError('Todos los trabajadores asignados ya tienen un registro para esta fecha.'); return; }
+    setBulkBusy(true); setBulkError('');
     try {
-      const regs = dataService.marcarCuadrillaPresente(projectId, fechaSeleccionada, '08:00', '18:00');
+      targets.forEach(user => dataService.upsertAsistenciaObrero({ proyecto_id: projectId, usuario_id: user.id, trabajador_nombre: user.nombre, trabajador_rol: user.rol, fecha: fechaSeleccionada, estado: 'presente', hora_entrada: bulkStart, hora_salida: bulkEnd, origen: 'web' }));
+      const saved = await dataService.pushToCloudServer();
       loadData();
-      showToast(`✅ ${regs.length} trabajadores marcados presentes (08:00 - 18:00).`);
-    } catch(error){showToast(error instanceof Error?error.message:'No se pudo registrar la asistencia.');}
+      if (!saved.success) { setBulkError('Los registros quedan pendientes de sincronización en este dispositivo. Reintenta cuando tengas conexión.'); return; }
+      setBulkOpen(false); showToast(`Asistencia guardada para ${targets.length} ${targets.length === 1 ? 'persona' : 'personas'}.`);
+    } catch (error) { setBulkError(error instanceof Error ? error.message : 'No se pudo registrar la asistencia.'); }
+    finally { setBulkBusy(false); }
   };
 
   const handleAgregarObreroDia = (e: React.FormEvent) => {
@@ -233,10 +247,10 @@ export default function ProyectoAsistenciaPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-lg sm:text-xl font-heading font-bold text-navy-900 dark:text-white">
-              Control de Asistencia de Obreros
+              Asistencia de la obra
             </h2>
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              Registro diario de entrada/salida, horas-hombre y reportes de llegada vía WhatsApp IA.
+              Personas, horarios y asistencia.
             </p>
           </div>
 
@@ -252,11 +266,11 @@ export default function ProyectoAsistenciaPage() {
             </div>
 
             <button
-              onClick={handleMarcarTodosPresentes}
+              onClick={() => { setBulkOpen(!bulkOpen); setBulkError(''); }}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#6B8F72] hover:bg-[#5B7C61] text-white text-xs font-heading font-bold shadow-sm transition-colors"
             >
               <UserCheck className="w-4 h-4" />
-              <span>Marcar Cuadrilla Presente (08:00 - 18:00)</span>
+              <span>Marcar cuadrilla</span>
             </button>
 
             <button
@@ -269,8 +283,17 @@ export default function ProyectoAsistenciaPage() {
           </div>
         </div>
 
+        {bulkOpen && <section aria-label="Registrar asistencia de cuadrilla" className="rounded-xl border border-kraft-200 bg-white dark:bg-[#141A23] dark:border-[#263040] p-4 space-y-3">
+          <p className="text-sm">Se registrará presencia solo para quienes aún no tienen asistencia en la fecha seleccionada. Se conservan los registros existentes.</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-sm">Entrada<input aria-label="Entrada de cuadrilla" type="time" value={bulkStart} onChange={e => setBulkStart(e.target.value)} className="block rounded-lg border p-2 dark:bg-[#1E2530]" /></label>
+            <label className="text-sm">Salida<input aria-label="Salida de cuadrilla" type="time" value={bulkEnd} onChange={e => setBulkEnd(e.target.value)} className="block rounded-lg border p-2 dark:bg-[#1E2530]" /></label>
+            <button type="button" disabled={bulkBusy} onClick={() => void handleMarcarTodosPresentes()} className="rounded-lg bg-obra-green text-white px-4 py-2 text-sm font-semibold disabled:opacity-50">{bulkBusy ? 'Guardando…' : 'Confirmar presencia'}</button>
+          </div>
+          {bulkError && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{bulkError}</p>}
+        </section>}
         {/* KPIs de Asistencia */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
             <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
               <span>Presentes / En Faena ({formatDate(fechaSeleccionada)})</span>
@@ -316,7 +339,7 @@ export default function ProyectoAsistenciaPage() {
               Gestionar cuadrilla →
             </Link>
           </div>
-        </div>
+        </div></CompactSummary>
 
         {/* Planilla Diaria Interactiva */}
         <div className="bg-white dark:bg-[#141A23] rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm overflow-hidden">
@@ -380,30 +403,10 @@ export default function ProyectoAsistenciaPage() {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {(
-                            [
-                              { id: 'presente', label: 'Presente', activeClass: 'bg-[#6B8F72] text-white' },
-                              { id: 'atraso', label: 'Atraso', activeClass: 'bg-amber-500 text-white' },
-                              { id: 'ausente', label: 'Ausente', activeClass: 'bg-red-600 text-white' },
-                              { id: 'licencia', label: 'Licencia', activeClass: 'bg-purple-600 text-white' },
-                              { id: 'permiso', label: 'Permiso', activeClass: 'bg-blue-600 text-white' },
-                            ] as { id: EstadoAsistencia; label: string; activeClass: string }[]
-                          ).map((btn) => (
-                            <button
-                              key={btn.id}
-                              type="button"
-                              onClick={() => handleMarcarEstado(item, btn.id)}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                                est === btn.id
-                                  ? btn.activeClass
-                                  : 'bg-kraft-100 dark:bg-[#1E2530] text-gray-600 dark:text-gray-300 hover:border-[#FF6A00]'
-                              }`}
-                            >
-                              {btn.label}
-                            </button>
-                          ))}
-                        </div>
+                        <select aria-label={`Estado de ${item.nombre}`} value={reg?.estado || ''} onChange={event => handleMarcarEstado(item, event.target.value as EstadoAsistencia)} className="rounded-lg border border-kraft-200 bg-white dark:bg-[#1E2530] dark:border-[#263040] px-3 py-2 text-sm">
+                          <option value="" disabled>Sin registro</option>
+                          <option value="presente">Presente</option><option value="atraso">Atraso</option><option value="ausente">Ausente</option><option value="licencia">Licencia</option><option value="permiso">Permiso</option>
+                        </select>
                       </td>
 
                       <td className="py-3.5 px-4">

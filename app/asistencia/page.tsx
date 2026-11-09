@@ -1,4 +1,5 @@
 'use client';
+import CompactSummary from '@/components/CompactSummary';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -108,8 +109,8 @@ export default function ControlAsistenciaGlobalPage() {
       )}
 
       <Navbar
-        title="Control General de Asistencia"
-        subtitle="Supervisión diaria de cuadrillas, horas-hombre y marcajes por WhatsApp en todas tus obras"
+        title="Asistencia"
+        subtitle="Asistencia diaria de tus obras."
         action={
           <button
             onClick={handleExportarConsolidado}
@@ -123,7 +124,7 @@ export default function ControlAsistenciaGlobalPage() {
 
       <div className="p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
         {/* KPIs Globales */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
             <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
               <span>Obreros Presentes ({formatDate(fechaFiltro)})</span>
@@ -165,9 +166,9 @@ export default function ControlAsistenciaGlobalPage() {
             <p className="text-2xl font-heading font-black text-navy-900 dark:text-white">
               {totalHorasMes.toFixed(1)} h
             </p>
-            <p className="text-[11px] text-gray-500 mt-1">Sincronizadas con Supabase</p>
+            <p className="text-[11px] text-gray-500 mt-1">Horas registradas</p>
           </div>
-        </div>
+        </div></CompactSummary>
 
         {/* Tarjetas Rápidas por Obra Activa */}
         <div className="space-y-3">

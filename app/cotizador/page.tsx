@@ -44,8 +44,6 @@ import {
   CotizacionEstimacion,
 } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
-import { getPlanDetails } from '@/lib/plans';
-import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 import PlanLockOverlay from '@/components/PlanLockOverlay';
 import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
@@ -76,7 +74,6 @@ export default function CopilotoObreroPage() {
 
   // Estados de interfaz
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('gratis');
-  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Mensajes de chat (Persistidos por sesión de usuario)
@@ -216,29 +213,18 @@ export default function CopilotoObreroPage() {
     <div className="flex-1 flex flex-col min-h-screen bg-kraft-100 font-sans pb-8">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-navy-900 text-white px-4 py-3 rounded-2xl shadow-2xl border-2 border-obra-orange flex items-center gap-2 text-xs font-semibold animate-in slide-in-from-bottom-5">
+        <div className="fixed bottom-6 right-6 z-50 bg-navy-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-kraft-200 flex items-center gap-2 text-xs font-semibold animate-in slide-in-from-bottom-5">
           <Sparkles className="w-4 h-4 text-obra-orange shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      <PlanSwitcherModal isOpen={isPlanModalOpen} onClose={() => setIsPlanModalOpen(false)} />
 
       {/* Navbar Superior */}
       <Navbar
         title="ObraBot"
         subtitle="Cotizaciones y acciones para gestionar tus obras."
-        action={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsPlanModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#E5DFC9] text-xs font-mono text-gray-700 hover:border-[#FF6A00] transition-colors shadow-sm"
-            >
-              <span className="w-2 h-2 rounded-full bg-[#6B8F72]"></span>
-              <span>{getPlanDetails(activePlan).nombre}</span>
-            </button>
-          </div>
-        }
+
       />
 
       <div className="p-4 md:p-6 max-w-7xl w-full mx-auto">
@@ -248,12 +234,12 @@ export default function CopilotoObreroPage() {
           requiredPlan="pro"
           description="Cotiza trabajos, consulta materiales y organiza tu obra desde el chat."
         >
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 gap-6">
 
             {/* ========================================================================= */}
             {/* COLUMNA PRINCIPAL: CHAT CONVERSACIONAL CON OBRABOT (8 cols) */}
             {/* ========================================================================= */}
-            <div className="lg:col-span-8 bg-white border border-kraft-200 rounded-3xl shadow-sm overflow-hidden flex flex-col h-[calc(100dvh-14rem)] min-h-[340px] sm:min-h-[480px]">
+            <div className="bg-white border border-kraft-200 rounded-3xl shadow-sm overflow-hidden flex flex-col h-[calc(100dvh-14rem)] min-h-[340px] sm:min-h-[480px]">
 
               {/* Header del Chat con Botón de Nueva Conversación */}
               <div className="bg-navy-900 text-white px-5 py-4 border-b border-navy-700 flex items-center justify-between">
@@ -263,15 +249,10 @@ export default function CopilotoObreroPage() {
                   </div>
                   <div>
                     <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
-                      <span>ObraBot</span>
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold border border-emerald-500/30 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Asistente IA
-                      </span>
+                      <span>Conversación</span>
+
                     </h3>
-                    <p className="text-[11px] text-gray-300">
-                      Cotizaciones, materiales y gestión de obras
-                    </p>
+
                   </div>
                 </div>
 
@@ -327,14 +308,14 @@ export default function CopilotoObreroPage() {
                       {/* TARJETA INTERACTIVA DE ACCIÓN EJECUTADA POR LA IA */}
                       {/* ============================================================= */}
                       {m.accion_ejecutada && (
-                        <div className="mt-3 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-[#1E2634] dark:to-[#18202C] border-2 border-obra-orange rounded-2xl p-3.5 space-y-2 text-navy-900 dark:text-gray-100 animate-in fade-in">
+                        <div className="mt-3 bg-kraft-50 dark:from-[#1E2634] dark:to-[#18202C] border border-kraft-200 rounded-2xl p-3.5 space-y-2 text-navy-900 dark:text-gray-100 animate-in fade-in">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-mono font-bold uppercase text-obra-orange flex items-center gap-1.5">
                               <Sparkles className="w-3.5 h-3.5 text-obra-orange" />
-                              <span>Acción Ejecutada en ObraTrack</span>
+                              <span>Cambio guardado</span>
                             </span>
                             <span className="px-2 py-0.5 rounded bg-obra-green text-white text-[9px] font-bold">
-                              ✓ LISTO
+                              Guardado
                             </span>
                           </div>
 
@@ -381,7 +362,7 @@ export default function CopilotoObreroPage() {
                             onClick={() => handleSendChat(sug)}
                             className="px-3 py-1.5 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] hover:border-obra-orange text-navy-900 dark:text-gray-100 rounded-xl text-[11px] font-medium shadow-2xs transition-all hover:bg-orange-50/50 dark:hover:bg-[#1E2634] text-left"
                           >
-                            💡 {sug}
+                            {sug}
                           </button>
                         ))}
                       </div>
@@ -423,7 +404,7 @@ export default function CopilotoObreroPage() {
             {/* ========================================================================= */}
             {/* PANEL LATERAL: CENTRO DE CONTROL EN VIVO (4 cols) */}
             {/* ========================================================================= */}
-            <div className="lg:col-span-4 space-y-5">
+            <details className="rounded-xl border border-kraft-200 dark:border-[#263040] p-4 space-y-4"><summary className="cursor-pointer text-sm font-semibold">Contexto y accesos de tus obras</summary>
 
               {/* Obras y Proyectos Creados */}
               <div className="bg-white border border-kraft-200 rounded-3xl p-5 shadow-sm space-y-3">
@@ -576,7 +557,7 @@ export default function CopilotoObreroPage() {
                 </div>
               </div>
 
-            </div>
+            </details>
           </div>
         </PlanLockOverlay>
       </div>

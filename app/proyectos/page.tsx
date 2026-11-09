@@ -1,6 +1,8 @@
 'use client';
+import CompactSummary from '@/components/CompactSummary';
 import { projectStatuses } from '@/lib/project-status';
 import { ProjectStatusBadge } from '@/components/ProjectStatus';
+import ActionMenu from '@/components/ActionMenu';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect } from 'react';
@@ -45,7 +47,6 @@ import PresupuestosPanel from '@/components/PresupuestosPanel';
 import { dataService } from '@/lib/data-service';
 import { Proyecto, Cliente, Usuario, SubscriptionPlanId, ProjectStatus } from '@/types/database';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
-import { getPlanDetails } from '@/lib/plans';
 import { getCoordenadasComuna } from '@/lib/chile-locations';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 import GoogleMapsLocationPicker from '@/components/GoogleMapsLocationPicker';
@@ -97,7 +98,7 @@ export default function ProyectosPage() {
   const [lugarReferencia, setLugarReferencia] = useState('');
   const [selectedTrabajadores, setSelectedTrabajadores] = useState<string[]>([]);
   const [actividadesTexto, setActividadesTexto] = useState(
-    'Cimientos y Radier (10 días)\nMontaje de Estructura y Muros (15 días)\nInstalaciones y Terminaciones (15 días)'
+    ''
   );
 
   // Formulario editar proyecto
@@ -337,22 +338,16 @@ export default function ProyectosPage() {
       />
 
       <Navbar
-        title={isTerreno ? 'Obras Asignadas' : 'Obras & Proyectos'}
+        title={isTerreno ? 'Obras Asignadas' : 'Obras y proyectos'}
         subtitle={
           isTerreno
             ? 'Vista de faena para reporte de avances, fotos y ubicación en mapas'
-            : 'Panel central de control, avance ponderado, trabajadores y estado financiero'
+            : 'Tus obras y presupuestos.'
         }
         action={
-          isTerreno ? null : (
+          isTerreno || tab === 'presupuestos' ? null : (
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsPlanModalOpen(true)}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E5DFC9] text-xs font-mono text-gray-700 hover:border-[#FF6A00] transition-colors shadow-sm"
-              >
-                <span className="w-2 h-2 rounded-full bg-[#FF6A00]"></span>
-                <span>{getPlanDetails(activePlan).nombre}</span>
-              </button>
+
               <button
                 onClick={() => {
                   if (activePlan === 'gratis' && proyectosActivos.length >= 1) {
@@ -364,7 +359,7 @@ export default function ProyectosPage() {
                 className="px-4 py-2.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-sm font-semibold rounded-xl shadow-sm flex items-center gap-2 transition-all font-heading"
               >
                 <Plus className="w-4 h-4" />
-                <span>Nuevo Proyecto</span>
+                <span>Nueva obra</span>
               </button>
             </div>
           )
@@ -402,7 +397,7 @@ export default function ProyectosPage() {
         )}
         
         {/* Tarjetas de Resumen KPI */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Proyectos Activos */}
           <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
@@ -476,7 +471,7 @@ export default function ProyectosPage() {
             </div>
           </div>
 
-        </div>
+        </div></CompactSummary>
 
         {/* Grid de Proyectos */}
         <div className="space-y-4">
@@ -642,7 +637,7 @@ export default function ProyectosPage() {
                       {/* Header Obra */}
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="overflow-hidden">
-                          <h3 className="font-heading font-bold text-base text-navy-900 leading-snug truncate">
+                          <h3 className="font-heading font-bold text-base text-navy-900 leading-snug line-clamp-2">
                             <Link href={`/proyectos/${proj.id}/gantt`} className="hover:text-obra-orange hover:underline focus-visible:underline">{proj.nombre}</Link>
                           </h3>
                           <div className="flex flex-col gap-0.5 mt-0.5">
@@ -668,25 +663,11 @@ export default function ProyectosPage() {
                         <div className="flex items-center gap-1 shrink-0">
                           <ProjectStatusBadge estado={proj.estado} />
                           
-                          {/* Botón Editar Obra */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(proj)}
-                            className="p-1.5 text-gray-400 hover:text-[#FF6A00] hover:bg-[#FF6A00]/10 rounded-lg transition-colors"
-                            title="Editar obra"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Botón Eliminar Obra */}
-                          <button
-                            type="button"
-                            onClick={() => setProjectToDelete(proj)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Eliminar obra"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <ActionMenu label={`Acciones de ${proj.nombre}`}>
+                            <button type="button" onClick={() => handleOpenEdit(proj)}>Editar obra</button>
+                            <button type="button" onClick={() => setViewingMapsProject(proj)}>Ver ubicación</button>
+                            <button type="button" className="text-red-600" onClick={() => setProjectToDelete(proj)}>Eliminar obra</button>
+                          </ActionMenu>
                         </div>
                       </div>
 
@@ -806,74 +787,9 @@ export default function ProyectosPage() {
                         </button>
                       </div>
                     ) : (
-                      <div className="space-y-1.5 pt-3 border-t border-kraft-200">
-                        <div className="grid grid-cols-4 gap-1.5">
-                          <Link
-                            href={`/proyectos/${proj.id}/gantt`}
-                            className="py-2 px-1 bg-navy-800 hover:bg-navy-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
-                            title="Carta Gantt & Partidas"
-                          >
-                            <GanttChartSquare className="w-3.5 h-3.5 text-obra-orange shrink-0" />
-                            <span className="truncate">Gantt</span>
-                          </Link>
-
-                          <Link
-                            href={`/proyectos/${proj.id}/finanzas`}
-                            className="py-2 px-1 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
-                            title="Control Financiero"
-                          >
-                            <Wallet className="w-3.5 h-3.5 text-navy-800 shrink-0" />
-                            <span className="truncate">Finanzas</span>
-                          </Link>
-
-                          <Link
-                            href={`/proyectos/${proj.id}/ia`}
-                            className="py-2 px-1 bg-gradient-to-r from-[#FF6A00]/15 to-purple-600/15 hover:from-[#FF6A00]/25 hover:to-purple-600/25 border border-[#FF6A00]/30 text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
-                            title="ObraBot de esta obra"
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
-                            <span className="truncate">IA</span>
-                          </Link>
-
-                          <button
-                            type="button"
-                            onClick={() => setViewingMapsProject(proj)}
-                            className="py-2 px-1 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00] text-[#1E1E1E] dark:text-white hover:text-[#FF6A00] rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate shadow-sm"
-                            title="Ver ubicación en Google Maps"
-                          >
-                            <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
-                            <span className="truncate">Maps</span>
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-1.5">
-                          <Link
-                            href={`/proyectos/${proj.id}/cambios`}
-                            className="py-1.5 px-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-700 dark:text-amber-400 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
-                            title="Reclamos, Incidencias y Solicitudes de Cambio"
-                          >
-                            <AlertTriangle className="w-3 h-3 shrink-0" />
-                            <span className="truncate">Cambios</span>
-                          </Link>
-
-                          <Link
-                            href={`/proyectos/${proj.id}/documentos`}
-                            className="py-1.5 px-1 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 text-indigo-700 dark:text-indigo-400 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
-                            title="Repositorio de Contratos, Planos, Facturas y Correos"
-                          >
-                            <FolderOpen className="w-3 h-3 shrink-0" />
-                            <span className="truncate">Documentos</span>
-                          </Link>
-
-                          <Link
-                            href={`/proyectos/${proj.id}/asistencia`}
-                            className="py-1.5 px-1 bg-[#6B8F72]/15 hover:bg-[#6B8F72]/25 border border-[#6B8F72]/30 text-[#527358] dark:text-[#86B08E] rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition-all font-heading truncate"
-                            title="Control de Asistencia de Obreros"
-                          >
-                            <ClipboardCheck className="w-3 h-3 shrink-0" />
-                            <span className="truncate">Asistencia</span>
-                          </Link>
-                        </div>
+                      <div className="flex items-center gap-2 pt-3 border-t border-kraft-200">
+                        <Link href={`/proyectos/${proj.id}/gantt`} className="flex-1 inline-flex justify-center items-center gap-2 rounded-xl bg-navy-900 px-3 py-2.5 text-sm font-semibold text-white hover:bg-navy-800">Abrir obra</Link>
+                        <Link href={`/proyectos/${proj.id}/ia`} aria-label={`ObraBot de ${proj.nombre}`} className="inline-flex items-center justify-center rounded-xl border border-kraft-200 p-2.5 text-obra-orange hover:border-obra-orange"><Sparkles size={18} aria-hidden="true" /></Link>
                       </div>
                     )}
                   </div>
@@ -887,14 +803,14 @@ export default function ProyectosPage() {
         </>}
       </div>
 
-      {/* Modal: + Nuevo Proyecto */}
+      {/* Modal: + Nueva obra */}
       {isModalOpen && (
         <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-lg my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl sm:rounded-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6 shadow-2xl animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-4 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-lg text-navy-900 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-obra-orange" />
-                <span>Registrar Nuevo Proyecto</span>
+                <span>Crear obra</span>
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -926,13 +842,13 @@ export default function ProyectosPage() {
 
             <form onSubmit={handleCreateProject} className="space-y-4">
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                <label htmlFor="create-project-name" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
                   Nombre de la Obra *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej: Ampliación Quincho & Terraza Ugarte"
+                  id="create-project-name" placeholder="Ej: Ampliación de terraza"
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-sm focus:outline-none focus:border-obra-orange"
@@ -1040,7 +956,7 @@ export default function ProyectosPage() {
               </div>
 
               {/* Selector Interactivo de Ubicación en Google Maps */}
-              <GoogleMapsLocationPicker
+              <details className="rounded-xl border border-kraft-200 p-3 dark:border-[#263040]"><summary className="cursor-pointer text-sm font-semibold">Ubicación y referencias</summary><div className="mt-3"><GoogleMapsLocationPicker
                 direccion={direccion}
                 comuna={comuna}
                 region={region}
@@ -1055,7 +971,7 @@ export default function ProyectosPage() {
                   setLongitud(loc.longitud);
                   setLugarReferencia(loc.lugarReferencia);
                 }}
-              />
+              /></div></details>
 
               <div>
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
@@ -1124,11 +1040,11 @@ export default function ProyectosPage() {
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                <label htmlFor="edit-project-name" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
                   Nombre de la Obra *
                 </label>
                 <input
-                  type="text"
+                  id="edit-project-name" type="text"
                   required
                   value={editNombre}
                   onChange={(e) => setEditNombre(e.target.value)}
@@ -1249,7 +1165,7 @@ export default function ProyectosPage() {
               </div>
 
               {/* Selector Interactivo de Ubicación en Google Maps (Edición) */}
-              <GoogleMapsLocationPicker
+              <details className="rounded-xl border border-kraft-200 p-3 dark:border-[#263040]"><summary className="cursor-pointer text-sm font-semibold">Ubicación y referencias</summary><div className="mt-3"><GoogleMapsLocationPicker
                 direccion={editDireccion}
                 comuna={editComuna}
                 region={editRegion}
@@ -1264,7 +1180,7 @@ export default function ProyectosPage() {
                   setEditLongitud(loc.longitud);
                   setEditReferencia(loc.lugarReferencia);
                 }}
-              />
+              /></div></details>
 
               <div>
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">

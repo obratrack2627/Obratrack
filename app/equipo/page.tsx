@@ -1,4 +1,5 @@
 'use client';
+import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -18,14 +19,12 @@ import {
   AlertTriangle,
   MessageSquare,
   BadgeCheck,
-  KeyRound,
   Terminal,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { registrationFields } from '@/lib/registrations';
 import { aiHeaders } from '@/lib/ai/client';
-import ChangePasswordModal from '@/components/ChangePasswordModal';
 import { dataService } from '@/lib/data-service';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
 import { isDeveloperEmail } from '@/lib/auth-utils';
@@ -43,7 +42,6 @@ export default function EquipoPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [projectId, setProjectId] = useState('');
   const [saving, setSaving] = useState(false);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -181,19 +179,11 @@ export default function EquipoPage() {
       )}
 
       <Navbar
-        title="Equipo de Obra & Cuadrilla"
-        subtitle="Gestión de trabajadores, maestros, roles y vinculación con WhatsApp para reportes de terreno"
+        title="Equipo"
+        subtitle="Personas y obras asignadas."
         action={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsPasswordModalOpen(true)}
-              className="px-3.5 py-2 bg-white dark:bg-[#141A23] hover:bg-gray-50 dark:hover:bg-[#1A2230] text-[#1E1E1E] dark:text-white border border-[#E5DFC9] dark:border-[#263040] text-xs font-semibold rounded-xl shadow-sm flex items-center gap-1.5 font-heading transition-all"
-              title="Cambiar contraseña de mi cuenta"
-            >
-              <KeyRound className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>Seguridad & Clave</span>
-            </button>
+
             <button
               type="button"
               onClick={() => setIsCreateModalOpen(true)}
@@ -209,7 +199,7 @@ export default function EquipoPage() {
       <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
         
         {/* KPI Cards de Equipo */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
@@ -260,7 +250,7 @@ export default function EquipoPage() {
               <ShieldCheck className="w-6 h-6" />
             </div>
           </div>
-        </div>
+        </div></CompactSummary>
 
         {/* Barra de Filtros y Búsqueda */}
         <div className="bg-white border border-kraft-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -303,7 +293,7 @@ export default function EquipoPage() {
                   : 'bg-kraft-50 text-gray-600 hover:bg-kraft-100 border border-kraft-200'
               }`}
             >
-              👷 Terreno ({countTerreno})
+              Terreno ({countTerreno})
             </button>
             <button
               onClick={() => setRoleFilter('supervisor')}
@@ -313,7 +303,7 @@ export default function EquipoPage() {
                   : 'bg-kraft-50 text-gray-600 hover:bg-kraft-100 border border-kraft-200'
               }`}
             >
-              📋 Supervisores ({countSupervisor})
+              Supervisores ({countSupervisor})
             </button>
             <button
               onClick={() => setRoleFilter('admin')}
@@ -323,7 +313,7 @@ export default function EquipoPage() {
                   : 'bg-kraft-50 text-gray-600 hover:bg-kraft-100 border border-kraft-200'
               }`}
             >
-              🛡️ Admins ({countAdmin})
+              Admins ({countAdmin})
             </button>
           </div>
         </div>
@@ -562,7 +552,7 @@ export default function EquipoPage() {
                   onChange={(e) => setRol(e.target.value as UserRole)}
                   className="w-full px-3.5 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-gray-800 rounded-xl text-xs text-navy-900 dark:text-white focus:outline-none focus:border-obra-orange font-mono"
                 >
-                  <option value="terreno">👷 Terreno (Maestro - Vista reducida móvil / Fotos de faena)</option>
+                  <option value="terreno">Terreno · WhatsApp</option>
                   <option value="supervisor">Supervisor · WhatsApp</option>
                 </select>
               </div>
@@ -672,9 +662,9 @@ export default function EquipoPage() {
                   className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-mono"
                 >
 
-                  <option value="admin">🛡️ Administrador / Contratista General</option>
-                  <option value="supervisor">📋 Supervisor (Control de Gantt y Aprobación)</option>
-                  <option value="terreno">👷 Terreno (Maestro / Capataz - Reporta por WhatsApp)</option>
+                  <option value="admin">Administrador / Contratista General</option>
+                  <option value="supervisor">Supervisor · WhatsApp</option>
+                  <option value="terreno">Terreno · WhatsApp</option>
                 </select>
               </div>
 
@@ -736,12 +726,7 @@ export default function EquipoPage() {
       )}
 
       {/* Modal de Cambio y Recuperación de Contraseña */}
-      <ChangePasswordModal
-        isOpen={isPasswordModalOpen}
-        onClose={() => setIsPasswordModalOpen(false)}
-        userEmail={activeUser?.email}
-        onSuccess={() => showToast('¡Contraseña actualizada con éxito!')}
-      />
+
 
     </div>
   );

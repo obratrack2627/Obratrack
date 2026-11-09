@@ -1,4 +1,6 @@
 'use client';
+import ActionMenu from '@/components/ActionMenu';
+import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect } from 'react';
@@ -56,6 +58,7 @@ export default function ProyectoFinanzasPage() {
   const [pagos, setPagos] = useState<Pago[]>([]);
   const [imprevistos, setImprevistos] = useState<Imprevisto[]>([]);
   const [materiales, setMateriales] = useState<MaterialProyecto[]>([]);
+  const [financeSection, setFinanceSection] = useState('resumen');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   
   // Modales de Creación
@@ -442,17 +445,17 @@ export default function ProyectoFinanzasPage() {
         <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-heading font-bold text-sm text-navy-900 dark:text-white">
-              Documentos de Cobro y Control Contable
+              Documentos de cobro
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Emite Estados de Pago formales según avance de Carta Gantt o exporta la cartola completa en Excel.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2.5">
+          <ActionMenu label="Exportaciones de la obra" text="Exportar">
             <button
               type="button"
               onClick={() => setIsEdpModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-obra-orange hover:bg-obra-orange-hover text-white text-xs font-bold shadow-sm transition-colors"
+              className="font-medium"
             >
               <FileText className="w-4 h-4" />
               <span>Emitir Estado de Pago (PDF)</span>
@@ -461,20 +464,23 @@ export default function ProyectoFinanzasPage() {
               type="button"
               disabled={isExportingExcel}
               onClick={() => void handleExportExcel()}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#6B8F72] hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold shadow-sm transition-colors"
+              className="font-medium"
             >
               {isExportingExcel ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <FileSpreadsheet className="w-4 h-4" />
               )}
-              <span>{isExportingExcel ? 'Generando Excel…' : 'Exportar Cartola Excel (.xlsx)'}</span>
+              <span>{isExportingExcel ? 'Generando Excel…' : 'Exportar Excel'}</span>
             </button>
-          </div>
+          </ActionMenu>
         </div>
 
+        <nav aria-label="Secciones de finanzas" className="flex flex-wrap gap-2 border-b border-kraft-200 pb-3 dark:border-[#263040]">
+          {[['resumen','Resumen'],['cobros','Cobros'],['materiales','Materiales'],['imprevistos','Imprevistos']].map(([id,label]) => <button type="button" key={id} onClick={() => setFinanceSection(id)} aria-pressed={financeSection === id} className={`rounded-xl px-4 py-2 text-sm font-semibold ${financeSection === id ? 'bg-navy-900 text-white dark:bg-obra-orange' : 'bg-kraft-100 text-gray-600 dark:bg-[#1E2530] dark:text-gray-200'}`}>{label}</button>)}
+        </nav>
         {/* KPI Cards & Semáforo de Rentabilidad Real */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
             <p className="text-xs font-mono font-semibold uppercase text-gray-500">Monto Cotizado (Total)</p>
             <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white mt-1">{formatCLP(montoCotizado)}</h3>
@@ -532,13 +538,13 @@ export default function ProyectoFinanzasPage() {
               Sin descontar mano de obra ni gastos generales
             </p>
           </div>
-        </div>
+        </div></CompactSummary>
 
         {/* Gráfico y Paneles de Control */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className={financeSection === 'materiales' ? 'hidden' : 'grid grid-cols-1 gap-6'}>
           
           {/* Gráfico Donut de Rentabilidad */}
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex flex-col justify-between items-center text-center">
+          <div className={`${financeSection === 'resumen' ? 'flex' : 'hidden'} bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex-col justify-between items-center text-center`}>
             <h4 className="font-heading font-bold text-sm text-navy-900 self-start">Distribución de Flujo</h4>
             
             <div className="w-full h-48 my-2">
@@ -588,7 +594,7 @@ export default function ProyectoFinanzasPage() {
           </div>
 
           {/* Historial Cronológico de Pagos (con CRUD) */}
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+          <div className={`${financeSection === 'cobros' ? 'flex' : 'hidden'} bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-heading font-bold text-sm text-navy-900 flex items-center gap-1.5">
@@ -643,7 +649,7 @@ export default function ProyectoFinanzasPage() {
           </div>
 
           {/* Historial de Imprevistos con Fotos (con CRUD) */}
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+          <div className={`${financeSection === 'imprevistos' ? 'flex' : 'hidden'} bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-heading font-bold text-sm text-navy-900 flex items-center gap-1.5">
@@ -716,15 +722,15 @@ export default function ProyectoFinanzasPage() {
         </div>
 
         {/* Sección: Materiales & Insumos de la Obra (con CRUD) */}
-        <div className="bg-white border border-kraft-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className={`${financeSection === 'materiales' ? '' : 'hidden'} bg-white border border-kraft-200 rounded-2xl p-6 shadow-sm space-y-4`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200">
             <div>
               <h3 className="font-heading font-black text-lg text-navy-900 flex items-center gap-2">
                 <Package className="w-5 h-5 text-obra-orange" />
-                <span>Lista de Materiales & Insumos de la Obra</span>
+                <span>Materiales</span>
               </h3>
               <p className="text-xs text-gray-500 font-sans mt-0.5">
-                Control de compras, cantidades y proveedores (Sodimac, Construmart, Imperial, Barracas).
+                Compras y materiales pendientes.
               </p>
             </div>
             

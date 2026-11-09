@@ -47,7 +47,7 @@ export default function MaterialPriceComparison({
               <span>
                 {offer.unidad === "un" && offer.multiplicador === 1
                   ? "Por unidad de venta"
-                  : `Unidad del catálogo: ${offer.unidad} · factor ${offer.multiplicador}`}
+                  : `Presentación: ${offer.multiplicador} ${offer.unidad}`}
               </span>
             </div>
             {offer.vendedor && (
@@ -57,7 +57,7 @@ export default function MaterialPriceComparison({
             )}
             {offer.total_solicitado != null && (
               <p className="text-xs">
-                {data.consulta.cantidad} unidades:{" "}
+                {data.consulta.cantidad} {data.consulta.unidad_cantidad || 'unidades'}:{" "}
                 <strong>{formatCLP(offer.total_solicitado)}</strong>
               </p>
             )}

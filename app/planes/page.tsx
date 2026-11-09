@@ -5,7 +5,6 @@ import {
   Building2,
   CheckCircle2,
   Download,
-  FileText,
   Mail,
   ShieldCheck,
   Sparkles,
@@ -27,7 +26,6 @@ export default function PlanesPage() {
     obrasActivas: 0,
     obrasTotales: 0,
     integrantesEquipo: 0,
-    cotizacionesGuardadas: 0,
   });
   const [toast, setToast] = useState<string | null>(null);
   const [legal, setLegal] = useState<
@@ -43,7 +41,6 @@ export default function PlanesPage() {
         obrasActivas: projs.filter((p) => p.estado === "activo").length,
         obrasTotales: projs.length,
         integrantesEquipo: dataService.getUsuarios().length,
-        cotizacionesGuardadas: dataService.getCotizaciones().length,
       });
     };
     refresh();
@@ -110,7 +107,7 @@ export default function PlanesPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-heading font-bold text-navy-900 dark:text-white">
-                Estado y Uso de tu Constructora
+                Tu suscripción
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {activeUser?.empresa_nombre || "Cuenta activa"} · Plan vigente:{" "}
@@ -120,8 +117,60 @@ export default function PlanesPage() {
               </p>
             </div>
 
-            {/* Selector ciclo de facturación */}
-            <div className="inline-flex items-center rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-100 dark:bg-[#0B0F14] p-1 text-xs font-semibold">
+
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+            <div className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-3.5">
+              <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
+                <span className="font-mono uppercase text-[11px]">Obras Activas</span>
+                <Building2 className="w-4 h-4 text-obra-orange" />
+              </div>
+              <p className="text-lg font-mono font-bold text-navy-900 dark:text-white mt-1">
+                {limiteTexto}
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                {usage.obrasTotales} obra(s) registrada(s) en total
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-3.5">
+              <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
+                <span className="font-mono uppercase text-[11px]">Equipo y Cuadrilla</span>
+                <Users className="w-4 h-4 text-obra-green" />
+              </div>
+              <p className="text-lg font-mono font-bold text-navy-900 dark:text-white mt-1">
+                {usage.integrantesEquipo} usuario(s)
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                Personas registradas
+              </p>
+            </div>
+
+
+
+            <div className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-3.5">
+              <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
+                <span className="font-mono uppercase text-[11px]">ObraBot</span>
+                <Sparkles className="w-4 h-4 text-obra-green" />
+              </div>
+              <p className="text-lg font-mono font-bold text-navy-900 dark:text-white mt-1">
+                {plan === "pro_ia"
+                  ? "Web + WhatsApp"
+                  : plan === "pro"
+                    ? "ObraBot web"
+                    : "Gestión básica"}
+              </p>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                {plan === "gratis"
+                  ? "Actualiza a Pro para cotizar con IA"
+                  : "ObraBot habilitado"}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <details className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-5 space-y-5"><summary className="cursor-pointer text-base font-semibold">Comparar y cambiar plan</summary><div className="inline-flex items-center rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-100 dark:bg-[#0B0F14] p-1 text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => setBillingCycle("mensual")}
@@ -147,71 +196,7 @@ export default function PlanesPage() {
                   -15%
                 </span>
               </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-            <div className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-3.5">
-              <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
-                <span className="font-mono uppercase text-[11px]">Obras Activas</span>
-                <Building2 className="w-4 h-4 text-obra-orange" />
-              </div>
-              <p className="text-lg font-mono font-bold text-navy-900 dark:text-white mt-1">
-                {limiteTexto}
-              </p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                {usage.obrasTotales} obra(s) registrada(s) en total
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-3.5">
-              <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
-                <span className="font-mono uppercase text-[11px]">Equipo y Cuadrilla</span>
-                <Users className="w-4 h-4 text-obra-green" />
-              </div>
-              <p className="text-lg font-mono font-bold text-navy-900 dark:text-white mt-1">
-                {usage.integrantesEquipo} usuario(s)
-              </p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                Roles admin, supervisor y terreno
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-3.5">
-              <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
-                <span className="font-mono uppercase text-[11px]">Cotizaciones Locales</span>
-                <FileText className="w-4 h-4 text-obra-orange" />
-              </div>
-              <p className="text-lg font-mono font-bold text-navy-900 dark:text-white mt-1">
-                {usage.cotizacionesGuardadas}
-              </p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                Convertibles en obra en 1 clic
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-3.5">
-              <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
-                <span className="font-mono uppercase text-[11px]">Cobertura IA</span>
-                <Sparkles className="w-4 h-4 text-obra-green" />
-              </div>
-              <p className="text-lg font-mono font-bold text-navy-900 dark:text-white mt-1">
-                {plan === "pro_ia"
-                  ? "Web + WhatsApp"
-                  : plan === "pro"
-                    ? "Copiloto Web"
-                    : "Básico Manual"}
-              </p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                {plan === "gratis"
-                  ? "Actualiza a Pro para cotizar con IA"
-                  : "ObraBot habilitado"}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Tarjetas Comparativas de Planes */}
+            </div>{/* Tarjetas Comparativas de Planes */}
         <div className="grid md:grid-cols-3 gap-5">
           {PLANES_SUSCRIPCION.map((p) => {
             const precioMensual =
@@ -289,7 +274,7 @@ export default function PlanesPage() {
               </article>
             );
           })}
-        </div>
+        </div></details>
 
         <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600 dark:text-gray-400">
           <p className="flex items-center gap-1.5">

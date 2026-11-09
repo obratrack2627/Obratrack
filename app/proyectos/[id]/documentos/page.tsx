@@ -1,4 +1,5 @@
 'use client';
+import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect } from 'react';
@@ -119,7 +120,7 @@ export default function ProyectoDocumentosPage() {
       if (!nombre.trim()) {
         setNombre(res.fileName.replace(/\.[^/.]+$/, ''));
       }
-      showToast('📁 Archivo cargado en Supabase Storage (documentos-obra).');
+      showToast('📁 Archivo guardado en la obra.');
     } catch (err: any) {
       showToast(err.message || 'Error al subir el documento.');
     } finally {
@@ -257,10 +258,10 @@ export default function ProyectoDocumentosPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-lg sm:text-xl font-heading font-bold text-navy-900 dark:text-white">
-              Repositorio Documental de Obra
+              Documentos
             </h2>
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              Centraliza contratos, planos, facturas, boletas, permisos DOM y respaldos de correos asociados en Supabase Storage.
+              Archivos y acuerdos de la obra.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -269,20 +270,20 @@ export default function ProyectoDocumentosPage() {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FF6A00] hover:bg-[#E05E00] text-white text-xs font-heading font-bold shadow-md transition-all"
             >
               <Upload className="w-4 h-4" />
-              <span>Subir Documento / Plano / Factura</span>
+              <span>Subir archivo</span>
             </button>
             <button
               onClick={() => handleOpenModal('correo')}
               className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs font-heading font-bold shadow-sm transition-all"
             >
               <Mail className="w-4 h-4 text-amber-500" />
-              <span>Registrar Correo Asociado</span>
+              <span>Registrar correo</span>
             </button>
           </div>
         </div>
 
         {/* KPIs del Repositorio */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
             <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
               <span>Total Archivos & Respaldos</span>
@@ -328,7 +329,7 @@ export default function ProyectoDocumentosPage() {
             </p>
             <p className="text-[11px] text-gray-500 mt-1">Comunicaciones y acuerdos formales</p>
           </div>
-        </div>
+        </div></CompactSummary>
 
         {/* Barra de Filtros y Buscador */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -564,7 +565,7 @@ export default function ProyectoDocumentosPage() {
                   <Upload className="w-6 h-6 text-[#FF6A00]" />
                   <span className="text-xs font-bold text-navy-900 dark:text-white">
                     {isUploading
-                      ? 'Subiendo archivo a Supabase Storage...'
+                      ? 'Subiendo archivo…'
                       : archivoNombre
                       ? `✅ ${archivoNombre}`
                       : 'Haz clic para seleccionar archivo (PDF, Plano, Imagen, Excel, Word)'}

@@ -1,4 +1,5 @@
 "use client";
+import ActionMenu from './ActionMenu';
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, FolderPlus } from "lucide-react";
@@ -141,8 +142,11 @@ export default function PresupuestosPanel({
         <h2 className="text-xl font-bold text-navy-900 dark:text-white">
           Presupuestos
         </h2>
-        <div className="flex gap-3 items-center">
-          <button type="button" className="rounded-xl border border-obra-orange px-3 py-2 text-sm font-semibold text-obra-orange" onClick={() => setCreating(true)}>Precio acordado</button>
+        <div className="flex flex-wrap gap-3 items-center">
+          <ActionMenu label="Crear presupuesto" text="Crear presupuesto">
+            <Link href={projectId ? `/proyectos/${projectId}/ia` : '/cotizador'}>Con ObraBot</Link>
+            <button type="button" onClick={() => setCreating(true)}>Precio acordado</button>
+          </ActionMenu>
           <button
             disabled={busy}
             onClick={refresh}
@@ -150,12 +154,7 @@ export default function PresupuestosPanel({
           >
             {busy ? "Actualizando…" : "Actualizar"}
           </button>
-          <Link
-            href={projectId ? `/proyectos/${projectId}/ia` : "/cotizador"}
-            className="rounded-xl bg-obra-orange hover:bg-obra-orange-hover px-4 py-2 text-white text-sm font-semibold transition-colors"
-          >
-            Nuevo presupuesto
-          </Link>
+
         </div>
       </div>
 
@@ -222,8 +221,8 @@ export default function PresupuestosPanel({
 
       {Array.from(new Set(visible.map((r) => r.grupo_id).filter(Boolean))).map((id) => <BudgetGroupCard key={id} rows={visible.filter((r) => r.grupo_id === id)} projects={projects} busy={busy} onChoose={setChoice} onHistory={setHistory} onAlternative={setVariantSource} onView={(row, edit) => { setSelected(row); setEditSelected(edit); }} onUpdate={(row, changes) => void update(row, changes)} />)}
       {visible.some((r) => !r.grupo_id) && (
-        <div className="overflow-x-auto rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23]">
-          <table className="w-full text-sm text-left">
+        <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23]">
+          <table className="responsive-records w-full text-sm text-left">
             <thead className="bg-kraft-100 dark:bg-[#0B0F14]">
               <tr>
                 {[
@@ -260,13 +259,13 @@ export default function PresupuestosPanel({
                         {row.origen === "whatsapp" ? "WhatsApp" : "Plataforma"}
                       </p>
                     </td>
-                    <td className="p-3 font-mono whitespace-nowrap font-semibold">
+                    <td data-label="Total con IVA" className="p-3 font-mono whitespace-nowrap font-semibold">
                       {formatCLP(
                         row.cotizacion.estructura_financiera
                           .precio_total_con_iva,
                       )}
                     </td>
-                    <td className="p-3">
+                    <td data-label="Estado" className="p-3">
                       <select
                         disabled={busy}
                         aria-label={`Estado de ${row.cotizacion.titulo_proyecto}`}
@@ -285,7 +284,7 @@ export default function PresupuestosPanel({
                         ))}
                       </select>
                     </td>
-                    <td className="p-3">
+                    <td data-label="Obra asociada" className="p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <select
                           disabled={busy}
@@ -316,7 +315,7 @@ export default function PresupuestosPanel({
                         )}
                       </div>
                     </td>
-                    <td className="p-3">
+                    <td data-label="Acciones" className="p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
@@ -326,6 +325,7 @@ export default function PresupuestosPanel({
                           Ver / PDF
                         </button>
                         <button type="button" className="text-sm font-semibold hover:underline" onClick={() => { setEditSelected(true); setSelected(row); }}>Editar</button>
+                        <ActionMenu label={`Más acciones de ${row.cotizacion.titulo_proyecto}`}>
                         <button type="button" className="text-sm text-gray-500" onClick={() => setHistory(row)}>Historial</button>
                         <button type="button" disabled={busy} className="text-sm font-semibold text-obra-orange" onClick={() => setVariantSource(row)}>Crear alternativa</button>
                         {row.proyecto_id && !['rechazada','anulada'].includes(row.estado) && <button type="button" disabled={busy} className="rounded-lg bg-obra-green text-white px-3 py-2 text-xs font-semibold" onClick={() => setChoice(row)}>Aplicar a la obra</button>}
@@ -340,6 +340,7 @@ export default function PresupuestosPanel({
                             <span>Convertir en Obra</span>
                           </button>
                         )}
+                        </ActionMenu>
                       </div>
                     </td>
                   </tr>

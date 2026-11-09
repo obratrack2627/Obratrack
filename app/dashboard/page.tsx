@@ -1,4 +1,5 @@
 'use client';
+import CompactSummary from '@/components/CompactSummary';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -158,14 +159,14 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-[#6B8F72]/15 text-[#6B8F72] border border-[#6B8F72]/30">
               <span className="w-2 h-2 rounded-full bg-[#6B8F72] animate-pulse"></span>
-              En Vivo
+              Hoy
             </span>
             <span className="text-xs font-mono text-gray-500">
               {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-heading font-black text-navy-900 dark:text-white">
-            Centro de Mando & Control de Obras
+            Centro de Mando
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Resumen ejecutivo en tiempo real para{' '}
@@ -181,7 +182,7 @@ export default function DashboardPage() {
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF6A00] to-[#E55F00] text-white font-heading font-bold text-sm shadow-md shadow-[#FF6A00]/20 hover:opacity-95 transition-all"
           >
             <Sparkles className="w-4 h-4" />
-            <span>Copiloto IA</span>
+            <span>ObraBot</span>
           </Link>
           <Link
             href="/proyectos"
@@ -194,7 +195,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Grid de KPIs Superiores */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Obras Activas */}
         <div className="p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm hover:border-[#FF6A00]/50 transition-all group">
           <div className="flex items-center justify-between">
@@ -230,7 +231,7 @@ export default function DashboardPage() {
         <div className="p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm hover:border-[#6B8F72]/50 transition-all group">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono font-bold uppercase tracking-wider text-gray-500">
-              Cartera Contratada
+              Total cotizado
             </span>
             <div className="p-2 rounded-xl bg-[#6B8F72]/10 text-[#6B8F72] group-hover:scale-110 transition-transform">
               <DollarSign className="w-5 h-5" />
@@ -295,7 +296,7 @@ export default function DashboardPage() {
             </Link>
           </div>
         </div>
-      </div>
+      </div></CompactSummary>
 
       {/* Alertas Operacionales Críticas */}
       {alertas.length > 0 && (
@@ -336,10 +337,10 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
-                Obras en Faena Activa ({obrasActivas.length})
+                Obras en curso ({obrasActivas.length})
               </h3>
               <p className="text-xs text-gray-500 font-mono">
-                Seguimiento de avance ponderado y georreferenciación
+                Avance y próxima entrega
               </p>
             </div>
             <Link
@@ -459,7 +460,7 @@ export default function DashboardPage() {
             href="/cotizador"
             className="block text-center w-full py-2 rounded-xl bg-kraft-100 dark:bg-[#1E2530] text-xs font-heading font-bold text-navy-900 dark:text-gray-200 border border-kraft-200 dark:border-[#263040] hover:bg-kraft-200 transition-colors"
           >
-            + Agendar con Copiloto IA
+            + Agendar con ObraBot
           </Link>
         </div>
       </div>
