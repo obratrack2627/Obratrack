@@ -223,7 +223,7 @@ test("reintento del mismo mensaje usa respuesta guardada y no vuelve a llamar IA
   };
   const first = await processPersonalMessage(sb, message, deps),
     second = await processPersonalMessage(sb, message, deps);
-  assert.match(first.respuesta, /Guardado/);
+  assert.match(first.respuesta, /Registré el pago/);
   assert.equal(second.message_id, first.message_id);
   assert.equal(calls, 1);
   assert.equal(sb.commits, 1);
@@ -675,7 +675,7 @@ test("crear una obra por WhatsApp no guarda nada hasta reunir los cinco campos o
     },
     deps,
   );
-  assert.match(second.respuesta, /Obra Creada/);
+  assert.match(second.respuesta, /Creé la obra/);
   assert.equal(params.p_changed.proyectos.length, 1);
   assert.equal(params.p_changed.proyectos[0].nombre, "Patio");
   assert.equal(params.p_changed.proyectos[0].monto_cotizado, 1500000);
@@ -771,7 +771,7 @@ test("una consulta sobre el avance de una obra no inicia una creación", async (
     },
   );
   assert.equal(result.acciones.tipo, undefined);
-  assert.match(result.respuesta, /^🟧 \*ObraTrack\*/);
+  assert.equal(result.respuesta, "Indica la obra.");
   assert.ok(result.respuesta.endsWith("Indica la obra."));
 });
 
@@ -852,7 +852,7 @@ test("una consulta o un aviso durante la creación de una obra conserva el borra
         }),
       },
     );
-    assert.match(reply.respuesta, /^🟧 \*ObraTrack\*/);
+    assert.doesNotMatch(reply.respuesta, /🟧|\*ObraTrack\*|Consulta de obra/);
     assert.ok(reply.respuesta.endsWith("Puedo consultar tu obra."));
     assert.equal(reply.borrador_obra.nombre, "Patio");
   }
@@ -895,7 +895,7 @@ test("una consulta o un aviso durante la creación de una obra conserva el borra
       }),
     },
   );
-  assert.match(complete.respuesta, /Obra Creada/);
+  assert.match(complete.respuesta, /Creé la obra/);
   assert.equal(complete.borrador_obra, null);
 });
 
@@ -909,7 +909,7 @@ test("confirmar una cotización por WhatsApp crea sus partidas y materiales sin 
   let committed;
   const rpc = sb.rpc.bind(sb); sb.rpc = async (name,p) => {committed=p;return rpc(name,p)};
   const response = await processPersonalMessage(sb,{id:'quote-confirm',from:'56912345678',type:'text',text:{body:'Sí'}},{chat:async()=>{throw Error('No debe volver a cotizar')}});
-  assert.match(response.respuesta,/Guardado en ObraTrack/);
+  assert.match(response.respuesta,/Creé la obra/);
   assert.equal(committed.p_changed.materiales_proyecto[0].cantidad,0.5);
   assert.equal(committed.p_changed.actividades.length,2);
   assert.equal(committed.p_changed.proyectos[0].cliente_id,'quote-client');
@@ -943,8 +943,8 @@ test('las opciones del presupuesto mostrado crean con confirmación o preguntan 
     sb.db.presupuestos = [{ id: 'wa:menu', empresa_id: user.empresa_id, cotizacion: q, proyecto_id: null, estado: 'borrador' }];
     sb.db.whatsapp_mensajes = [{ message_id: 'source', empresa_id: user.empresa_id, actor_id: user.id, cotizacion: q, respuesta: quoteWhatsApp(q), texto: 'Cotiza' }];
     const reply = await processPersonalMessage(sb, { id: 'menu-' + choice, from: '56912345678', type: 'text', text: { body: choice } }, { chat: async () => { throw Error('El menú no necesita Gemini'); } });
-    assert.match(reply.respuesta, /^🟧 \*ObraTrack\*/);
-    if (choice === '1') assert.match(reply.respuesta, /Obra Creada/);
+    assert.doesNotMatch(reply.respuesta, /🟧|\*ObraTrack\*|Consulta de obra/);
+    if (choice === '1') assert.match(reply.respuesta, /Creé la obra/);
     else {
       assert.equal(sb.db.whatsapp_mensajes[0].acciones.tipo, undefined);
       assert.match(reply.respuesta, choice === '2' ? /Qué deseas modificar/ : /Qué material quieres comparar/);
@@ -1025,7 +1025,7 @@ test('cambiar el teléfono propio confirma, permite reintento de Meta y retira e
   assert.equal(modelCalls,1);
   const old=await processPersonalMessage(sb,{...message,id:'new-id-from-old-number'},deps);
   assert.equal(old.persistido,false);
-  assert.match(old.respuesta,/Vincula tu teléfono/);
+  assert.match(old.respuesta,/no tiene una cuenta.*vinculada/);
   assert.equal(identifySender(sb.db.usuarios,'56977778888').id,user.id);
   const stolen=await processPersonalMessage(sb,{...message,from:'56999990000'},deps);
   assert.equal(stolen.persistido,false);
@@ -1092,7 +1092,7 @@ test('el borrador de trabajador dura entre consultas y crea ficha y asignación 
  await processPersonalMessage(sb,msg('person-query','¿Qué obras tengo?'),{chat:async()=>({respuesta:'Radier',accion:null,cotizacion:null})});
  assert.equal(captured.p_acciones.borrador_registro.items[0].nombre,'Pedro Morales');
  const complete=await processPersonalMessage(sb,msg('person-2','RUT 12345678-5, correo pedro@empresa.cl, teléfono +56987654321, terreno en Radier'),{chat:async()=>({respuesta:'Datos recibidos',accion:null,cotizacion:null,registro_propuesto:{tipo:'trabajador',rut:'12345678-5',email:'pedro@empresa.cl',telefono:'+56987654321',rol:'terreno',proyecto_id:'p1'}})});
- assert.match(complete.respuesta,/Guardado en ObraTrack/);assert.equal(captured.p_changed.usuarios.length,1);assert.equal(captured.p_changed.usuarios[0].rut,'12345678-5');assert.ok(captured.p_changed.proyectos[0].trabajadores_ids.includes(captured.p_changed.usuarios[0].id));assert.equal(captured.p_acciones.borrador_registro,null);
+ assert.match(complete.respuesta,/Registré el trabajador/);assert.equal(captured.p_changed.usuarios.length,1);assert.equal(captured.p_changed.usuarios[0].rut,'12345678-5');assert.ok(captured.p_changed.proyectos[0].trabajadores_ids.includes(captured.p_changed.usuarios[0].id));assert.equal(captured.p_acciones.borrador_registro,null);
 });
 
 test('un reintento no expone una conversación anterior si el teléfono ahora pertenece a otra ficha',async()=>{
@@ -1104,7 +1104,7 @@ test('un reintento no expone una conversación anterior si el teléfono ahora pe
 test('un formato de adjunto no admitido responde con ayuda en vez de quedar en reintentos',async()=>{
  const {AIError}=require('../lib/ai/errors.ts');const sb=database();
  const result=await processPersonalMessage(sb,{id:'unsupported-media',from:'56912345678',type:'document',document:{id:'123',filename:'archivo.exe'}},{media:async()=>{throw new AIError('MEDIA_FORMAT','Envía PDF, Word o Excel de hasta 10 MB.',422)},chat:async()=>{throw Error('No debe consultar IA')}});
- assert.equal(result.persistido,false);assert.match(result.respuesta,/Revisa el archivo/);assert.match(result.respuesta,/10 MB/);
+ assert.equal(result.persistido,false);assert.match(result.respuesta,/Envía PDF/);assert.match(result.respuesta,/10 MB/);
 });
 
 test('un error nativo de otra acción conserva la evidencia en bitácora al confirmar el mensaje',async()=>{
@@ -1138,4 +1138,35 @@ test('la respuesta rápida de plazos en WhatsApp respeta la asignación del maes
  sb.db.proyecto_trabajadores=[{proyecto_id:'assigned',usuario_id:user.id}];
  const result=await processPersonalMessage(sb,{id:'wamid.worker-deadlines',from:'56912345678',type:'text',text:{body:'Obras vencidas'}},{chat:async()=>{throw new Error('No debe llamar al modelo')}});
  assert.match(result.respuesta,/1 obra/);assert.match(result.respuesta,/Mi obra/);assert.doesNotMatch(result.respuesta,/Privada/);
+});
+
+test('consulta vencidas y «pon esa obra como terminada» guarda el estado sin tocar presupuesto ni usar el modelo', async () => {
+ const sb=database();
+ sb.db.proyectos=[{id:'floor',empresa_id:'empresa1',nombre:'Porcelanato La Florida',estado:'activo',fecha_termino_estimada:'2000-01-01',monto_cotizado:570493},{id:'future',empresa_id:'empresa1',nombre:'Ampliación PAC',estado:'activo',fecha_termino_estimada:'2999-01-01',monto_cotizado:12000000}];
+ const rpc=sb.rpc.bind(sb);let last;
+ sb.rpc=async(name,p)=>{last=p;const out=await rpc(name,p);for(const row of p.p_changed.proyectos||[])sb.db.proyectos=sb.db.proyectos.map(old=>old.id===row.id?{...old,...row}:old);return out;};
+ const deps={chat:async()=>{throw Error('No debe llamar al modelo')}};
+ const ask=await processPersonalMessage(sb,{id:'expired-ref',from:'56912345678',type:'text',text:{body:'Hola, tengo alguna obra vencida?'}},deps);
+ assert.match(ask.respuesta,/Porcelanato La Florida/);assert.doesNotMatch(ask.respuesta,/🟧|ObraTrack|Consulta de obra/);
+ const message={id:'close-ref',from:'56912345678',type:'text',text:{body:'Pon esa obra como terminada'}};
+ const done=await processPersonalMessage(sb,message,deps);
+ assert.equal(sb.db.proyectos[0].estado,'terminado');assert.equal(sb.db.proyectos[0].monto_cotizado,570493);assert.equal(sb.db.proyectos[1].estado,'activo');
+ assert.match(done.respuesta,/Porcelanato La Florida quedó como terminada/);assert.doesNotMatch(done.respuesta,/ACTIVO|Acciones|Guardado en|🟧|570.493/);
+ assert.equal(last.p_acciones.proyecto_contexto_id,'floor');
+ await processPersonalMessage(sb,message,deps);assert.equal(sb.commits,2);
+});
+
+test('si «esa obra» sigue a varias obras pide aclaración y no inventa el objetivo',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'a',empresa_id:'empresa1',nombre:'Obra Norte',estado:'activo'},{id:'b',empresa_id:'empresa1',nombre:'Obra Sur',estado:'activo'}];
+ sb.db.whatsapp_mensajes=[{empresa_id:'empresa1',actor_id:user.id,texto:'Obras?',respuesta:'Obra Norte y Obra Sur',acciones:{proyecto_contexto_id:'a'}}];
+ let saved;const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{saved=p;return rpc(name,p)};
+ const out=await processPersonalMessage(sb,{id:'ambiguous-close',from:'56912345678',type:'text',text:{body:'Da como terminada esa obra'}},{chat:async()=>{throw Error('No debe elegir por el modelo')}});
+ assert.match(out.respuesta,/Qué obra/);assert.equal((saved.p_changed.proyectos||[]).length,0);
+});
+
+test('un fallo de persistencia impide entregar la confirmación de obra terminada',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'a',empresa_id:'empresa1',nombre:'Radier',estado:'activo',monto_cotizado:570493}];
+ sb.rpc=async()=>({error:{message:'database unavailable'}});
+ await assert.rejects(processPersonalMessage(sb,{id:'failed-close',from:'56912345678',type:'text',text:{body:'Marca la obra Radier como terminada'}},{chat:async()=>{throw Error('No debe usar IA')}}),error=>error.code==='WHATSAPP_DATABASE_SAVE');
+ assert.equal(sb.db.proyectos[0].estado,'activo');
 });

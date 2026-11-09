@@ -29,3 +29,5 @@
 - Nuevas fichas de equipo: nombre completo, RUT, teléfono, correo, rol y obra para terreno. Se crean sin cuenta Auth ni contraseña. El registro y la asignación usan `crear_integrante_equipo`; no crear personas implícitas al asignar una cuadrilla.
 - Evidencias de WhatsApp: originales privados, referencia estable `whatsapp-evidencias:` y firma de URL en lectura. PDF/Word/Excel son documentos; una boleta no genera un pago automáticamente.
 - Migraciones finales en orden: `contactos_whatsapp.sql`, luego `flujo_terreno_rbac.sql`. Las pruebas nativas en `tests/sql` revierten sus fixtures.
+
+- WhatsApp: conversación natural sin cabecera de marca, emojis automáticos ni contadores de acciones. Los documentos conservan su desglose. No modificar presupuesto al cambiar un estado; no confirmar envíos entregados cuando solo están en cola.

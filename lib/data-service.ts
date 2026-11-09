@@ -1,3 +1,4 @@
+import { projectStatusLabel } from '@/lib/project-status';
 import {
   Proyecto,
   Actividad,
@@ -1531,7 +1532,7 @@ export class DataService {
         if (!proj) return null;
         const updates: Partial<Proyecto> = {};
         if (accion.estado) updates.estado = accion.estado;
-        if (accion.monto !== undefined || accion.monto_cotizado !== undefined) updates.monto_cotizado = Number(accion.monto_cotizado ?? accion.monto);
+        if (accion.monto != null || accion.monto_cotizado != null) updates.monto_cotizado = Number(accion.monto_cotizado ?? accion.monto);
         if (accion.fecha_termino_estimada) updates.fecha_termino_estimada = accion.fecha_termino_estimada;
         if (accion.descripcion) updates.descripcion = accion.descripcion;
         const updated = this.updateProyecto(proj.id, updates);
@@ -1539,7 +1540,12 @@ export class DataService {
           tipo: 'actualizar_proyecto',
           titulo: `Obra Actualizada: ${proj.nombre}`,
           detalles: updated || proj,
-          resultado_texto: `Estado: ${(updated?.estado || proj.estado).toUpperCase()} • Monto: $${(updated?.monto_cotizado || proj.monto_cotizado).toLocaleString('es-CL')} CLP`,
+          resultado_texto: [
+            updates.estado ? `${proj.nombre} ${proj.estado === updates.estado ? 'ya figura' : 'quedó'} como ${projectStatusLabel(updates.estado).toLowerCase()}.` : `Actualicé ${proj.nombre}.`,
+            updates.monto_cotizado !== undefined ? `El presupuesto quedó en $${updates.monto_cotizado.toLocaleString('es-CL')}.` : '',
+            updates.fecha_termino_estimada ? `La entrega quedó para el ${updates.fecha_termino_estimada.split('-').reverse().join('/')}.` : '',
+            updates.descripcion ? 'Actualicé la descripción.' : '',
+          ].filter(Boolean).join(' '),
           link_destino: `/proyectos/${proj.id}/gantt`,
           link_texto: 'Ver Obra ➔',
         };
@@ -2103,9 +2109,9 @@ export class DataService {
         }
         return {
           tipo: 'lote_acciones',
-          titulo: `¡${resultados.length} Acciones Ejecutadas de una Sola Vez!`,
+          titulo: resultados.length === 1 ? resultados[0].titulo : 'Cambios guardados',
           detalles: { acciones: resultados },
-          resultado_texto: resultados.map((r, i) => `${i + 1}. ${r.titulo}: ${r.resultado_texto}`).join(' • '),
+          resultado_texto: resultados.map(r => r.resultado_texto).join('\n\n'),
           link_destino: resultados[0]?.link_destino || '/proyectos',
           link_texto: 'Ver Cambios en la Plataforma ➔',
         };

@@ -96,7 +96,7 @@ test("un aviso por rol selecciona solo la empresa y permite limitar a una obra",
     [],
   );
   assert.deepEqual(plan.destinatarios, ["u1", "u3"]);
-  assert.match(plan.result.resultado_texto, /1 persona\(s\) sin teléfono/);
+  assert.match(plan.result.resultado_texto, /1 persona no tiene teléfono/);
   const scoped = prepareCampaign(
     actor,
     {

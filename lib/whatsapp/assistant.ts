@@ -1,3 +1,5 @@
+import { projectStatusCommand } from '@/lib/ai/project-status-command';
+import { actionReply } from '@/lib/ai/action-reply';
 import { projectDeadlineAnswer } from '@/lib/ai/project-deadlines';
 import { operationsContext } from '@/lib/ai/operations-context';
 import { acceptsQuotedProject, quotedProjectDraft } from "./quote-intake";
@@ -271,7 +273,8 @@ export async function processPersonalMessage(
   let analysisFailed = false;
   try {
     const verifiedDeadlines = !attachment ? projectDeadlineAnswer(text, deadlineProjects, activeProject || undefined) : null;
-    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : verifiedDeadlines || await deps.chat(
+    const statusCommand = !attachment ? projectStatusCommand(text, tables.proyectos, activeProject) : null;
+    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : statusCommand || verifiedDeadlines || await deps.chat(
       conversationRows
         .slice()
         .reverse()
@@ -467,7 +470,7 @@ export async function processPersonalMessage(
     Object.assign(result.cotizacion, { presupuesto_origen_id: nativeBudget.id, presupuesto_origen_version: nativeBudget.updated_at, presupuesto_proyecto_id: nativeBudget.proyecto_id });
   }
   if (plan.result && !['solicitar_datos_obra','solicitar_datos_persona'].includes(plan.result.tipo))
-    response = `✅ *Guardado en ObraTrack*\n*${plan.result.titulo}*\n\n${plan.result.resultado_texto || ""}${image ? `\n\n${result.respuesta}` : ""}`;
+    response = actionReply(plan.result) + (image ? `\n\n${result.respuesta}` : '');
   if (actionWarning && plan.result) response += `\n\nLa evidencia se conservó. El resto de la solicitud quedó pendiente: ${actionWarning}`;
   if (user.rol === 'terreno') result.cotizacion = null;
   if (result.cotizacion)
@@ -479,12 +482,12 @@ export async function processPersonalMessage(
   const photoAttachment = attachment && (attachment.mime_type?.startsWith('image/') || /\.(jpg|png|webp)$/i.test(attachment.path));
   if (attachment)
     response += attachment.proyecto_id
-      ? `\n\n${photoAttachment ? '📸 Foto guardada' : '📎 Archivo guardado'} en la obra y su bitácora.`
-      : readOnlyEvidence ? '\n\n📎 Archivo recibido en el chat; no se incorporó a la bitácora.'
-      : `\n\n📎 Archivo conservado. ${service.getProyectos().length ? 'Indica el nombre de la obra a la que pertenece para vincularlo.' : 'Pide al administrador que te asigne una obra para vincularlo.'}`;
+      ? `\n\n${photoAttachment ? 'Foto guardada' : 'Archivo guardado'} en la obra y su bitácora.`
+      : readOnlyEvidence ? '\n\nArchivo recibido en el chat; no se incorporó a la bitácora.'
+      : `\n\nArchivo conservado. ${service.getProyectos().length ? 'Indica el nombre de la obra a la que pertenece para vincularlo.' : 'Pide al administrador que te asigne una obra para vincularlo.'}`;
   if (analysisFailed)
     response +=
-      "\n\n⚠️ El análisis de la imagen no estuvo disponible. La foto quedó conservada; puedes reenviarla para volver a analizarla.";
+      "\n\nEl análisis de la imagen no estuvo disponible. La foto quedó conservada; puedes reenviarla para volver a analizarla.";
   const title = menuChoice === 2 ? "Modificar cotización" : menuChoice === 3 ? "Comparar materiales"
     : response.startsWith("No se guardaron cambios.") ? "Solicitud pendiente"
     : plan.result?.tipo === "solicitar_datos_obra" ? "Datos para crear la obra"

@@ -307,7 +307,7 @@ test("el copiloto web encola el aviso real y no devuelve una acción para simula
   const body = await result.json();
   assert.equal(body.accion, null);
   assert.equal(body.accion_ejecutada.tipo, "enviar_mensaje_equipo");
-  assert.match(body.respuesta, /registrado/);
+  assert.match(body.respuesta, /en cola/);
   assert.equal(fixture.rpcCalls.length, 1);
 });
 
@@ -457,4 +457,14 @@ test('si falla la lectura de proyectos no informa falsamente cero obras vencidas
  const handler=createChatHandler({authorize:authorized,global:async()=>response,project:async()=>response});
  const res=await handler(makeRequest({mensaje:'Obras vencidas'}));
  assert.equal(res.status,503);assert.equal((await res.json()).respuesta,undefined);
+});
+
+test('el chat web propone el estado exacto solicitado sin inventar monto ni esperar al modelo',async()=>{
+ fixture.tables.set('proyectos',[{id:'floor',empresa_id:'company-a',nombre:'Porcelanato La Florida',estado:'activo',monto_cotizado:570493},{id:'other',empresa_id:'company-a',nombre:'Quincho',estado:'activo',monto_cotizado:2500000}]);
+ const never=async()=>{throw Error('No debe llamar al modelo')};
+ const handler=createChatHandler({authorize:authorized,global:never,project:never});
+ const res=await handler(makeRequest({mensaje:'Pon esa obra como terminada',historial:[{remitente:'agente',texto:'Porcelanato La Florida tiene 3 días de atraso.'}]}));
+ assert.equal(res.status,200);const body=await res.json();
+ assert.deepEqual(body.accion,{tipo:'actualizar_proyecto',proyecto_id:'floor',estado:'terminado'});
+ assert.doesNotMatch(body.respuesta,/guardad|listo/i);
 });

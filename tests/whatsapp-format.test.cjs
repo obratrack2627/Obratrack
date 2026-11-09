@@ -14,7 +14,7 @@ test('la cotización conserva cálculos, todas las partidas y condiciones en for
     observaciones: 'Respetar curado antes de usar.', condiciones_pago: 'Pago acordado con el cliente.',
   });
   const text = quoteWhatsApp(q);
-  assert.equal(text.split(WHATSAPP_BRAND).length, 2);
+  assert.equal(text.includes(WHATSAPP_BRAND), false);
   assert.match(text, /\*Cotización · Radier patio\*/);
   assert.match(text, /0,5 m3/);
   assert.match(text, /Margen sobre venta \(20%\)/);
@@ -46,7 +46,7 @@ test('el comparador muestra precio, presentación, enlaces y disponibilidad real
     resumen: 'Opciones publicadas.', ofertas: [{ id: 'easy-1', tienda: 'Easy', nombre: 'Cemento 25 kg', precio: 4990, unidad: 'saco', total_solicitado: 99800, url: 'https://www.easy.cl/cemento-25/p' }],
     mejores_ids: [], proveedores: [{ nombre: 'Easy', estado: 'consultado' }, { nombre: 'Imperial', estado: 'no_disponible' }],
   });
-  assert.match(text, /^🟧 \*ObraTrack\*/);
+  assert.doesNotMatch(text, /🟧|ObraTrack\*/);
   assert.match(text, /\*\$4.990\*/);
   assert.match(text, /Unidad de venta: saco/);
   assert.match(text, /Imperial: no disponible/);
@@ -62,6 +62,6 @@ test('una respuesta extensa conserva cada partida y enlace, con continuaciones b
   assert.ok(chunks.length > 1);
   assert.ok(chunks.every(c => c.length <= 4000));
   for (const row of records) assert.ok(chunks.some(c => c.includes(row)), 'No se cortó la partida ni su enlace');
-  const restored = chunks.map((c, i) => i === 0 ? c : c.replace(/^🟧 \*ObraTrack\*\n_Continuación \d+\/\d+_\n\n/, '')).join('\n\n');
+  const restored = chunks.map((c, i) => i === 0 ? c : c.replace(/^_Continuación \d+\/\d+_\n\n/, '')).join('\n\n');
   assert.equal(restored, text);
 });

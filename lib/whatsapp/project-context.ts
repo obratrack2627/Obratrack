@@ -4,6 +4,11 @@ export function activeWhatsAppProject(projects: any[], text: string, history: an
   if (mentions.length === 1) return mentions[0].id as string;
   if (mentions.length > 1) return null;
   if (projects.length === 1) return projects[0].id as string;
+  // El antecedente inmediato manda: una lista con varias obras no permite adivinar «esa obra».
+  const reply = history[0]?.respuesta || '';
+  const referenced = projects.filter(project => norm(reply).includes(norm(project.nombre)));
+  if (referenced.length === 1) return referenced[0].id as string;
+  if (referenced.length > 1) return null;
   const previous = history[0]?.acciones?.proyecto_contexto_id;
   return projects.some(project => project.id === previous) ? previous as string : null;
 }

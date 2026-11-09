@@ -49,7 +49,8 @@ export function prepareCampaign(
     canonicalPhone(u.telefono_whatsapp || ""),
   );
   const phones = new Set(valid.map((u) => canonicalPhone(u.telefono_whatsapp)));
-  const summary = `Aviso registrado para ${phones.size} teléfono(s)${selected.length - valid.length ? `; ${selected.length - valid.length} persona(s) sin teléfono válido` : ""}. Los envíos se procesan automáticamente. Revisa la entrega en WhatsApp y reportes.`;
+  const withoutPhone = selected.length - valid.length;
+  const summary = `Dejé el mensaje en cola para ${phones.size} ${phones.size === 1 ? 'teléfono' : 'teléfonos'}${withoutPhone ? `; ${withoutPhone} ${withoutPhone === 1 ? 'persona no tiene' : 'personas no tienen'} teléfono válido` : ''}. Todavía no hay confirmación de entrega; puedes revisarla en los reportes.`;
   const result: AccionAsistenteIA = {
     tipo: "enviar_mensaje_equipo",
     titulo: "Aviso al equipo en cola",

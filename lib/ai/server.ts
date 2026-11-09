@@ -1,3 +1,4 @@
+import { projectStatusCommand } from './project-status-command';
 import { isProjectDeadlineQuestion, projectDeadlineAnswer } from './project-deadlines';
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -139,6 +140,7 @@ export function createChatHandler(
             "Puedes cotizar y consultar precios con Pro. Los cambios por el copiloto requieren Pro IA.",
             403,
           );
+        result.accion = actions.length === 1 ? actions[0] : actions.length ? { tipo: 'lote_acciones', acciones: actions } : null;
         const broadcast = actions.find(
           (a) => a.tipo === "enviar_mensaje_equipo",
         );
@@ -186,6 +188,15 @@ export function createChatHandler(
         if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
         const verified = projectDeadlineAnswer(body.mensaje, tables.proyectos, projectId);
         if (verified) return NextResponse.json(verified);
+      }
+      if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
+      const precedingReply = [...body.historial].reverse().find((turn: any) => turn.rol === 'model')?.texto || '';
+      const normalizeName = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const referenced = tables.proyectos.filter(p => normalizeName(precedingReply).includes(normalizeName(p.nombre)));
+      const statusCommand = projectStatusCommand(body.mensaje, tables.proyectos, projectId || (referenced.length === 1 ? referenced[0].id : undefined));
+      if (statusCommand) {
+        await finish(statusCommand, projectId);
+        return NextResponse.json(statusCommand);
       }
       let canonicalBudget: Presupuesto | null = null;
       const budgetContext = async (scope?: string) => {

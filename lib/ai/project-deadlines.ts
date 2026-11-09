@@ -18,7 +18,7 @@ export function projectDeadlines(projects: any[], projectId?: string, now = new 
   }).sort((a, b) => b.dias_vencida - a.dias_vencida || a.nombre.localeCompare(b.nombre));
   return { fecha_chile: today, criterio: 'Obras abiertas con fecha de término anterior a hoy; terminadas y canceladas excluidas. Una obra que vence hoy todavía no está vencida.', obras_evaluadas: open.length, vencidas: overdue, sin_fecha_valida: open.filter(p => day(p.fecha_termino_estimada) === null).length };
 }
-const queryWords = new Set('hola buen buenos dia dias buenas tardes noches que cuales cuantas cuantos obras proyectos obra proyecto tengo tenemos hay estan esta vencidas vencidos vencida vencido atrasadas atrasados atrasada atrasado retrasadas retrasados ya hoy actualmente son listado dame un saber mis las los el la me puedes mostrar mostrarme dime listar listame muestra muestrame por favor revisar revisa consulta consultar entrega de plazo con tenemos al a fecha'.split(' '));
+const queryWords = new Set('hola buen buenos dia dias buenas tardes noches que cuales cuantas cuantos obras proyectos obra proyecto tengo tenemos alguna algunas algun algunos hay estan esta vencidas vencidos vencida vencido atrasadas atrasados atrasada atrasado retrasadas retrasados ya hoy actualmente son listado dame un saber mis las los el la me puedes mostrar mostrarme dime listar listame muestra muestrame por favor revisar revisa consulta consultar entrega de plazo con tenemos al a fecha'.split(' '));
 export function isProjectDeadlineQuestion(message: string) {
   if (/\d/.test(message)) return false;
   const words = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z]+/).filter(Boolean);
@@ -33,7 +33,7 @@ export function projectDeadlineAnswer(message: string, projects: any[], projectI
   const count = report.vencidas.length;
   const date = (value: string) => value.split('-').reverse().join('/');
   let respuesta = count ? `Tienes ${count === 1 ? '1 obra con el plazo vencido' : `${count} obras con el plazo vencido`}:\n\n` + report.vencidas.map(p => `• ${p.nombre}: entrega prevista para el ${date(p.fecha_termino)}, hace ${p.dias_vencida} ${p.dias_vencida === 1 ? 'día' : 'días'}.`).join('\n') : 'No hay obras abiertas con fecha de entrega vencida.';
-  respuesta += `\n\nRevisado al ${date(report.fecha_chile)}. Las obras terminadas y canceladas quedan fuera de este listado.`;
+
   if (report.sin_fecha_valida) respuesta += ` ${report.sin_fecha_valida === 1 ? 'Hay una obra sin fecha válida de término que conviene completar.' : `Hay ${report.sin_fecha_valida} obras sin fecha válida de término que conviene completar.`}`;
   return { respuesta, accion: null, cotizacion: null, obra_propuesta: null, sugerencias: count ? ['Revisar avances de las obras vencidas'] : [] };
 }

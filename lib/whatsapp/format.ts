@@ -16,7 +16,7 @@ export function whatsappText(text: string) {
     // no vuelve a recorrer el mismo sufijo desde cada corchete.
     .replace(/\[([^[\]\r\n]+)\]\((https?:\/\/[^\s[\]]+)\)/g, "$1\n$2")
     .replace(/\*\*([^*]+)\*\*/g, "*$1*")
-    .split("\n").map((row) => {
+    .split("\n").filter(row => ![WHATSAPP_BRAND, "*Consulta de obra*", "*Registro de obra*", "✅ *Guardado en ObraTrack*"].includes(row.trim())).map((row) => {
       const heading = /^#{1,6}[ \t]+/.exec(row);
       if (heading && heading[0].length < row.length) return `*${row.slice(heading[0].length)}*`;
       return row.replace(/^[ \t]*[-+][ \t]+/, "• ");
@@ -28,7 +28,7 @@ export function whatsappText(text: string) {
 export function whatsappCard(title: string, body: string) {
   const content = whatsappText(body).split("\n")
     .filter((s) => s.trim() !== WHATSAPP_BRAND).join("\n").trim();
-  return `${WHATSAPP_BRAND}\n*${line(title)}*\n\n${content}`;
+  return /^(Cotización|Alternativas|Precios de materiales)/.test(title) ? `*${line(title)}*\n\n${content}` : content;
 }
 
 export function quoteWhatsApp(q: CotizacionEstimacion, canCreate = true) {
@@ -48,7 +48,7 @@ export function quoteWhatsApp(q: CotizacionEstimacion, canCreate = true) {
   }
   const f = q.estructura_financiera;
   const sections = [
-    [q.comuna_region ? `📍 ${q.comuna_region}` : "", q.metros_cuadrados ? `Superficie: ${q.metros_cuadrados.toLocaleString("es-CL")} m²` : ""].filter(Boolean).join(" · "),
+    [q.comuna_region ? `${q.comuna_region}` : "", q.metros_cuadrados ? `Superficie: ${q.metros_cuadrados.toLocaleString("es-CL")} m²` : ""].filter(Boolean).join(" · "),
     q.resumen_ejecutivo,
     q.modo_presupuesto === 'precio_acordado' ? ['*PRECIOS ACORDADOS*', ...(q.partidas_venta || []).map((p) => `• ${line(p.nombre)}: ${formatCLP(p.subtotal)}`)].join('\n') : ["*DETALLE*", `• Materiales: ${formatCLP(f.costo_materiales_total)}`, `• Mano de obra: ${formatCLP(f.costo_mano_obra_total)}`,
       `• Gastos generales: ${formatCLP(f.gastos_generales_monto)}`, `• Imprevistos: ${formatCLP(f.imprevistos_monto)}`,
@@ -58,12 +58,12 @@ export function quoteWhatsApp(q: CotizacionEstimacion, canCreate = true) {
       `• ${line(m.nombre)}\n  ${m.cantidad.toLocaleString("es-CL")} ${m.unidad} × ${formatCLP(m.precio_unitario_estimado)} · ${formatCLP(m.subtotal)}`).join("\n\n") : "",
     q.mano_de_obra.length ? "*MANO DE OBRA*\n" + q.mano_de_obra.map((m) =>
       `• ${line(m.rol)}\n  ${count(m.cantidad_personas, "persona", "personas")} × ${count(m.dias_estimados, "día", "días")} · ${formatCLP(m.subtotal)}`).join("\n\n") : "",
-    q.duracion_dias_estimada ? `🗓️ *Plazo sugerido: ${count(q.duracion_dias_estimada, "día", "días")}*` : "",
+    q.duracion_dias_estimada ? `*Plazo sugerido: ${count(q.duracion_dias_estimada, "día", "días")}*` : "",
     q.actividades_gantt?.length ? "*GANTT SUGERIDO*\n" + q.actividades_gantt.map((a, i) => `${i + 1}. ${line(a.nombre)} — ${count(a.dias, "día", "días")}`).join("\n") : "",
     q.observaciones ? `*OBSERVACIONES*\n${q.observaciones}` : "",
     q.condiciones_pago ? `*CONDICIONES DE PAGO*\n${q.condiciones_pago}` : "",
     q.hitos_pago?.length ? '*PLAN DE COBRO*\n' + q.hitos_pago.map((h) => `• ${h.nombre} (${h.porcentaje}%): ${formatCLP(h.monto)}`).join('\n') : '',
-    (q.modo_presupuesto === 'precio_acordado' ? 'Precios proporcionados para esta propuesta.' : '📌 Precios estimados, sujetos a confirmación.') + '\nPDF disponible en ObraTrack → Reportes WhatsApp.',
+    (q.modo_presupuesto === 'precio_acordado' ? 'Precios proporcionados para esta propuesta.' : 'Precios estimados, sujetos a confirmación.') + '\nPDF disponible en ObraTrack → Reportes WhatsApp.',
     ["*¿Cómo seguimos?*", ...(canCreate ? [createOption] : []), modifyOption, compareOption,
       ...(canCreate ? ["", "Para crearla responde *1* o *sí*. Se incorporarán el Gantt sugerido y sus materiales; te pediré los datos del cliente que falten."] : [])].join("\n"),
   ];
@@ -110,5 +110,5 @@ export function splitWhatsAppMessage(text: string) {
     rest = rest.slice(end).trim();
   }
   if (rest) parts.push(rest);
-  return parts.map((part, i) => i === 0 ? part : `${WHATSAPP_BRAND}\n_Continuación ${i + 1}/${parts.length}_\n\n${part}`);
+  return parts.map((part, i) => i === 0 ? part : `_Continuación ${i + 1}/${parts.length}_\n\n${part}`);
 }
