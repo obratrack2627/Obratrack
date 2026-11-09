@@ -2,6 +2,7 @@
 import { supabase } from "@/lib/supabase/client";
 import { dataService } from "@/lib/data-service";
 import { executeAI } from "./execute";
+import { actionReply } from "./action-reply";
 import { isMaterialComparison } from "@/lib/materials/types";
 import type { CotizacionEstimacion } from "@/types/database";
 
@@ -81,7 +82,7 @@ export async function applyAIResponse(data: any, projectId?: string) {
   if (cotizacion)
     dataService.runLocalAI(() => dataService.saveCotizacion(cotizacion));
   return {
-    texto: action?.warning || data.respuesta,
+    texto: action?.warning || (action?.result ? actionReply(action.result) : data.respuesta),
     accion_ejecutada: action?.result || data.accion_ejecutada,
     cotizacion_generada: cotizacion,
     comparacion_materiales: isMaterialComparison(data.comparacion_materiales)

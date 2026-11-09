@@ -273,7 +273,7 @@ export async function processPersonalMessage(
   let analysisFailed = false;
   try {
     const verifiedDeadlines = !attachment ? projectDeadlineAnswer(text, deadlineProjects, activeProject || undefined) : null;
-    const statusCommand = !attachment ? projectStatusCommand(text, tables.proyectos, activeProject) : null;
+    const statusCommand = !attachment ? projectStatusCommand(text, tables.proyectos, activeProject, conversationRows.slice().reverse().flatMap((row: any) => [{ rol: 'user' as const, texto: row.texto || '' }, { rol: 'model' as const, texto: row.respuesta || '' }])) : null;
     result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : statusCommand || verifiedDeadlines || await deps.chat(
       conversationRows
         .slice()

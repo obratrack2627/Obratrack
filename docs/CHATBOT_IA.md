@@ -1,6 +1,6 @@
 # Chatbot de cotizaciones y gestión de obras
 
-El chat general (`/cotizador`) y el asistente de cada obra usan el mismo protocolo y motor de ejecución. El chat general permite elegir la obra; cada contexto conserva su conversación y presupuesto por separado. El chat flotante fue retirado. Pro permite consultas, cotizaciones y búsqueda de materiales; Pro IA agrega cambios en las obras y avisos al equipo.
+El chat general (`/cotizador`) y el asistente de cada obra usan el mismo protocolo y motor de ejecución. El chat general permite elegir la obra; cada contexto conserva su conversación y presupuesto por separado. El chat flotante permite usar este mismo motor sin abandonar el módulo actual. Pro permite consultas, cotizaciones y búsqueda de materiales; Pro IA agrega cambios en las obras y avisos al equipo.
 
 ## Configuración del servidor
 
@@ -55,6 +55,27 @@ WhatsApp recupera hasta 80 intercambios recientes del mismo actor y empresa para
 El servidor incluye un extracto de los registros actuales autorizados: actividades y responsables, materiales pendientes/comprados, bitácora, asistencia, cambios y, para los perfiles autorizados, pagos e imprevistos. Cada sección declara su total y si fue recortada; las coincidencias con la consulta tienen prioridad. En el chat de obra solo se incluyen sus registros y el cliente registrado, sin usar el inventario enviado por el navegador.
 
 Las reglas indican pedir únicamente lo que falta, respetar correcciones recientes y diferenciar declaraciones del usuario, estimaciones y estados guardados. Una respuesta histórica no acredita un pago; un material comprado no acredita recepción ni instalación. Las peticiones explícitas de «solo consulta» se validan en el servidor para impedir escrituras aunque el modelo proponga acciones. Ante ambigüedad o información ausente debe pedir aclaración, en vez de fingir que recuerda. Estos controles reducen errores; no garantizan que toda respuesta del modelo sea correcta.
+
+## Instrucciones y referencias conversacionales
+
+Los cambios simples de estado se resuelven en el servidor antes de llamar al modelo.
+«Quiero que la dejes como cancelada», «déjala en pausa», «márcala como terminada»
+y «reanúdala» utilizan una obra autorizada e inequívoca del contexto inmediato.
+La web y WhatsApp comparten el intérprete. No se cambia el presupuesto al modificar
+un estado, ni se escribe de nuevo cuando ya tiene el estado solicitado.
+
+La referencia distingue nombres completos y homónimos: mencionar «Radier Norte»
+no selecciona también «Radier». Una lista con varias obras, un nombre desconocido
+o antecedentes contradictorios requiere aclaración. El chat de una obra rechaza
+cambios dirigidos a otra. El chat general aporta al modelo la obra de referencia
+identificada a partir de los registros autorizados, sin aceptar el inventario del navegador.
+
+Cuando pregunta «¿Qué obra quieres marcar como cancelada?», responder con su
+nombre completa esa instrucción. Solo vale para la aclaración inmediata; cambiar
+de tema o mencionar un nombre en otro momento no repite una acción anterior.
+Las negativas y las peticiones de solo consulta se validan también cuando el modelo
+propone acciones. La confirmación continúa dependiendo del guardado real, con los
+reintentos idempotentes existentes; no se añade otra escritura de estado en el intérprete.
 
 ## Cotizaciones
 

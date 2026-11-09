@@ -1170,3 +1170,30 @@ test('un fallo de persistencia impide entregar la confirmación de obra terminad
  await assert.rejects(processPersonalMessage(sb,{id:'failed-close',from:'56912345678',type:'text',text:{body:'Marca la obra Radier como terminada'}},{chat:async()=>{throw Error('No debe usar IA')}}),error=>error.code==='WHATSAPP_DATABASE_SAVE');
  assert.equal(sb.db.proyectos[0].estado,'activo');
 });
+
+test('WhatsApp entiende «quiero que la dejes como cancelada» y conserva presupuesto e identidad de obra',async()=>{
+ const sb=database();
+ sb.db.proyectos=[{id:'floor',empresa_id:'empresa1',nombre:'Porcelanato La Florida',estado:'activo',fecha_termino_estimada:'2000-01-01',monto_cotizado:570493},{id:'future',empresa_id:'empresa1',nombre:'Ampliación PAC',estado:'activo',fecha_termino_estimada:'2999-01-01',monto_cotizado:12000000}];
+ const rpc=sb.rpc.bind(sb);let saved;
+ sb.rpc=async(name,p)=>{saved=p;const out=await rpc(name,p);for(const row of p.p_changed.proyectos||[])sb.db.proyectos=sb.db.proyectos.map(old=>old.id===row.id?{...old,...row}:old);return out};
+ const deps={chat:async()=>{throw Error('No debe llamar al modelo para esta orden inequívoca')}};
+ await processPersonalMessage(sb,{id:'deadline-cancel-context',from:'56912345678',type:'text',text:{body:'¿Hay obras con plazo vencido?'}},deps);
+ const out=await processPersonalMessage(sb,{id:'natural-cancel-context',from:'56912345678',type:'text',text:{body:'quiero que la dejes como cancelada'}},deps);
+ assert.equal(sb.db.proyectos[0].estado,'cancelada');assert.equal(sb.db.proyectos[0].monto_cotizado,570493);
+ assert.equal(sb.db.proyectos[1].estado,'activo');assert.equal(sb.db.proyectos[1].monto_cotizado,12000000);
+ assert.match(out.respuesta,/Porcelanato La Florida quedó como cancelada/);assert.equal(saved.p_acciones.proyecto_contexto_id,'floor');
+});
+
+test('WhatsApp completa la selección de obra sin volver a preguntar por el estado pedido',async()=>{
+ const sb=database();
+ sb.db.proyectos=[{id:'a',empresa_id:'empresa1',nombre:'Obra Norte',estado:'activo'},{id:'b',empresa_id:'empresa1',nombre:'Obra Sur',estado:'activo'}];
+ sb.db.whatsapp_mensajes=[{empresa_id:'empresa1',actor_id:user.id,texto:'Obras?',respuesta:'Obra Norte y Obra Sur',acciones:{proyecto_contexto_id:'a'}}];
+ const rpc=sb.rpc.bind(sb);let saved;
+ sb.rpc=async(name,p)=>{saved=p;return rpc(name,p)};
+ const deps={chat:async()=>{throw Error('La aclaración no necesita reinterpretar la orden con IA')}};
+ const pending=await processPersonalMessage(sb,{id:'choose-cancel',from:'56912345678',type:'text',text:{body:'Déjala cancelada'}},deps);
+ assert.match(pending.respuesta,/Qué obra/);assert.equal((saved.p_changed.proyectos||[]).length,0);
+ const out=await processPersonalMessage(sb,{id:'choose-cancel-name',from:'56912345678',type:'text',text:{body:'Obra Sur'}},deps);
+ assert.equal(saved.p_changed.proyectos[0].id,'b');assert.equal(saved.p_changed.proyectos[0].estado,'cancelada');
+ assert.match(out.respuesta,/Obra Sur quedó como cancelada/);
+});

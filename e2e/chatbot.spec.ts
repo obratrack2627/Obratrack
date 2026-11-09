@@ -1775,3 +1775,34 @@ test('la asistencia de cuadrilla respeta licencias existentes y usa el horario e
   expect(saved[0]).toMatchObject({ usuario_id: 'dos', hora_entrada: '09:00', hora_salida: '17:00', estado: 'presente' });
   await expect(page.getByLabel('Estado de Maestro 1', { exact: true })).toHaveValue('licencia');
 });
+
+test('ObraBot flotante cancela la obra recién consultada y confirma el estado guardado sin cambiar su presupuesto', async ({ page }) => {
+  const {projectStatusCommand} = await import('../lib/ai/project-status-command');
+  const {conversationProjectId} = await import('../lib/ai/project-reference');
+  const {conversationHistory} = await import('../lib/ai/conversation');
+  const {projectDeadlineAnswer} = await import('../lib/ai/project-deadlines');
+  const db = await setup(page, {}, true);
+  db.proyectos[0].fecha_termino_estimada = '2000-01-01';
+  db.proyectos.push({ ...db.proyectos[0], id:'p-other', nombre:'Ampliación PAC', fecha_termino_estimada:'2999-01-01', monto_cotizado:12000000 });
+  await page.route('**/api/cotizador/chat', async route => {
+    const body = route.request().postDataJSON();
+    const history = conversationHistory(body.historial, body.mensaje);
+    const result = projectDeadlineAnswer(body.mensaje, db.proyectos) || projectStatusCommand(body.mensaje, db.proyectos, conversationProjectId(db.proyectos, body.mensaje, history), history);
+    expect(result).toBeTruthy();
+    await route.fulfill({json:result});
+  });
+  await page.goto('/dashboard');
+  await page.getByRole('button', { name:'Abrir ObraBot', exact:true }).click();
+  const chat = page.getByRole('dialog', { name:'Chat con ObraBot', exact:true });
+  await chat.getByRole('textbox').fill('hay obras con plazo vencido?');
+  await chat.getByRole('button', { name:'Enviar mensaje', exact:true }).click();
+  await expect(chat.getByText(/Tienes 1 obra con el plazo vencido/)).toBeVisible();
+  await chat.getByRole('textbox').fill('quiero que la dejes como cancelada');
+  await chat.getByRole('button', { name:'Enviar mensaje', exact:true }).click();
+  await expect(chat.getByText(/Terraza quedó como cancelada/)).toBeVisible();
+  expect(db.proyectos[0].estado).toBe('cancelada');
+  expect(db.proyectos[0].monto_cotizado).toBe(3000000);
+  expect(db.proyectos[1].estado).toBe('activo');
+  expect(db.proyectos[1].monto_cotizado).toBe(12000000);
+  await page.screenshot({path:'/tmp/obrabot-logica-contexto.png',fullPage:true});
+});

@@ -1,4 +1,5 @@
 import { projectStatusCommand } from './project-status-command';
+import { conversationProjectId } from './project-reference';
 import { isProjectDeadlineQuestion, projectDeadlineAnswer } from './project-deadlines';
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -190,11 +191,10 @@ export function createChatHandler(
         if (verified) return NextResponse.json(verified);
       }
       if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
-      const precedingReply = [...body.historial].reverse().find((turn: any) => turn.rol === 'model')?.texto || '';
-      const normalizeName = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const referenced = tables.proyectos.filter(p => normalizeName(precedingReply).includes(normalizeName(p.nombre)));
-      const statusCommand = projectStatusCommand(body.mensaje, tables.proyectos, projectId || (referenced.length === 1 ? referenced[0].id : undefined));
+      const referencedId = conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId);
+      const statusCommand = projectStatusCommand(body.mensaje, tables.proyectos, referencedId, body.historial);
       if (statusCommand) {
+        if (projectId && statusCommand.accion && statusCommand.accion.proyecto_id !== projectId) throw new AIError('PROJECT_CONTEXT', 'Estás en el chat de otra obra. Abre la obra indicada o usa la consulta general para cambiar su estado.', 422);
         await finish(statusCommand, projectId);
         return NextResponse.json(statusCommand);
       }
@@ -241,6 +241,7 @@ export function createChatHandler(
       const result = await deps.global(body.historial, body.mensaje, {
         ...context,
         ...capability,
+        proyecto_actual: tables.proyectos.find(project => project.id === referencedId) || null,
         operacion_obra: operationsContext(tables, undefined, user.rol, body.mensaje),
         cotizacion_actual: await budgetContext(),
       });

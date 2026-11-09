@@ -1,14 +1,13 @@
-const norm = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+import { projectMentions, conversationProjectId } from '@/lib/ai/project-reference';
 export function activeWhatsAppProject(projects: any[], text: string, history: any[]) {
-  const mentions = projects.filter(project => norm(text).includes(norm(project.nombre)));
-  if (mentions.length === 1) return mentions[0].id as string;
-  if (mentions.length > 1) return null;
-  if (projects.length === 1) return projects[0].id as string;
-  // El antecedente inmediato manda: una lista con varias obras no permite adivinar «esa obra».
-  const reply = history[0]?.respuesta || '';
-  const referenced = projects.filter(project => norm(reply).includes(norm(project.nombre)));
-  if (referenced.length === 1) return referenced[0].id as string;
-  if (referenced.length > 1) return null;
+  const turns = history.slice(0, 4).reverse().flatMap(row => [
+    { rol: 'user' as const, texto: row.texto || '' },
+    { rol: 'model' as const, texto: row.respuesta || '' },
+  ]);
+  const inferred = conversationProjectId(projects, text, turns);
+  if (inferred) return inferred;
+  // No recurrir a metadatos viejos si hay una lista ambigua o antecedentes en conflicto.
+  if ([text, history[0]?.respuesta || '', history[0]?.texto || ''].some(value => projectMentions(projects, value).length)) return null;
   const previous = history[0]?.acciones?.proyecto_contexto_id;
   return projects.some(project => project.id === previous) ? previous as string : null;
 }

@@ -468,3 +468,48 @@ test('el chat web propone el estado exacto solicitado sin inventar monto ni espe
  assert.deepEqual(body.accion,{tipo:'actualizar_proyecto',proyecto_id:'floor',estado:'terminado'});
  assert.doesNotMatch(body.respuesta,/guardad|listo/i);
 });
+
+test('el widget resuelve «quiero que la dejes como cancelada» después del listado de vencidas',async()=>{
+ fixture.tables.set('proyectos',[{id:'floor',empresa_id:'company-a',nombre:'Porcelanato La Florida',estado:'activo',monto_cotizado:570493},{id:'other',empresa_id:'company-a',nombre:'Ampliación PAC',estado:'activo',monto_cotizado:12000000}]);
+ const never=async()=>{throw Error('La instrucción inequívoca no necesita llamar al modelo')};
+ const handler=createChatHandler({authorize:authorized,global:never,project:never});
+ const result=await handler(makeRequest({mensaje:'quiero que la dejes como cancelada',historial:[{remitente:'usuario',texto:'hay obras con plazo vencido?'},{remitente:'agente',texto:'Tienes 1 obra con el plazo vencido: Porcelanato La Florida, hace 3 días.'}]}));
+ assert.equal(result.status,200);
+ const body=await result.json();assert.deepEqual(body.accion,{tipo:'actualizar_proyecto',proyecto_id:'floor',estado:'cancelada'});
+ assert.doesNotMatch(body.respuesta,/guardad|quedó|listo/);
+});
+
+test('el chat conserva la orden durante una aclaración sin adivinar entre varias obras',async()=>{
+ fixture.tables.set('proyectos',[{id:'north',empresa_id:'company-a',nombre:'Obra Norte',estado:'activo'},{id:'south',empresa_id:'company-a',nombre:'Obra Sur',estado:'activo'}]);
+ const never=async()=>{throw Error('No debe delegar una aclaración determinística al modelo')};
+ const handler=createChatHandler({authorize:authorized,global:never,project:never});
+ const message='Déjala como cancelada';
+ const first=await handler(makeRequest({mensaje:message,historial:[{remitente:'agente',texto:'Obra Norte y Obra Sur tienen pendientes.'}]}));
+ const pending=await first.json();assert.equal(pending.accion,null);assert.match(pending.respuesta,/Qué obra/);
+ const second=await handler(makeRequest({mensaje:'Obra Sur',historial:[{remitente:'usuario',texto:message},{remitente:'agente',texto:pending.respuesta}]}));
+ assert.deepEqual((await second.json()).accion,{tipo:'actualizar_proyecto',proyecto_id:'south',estado:'cancelada'});
+});
+
+test('la obra de referencia llega al modelo y no se toma de inventarios del navegador',async()=>{
+ fixture.tables.set('proyectos',[{id:'north',empresa_id:'company-a',nombre:'Obra Norte',estado:'activo'},{id:'south',empresa_id:'company-a',nombre:'Obra Sur',estado:'activo'}]);
+ const handler=createChatHandler({authorize:authorized,global:async(_history,_message,context)=>{assert.equal(context.proyecto_actual.id,'north');assert.equal(context.proyecto_actual.nombre,'Obra Norte');return response;},project:async()=>response});
+ const out=await handler(makeRequest({mensaje:'¿Qué materiales le faltan?',proyecto_actual:{id:'south'},historial:[{remitente:'usuario',texto:'Veamos Obra Norte'},{remitente:'agente',texto:'¿Qué necesitas revisar?'}]}));
+ assert.equal(out.status,200);
+});
+
+test('una consulta o negativa no permite que el modelo cambie el estado',async()=>{
+ fixture.tables.set('proyectos',[{id:'floor',empresa_id:'company-a',nombre:'Radier',estado:'activo'}]);
+ const wrong=async()=>({...response,accion:{tipo:'actualizar_proyecto',proyecto_id:'floor',estado:'cancelada'}});
+ const handler=createChatHandler({authorize:authorized,global:wrong,project:wrong});
+ for(const mensaje of ['No la canceles','Solo quiero saber si está cancelada','¿Está cancelada?']){
+  const out=await handler(makeRequest({mensaje}));assert.equal(out.status,422);assert.equal((await out.json()).accion,undefined);
+ }
+});
+
+test('el chat de una obra no propone modificar otra aunque se mencione su nombre',async()=>{
+ fixture.tables.set('proyectos',[{id:'north',empresa_id:'company-a',nombre:'Obra Norte',estado:'activo'},{id:'south',empresa_id:'company-a',nombre:'Obra Sur',estado:'activo'}]);
+ const never=async()=>{throw Error('No debe llamar al modelo')};
+ const handler=createChatHandler({authorize:authorized,global:never,project:never});
+ const out=await handler(makeRequest({mensaje:'Cancela la obra Obra Sur'}),'north');
+ assert.equal(out.status,422);assert.equal((await out.json()).code,'PROJECT_CONTEXT');
+});
