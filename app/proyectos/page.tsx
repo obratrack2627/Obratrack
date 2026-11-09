@@ -1,5 +1,6 @@
 'use client';
-import { projectStatuses, projectStatusLabel } from '@/lib/project-status';
+import { projectStatuses } from '@/lib/project-status';
+import { ProjectStatusBadge } from '@/components/ProjectStatus';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect } from 'react';
@@ -626,6 +627,7 @@ export default function ProyectosPage() {
                 return (
                   <div
                     key={proj.id}
+                    data-project-id={proj.id}
                     className="bg-white border border-kraft-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
                   >
                     <div>
@@ -656,17 +658,7 @@ export default function ProyectosPage() {
                         </div>
                         
                         <div className="flex items-center gap-1 shrink-0">
-                          <span
-                            className={`text-[10px] font-bold font-mono uppercase px-2 py-0.5 rounded ${
-                              proj.estado === 'activo'
-                                ? 'bg-obra-green-light text-obra-green'
-                                : proj.estado === 'terminado'
-                                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
-                            {projectStatusLabel(proj.estado)}
-                          </span>
+                          <ProjectStatusBadge estado={proj.estado} />
                           
                           {/* Botón Editar Obra */}
                           <button

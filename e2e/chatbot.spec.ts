@@ -1671,6 +1671,7 @@ test('solo Developer ve el selector de planes y confirma el cambio antes de actu
 
 test('estado de obra se confirma, persiste al navegar y conserva el valor ante un error', async ({ page }) => {
   const db = await setup(page, { respuesta: 'Consulta', accion: null }, true);
+  db.proyectos.push({ ...db.proyectos[0], id: 'p-other', nombre: 'Galpón' });
   let fail = false;
   await page.route('**/rest/v1/rpc/cambiar_estado_proyecto', async route => {
     const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS' };
@@ -1683,20 +1684,30 @@ test('estado de obra se confirma, persiste al navegar y conserva el valor ante u
   });
   await page.goto('/proyectos/p-existing/gantt');
   const state = page.getByRole('combobox', { name: 'Estado de la obra', exact: true });
-  await expect(state).toHaveValue('activo');
+  await expect(state).toHaveAttribute('data-project-status', 'activo');
   for (const value of ['pendiente', 'cancelada', 'terminado', 'activo']) {
-    await state.selectOption(value);
+    await state.click();
+    await page.getByRole('option', { name: ({pendiente:'Pendiente',cancelada:'Cancelada',terminado:'Terminada',activo:'En curso'} as Record<string,string>)[value], exact: true }).click();
     await expect(state).toBeEnabled();
-    await expect(state).toHaveValue(value);
+    await expect(state).toHaveAttribute('data-project-status', value);
     expect(db.proyectos[0].estado).toBe(value);
+    await page.getByRole('link', { name: 'Obras & Proyectos', exact: true }).click();
+    await expect(page.locator('[data-project-id="p-existing"] [data-project-status]')).toHaveAttribute('data-project-status', value);
+    await expect(page.locator('[data-project-id="p-other"] [data-project-status]')).toHaveAttribute('data-project-status', 'activo');
+    await page.getByRole('link', { name: 'Terraza', exact: true }).click();
+    await expect(state).toHaveAttribute('data-project-status', value);
   }
-  await state.selectOption('pendiente');
+  await state.focus();
+  await state.press('ArrowDown');
+  await state.press('Home');
+  await state.press('Enter');
   await expect(state).toBeEnabled();
-  await page.goto('/proyectos/p-existing/finanzas');
-  await expect(state).toHaveValue('pendiente');
+  await page.getByRole('link', { name: /Finanzas y materiales/ }).click();
+  await expect(state).toHaveAttribute('data-project-status', 'pendiente');
   fail = true;
-  await state.selectOption('cancelada');
+  await state.click();
+  await page.getByRole('option', { name: 'Cancelada', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'No se pudo guardar' })).toBeVisible();
-  await expect(state).toHaveValue('pendiente');
+  await expect(state).toHaveAttribute('data-project-status', 'pendiente');
   expect(db.proyectos[0].estado).toBe('pendiente');
 });

@@ -1,3 +1,4 @@
+import { projectDeadlineAnswer } from '@/lib/ai/project-deadlines';
 import { operationsContext } from '@/lib/ai/operations-context';
 import { acceptsQuotedProject, quotedProjectDraft } from "./quote-intake";
 import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib/presupuestos";
@@ -207,6 +208,7 @@ export async function processPersonalMessage(
         whatsappCard("Revisa tu mensaje", "Envía una instrucción de hasta 6000 caracteres e indica la obra."),
       persistido: false,
     };
+  const deadlineProjects = tables.proyectos.slice();
   const activeProject = activeWhatsAppProject(tables.proyectos, text, history);
   if (user.rol === 'terreno' && activeProject) {
     tables.proyectos = tables.proyectos.filter(p => p.id === activeProject);
@@ -268,7 +270,8 @@ export async function processPersonalMessage(
   if (!confirmationResponse && !pendingProject && !chosenBudget && nativeBudget?.grupo_id && !candidates.length) confirmationResponse = 'No se pudieron recuperar las alternativas. Revisa el presupuesto en ObraTrack.';
   let analysisFailed = false;
   try {
-    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : await deps.chat(
+    const verifiedDeadlines = !attachment ? projectDeadlineAnswer(text, deadlineProjects, activeProject || undefined) : null;
+    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : verifiedDeadlines || await deps.chat(
       conversationRows
         .slice()
         .reverse()

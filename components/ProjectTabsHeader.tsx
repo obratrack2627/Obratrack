@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   ArrowLeft,
-  ChevronDown,
   GanttChartSquare,
   Wallet,
   Sparkles,
@@ -17,18 +16,10 @@ import {
   FileText,
   ClipboardCheck,
 } from 'lucide-react';
-import { projectStatuses } from '@/lib/project-status';
-import { Proyecto, Cliente, ProjectStatus } from '@/types/database';
+import { ProjectStatusSelect } from '@/components/ProjectStatus';
+import { Proyecto, Cliente } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
 import { dataService } from '@/lib/data-service';
-
-const statusColors: Record<ProjectStatus, string> = {
-  terminado: 'bg-sky-300 text-sky-950 border-sky-400 dark:bg-sky-300 dark:text-sky-950 dark:border-sky-400',
-  cancelada: 'bg-red-700 text-white border-red-800 dark:bg-red-700 dark:text-white dark:border-red-800',
-  pendiente: 'bg-[#FF6A00] text-[#431407] border-orange-600 dark:bg-[#FF6A00] dark:text-[#431407] dark:border-orange-600',
-  activo: 'bg-green-700 text-white border-green-800 dark:bg-green-700 dark:text-white dark:border-green-800',
-  pausado: 'bg-yellow-400 text-yellow-950 border-yellow-500 dark:bg-yellow-400 dark:text-yellow-950 dark:border-yellow-500',
-};
 
 interface ProjectTabsHeaderProps {
   proyecto: Proyecto | null;
@@ -46,13 +37,14 @@ export default function ProjectTabsHeader({
   const [estado, setEstado] = useState(proyecto?.estado || 'activo');
   const [guardandoEstado, setGuardandoEstado] = useState(false);
   const [errorEstado, setErrorEstado] = useState('');
-  useEffect(() => { setEstado(proyecto?.estado || 'activo'); setErrorEstado(''); }, [proyecto?.id, proyecto?.estado]);
+  useEffect(() => { setErrorEstado(''); }, [proyecto?.id]);
   const [docsCount, setDocsCount] = useState(0);
   const [presentesHoy, setPresentesHoy] = useState(0);
 
   useEffect(() => {
     if (!proyecto) return;
     const refreshCounts = () => {
+      setEstado(dataService.getProyectoById(proyecto.id)?.estado || proyecto.estado);
       const cambios = dataService
         .getReclamosCambios(proyecto.id)
         .filter((c) => c.estado === 'pendiente' || c.estado === 'en_revision');
@@ -149,28 +141,16 @@ export default function ProjectTabsHeader({
               <h1 className="text-xl sm:text-2xl font-heading font-black text-navy-900 dark:text-white truncate">
                 {proyecto.nombre}
               </h1>
-              <div className="relative inline-flex shrink-0">
-                <select
-                  aria-label="Estado de la obra"
-                  value={estado}
-                  disabled={guardandoEstado}
-                  onChange={async (event) => {
-                    const value = event.target.value as ProjectStatus;
-                    setGuardandoEstado(true);
-                    setErrorEstado('');
-                    try {
-                      await dataService.cambiarEstadoProyecto(proyecto.id, value);
-                      setEstado(value);
-                    } catch (error) {
-                      setErrorEstado(error instanceof Error ? error.message : 'No se pudo guardar el estado.');
-                    } finally { setGuardandoEstado(false); }
-                  }}
-                  className={`appearance-none cursor-pointer text-xs font-bold pl-3 pr-8 py-2 rounded-xl border shadow-sm transition-colors hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-obra-orange disabled:cursor-wait disabled:opacity-70 ${statusColors[estado]}`}
-                >
-                  {projectStatuses.map(item => <option key={item.value} value={item.value} className="bg-white text-gray-900 dark:bg-[#1E2530] dark:text-gray-100">{item.label}</option>)}
-                </select>
-                <ChevronDown aria-hidden="true" className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${estado === 'activo' || estado === 'cancelada' ? 'text-white' : 'text-gray-900'}`} />
-              </div>
+              <ProjectStatusSelect estado={estado} busy={guardandoEstado} onChange={async value => {
+                setGuardandoEstado(true);
+                setErrorEstado('');
+                try {
+                  await dataService.cambiarEstadoProyecto(proyecto.id, value);
+                  setEstado(value);
+                } catch (error) {
+                  setErrorEstado(error instanceof Error ? error.message : 'No se pudo guardar el estado.');
+                } finally { setGuardandoEstado(false); }
+              }} />
               {guardandoEstado && <span role="status" className="text-xs text-gray-500">Guardando…</span>}
               {errorEstado && <span role="alert" className="text-xs text-red-600">{errorEstado}</span>}
             </div>

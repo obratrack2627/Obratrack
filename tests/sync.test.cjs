@@ -328,3 +328,27 @@ test('el historial de proyecto pendiente no se guarda en la empresa de una sesiÃ
   assert.deepEqual(await loading,[]);assert.deepEqual(dataService.getProyectoChatHistorial('p1'),[]);
  } finally {supabaseService.getProyectoChatHistorial=original;}
 });
+
+test('el estado confirmado no se reenvÃ­a como pendiente ni retrocede con una lectura iniciada antes', async () => {
+  const {supabaseService}=require('../lib/supabase/supabase-service.ts');
+  const original=supabaseService.cambiarEstadoProyecto;
+  const other={...p1,id:'p2',nombre:'Obra B'};
+  localStorage.setItem('obratrack_proyectos_v7_a',JSON.stringify([p1,other]));
+  let release,started;
+  const fetching=new Promise(resolve=>{started=resolve});
+  global.fetch=()=>{started();return new Promise(resolve=>{release=resolve})};
+  supabaseService.cambiarEstadoProyecto=async(id,estado)=>({...p1,id,estado});
+  try {
+    const loading=dataService.pullFromCloudServer();await fetching;
+    await dataService.cambiarEstadoProyecto('p1','terminado');
+    assert.equal(dataService.getProyectoById('p1').estado,'terminado');
+    assert.equal(JSON.parse(localStorage.getItem('obratrack_dirty_v1_a')||'{}').proyectos?.p1,undefined);
+    release(new Response(JSON.stringify({empresaId:'a',proyectos:[p1,other]}),{status:200}));
+    assert.equal((await loading).success,true);
+    assert.equal(dataService.getProyectoById('p1').estado,'terminado');
+    assert.equal(dataService.getProyectoById('p2').estado,'activo');
+    global.fetch=async()=>new Response(JSON.stringify({empresaId:'a',proyectos:[{...p1,estado:'cancelada'},other]}),{status:200});
+    await dataService.pullFromCloudServer();
+    assert.equal(dataService.getProyectoById('p1').estado,'cancelada');
+  } finally {supabaseService.cambiarEstadoProyecto=original;}
+});

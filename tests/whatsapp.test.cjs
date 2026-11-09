@@ -1120,3 +1120,22 @@ test('al crear una obra con una foto la evidencia se vincula a la obra nueva y n
  await processPersonalMessage(sb,{id:'new-project-photo',from:'56912345678',type:'image',image:{id:'123',caption:'Crea una obra llamada Radier Nuevo, cliente Ana Pérez, presupuesto 1000000, correo ana@example.test, teléfono +56987654321, RUT 12345678-5'}},{media:async()=>({mimeType:'image/png',data:'aW1hZ2U='}),store:async()=>({path:'empresa1/jefe/'+ 'e'.repeat(64)+'.png',mime_type:'image/png',proyecto_id:null}),chat:async()=>({respuesta:'Datos recibidos',accion:null,cotizacion:null,obra_propuesta:{nombre:'Radier Nuevo',cliente_nombre:'Ana Pérez',monto_cotizado:1000000,cliente_email:'ana@example.test',cliente_telefono:'+56987654321',cliente_rut:'12345678-5'}})});
  const project=saved.p_changed.proyectos.find(p=>p.nombre==='Radier Nuevo');assert.ok(project);assert.equal(saved.p_changed.bitacora_entradas[0].proyecto_id,project.id);assert.equal(saved.p_adjunto.proyecto_id,project.id);assert.equal(saved.p_acciones.proyecto_contexto_id,project.id);
 });
+
+test('WhatsApp responde obras vencidas desde las fechas reales sin esperar al modelo',async()=>{
+ const sb=database();
+ sb.db.proyectos=[
+  {id:'expired-a',empresa_id:'empresa1',nombre:'Pintura atrasada',estado:'activo',fecha_termino_estimada:'2000-01-01'},
+  {id:'expired-b',empresa_id:'empresa1',nombre:'Piso atrasado',estado:'activo',fecha_termino_estimada:'2000-01-02'},
+  {id:'closed',empresa_id:'empresa1',nombre:'Entregada',estado:'terminado',fecha_termino_estimada:'2000-01-01'},
+ ];
+ const result=await processPersonalMessage(sb,{id:'wamid.deadlines',from:'56912345678',type:'text',text:{body:'¿Qué obras tengo vencidas?'}},{chat:async()=>{throw new Error('No debe llamar IA para fechas verificadas')}});
+ assert.match(result.respuesta,/Tienes 2 obras/);assert.match(result.respuesta,/Pintura atrasada/);assert.match(result.respuesta,/Piso atrasado/);assert.equal(sb.commits,1);
+});
+
+test('la respuesta rápida de plazos en WhatsApp respeta la asignación del maestro',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,rol:'terreno'}];
+ sb.db.proyectos=[{id:'assigned',empresa_id:'empresa1',nombre:'Mi obra',estado:'activo',fecha_termino_estimada:'2000-01-01'},{id:'private',empresa_id:'empresa1',nombre:'Privada sin asignación',estado:'activo',fecha_termino_estimada:'2000-01-01'}];
+ sb.db.proyecto_trabajadores=[{proyecto_id:'assigned',usuario_id:user.id}];
+ const result=await processPersonalMessage(sb,{id:'wamid.worker-deadlines',from:'56912345678',type:'text',text:{body:'Obras vencidas'}},{chat:async()=>{throw new Error('No debe llamar al modelo')}});
+ assert.match(result.respuesta,/1 obra/);assert.match(result.respuesta,/Mi obra/);assert.doesNotMatch(result.respuesta,/Privada/);
+});

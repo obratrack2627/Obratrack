@@ -116,10 +116,10 @@ export class DataService {
     [KEYS.DOCUMENTOS_OBRA]:'documentos',[KEYS.ASISTENCIAS_OBRA]:'asistencias',[KEYS.REPORTES]:'reportes_whatsapp',
   };
 
-  private setItem<T>(key: string, value: T): void {
+  private setItem<T>(key: string, value: T, trackChanges = true): void {
     if (!this.isBrowser() && !this.isolatedStorage) return;
     try {
-      if(this.isBrowser() && !this.isolatedStorage && !this.isPullingCloud && !this.aiLocalOnly && Array.isArray(value)) {
+      if(trackChanges && this.isBrowser() && !this.isolatedStorage && !this.isPullingCloud && !this.aiLocalOnly && Array.isArray(value)) {
         const empresa=this.getActiveUser()?.empresa_id;
         const base=Object.keys(this.syncNames).find(base=>key===`${base}_${empresa}`);
         if(base) {
@@ -134,7 +134,7 @@ export class DataService {
       }
       (this.isolatedStorage || localStorage).setItem(key, JSON.stringify(value));
       if (
-        !this.isPullingCloud &&
+        trackChanges && !this.isPullingCloud &&
         key !== KEYS.ACTIVE_USER &&
         !key.startsWith(KEYS.CHAT_SESSION) &&
         !key.includes(KEYS.CHAT_PROYECTOS)
@@ -566,14 +566,26 @@ export class DataService {
     return true;
   }
 
+  private projectStateRevision = 0;
+  private confirmedProjectStates = new Map<string, { estado: Proyecto['estado']; revision: number }>();
+
   async cambiarEstadoProyecto(id: string, estado: import('@/types/database').ProjectStatus): Promise<void> {
     const actor = this.getActiveUser();
+    const pendingKey = this.dirtyKey();
+    if (this.getItem<Record<string, Record<string, any>>>(pendingKey, {}).proyectos?.[id] || this.cloudPush) {
+      const pushed = await this.pushToCloudServer();
+      if (!pushed.success) throw new Error('Sincroniza los cambios pendientes antes de cambiar el estado de la obra.');
+    }
+    if (!actor || this.getActiveUser()?.id !== actor.id || this.getActiveUser()?.empresa_id !== actor.empresa_id) throw new Error('La sesión cambió. Vuelve a abrir la obra.');
     const saved = await supabaseService.cambiarEstadoProyecto(id, estado);
     const current = this.getActiveUser();
-    if (!actor || current?.id !== actor.id || current?.empresa_id !== actor.empresa_id) return;
+    if (!actor || current?.id !== actor.id || current?.empresa_id !== actor.empresa_id) throw new Error('La sesión cambió. Vuelve a abrir la obra.');
     const key = this.getTenantKey(KEYS.PROYECTOS);
     const rows = this.getItem<Proyecto[]>(key, []);
-    this.setItem(key, rows.map(row => row.id === id ? { ...row, estado: saved.estado } : row));
+    this.confirmedProjectStates.set(`${actor.empresa_id}:${id}`, { estado: saved.estado, revision: ++this.projectStateRevision });
+    const updated = rows.map(row => row.id === id ? { ...row, estado: saved.estado } : row);
+    if (!updated.some(row => row.id === id)) updated.push(saved);
+    this.setItem(key, updated, false);
     window.dispatchEvent(new Event('obratrack_cloud_synced'));
   }
 
@@ -2259,6 +2271,7 @@ export class DataService {
   }
 
   private async readFromCloudServer(): Promise<CloudPullResult> {
+    const stateRevision = this.projectStateRevision;
     if (!this.isBrowser()) return { success: false, message: 'No browser' };
     try {
       const active = this.getActiveUser();
@@ -2296,7 +2309,10 @@ export class DataService {
         if (['gratis','pro','pro_ia'].includes(cloud.plan_id)) this.setItem(this.getTenantKey(KEYS.PLAN),cloud.plan_id);
         if (Array.isArray(cloud.agenda)) this.setItem(this.getTenantKey(KEYS.AGENDA),cloud.agenda);
         if (Array.isArray(cloud.proyectos)) {
-          this.setItem(this.getTenantKey(KEYS.PROYECTOS), mergeById(localProjs, cloud.proyectos, 'proyectos'));
+          this.setItem(this.getTenantKey(KEYS.PROYECTOS), mergeById(localProjs, cloud.proyectos.map((row: Proyecto) => {
+            const confirmed = this.confirmedProjectStates.get(`${empresaId}:${row.id}`);
+            return confirmed && confirmed.revision > stateRevision ? { ...row, estado: confirmed.estado } : row;
+          }), 'proyectos'));
         }
         if (Array.isArray(cloud.clientes)) {
           this.setItem(this.getTenantKey(KEYS.CLIENTES), mergeById(this.getClientes(), cloud.clientes, 'clientes'));

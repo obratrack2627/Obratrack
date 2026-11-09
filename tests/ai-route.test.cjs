@@ -435,3 +435,26 @@ test('el chat de obra recibe sus actividades, materiales y cliente actuales del 
  }});
  assert.equal((await handler(makeRequest({mensaje:'¿Qué falta comprar?',contexto_proyecto:{materiales:[{nombre:'Inventado'}]}}),'p-a')).status,200);
 });
+
+test('consulta de obras vencidas usa registros autorizados actuales, sin llamada al modelo ni cargar módulos ajenos',async()=>{
+ fixture.tables.set('proyectos',[
+  {id:'expired-a',empresa_id:'company-a',nombre:'Pintura vencida',estado:'activo',fecha_termino_estimada:'2000-01-01'},
+  {id:'expired-b',empresa_id:'company-a',nombre:'Piso vencido',estado:'activo',fecha_termino_estimada:'2000-01-02'},
+  {id:'closed',empresa_id:'company-a',nombre:'Obra cerrada',estado:'terminado',fecha_termino_estimada:'2000-01-01'},
+  {id:'foreign',empresa_id:'otra-empresa',nombre:'Obra privada',estado:'activo',fecha_termino_estimada:'2000-01-01'},
+ ]);
+ const never=async()=>{throw new Error('No debe esperar al modelo para leer plazos')};
+ const handler=createChatHandler({authorize:authorized,global:never,project:never});
+ const res=await handler(makeRequest({mensaje:'¿Qué obras tengo vencidas?',historial:[{remitente:'agente',texto:'No hay obras vencidas'}]}));
+ assert.equal(res.status,200);
+ const result=await res.json();assert.match(result.respuesta,/Tienes 2 obras/);assert.match(result.respuesta,/Pintura vencida/);assert.doesNotMatch(result.respuesta,/Obra privada/);assert.equal(result.accion,null);
+ assert.equal(fixture.calls.some(call=>call.table==='materiales_proyecto'),false);
+ const denied=await handler(makeRequest({mensaje:'Obras vencidas'}),'foreign');assert.equal(denied.status,403);
+});
+
+test('si falla la lectura de proyectos no informa falsamente cero obras vencidas',async()=>{
+ fixture.fail('proyectos');
+ const handler=createChatHandler({authorize:authorized,global:async()=>response,project:async()=>response});
+ const res=await handler(makeRequest({mensaje:'Obras vencidas'}));
+ assert.equal(res.status,503);assert.equal((await res.json()).respuesta,undefined);
+});

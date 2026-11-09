@@ -77,6 +77,13 @@ export default function CloudSync() {
       clearTimeout(timer);
       timer = setTimeout(() => void sync(), 150);
     }
+    const storageChanged = (event: StorageEvent) => {
+      if (event.key === `obratrack_proyectos_v7_${dataService.getActiveUser()?.empresa_id}`) {
+        window.dispatchEvent(new Event('obratrack_cloud_synced'));
+        request();
+      }
+    };
+    window.addEventListener('storage', storageChanged);
     const offline = () => setError(offlineMessage);
     retry.current = request;
     window.addEventListener("focus", request);
@@ -90,6 +97,7 @@ export default function CloudSync() {
       disposed = true;
       clearTimeout(timer);
       clearInterval(interval);
+      window.removeEventListener("storage", storageChanged);
       window.removeEventListener("focus", request);
       window.removeEventListener("pageshow", request);
       window.removeEventListener("online", request);

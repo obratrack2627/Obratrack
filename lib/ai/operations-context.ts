@@ -1,3 +1,4 @@
+import { projectDeadlines } from './project-deadlines';
 const pick = (row: any, fields: string[]) => Object.fromEntries(fields.filter((field) => row[field] !== undefined).map((field) => [field, typeof row[field] === 'string' ? row[field].slice(0, 1800) : row[field]]));
 
 // Registros filtrados previamente por empresa/asignación; nunca usa el inventario
@@ -21,6 +22,7 @@ export function operationsContext(tables: Record<string, any[]>, projectId?: str
   ];
   return {
     fuente: 'Registros actuales consultados en ObraTrack',
+    plazos: projectDeadlines(tables.proyectos || [], projectId),
     proyecto_id: projectId || null,
     registros: Object.fromEntries(specs.map(([table, limit, fields]) => {
       const rows = (tables[table] || []).filter((row) => !projectId || row.proyecto_id === projectId).slice().sort((a, b) => {

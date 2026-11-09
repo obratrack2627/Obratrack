@@ -1,3 +1,4 @@
+import { isProjectDeadlineQuestion, projectDeadlineAnswer } from './project-deadlines';
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseUrl, supabaseAnonKey } from "@/lib/supabase/client";
@@ -112,6 +113,7 @@ export function createChatHandler(
       const { company, context, service, tables } = await loadAIContext(
         client,
         user,
+        { projectsOnly: isProjectDeadlineQuestion(body.mensaje) },
       );
       if (!company)
         throw new AIError(
@@ -180,6 +182,11 @@ export function createChatHandler(
           "Tu cuenta no tiene acceso al asistente de obras.",
           403,
         );
+      if (isProjectDeadlineQuestion(body.mensaje)) {
+        if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
+        const verified = projectDeadlineAnswer(body.mensaje, tables.proyectos, projectId);
+        if (verified) return NextResponse.json(verified);
+      }
       let canonicalBudget: Presupuesto | null = null;
       const budgetContext = async (scope?: string) => {
         const id = body.contexto_cotizacion?.id;

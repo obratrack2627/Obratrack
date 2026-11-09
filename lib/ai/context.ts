@@ -23,22 +23,15 @@ export function checkedRows(result: any): any[] {
 }
 
 // El servidor usa datos actuales y permisos de la sesión, nunca el inventario enviado por el navegador.
-export async function loadAIContext(client: any, user: any) {
-  const company = checkedRows(
-    await client
-      .from("empresas")
-      .select("id,plan_id")
-      .eq("id", user.empresa_id),
-  )[0];
-  const tables: Record<string, any[]> = {};
-  tables.proyectos = checkedRows(
-    await client
-      .from("proyectos")
-      .select("*")
-      .eq("empresa_id", user.empresa_id),
-  );
+export async function loadAIContext(client: any, user: any, options: { projectsOnly?: boolean } = {}) {
+  const [companyResult, projectResult] = await Promise.all([
+    client.from('empresas').select('id,plan_id').eq('id', user.empresa_id),
+    client.from('proyectos').select('*').eq('empresa_id', user.empresa_id),
+  ]);
+  const company = checkedRows(companyResult)[0];
+  const tables: Record<string, any[]> = { usuarios: [], clientes: [], agenda_eventos: [], proyectos: checkedRows(projectResult) };
   const ids = tables.proyectos.map((p) => p.id);
-  const names = ["usuarios", "clientes", "agenda_eventos", ...projectTables];
+  const names = options.projectsOnly ? (user.rol === "terreno" ? ["proyecto_trabajadores"] : []) : ["usuarios", "clientes", "agenda_eventos", ...projectTables];
   const results = await Promise.all(
     names.map((table) =>
       projectTables.includes(table)
@@ -59,7 +52,7 @@ export async function loadAIContext(client: any, user: any) {
     );
     tables.proyectos = tables.proyectos.filter((p) => assigned.has(p.id));
     for (const table of projectTables)
-      tables[table] = tables[table].filter((r) => assigned.has(r.proyecto_id));
+      tables[table] = (tables[table] || []).filter((r) => assigned.has(r.proyecto_id));
     tables.usuarios = [user];
     tables.clientes = [];
     tables.agenda_eventos = [];
