@@ -566,6 +566,17 @@ export class DataService {
     return true;
   }
 
+  async cambiarEstadoProyecto(id: string, estado: import('@/types/database').ProjectStatus): Promise<void> {
+    const actor = this.getActiveUser();
+    const saved = await supabaseService.cambiarEstadoProyecto(id, estado);
+    const current = this.getActiveUser();
+    if (!actor || current?.id !== actor.id || current?.empresa_id !== actor.empresa_id) return;
+    const key = this.getTenantKey(KEYS.PROYECTOS);
+    const rows = this.getItem<Proyecto[]>(key, []);
+    this.setItem(key, rows.map(row => row.id === id ? { ...row, estado: saved.estado } : row));
+    window.dispatchEvent(new Event('obratrack_cloud_synced'));
+  }
+
   updateProyecto(id: string, data: Partial<Proyecto>): Proyecto | null {
     const defaultProjs = this.isDemoTenant() ? INITIAL_PROYECTOS : [];
     const proyectos = this.getItem<Proyecto[]>(this.getTenantKey(KEYS.PROYECTOS), defaultProjs);

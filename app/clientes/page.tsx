@@ -186,7 +186,7 @@ export default function ClientesPage() {
             className="px-4 py-2.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-sm font-semibold rounded-xl shadow-sm flex items-center gap-2 font-heading transition-all"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Nuevo Cliente</span>
+            <span>Nuevo Cliente</span>
           </button>
         }
       />

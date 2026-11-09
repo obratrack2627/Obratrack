@@ -16,7 +16,8 @@ import {
   FileText,
   ClipboardCheck,
 } from 'lucide-react';
-import { Proyecto, Cliente } from '@/types/database';
+import { projectStatuses } from '@/lib/project-status';
+import { Proyecto, Cliente, ProjectStatus } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
 import { dataService } from '@/lib/data-service';
 
@@ -33,6 +34,10 @@ export default function ProjectTabsHeader({
 }: ProjectTabsHeaderProps) {
   const pathname = usePathname();
   const [cambiosPendientes, setCambiosPendientes] = useState(0);
+  const [estado, setEstado] = useState(proyecto?.estado || 'activo');
+  const [guardandoEstado, setGuardandoEstado] = useState(false);
+  const [errorEstado, setErrorEstado] = useState('');
+  useEffect(() => { setEstado(proyecto?.estado || 'activo'); setErrorEstado(''); }, [proyecto?.id, proyecto?.estado]);
   const [docsCount, setDocsCount] = useState(0);
   const [presentesHoy, setPresentesHoy] = useState(0);
 
@@ -135,17 +140,27 @@ export default function ProjectTabsHeader({
               <h1 className="text-xl sm:text-2xl font-heading font-black text-navy-900 dark:text-white truncate">
                 {proyecto.nombre}
               </h1>
-              <span
-                className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full ${
-                  proyecto.estado === 'activo'
-                    ? 'bg-[#6B8F72]/15 text-[#6B8F72] border border-[#6B8F72]/30'
-                    : proyecto.estado === 'terminado'
-                    ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30'
-                    : 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
-                }`}
+              <select
+                aria-label="Estado de la obra"
+                value={estado}
+                disabled={guardandoEstado}
+                onChange={async (event) => {
+                  const value = event.target.value as ProjectStatus;
+                  setGuardandoEstado(true);
+                  setErrorEstado('');
+                  try {
+                    await dataService.cambiarEstadoProyecto(proyecto.id, value);
+                    setEstado(value);
+                  } catch (error) {
+                    setErrorEstado(error instanceof Error ? error.message : 'No se pudo guardar el estado.');
+                  } finally { setGuardandoEstado(false); }
+                }}
+                className="text-xs font-semibold px-2 py-1.5 rounded-lg bg-kraft-50 dark:bg-[#1E2530] text-navy-900 dark:text-gray-200 border border-kraft-200 dark:border-[#263040] focus:ring-2 focus:ring-obra-orange disabled:opacity-60"
               >
-                {proyecto.estado.toUpperCase()}
-              </span>
+                {projectStatuses.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+              {guardandoEstado && <span role="status" className="text-xs text-gray-500">Guardando…</span>}
+              {errorEstado && <span role="alert" className="text-xs text-red-600">{errorEstado}</span>}
             </div>
 
             {/* Metadatos Rápidos */}

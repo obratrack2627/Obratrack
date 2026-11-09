@@ -142,7 +142,7 @@ export function validateAction(raw: any): AIAction {
   if (
     a.estado &&
     a.tipo === "actualizar_proyecto" &&
-    !["activo", "terminado", "pausado"].includes(a.estado)
+    !["activo", "terminado", "pausado", "pendiente", "cancelada"].includes(a.estado)
   )
     fail("Estado de obra no válido.");
   if (

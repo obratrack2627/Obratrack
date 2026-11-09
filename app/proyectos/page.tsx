@@ -1,4 +1,5 @@
 'use client';
+import { projectStatuses, projectStatusLabel } from '@/lib/project-status';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect } from 'react';
@@ -509,7 +510,7 @@ export default function ProyectosPage() {
               )}
 
               {/* Filtro por Estado */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-wrap">
                 <button
                   onClick={() => setStatusFilter('todos')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold transition-all ${
@@ -540,6 +541,11 @@ export default function ProyectosPage() {
                 >
                   Terminados ({proyectos.filter((p) => p.estado === 'terminado').length})
                 </button>
+                {projectStatuses.filter(item => ['pendiente', 'cancelada', 'pausado'].includes(item.value)).map(item => (
+                  <button type="button" key={item.value} onClick={() => setStatusFilter(item.value)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${statusFilter === item.value ? 'bg-navy-800 text-white' : 'bg-kraft-50 text-gray-600 border-kraft-200'}`}>
+                    {item.label} ({proyectos.filter(p => p.estado === item.value).length})
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -659,7 +665,7 @@ export default function ProyectosPage() {
                                 : 'bg-gray-100 text-gray-600'
                             }`}
                           >
-                            {proj.estado}
+                            {projectStatusLabel(proj.estado)}
                           </span>
                           
                           {/* Botón Editar Obra */}
@@ -1158,9 +1164,7 @@ export default function ProyectosPage() {
                     onChange={(e) => setEditEstado(e.target.value as ProjectStatus)}
                     className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-sm focus:outline-none focus:border-obra-orange"
                   >
-                    <option value="activo">Activo (En Ejecución)</option>
-                    <option value="terminado">Terminado (Entregado)</option>
-                    <option value="pausado">Pausado</option>
+                    {projectStatuses.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
               </div>

@@ -78,7 +78,7 @@ export default function GanttChart({
           className="px-4 py-2 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl font-heading inline-flex items-center gap-1.5 shadow-sm transition-all"
         >
           <Plus className="w-4 h-4" />
-          <span>+ Agregar Primera Partida</span>
+          <span>Agregar Primera Partida</span>
         </button>
       </div>
     );

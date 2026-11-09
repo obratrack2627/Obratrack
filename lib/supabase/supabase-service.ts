@@ -381,6 +381,12 @@ export class SupabaseService {
     }
   }
 
+  async cambiarEstadoProyecto(id: string, estado: import('@/types/database').ProjectStatus): Promise<Proyecto> {
+    const { data, error } = await this.client.rpc('cambiar_estado_proyecto', { p_id: id, p_estado: estado });
+    if (error || !data?.id) throw new Error(error?.message?.includes('PLAN_LIMIT') ? 'Tu plan no permite otra obra en curso.' : 'No se pudo guardar el estado. Inténtalo de nuevo.');
+    return data as Proyecto;
+  }
+
   async deleteProyecto(id: string): Promise<void> {
     const { error } = await this.client.from('proyectos').delete().eq('id', id);
     if (error) console.error('Error eliminando proyecto en Supabase:', error);

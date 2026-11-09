@@ -4,7 +4,7 @@
  */
 
 export type UserRole = 'admin' | 'supervisor' | 'terreno';
-export type ProjectStatus = 'activo' | 'terminado' | 'pausado';
+export type ProjectStatus = 'activo' | 'terminado' | 'pausado' | 'pendiente' | 'cancelada';
 export type ActivityStatus = 'pendiente' | 'en_curso' | 'terminada';
 export type PaymentMethod = 'transferencia' | 'efectivo' | 'debito';
 export type ImprevistoOrigin = 'manual' | 'whatsapp_ia';

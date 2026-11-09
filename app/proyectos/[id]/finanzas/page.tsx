@@ -737,7 +737,7 @@ export default function ProyectoFinanzasPage() {
               className="px-4 py-2 bg-obra-orange hover:bg-obra-orange-hover text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 font-heading self-start sm:self-auto"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Agregar Material</span>
+              <span>Agregar Material</span>
             </button>
           </div>
 

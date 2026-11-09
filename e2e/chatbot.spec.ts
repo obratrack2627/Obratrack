@@ -1668,3 +1668,35 @@ test('solo Developer ve el selector de planes y confirma el cambio antes de actu
   expect(db.empresas[0].plan_id).toBe('pro');
  } finally { await context.close(); }
 });
+
+test('estado de obra se confirma, persiste al navegar y conserva el valor ante un error', async ({ page }) => {
+  const db = await setup(page, { respuesta: 'Consulta', accion: null }, true);
+  let fail = false;
+  await page.route('**/rest/v1/rpc/cambiar_estado_proyecto', async route => {
+    const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS' };
+    if (route.request().method() === 'OPTIONS') { await route.fulfill({ status: 204, headers }); return; }
+    if (fail) { await route.fulfill({ status: 500, headers, json: { message: 'Falló el guardado' } }); return; }
+    const { p_id, p_estado } = route.request().postDataJSON();
+    const row = db.proyectos.find((p:any) => p.id === p_id);
+    row.estado = p_estado;
+    await route.fulfill({ headers, json: row });
+  });
+  await page.goto('/proyectos/p-existing/gantt');
+  const state = page.getByRole('combobox', { name: 'Estado de la obra', exact: true });
+  await expect(state).toHaveValue('activo');
+  for (const value of ['pendiente', 'cancelada', 'terminado', 'activo']) {
+    await state.selectOption(value);
+    await expect(state).toBeEnabled();
+    await expect(state).toHaveValue(value);
+    expect(db.proyectos[0].estado).toBe(value);
+  }
+  await state.selectOption('pendiente');
+  await expect(state).toBeEnabled();
+  await page.goto('/proyectos/p-existing/finanzas');
+  await expect(state).toHaveValue('pendiente');
+  fail = true;
+  await state.selectOption('cancelada');
+  await expect(page.getByRole('alert').filter({ hasText: 'No se pudo guardar' })).toBeVisible();
+  await expect(state).toHaveValue('pendiente');
+  expect(db.proyectos[0].estado).toBe('pendiente');
+});
