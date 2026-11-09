@@ -101,6 +101,8 @@ export default function ProyectosPage() {
   );
 
   // Formulario editar proyecto
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
   const [editingProject, setEditingProject] = useState<Proyecto | null>(null);
   const [editNombre, setEditNombre] = useState('');
   const [editClienteId, setEditClienteId] = useState('');
@@ -212,7 +214,8 @@ export default function ProyectosPage() {
     };
     setEditingProject(proj);
     setEditNombre(proj.nombre);
-    setEditClienteId(proj.cliente_id || (clientes.length > 0 ? clientes[0].id : ''));
+    setEditClienteId(proj.cliente_id || '');
+    setEditError('');
     setEditMontoCotizado(formatThousands(proj.monto_cotizado || ''));
     setEditFechaInicio(proj.fecha_inicio);
     setEditFechaTermino(proj.fecha_termino_estimada);
@@ -227,11 +230,14 @@ export default function ProyectosPage() {
     setEditTrabajadores(proj.trabajadores_ids || []);
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingProject || !editNombre.trim()) return;
+    if (!editingProject || !editNombre.trim() || savingEdit) return;
+    setSavingEdit(true);
+    setEditError('');
+    try {
 
-    dataService.updateProyecto(editingProject.id, {
+    await dataService.guardarEdicionProyecto(editingProject.id, {
       nombre: editNombre.trim(),
       cliente_id: editClienteId || undefined,
       monto_cotizado: parseThousands(editMontoCotizado),
@@ -252,6 +258,8 @@ export default function ProyectosPage() {
     setToastMessage(`Obra "${editNombre.trim()}" actualizada exitosamente.`);
     loadData();
     setTimeout(() => setToastMessage(null), 3000);
+    } catch (error) { setEditError(error instanceof Error ? error.message : 'No se pudo guardar la obra.'); }
+    finally { setSavingEdit(false); }
   };
 
   const isTerreno = activeUser?.rol === 'terreno';
@@ -1270,6 +1278,7 @@ export default function ProyectosPage() {
                 />
               </div>
 
+              {editError && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{editError}</p>}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-kraft-200">
                 <button
                   type="button"
@@ -1279,10 +1288,10 @@ export default function ProyectosPage() {
                   Cancelar
                 </button>
                 <button
-                  type="submit"
+                  type="submit" disabled={savingEdit}
                   className="px-5 py-2 bg-obra-orange hover:bg-obra-orange-hover text-white text-sm font-semibold rounded-lg shadow-sm font-heading"
                 >
-                  Guardar Cambios
+                  {savingEdit ? 'Guardando…' : 'Guardar cambios'}
                 </button>
               </div>
             </form>

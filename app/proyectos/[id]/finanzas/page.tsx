@@ -409,8 +409,8 @@ export default function ProyectoFinanzasPage() {
   const porcentajePagado = montoCotizado > 0 ? Math.min(100, Math.round((totalPagado / montoCotizado) * 100)) : 0;
 
   const totalCostosDirectos = totalMateriales + totalImprevistos;
-  const margenEstimadoCLP = montoCotizado - totalCostosDirectos;
-  const margenEstimadoPorcentaje = montoCotizado > 0 ? Math.round((margenEstimadoCLP / montoCotizado) * 100) : 0;
+  const saldoTrasCostos = montoCotizado - totalCostosDirectos;
+  const porcentajeDisponible = montoCotizado > 0 ? Math.round((saldoTrasCostos / montoCotizado) * 100) : 0;
 
   const chartData = [
     { name: 'Pagado', value: totalPagado, color: '#6B8F72' },
@@ -494,46 +494,42 @@ export default function ProyectoFinanzasPage() {
           </div>
 
           <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
-            <p className="text-xs font-mono font-semibold uppercase text-gray-500">Gastos Directos</p>
+            <p className="text-xs font-mono font-semibold uppercase text-gray-500">Costos considerados</p>
             <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-gray-200 mt-1">{formatCLP(totalCostosDirectos)}</h3>
-            <p className="text-[11px] text-gray-500 font-sans mt-0.5">Insumos + Imprevistos</p>
+            <p className="text-[11px] text-gray-500 font-sans mt-0.5">Materiales e imprevistos</p>
           </div>
 
           {/* Tarjeta de Saldo presupuestado y Semáforo */}
           <div className={`rounded-xl p-4 sm:p-5 shadow-sm border ${
-            margenEstimadoPorcentaje >= 25
+            porcentajeDisponible >= 25
               ? 'bg-[#6B8F72]/10 border-[#6B8F72]/40 text-navy-900 dark:text-white'
-              : margenEstimadoPorcentaje >= 10
+              : porcentajeDisponible >= 10
               ? 'bg-amber-500/10 border-amber-500/40 text-navy-900 dark:text-white'
               : 'bg-red-500/10 border-red-500/40 text-navy-900 dark:text-white'
           }`}>
             <div className="flex items-center justify-between">
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400">Saldo presupuestado</p>
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400">Saldo del presupuesto</p>
               <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                margenEstimadoPorcentaje >= 25
+                porcentajeDisponible >= 25
                   ? 'bg-[#6B8F72] text-white'
-                  : margenEstimadoPorcentaje >= 10
+                  : porcentajeDisponible >= 10
                   ? 'bg-amber-500 text-white'
                   : 'bg-red-500 text-white'
               }`}>
-                {margenEstimadoPorcentaje}%
+                {porcentajeDisponible}%
               </span>
             </div>
             <h3 className={`text-xl sm:text-2xl font-bold font-mono mt-1 ${
-              margenEstimadoPorcentaje >= 25
+              porcentajeDisponible >= 25
                 ? 'text-[#6B8F72]'
-                : margenEstimadoPorcentaje >= 10
+                : porcentajeDisponible >= 10
                 ? 'text-amber-500'
                 : 'text-red-500'
             }`}>
-              {formatCLP(margenEstimadoCLP)}
+              {formatCLP(saldoTrasCostos)}
             </h3>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-0.5">
-              {margenEstimadoPorcentaje >= 25
-                ? 'Disponible tras materiales e imprevistos'
-                : margenEstimadoPorcentaje >= 10
-                ? 'Saldo ajustado tras costos registrados'
-                : 'Alerta: Costos Elevados'}
+              Sin descontar mano de obra ni gastos generales
             </p>
           </div>
         </div>

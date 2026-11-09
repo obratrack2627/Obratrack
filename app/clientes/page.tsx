@@ -165,7 +165,7 @@ export default function ClientesPage() {
     (sum, p) => sum + (Number(p.monto_cotizado) || 0),
     0
   );
-  const clientesConObras = new Set(proyectos.map((p) => p.cliente_id).filter(Boolean)).size;
+  const clientesConObras = new Set(proyectos.filter(p => p.estado === 'activo').map((p) => p.cliente_id).filter(Boolean)).size;
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
@@ -232,13 +232,13 @@ export default function ClientesPage() {
           <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
-                Total Facturado / Obras
+                Total cotizado
               </p>
               <h3 className="text-xl font-bold font-mono text-navy-900 mt-1">
                 {formatCLP(totalContratadoGeneral)}
               </h3>
               <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                Suma de cotizaciones de clientes
+                Presupuestos asociados a sus obras
               </p>
             </div>
             <div className="w-11 h-11 rounded-lg bg-obra-orange-light text-obra-orange flex items-center justify-center">

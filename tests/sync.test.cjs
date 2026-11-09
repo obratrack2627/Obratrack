@@ -352,3 +352,20 @@ test('el estado confirmado no se reenvía como pendiente ni retrocede con una le
     assert.equal(dataService.getProyectoById('p1').estado,'cancelada');
   } finally {supabaseService.cambiarEstadoProyecto=original;}
 });
+
+test('editar una obra espera al guardado y conserva los datos locales si falla la nube',async()=>{
+ localStorage.setItem('obratrack_proyectos_v7_a',JSON.stringify([p1]));
+ global.fetch=async()=>new Response('{}',{status:503});
+ await assert.rejects(dataService.guardarEdicionProyecto('p1',{nombre:'Cambio sin confirmar'}),/No se pudo confirmar/);
+ assert.equal(dataService.getProyectoById('p1').nombre,'Obra A');
+ assert.equal(JSON.parse(localStorage.getItem('obratrack_dirty_v1_a')||'{}').proyectos?.p1,undefined);
+});
+test('editar una obra confirma nombre y asignación sin crear otro guardado pendiente',async()=>{
+ localStorage.setItem('obratrack_proyectos_v7_a',JSON.stringify([p1]));
+ let sent;
+ global.fetch=async(url,options)=>{sent=JSON.parse(options.body);return new Response(JSON.stringify({success:true}),{status:200})};
+ await dataService.guardarEdicionProyecto('p1',{nombre:'Nombre confirmado',trabajadores_ids:['worker']});
+ assert.equal(sent.cambios.proyectos[0].nombre,'Nombre confirmado');assert.deepEqual(sent.cambios.proyectos[0].trabajadores_ids,['worker']);
+ assert.equal(dataService.getProyectoById('p1').nombre,'Nombre confirmado');
+ assert.equal(JSON.parse(localStorage.getItem('obratrack_dirty_v1_a')||'{}').proyectos?.p1,undefined);
+});

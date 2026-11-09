@@ -116,7 +116,7 @@ export default function ControlAsistenciaGlobalPage() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF6A00] hover:bg-[#E05E00] text-white text-xs font-heading font-bold shadow-sm transition-colors"
           >
             <Download className="w-4 h-4" />
-            <span>Exportar Planilla Remuneraciones (CSV)</span>
+            <span>Exportar asistencia</span>
           </button>
         }
       />

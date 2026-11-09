@@ -94,6 +94,8 @@ export default function ProyectoGanttPage() {
 
   useEffect(() => {
     loadData();
+    window.addEventListener('obratrack_cloud_synced', loadData);
+    return () => window.removeEventListener('obratrack_cloud_synced', loadData);
   }, [projectId]);
 
   const showToast = (msg: string) => {

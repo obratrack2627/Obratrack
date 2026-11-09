@@ -590,6 +590,33 @@ export class DataService {
     window.dispatchEvent(new Event('obratrack_cloud_synced'));
   }
 
+  async guardarEdicionProyecto(id: string, changes: Partial<Proyecto>): Promise<void> {
+    const actor = this.getActiveUser();
+    if (!actor?.empresa_id) throw new Error('Inicia sesión para guardar la obra.');
+    const sameSession = () => this.getActiveUser()?.id === actor.id && this.getActiveUser()?.empresa_id === actor.empresa_id;
+    const pushed = await this.pushToCloudServer();
+    if (!pushed.success) throw new Error(pushed.message);
+    const key = this.getTenantKey(KEYS.PROYECTOS);
+    const row = this.getItem<Proyecto[]>(key, []).find(project => project.id === id);
+    if (!row || !sameSession()) throw new Error('La obra ya no está disponible para esta sesión.');
+    const updated = { ...row, ...changes, id, empresa_id: actor.empresa_id };
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session?.access_token || !sameSession()) throw new Error('Renueva tu sesión para guardar.');
+    const response = await fetch('/api/supabase/sync', {
+      method: 'POST', signal: AbortSignal.timeout(20000),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}` },
+      body: JSON.stringify({ cambios: { proyectos: [updated] } }),
+    });
+    if (!response.ok) throw new Error('No se pudo confirmar el guardado. Conservamos el formulario para que puedas reintentar.');
+    // Una lectura iniciada antes del guardado no debe sobrescribir el resultado confirmado.
+    if (this.cloudPull) await this.cloudPull.promise;
+    if (!sameSession()) throw new Error('La sesión cambió durante el guardado.');
+    const rows = this.getItem<Proyecto[]>(key, []);
+    this.confirmedProjectStates.set(`${actor.empresa_id}:${id}`, { estado: updated.estado, revision: ++this.projectStateRevision });
+    this.setItem(key, rows.map(project => project.id === id ? { ...project, ...updated } : project), false);
+    window.dispatchEvent(new Event('obratrack_cloud_synced'));
+  }
+
   updateProyecto(id: string, data: Partial<Proyecto>): Proyecto | null {
     const defaultProjs = this.isDemoTenant() ? INITIAL_PROYECTOS : [];
     const proyectos = this.getItem<Proyecto[]>(this.getTenantKey(KEYS.PROYECTOS), defaultProjs);
