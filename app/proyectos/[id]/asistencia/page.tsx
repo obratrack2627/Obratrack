@@ -396,13 +396,13 @@ export default function ProyectoAsistenciaPage() {
             </div>
 
             {/* Agregar trabajador eventual en la jornada */}
-            <form onSubmit={handleAgregarObreroDia} className="flex items-center gap-2 shrink-0">
+            <form onSubmit={handleAgregarObreroDia} className="flex w-full min-w-0 items-center gap-2 lg:w-auto lg:shrink-0">
               <input
                 type="text"
                 placeholder="Nombre obrero adicional..."
                 value={nuevoNombre}
                 onChange={(e) => setNuevoNombre(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-kraft-200 dark:border-[#2F3B4B] bg-[#FAF8F5] dark:bg-[#1E2530] text-xs text-navy-900 dark:text-white"
+                className="w-full min-w-0 flex-1 px-3 py-2 rounded-xl border border-kraft-200 dark:border-[#2F3B4B] bg-[#FAF8F5] dark:bg-[#1E2530] text-xs text-navy-900 dark:text-white"
               />
               <input
                 type="text"
