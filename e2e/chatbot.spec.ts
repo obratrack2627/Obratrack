@@ -1897,7 +1897,7 @@ test('los presupuestos usan tarjetas adaptables y el teléfono no recibe un colo
  await expect(card.getByRole('button',{name:'Ver / PDF',exact:true})).toBeVisible();
  await expect.poll(()=>card.locator('.money-amount').evaluateAll(nodes=>nodes.every(node=>(node.firstElementChild?.scrollWidth||0)<=node.clientWidth+1))).toBe(true);
  await expect(page.locator('meta[name="theme-color"]')).toHaveCount(0);
- const manifest=await(await page.request.get('/manifest.webmanifest')).json();expect(manifest.theme_color).toBeUndefined();
+ const manifest=await(await page.request.get('/manifest.webmanifest')).json();expect(manifest.theme_color).toBe('#1E1E1E');
  await card.getByLabel(`Obra de ${quote.titulo_proyecto}`,{exact:true}).selectOption('p-existing');
  await expectMobileWidth(page);
  await expect(card).toBeVisible();
@@ -1907,4 +1907,22 @@ test('los presupuestos usan tarjetas adaptables y el teléfono no recibe un colo
  await expect(page.getByRole('main')).toHaveCSS('padding-left','256px');
  await expectMobileWidth(page);
  await page.screenshot({path:'/tmp/obratrack-budgets-desktop.png',fullPage:true});
+});
+
+test('la app instalada desde Chrome reemplaza el tema naranjo y lo conserva al cambiar de módulo', async ({page}) => {
+ await page.setViewportSize({width:390,height:844});
+ await setup(page,{},true);
+ await page.addInitScript(()=>{
+  const original=window.matchMedia.bind(window);
+  window.matchMedia=(query:string)=>{const media=original(query);if(query==='(display-mode: standalone)')Object.defineProperty(media,'matches',{value:true});return media;};
+  // Representa los metadatos de una instalación anterior a la actualización.
+  document.addEventListener('DOMContentLoaded',()=>{const meta=document.createElement('meta');meta.name='theme-color';meta.content='#FF6A00';document.head.appendChild(meta);},{once:true});
+ });
+ await page.goto('/proyectos');
+ await expect.poll(()=>page.locator('meta[name="theme-color"]').evaluateAll(nodes=>nodes.length>0 && nodes.every(node=>node.getAttribute('content')==='#1E1E1E'))).toBe(true);
+ const manifest=await(await page.request.get('/manifest.webmanifest')).json();
+ expect(manifest.theme_color).toBe('#1E1E1E');expect(manifest.id).toBe('/proyectos');expect(manifest.scope).toBe('/');
+ await page.getByRole('link',{name:'Terraza',exact:true}).click();
+ await expect(page).toHaveURL(/\/proyectos\/p-existing\/gantt/);
+ await expect.poll(()=>page.locator('meta[name="theme-color"]').evaluateAll(nodes=>nodes.length>0 && nodes.every(node=>node.getAttribute('content')==='#1E1E1E'))).toBe(true);
 });

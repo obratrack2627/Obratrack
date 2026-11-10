@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import CloudSync from '@/components/CloudSync';
 import ThemeProvider from '@/components/ThemeProvider';
+import InstalledAppTheme from '@/components/InstalledAppTheme';
 import ThemeToggle from '@/components/ThemeToggle';
 import ObraBotLauncher from '@/components/ObraBotLauncher';
 import WebSession from '@/components/WebSession';
@@ -23,6 +24,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeProvider>
+      <InstalledAppTheme />
       {isAuthPage ? (
         <main className="min-h-screen w-full bg-[var(--bg-page)] text-[var(--text-primary)] antialiased workspace-ui page-fade-enter transition-colors duration-200">
           <div className="fixed top-4 right-4 z-40 print:hidden">

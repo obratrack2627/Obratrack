@@ -6,10 +6,13 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'ObraTrack',
     description:
       'Plataforma SaaS de control de obras, presupuestos con IA, Carta Gantt, estados de pago y reportes de terreno para constructoras en Chile.',
+    id: '/proyectos',
+    scope: '/',
     start_url: '/proyectos',
     display: 'standalone',
     orientation: 'portrait',
     background_color: '#141A23',
+    theme_color: '#1E1E1E',
     lang: 'es-CL',
     categories: ['business', 'productivity', 'finance'],
     icons: [
