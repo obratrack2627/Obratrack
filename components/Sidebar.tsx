@@ -221,12 +221,8 @@ export default function Sidebar() {
         <div>
           <div className="hidden md:flex flex-col px-5 py-5 border-b border-[#2A2A2A]">
             <Link href="/dashboard" className="hover:opacity-95 transition-opacity">
-              <Logo variant="horizontal" theme="dark" size="md" withDescriptor={false} />
+              <Logo variant="horizontal" theme="dark" size="md" withTagline className="[&_p]:mt-1 [&_p]:text-[9px] [&_p]:leading-3 [&_p]:text-gray-400 [&_p]:whitespace-nowrap" />
             </Link>
-            <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center gap-1.5 text-[10px] font-heading font-medium text-gray-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#6B8F72] animate-pulse"></span>
-              <span>El <strong className="text-[#FF6A00]">copiloto</strong> digital del constructor</span>
-            </div>
           </div>
 
           {/* Navigation Links */}
