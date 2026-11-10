@@ -10,6 +10,11 @@ export function actionReply(result: any): string {
   if (result.tipo === 'crear_proyecto') return `Creé la obra ${result.detalles?.nombre || ''}.${typeof result.detalles?.monto_cotizado === 'number' ? ` El presupuesto es ${formatCLP(result.detalles.monto_cotizado)}.` : ''}`;
   if (['actualizar_cliente','actualizar_trabajador'].includes(result.tipo)) return `Actualicé los datos de ${result.detalles?.nombre || 'la ficha'}.\n${result.resultado_texto || ''}`;
   if (result.tipo === 'generar_mensaje_whatsapp') return `Preparé el texto, pero todavía no se ha enviado.\n\n${result.detalles?.mensaje || result.resultado_texto || ''}`;
+  if (['agregar_trabajador','agregar_trabajadores'].includes(result.tipo) && result.detalles?.trabajadores?.length) {
+    const names = result.detalles.trabajadores.map((worker: any) => worker.nombre).filter(Boolean);
+    if (names.length) return `Registré ${names.length === 1 ? 'el trabajador' : 'los trabajadores'} ${names.join(', ')} en el equipo.`;
+  }
+  if (['asignar_trabajador','asignar_trabajadores'].includes(result.tipo) && result.detalles?.proyecto && result.detalles?.nombres?.length) return `Asigné a ${result.detalles.nombres.join(', ')} a la obra ${result.detalles.proyecto}.`;
   const titles: Record<string, string> = {
     crear_proyecto: 'Creé la obra', eliminar_proyecto: 'Eliminé la obra', crear_cliente: 'Registré el cliente',
     actualizar_cliente: 'Actualicé los datos del cliente', actualizar_trabajador: 'Actualicé los datos del trabajador',

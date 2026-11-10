@@ -81,9 +81,12 @@ export async function applyAIResponse(data: any, projectId?: string) {
     data.cotizacion || undefined;
   if (cotizacion)
     dataService.runLocalAI(() => dataService.saveCotizacion(cotizacion));
+  const executed = action?.result || data.accion_ejecutada;
+  const draft = data.accion_ejecutada?.detalles?.borrador_registro;
+  if (executed && draft) executed.detalles = {...(executed.detalles || {}), borrador_registro:draft};
   return {
     texto: action?.warning || (action?.result ? actionReply(action.result) : data.respuesta),
-    accion_ejecutada: action?.result || data.accion_ejecutada,
+    accion_ejecutada: executed,
     cotizacion_generada: cotizacion,
     comparacion_materiales: isMaterialComparison(data.comparacion_materiales)
       ? data.comparacion_materiales

@@ -1,3 +1,6 @@
+import { personIntake } from '../lib/whatsapp/person-intake';
+import { pendingPerson, withPersonContext } from '../lib/ai/person-context';
+import { conversationHistory } from '../lib/ai/conversation';
 import { test, expect, type Page } from "@playwright/test";
 import { normalizeQuote } from "../lib/ai/protocol";
 import { reviseQuote } from "../lib/quotes/revise";
@@ -2293,4 +2296,44 @@ test("sincronización móvil muestra el registro rechazado y conserva el pendien
       () => document.documentElement.scrollWidth <= innerWidth + 1,
     ),
   ).toBe(true);
+});
+
+test('ObraBot móvil conserva el alta tras consultar obras y registra teléfono local y asignación después de corregir solo el RUT', async ({page}) => {
+  await page.setViewportSize({width:390,height:844});
+  const db=await setup(page,{},true);db.proyectos[0].nombre='Baño';
+  let requests=0,registrations=0;
+  await page.route('**/api/cotizador/chat',async route=>{
+    requests++;const body=route.request().postDataJSON();
+    const draft=pendingPerson(body.historial,conversationHistory(body.historial,body.mensaje),db.proyectos);
+    if (body.mensaje==='¿Qué obras tengo?') {
+      expect(draft?.items[0].nombre).toBe('Ramón Escobar');
+      await route.fulfill({json:withPersonContext({respuesta:'Tienes la obra Baño en curso.',accion:null,cotizacion:null},draft)});return;
+    }
+    const step=personIntake([],null,draft,body.mensaje,db.proyectos,undefined,db.usuarios);
+    await route.fulfill({json:withPersonContext({respuesta:step.question || 'Voy a registrar la ficha y su asignación.',accion:step.actions.length?{tipo:'lote_acciones',acciones:step.actions}:null,cotizacion:null},step.draft)});
+  });
+  await page.route('**/rest/v1/rpc/crear_integrante_equipo',async route=>{
+    registrations++;const body=route.request().postDataJSON();
+    expect(body.p_datos.telefono_whatsapp).toBe('+56967345678');expect(body.p_proyecto).toBe('p-existing');
+    const worker={...body.p_datos,empresa_id:company,auth_user_id:null,is_dev:false};db.usuarios.push(worker);
+    await route.fulfill({json:worker,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'}});
+  });
+  await page.goto('/cotizador');
+  await send(page,'Necesito agregar un trabajador');
+  await expect(page.getByText(/Para registrar al trabajador falta:/).last()).toBeVisible();
+  await send(page,'Ramón Escobar, terreno, 67345678, rut 200635468, correo ramon@example.test, asignalo a la obra Baño');
+  await expect(page.getByText(/Para registrar Ramón Escobar falta:/).last()).toBeVisible();
+  expect(registrations).toBe(0);
+  await page.getByRole('link',{name:'ObraTrack',exact:true}).click();
+  await page.getByRole('button',{name:'Abrir ObraBot',exact:true}).click();
+  const widget=page.getByRole('dialog',{name:'Chat con ObraBot',exact:true});
+  await expect(widget.getByText(/Para registrar Ramón Escobar falta:/)).toBeVisible();
+  const widgetSend=async(text:string)=>{await widget.getByRole('textbox').fill(text);await widget.getByRole('button',{name:'Enviar mensaje',exact:true}).click();};
+  await widgetSend('¿Qué obras tengo?');
+  await expect(widget.getByText('Tienes la obra Baño en curso.',{exact:true})).toBeVisible();
+  await widgetSend('12.345.678-5');
+  await expect(page.getByText(/Registré el trabajador Ramón Escobar/).first()).toBeVisible();
+  expect(registrations).toBe(1);expect(requests).toBe(4);
+  await expect.poll(()=>db.proyecto_trabajadores?.some(row=>row.proyecto_id==='p-existing' && row.usuario_id===db.usuarios.find(user=>user.nombre==='Ramón Escobar')?.id)).toBe(true);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
 });

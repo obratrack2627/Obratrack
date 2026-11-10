@@ -1,3 +1,4 @@
+import { scopeProjectActions } from '@/lib/ai/actions';
 import { projectStatusCommand } from '@/lib/ai/project-status-command';
 import { actionReply } from '@/lib/ai/action-reply';
 import { projectDeadlineAnswer } from '@/lib/ai/project-deadlines';
@@ -271,10 +272,14 @@ export async function processPersonalMessage(
   }
   if (!confirmationResponse && !pendingProject && !chosenBudget && nativeBudget?.grupo_id && !candidates.length) confirmationResponse = 'No se pudieron recuperar las alternativas. Revisa el presupuesto en ObraTrack.';
   let analysisFailed = false;
+  let localRegistration: ReturnType<typeof personIntake> | null = null;
+  let registrationReply: any = null;
   try {
     const verifiedDeadlines = !attachment ? projectDeadlineAnswer(text, deadlineProjects, activeProject || undefined) : null;
     const statusCommand = !attachment ? projectStatusCommand(text, tables.proyectos, activeProject, conversationRows.slice().reverse().flatMap((row: any) => [{ rol: 'user' as const, texto: row.texto || '' }, { rol: 'model' as const, texto: row.respuesta || '' }])) : null;
-    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : statusCommand || verifiedDeadlines || await deps.chat(
+    localRegistration = !attachment && user.rol !== 'terreno' ? personIntake([], null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios) : null;
+    registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
+    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : statusCommand || verifiedDeadlines || registrationReply || await deps.chat(
       conversationRows
         .slice()
         .reverse()
@@ -415,10 +420,10 @@ export async function processPersonalMessage(
         if (intake.question) response = intake.question;
       }
     }
-    const person = personIntake(actions, 'registro_propuesto' in result ? result.registro_propuesto : null, pendingPerson, text, service.getProyectos());
+    const person = result === registrationReply && localRegistration ? localRegistration : personIntake(actions, 'registro_propuesto' in result ? result.registro_propuesto : null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios);
     if (user.rol === 'terreno' && (person.draft || person.result || person.actions.some(a => ['crear_cliente','agregar_trabajador','agregar_trabajadores'].includes(a.tipo))))
       throw new Error('Solo administradores y supervisores pueden registrar personas.');
-    actions = person.actions;
+    actions = scopeProjectActions(person.actions, activeProject, service.getProyectos());
     candidatePerson = person.prepared || person.draft || pendingPerson;
     nextPerson = person.draft;
     if (person.question) response = person.question;

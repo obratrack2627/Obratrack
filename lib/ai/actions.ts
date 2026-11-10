@@ -1,3 +1,4 @@
+import { AIError } from './errors';
 import { flattenActions, type AIAction } from './protocol';
 import { checkTeamContact } from './contacts';
 import { registrationFields } from '@/lib/registrations';
@@ -163,6 +164,19 @@ export function prepareActionPlan(
         projects.splice(index, 1);
       }
     }
+  }
+  return actions;
+}
+
+
+/** Completar solo la obra inequívoca del contexto autorizado, nunca la primera de una lista. */
+export function scopeProjectActions(input: unknown, reference: string | undefined | null, projects: {id:string}[], selectedId?: string) {
+  const actions = flattenActions(input);
+  const validReference = reference && projects.some(project => project.id === reference) ? reference : undefined;
+  for (const action of actions) {
+    if (!PROJECT_ACTIONS.has(action.tipo)) continue;
+    if (!action.proyecto_id && !action.proyecto_nombre && validReference) action.proyecto_id = validReference;
+    if (selectedId && action.proyecto_id && action.proyecto_id !== selectedId) throw new AIError('PROJECT_CONTEXT', 'Esta acción corresponde a otra obra. Abre su asistente o usa el chat general.', 422);
   }
   return actions;
 }

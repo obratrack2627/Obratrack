@@ -3,7 +3,7 @@ export type PersonDraft = { tipo: 'trabajador' | 'cliente'; nombre?: string; rut
 export function registrationFields(input: PersonDraft) {
   const draft = { ...input };
   const missing: string[] = [];
-  const fields: Record<string, string> = { nombre: draft.tipo === 'cliente' ? 'Nombre o razón social' : 'Nombre completo', rut: 'RUT válido', telefono: 'Teléfono con código de país', email: 'Correo electrónico' };
+  const fields: Record<string, string> = { nombre: draft.tipo === 'cliente' ? 'Nombre o razón social' : 'Nombre completo', rut: 'RUT válido', telefono: 'Teléfono', email: 'Correo electrónico' };
   for (const [field, label] of Object.entries(fields)) {
     const value = draft[field as keyof PersonDraft];
     if (typeof value !== 'string' || !value.trim()) { missing.push(label); continue; }

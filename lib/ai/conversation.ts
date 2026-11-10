@@ -43,7 +43,13 @@ export function conversationHistory(input: unknown, query: string): Conversation
 // Solo texto para la API: las copias de cotizaciones y datos locales no se envían
 // como si fueran registros guardados. La cotización vigente se consulta por ID.
 export function conversationRequest(input: unknown, query: string) {
-  return conversationHistory(input, query).map((turn) => ({ remitente: turn.rol === 'user' ? 'usuario' : 'agente', texto: turn.texto }));
+  const selected = conversationHistory(input, query).map((turn) => ({ remitente: turn.rol === 'user' ? 'usuario' : 'agente', texto: turn.texto }));
+  if (Array.isArray(input)) {
+    const last = input.findLast(row => row?.rol === 'model' || row?.remitente === 'agente');
+    const model = selected.findLast(row => row.remitente === 'agente');
+    if (last?.accion_ejecutada && model) Object.assign(model, {registro_pendiente:last.accion_ejecutada?.detalles?.borrador_registro || null});
+  }
+  return selected;
 }
 export const conversationRules = `TRATO CON EL CONSTRUCTOR O CONTRATISTA:
 - Habla de tú, con respeto y cercanía, como un colaborador que conoce el trabajo en obra. Usa español natural de Chile, sin caricaturas, exceso de confianza ni apodos como jefe, patrón o maestro si el usuario no los usa.

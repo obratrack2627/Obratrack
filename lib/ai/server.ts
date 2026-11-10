@@ -1,3 +1,7 @@
+import { personIntake } from '@/lib/whatsapp/person-intake';
+import { pendingPerson, withPersonContext } from './person-context';
+import { flattenActions } from './protocol';
+import { scopeProjectActions } from './actions';
 import { projectStatusCommand } from './project-status-command';
 import { conversationProjectId } from './project-reference';
 import { isProjectDeadlineQuestion, projectDeadlineAnswer } from './project-deadlines';
@@ -97,7 +101,7 @@ export async function readAIRequest(request: NextRequest) {
       400,
     );
   const historial = conversationHistory(body.historial, body.mensaje);
-  return { ...body, mensaje: body.mensaje.trim(), historial };
+  return { ...body, mensaje: body.mensaje.trim(), historial, historial_original: body.historial };
 }
 
 // Dependencias explícitas permiten probar la ruta sin una clave ni una base de producción.
@@ -129,7 +133,16 @@ export function createChatHandler(
           "El asistente de IA requiere el Plan Pro o Plan Pro IA.",
           403,
         );
-      const finish = async (result: any, currentId?: string) => {
+      let registrationDraft = pendingPerson(body.historial_original, body.historial, tables.proyectos, projectId);
+      const finish = async (result: any, currentId?: string, prepared?: ReturnType<typeof personIntake>) => {
+        const registration = prepared || personIntake(flattenActions(result.accion), result.registro_propuesto, registrationDraft, body.mensaje, tables.proyectos, projectId, tables.usuarios);
+        if ((registration.prepared || (registration.question && registration.draft)) && company.plan_id !== 'pro_ia') throw new AIError('PLAN_REQUIRED', 'Los registros y cambios por ObraBot requieren Pro IA.', 403);
+        if ((registration.prepared || (registration.question && registration.draft)) && user.rol === 'terreno') throw new AIError('ACTION_FORBIDDEN', 'Solo administradores y supervisores pueden registrar personas.', 403);
+        registrationDraft = registration.draft;
+        const scoped = scopeProjectActions(registration.actions, conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId), tables.proyectos, projectId);
+        result.accion = scoped.length === 1 ? scoped[0] : scoped.length ? {tipo:'lote_acciones',acciones:scoped} : null;
+        if (registration.question) result.respuesta = registration.question;
+        Object.assign(result, withPersonContext(result, registrationDraft));
         const actions = checkActionPermissions(
           user,
           result.accion,
@@ -171,13 +184,13 @@ export function createChatHandler(
           `web:${user.id}:${requestId}`,
           "plataforma",
         );
-        return NextResponse.json({
+        return NextResponse.json(withPersonContext({
           ...result,
           respuesta: action.resultado_texto,
           accion: null,
           cotizacion: null,
           accion_ejecutada: action,
-        });
+        }, registrationDraft));
       };
       if (!["admin", "supervisor", "terreno"].includes(user.rol))
         throw new AIError(
@@ -185,10 +198,17 @@ export function createChatHandler(
           "Tu cuenta no tiene acceso al asistente de obras.",
           403,
         );
+      if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
+      const localRegistration = personIntake([], null, registrationDraft, body.mensaje, tables.proyectos, projectId, tables.usuarios);
+      if (localRegistration.question || localRegistration.actions.length) {
+        const result = {respuesta:localRegistration.question || 'Voy a registrar la ficha y su asignación.',accion:null,cotizacion:null,sugerencias:[]};
+        await finish(result, projectId, localRegistration);
+        return NextResponse.json(result);
+      }
       if (isProjectDeadlineQuestion(body.mensaje)) {
         if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
         const verified = projectDeadlineAnswer(body.mensaje, tables.proyectos, projectId);
-        if (verified) return NextResponse.json(verified);
+        if (verified) return NextResponse.json(withPersonContext(verified, registrationDraft));
       }
       if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
       const referencedId = conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId);
@@ -212,7 +232,7 @@ export function createChatHandler(
         canonicalBudget = data;
         return data?.cotizacion || null;
       };
-      const capability = { acciones_habilitadas: company.plan_id === "pro_ia" };
+      const capability = { registro_persona: registrationDraft, acciones_habilitadas: company.plan_id === "pro_ia" };
       if (projectId) {
         if (!/^[a-zA-Z0-9_-]+$/.test(projectId))
           throw new AIError("PROJECT_INVALID", "La obra no es válida.", 400);

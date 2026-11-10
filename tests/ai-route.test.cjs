@@ -513,3 +513,40 @@ test('el chat de una obra no propone modificar otra aunque se mencione su nombre
  const out=await handler(makeRequest({mensaje:'Cancela la obra Obra Sur'}),'north');
  assert.equal(out.status,422);assert.equal((await out.json()).code,'PROJECT_CONTEXT');
 });
+
+test('web y widget conservan el registro entre mensajes y consultas sin depender del modelo para completar teléfonos', async()=>{
+  const {conversationRequest}=require('../lib/ai/conversation.ts');
+  fixture.tables.set('proyectos',[{id:'bath',nombre:'Baño',empresa_id:'company-a'},{id:'terrace',nombre:'Terraza',empresa_id:'company-a'}]);
+  let calls=0;
+  const handler=createChatHandler({authorize:authorized,global:async()=>{calls++;return {...response,respuesta:'Baño y Terraza están en curso.'}},project:async()=>{throw Error('No debe llamar al modelo para el registro');}});
+  let messages=[];
+  async function send(message,scope){
+    const result=await handler(makeRequest({mensaje:message,historial:conversationRequest(messages,message)}),scope);
+    assert.equal(result.status,200);const data=await result.json();
+    messages.push({remitente:'usuario',texto:message},{remitente:'agente',texto:data.respuesta,accion_ejecutada:data.accion_ejecutada});
+    return data;
+  }
+  let reply=await send('Necesito agregar un trabajador');
+  assert.match(reply.respuesta,/Nombre completo/);assert.equal(calls,0);
+  reply=await send('Ramón Escobar, terreno, 67345678, rut 200635468, correo ramon@example.test, asignalo a la obra Baño');
+  assert.match(reply.respuesta,/RUT válido/);assert.doesNotMatch(reply.respuesta,/duración|Teléfono|Correo/);assert.equal(calls,0);
+  reply=await send('¿Qué obras tengo?');assert.equal(calls,1);assert.ok(reply.accion_ejecutada.detalles.borrador_registro);
+  reply=await send('12.345.678-5');
+  assert.equal(calls,1);assert.equal(reply.accion.tipo,'lote_acciones');
+  assert.equal(reply.accion.acciones[0].telefono,'+56967345678');assert.equal(reply.accion.acciones[1].proyecto_id,'bath');
+});
+
+test('una gestión de seguimiento usa la obra del contexto y no vuelve a pedirla si es inequívoca',async()=>{
+ fixture.tables.set('proyectos',[{id:'bath',nombre:'Baño',empresa_id:'company-a'},{id:'terrace',nombre:'Terraza',empresa_id:'company-a'}]);
+ const handler=createChatHandler({authorize:authorized,global:async()=>({...response,accion:{tipo:'registrar_pago',monto:50000}}),project:async()=>response});
+ const out=await handler(makeRequest({mensaje:'Registra un abono de 50 mil',historial:[{remitente:'usuario',texto:'Veamos Baño'},{remitente:'agente',texto:'Baño está en curso.'}]}));
+ const data=await out.json();assert.equal(out.status,200);assert.equal(data.accion.proyecto_id,'bath');
+});
+
+test('el registro rápido tampoco permite saltarse la pertenencia del chat de una obra',async()=>{
+ const never=async()=>{throw Error('No llamar al modelo');};
+ const handler=createChatHandler({authorize:authorized,global:never,project:never});
+ const out=await handler(makeRequest({mensaje:'Agrega al trabajador Ramón Escobar'}),'other-company-project');
+ assert.equal(out.status,403);assert.equal((await out.json()).code,'PROJECT_FORBIDDEN');
+ assert.ok(!fixture.calls.some(call=>['upsert','update'].includes(call.mode)));
+});

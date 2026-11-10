@@ -171,3 +171,28 @@ Aplicar `supabase/permisos_obra.sql` y después `supabase/registro_constructor.s
 El registro crea empresa y perfil en una transacción de Supabase Auth, con plan Gratis. Si el correo requiere confirmación y todavía no hay sesión, el navegador no intenta crear registros relacionales ni inventa una empresa local. Al iniciar sesión consulta `completar_registro_actual`, que reutiliza el perfil propio y recupera un alta anterior incompleta cuando sus datos lo permiten. Las invitaciones de empleados continúan por el servidor. Las migraciones no reasignan los usuarios ni planes existentes.
 
 `flujo_obra.sql` también añade `foto_url` a los imprevistos: el formulario y la sincronización escriben esa evidencia, incluso cuando su valor es nulo.
+
+## Registro conversacional compartido
+
+La web (chat general, chat por obra y ventana flotante) y WhatsApp usan el mismo
+intérprete de altas de clientes y trabajadores. Conserva el borrador en el historial
+existente, también durante consultas intermedias, y solicita solo los datos
+obligatorios faltantes o inválidos. No agrega columnas ni nuevas tablas.
+
+Los móviles chilenos de ocho dígitos reciben `+569`; los de nueve que comienzan
+por `9`, `+56`. Un RUT etiquetado o un presupuesto no se interpreta como teléfono.
+Los campos ajenos a una operación se descartan antes de validarla: registrar una
+persona no exige días, partidas ni presupuesto. Los permisos y la validación del
+RUT siguen vigentes. Una ficha existente con el mismo RUT se reutiliza al asignarla;
+las diferencias de contacto requieren aclaración antes de modificarla.
+
+Las gestiones de seguimiento usan la obra identificada inequívocamente en el
+contexto autorizado. Una referencia ambigua requiere aclaración. Las altas y
+asignaciones siguen confirmándose después del guardado; una repetición automática
+del mismo mensaje de Meta conserva la idempotencia existente.
+
+El respaldo anterior a esta corrección es
+`backup/antes-contexto-obrabot-2026-11-10`. Para revertir únicamente este cambio
+sin modificar los registros: `git revert ai/obrabot-contexto-2026-11-10` y publicar
+la reversión en `main`. No cambia la configuración del proveedor de IA ni requiere
+migraciones SQL.

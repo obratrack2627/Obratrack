@@ -173,9 +173,9 @@ export default function CopilotoObreroPage() {
       const data = await requestAI(obraSeleccionada?`/api/proyectos/${obraSeleccionada}/chat`:'/api/cotizador/chat', {
         mensaje: msgToSend, historial: conversationRequest(mensajesChat.filter(m=>(m.obra_contexto_id||'')===obraSeleccionada), msgToSend), contexto_db: aiContext(), contexto_cotizacion: ultimaCotizacion,
       });
-      const processed = await applyAIResponse(data);
+      const processed = await applyAIResponse(data, obraSeleccionada || undefined);
       reloadData();
-      if (processed.accion_ejecutada) showToast(processed.accion_ejecutada.titulo);
+      if (processed.accion_ejecutada && processed.accion_ejecutada.tipo !== 'solicitar_datos_persona') showToast(processed.accion_ejecutada.titulo);
 
       const agentMsg: MensajeChatCotizador = {
         id: 'm-a-' + Date.now(),
@@ -314,7 +314,7 @@ export default function CopilotoObreroPage() {
                       {/* ============================================================= */}
                       {/* TARJETA INTERACTIVA DE ACCIÓN EJECUTADA POR LA IA */}
                       {/* ============================================================= */}
-                      {m.accion_ejecutada && (
+                      {m.accion_ejecutada && m.accion_ejecutada.tipo !== 'solicitar_datos_persona' && (
                         <div className="mt-3 bg-kraft-50 dark:from-[#1E2634] dark:to-[#18202C] border border-kraft-200 rounded-2xl p-3.5 space-y-2 text-navy-900 dark:text-gray-100 animate-in fade-in">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-mono font-bold uppercase text-obra-orange flex items-center gap-1.5">

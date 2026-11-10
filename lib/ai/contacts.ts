@@ -35,7 +35,7 @@ export function validateContactAction(action: Record<string, any>) {
   }
   if (action.telefono) {
     const phone = canonicalPhone(action.telefono);
-    if (!phone || !/^[+\d\s().-]+$/.test(action.telefono)) throw new AIError('CONTACT_INVALID', 'Indica un teléfono válido con código de país, por ejemplo +56912345678.', 422);
+    if (!phone || !/^[+\d\s().-]+$/.test(action.telefono)) throw new AIError('CONTACT_INVALID', 'Indica un teléfono válido; puedes usar 9 XXXX XXXX o +56 9 XXXX XXXX.', 422);
     action.telefono = `+${phone}`;
   }
   if (action.rut) {

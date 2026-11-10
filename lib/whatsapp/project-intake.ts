@@ -1,3 +1,4 @@
+import { phonesInText } from '@/lib/phone';
 import { canonicalPhone } from "./meta";
 import { resolveEntity } from "@/lib/ai/actions";
 import { AIError } from "@/lib/ai/errors";
@@ -148,14 +149,14 @@ export function projectIntake(
         .trim()
         .slice(0, 150);
   }
+  const literalPhones = phonesInText(userText);
+  if (literalPhones.length === 1 && (/\b(tel[eé]fono|celular|whatsapp)\b/i.test(userText) || (previous?.monto_cotizado > 0 && previous?.cliente_nombre && !previous?.cliente_telefono && /^[+\d ().-]+$/.test(userText.trim())))) draft.cliente_telefono = '+' + literalPhones[0];
   if (text(draft.cliente_telefono)) {
     const phone = canonicalPhone(draft.cliente_telefono);
     const known = [previous?.cliente_telefono, client?.telefono].some(
       (p) => p && canonicalPhone(p) === phone,
     );
-    const inText = (userText.match(/\+?[\d][\d\s().-]{6,20}\d/g) || []).some(
-      (p) => canonicalPhone(p) === phone,
-    );
+    const inText = literalPhones.includes(phone);
     if (!phone || (!known && !inText)) delete draft.cliente_telefono;
     else draft.cliente_telefono = "+" + phone;
   }
@@ -179,7 +180,7 @@ export function projectIntake(
   )
     missing.push("Correo electrónico del cliente");
   if (!draft.cliente_telefono)
-    missing.push("Teléfono del cliente con código de país");
+    missing.push("Teléfono del cliente");
   if (missing.length) {
     const question =
       "Para crear la obra necesito estos datos:\n" +

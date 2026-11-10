@@ -1,3 +1,4 @@
+import { relevantActionFields } from './action-fields';
 import type { CotizacionEstimacion } from "@/types/database";
 import { AIError } from "./errors";
 import { commercialLines, agreedTotals, paymentMilestones } from '@/lib/quotes/commercial';
@@ -90,7 +91,7 @@ export function flattenActions(input: any, depth = 0): AIAction[] {
 export function validateAction(raw: any): AIAction {
   if (!raw || typeof raw !== "object" || !ACTION_TYPES.includes(raw.tipo))
     fail("La IA propuso una acción que la plataforma no admite.");
-  const a: AIAction = JSON.parse(JSON.stringify(raw));
+  const a: AIAction = relevantActionFields(JSON.parse(JSON.stringify(raw)));
   if (a.tipo === 'actualizar_proyecto' && typeof a.estado === 'string') {
     const aliases: Record<string, string> = { terminada:'terminado', finalizada:'terminado', finalizado:'terminado', activa:'activo', 'en curso':'activo', pausada:'pausado', cancelado:'cancelada' };
     a.estado = aliases[a.estado.toLowerCase()] || a.estado;

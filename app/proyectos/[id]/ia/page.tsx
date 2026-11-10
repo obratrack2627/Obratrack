@@ -250,7 +250,7 @@ export default function ProyectoIAPage() {
       });
       const processed = await applyAIResponse(data, projectId);
       loadData();
-      if (processed.accion_ejecutada) showToast(processed.accion_ejecutada.titulo);
+      if (processed.accion_ejecutada && processed.accion_ejecutada.tipo !== 'solicitar_datos_persona') showToast(processed.accion_ejecutada.titulo);
 
       const agenteMsg: MensajeChatProyecto = {
         id: 'agt-p-' + Date.now(),
@@ -510,7 +510,7 @@ export default function ProyectoIAPage() {
                     </div>
 
                     {/* Tarjeta de Cambio guardado */}
-                    {m.accion_ejecutada && (
+                    {m.accion_ejecutada && m.accion_ejecutada.tipo !== 'solicitar_datos_persona' && (
                       <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-3 space-y-1.5 text-left animate-in fade-in-50">
                         <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold font-heading text-xs">
                           <CheckCircle2 className="w-4 h-4" />

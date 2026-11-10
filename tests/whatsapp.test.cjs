@@ -1197,3 +1197,20 @@ test('WhatsApp completa la selección de obra sin volver a preguntar por el esta
  assert.equal(saved.p_changed.proyectos[0].id,'b');assert.equal(saved.p_changed.proyectos[0].estado,'cancelada');
  assert.match(out.respuesta,/Obra Sur quedó como cancelada/);
 });
+
+test('WhatsApp completa el caso de Ramón con teléfono local y RUT corregido sin pedir duración ni perder contexto',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'bath',nombre:'Baño',empresa_id:user.empresa_id},{id:'terrace',nombre:'Terraza',empresa_id:user.empresa_id}];
+ let modelCalls=0,captured;const base=sb.rpc.bind(sb);sb.rpc=async(name,params)=>{captured=params;return base(name,params);};
+ const deps={chat:async()=>{modelCalls++;return {respuesta:'Baño y Terraza están en curso.',accion:null,cotizacion:null};}};
+ const message=(id,body)=>({id,from:'56912345678',type:'text',text:{body}});
+ await processPersonalMessage(sb,message('ramon-start','Necesito agregar un trabajador'),deps);
+ assert.equal(modelCalls,0);assert.equal(captured.p_changed.usuarios.length,0);
+ const incomplete=await processPersonalMessage(sb,message('ramon-data','Ramón Escobar, terreno, 67345678, rut 200635468, correo ramon@example.test, asignalo a la obra Baño'),deps);
+ assert.match(incomplete.respuesta,/RUT válido/);assert.doesNotMatch(incomplete.respuesta,/duración|Teléfono|Correo/);
+ await processPersonalMessage(sb,message('ramon-query','¿Qué obras tengo?'),deps);assert.equal(modelCalls,1);
+ const complete=await processPersonalMessage(sb,message('ramon-rut','12.345.678-5'),deps);
+ assert.equal(modelCalls,1);assert.match(complete.respuesta,/Registré el trabajador/);
+ assert.equal(captured.p_changed.usuarios.length,1);assert.equal(captured.p_changed.usuarios[0].telefono_whatsapp,'+56967345678');
+ assert.equal(captured.p_changed.proyectos[0].id,'bath');assert.equal(captured.p_acciones.borrador_registro,null);
+ const commits=sb.commits;await processPersonalMessage(sb,message('ramon-rut','12.345.678-5'),deps);assert.equal(sb.commits,commits);
+});
