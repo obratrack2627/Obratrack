@@ -11,8 +11,6 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/proyectos',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#141A23',
-    theme_color: '#1E1E1E',
     lang: 'es-CL',
     categories: ['business', 'productivity', 'finance'],
     icons: [
