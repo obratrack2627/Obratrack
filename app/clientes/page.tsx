@@ -55,6 +55,7 @@ export default function ClientesPage() {
 
   // Filtros y Vista
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'activos' | 'con_obras' | 'sin_obras'>('todos');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   // Formulario nuevo cliente
@@ -172,19 +173,34 @@ export default function ClientesPage() {
     loadData();
   };
 
+  // Sets auxiliares para filtros de clientes por obras
+  const clientesIdsActivos = useMemo(
+    () => new Set(proyectos.filter((p) => p.estado === 'activo').map((p) => p.cliente_id).filter(Boolean)),
+    [proyectos]
+  );
+  const clientesIdsConObras = useMemo(
+    () => new Set(proyectos.filter((p) => p.estado !== 'cancelada').map((p) => p.cliente_id).filter(Boolean)),
+    [proyectos]
+  );
+
   // Filtrado reactivo
   const filteredClientes = useMemo(() => {
     return clientes.filter((c) => {
       const term = searchTerm.toLowerCase();
-      return (
+      const matchesSearch =
         c.nombre.toLowerCase().includes(term) ||
         (c.rut && c.rut.toLowerCase().includes(term)) ||
         (c.email && c.email.toLowerCase().includes(term)) ||
         (c.telefono && c.telefono.toLowerCase().includes(term)) ||
-        (c.direccion && c.direccion.toLowerCase().includes(term))
-      );
+        (c.direccion && c.direccion.toLowerCase().includes(term));
+
+      if (!matchesSearch) return false;
+      if (statusFilter === 'activos') return clientesIdsActivos.has(c.id);
+      if (statusFilter === 'con_obras') return clientesIdsConObras.has(c.id);
+      if (statusFilter === 'sin_obras') return !clientesIdsConObras.has(c.id);
+      return true;
     });
-  }, [clientes, searchTerm]);
+  }, [clientes, searchTerm, statusFilter, clientesIdsActivos, clientesIdsConObras]);
 
   // Métricas (excluyendo obras canceladas)
   const proyectosVigentes = proyectos.filter((p) => p.estado !== 'cancelada');
@@ -275,56 +291,150 @@ export default function ClientesPage() {
         </div></CompactSummary>
 
         {/* Barra de Filtros, Búsqueda y Selector de Vista */}
-        <div className="bg-white border border-kraft-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Buscar por nombre, RUT, teléfono, email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs text-navy-900 focus:outline-none focus:border-obra-orange font-sans"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
-              >
-                ✕
-              </button>
-            )}
+        <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3 min-w-0">
+          {/* Fila Superior: Buscador + Selector de Vista */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 min-w-0">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre, RUT, teléfono, email o dirección..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full h-10 pl-10 pr-8 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs text-navy-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-obra-orange focus:bg-white dark:focus:bg-[#141A23] transition-colors font-sans"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full hover:bg-kraft-200 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center justify-center text-xs transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+              <div className="flex items-center gap-1 bg-kraft-50 dark:bg-[#0F141C] p-1 rounded-xl border border-kraft-200 dark:border-[#263040] h-10">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={`px-2.5 h-full rounded-lg text-xs font-heading font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-navy-900 text-white dark:bg-white dark:text-navy-900 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
+                  }`}
+                  title="Vista en Tarjetas"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Tarjetas</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('table')}
+                  className={`px-2.5 h-full rounded-lg text-xs font-heading font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                    viewMode === 'table'
+                      ? 'bg-navy-900 text-white dark:bg-white dark:text-navy-900 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
+                  }`}
+                  title="Vista en Tabla"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Tabla</span>
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <span className="text-xs font-mono text-gray-500">
-              {filteredClientes.length} {filteredClientes.length === 1 ? 'resultado' : 'resultados'}
-            </span>
-            <div className="border-l border-kraft-200 pl-2 flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded-lg border transition-colors ${
-                  viewMode === 'grid'
-                    ? 'bg-navy-800 text-white border-navy-800'
-                    : 'bg-kraft-50 text-gray-600 border-kraft-200 hover:bg-kraft-100'
-                }`}
-                title="Vista en Tarjetas"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`p-1.5 rounded-lg border transition-colors ${
-                  viewMode === 'table'
-                    ? 'bg-navy-800 text-white border-navy-800'
-                    : 'bg-kraft-50 text-gray-600 border-kraft-200 hover:bg-kraft-100'
-                }`}
-                title="Vista en Tabla"
-              >
-                <List className="w-4 h-4" />
-              </button>
+          {/* Fila Inferior: Pestañas de Estado */}
+          <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-kraft-100 dark:border-[#1E2530] min-w-0">
+            <div
+              role="tablist"
+              aria-label="Filtrar clientes por estado de obras"
+              className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 -mx-1 px-1"
+            >
+              {(
+                [
+                  {
+                    value: 'todos',
+                    label: 'Todos',
+                    count: clientes.length,
+                    dot: 'bg-gray-400',
+                    activeClass:
+                      'bg-navy-900 text-white border-navy-900 dark:bg-white dark:text-navy-900 dark:border-white shadow-sm',
+                  },
+                  {
+                    value: 'activos',
+                    label: 'Con obras en curso',
+                    count: clientes.filter((c) => clientesIdsActivos.has(c.id)).length,
+                    dot: 'bg-obra-green',
+                    activeClass: 'bg-obra-green text-white border-obra-green shadow-sm',
+                  },
+                  {
+                    value: 'con_obras',
+                    label: 'Con obras asociadas',
+                    count: clientes.filter((c) => clientesIdsConObras.has(c.id)).length,
+                    dot: 'bg-blue-500',
+                    activeClass: 'bg-blue-600 text-white border-blue-600 shadow-sm',
+                  },
+                  {
+                    value: 'sin_obras',
+                    label: 'Sin obras',
+                    count: clientes.filter((c) => !clientesIdsConObras.has(c.id)).length,
+                    dot: 'bg-slate-400',
+                    activeClass: 'bg-slate-700 text-white border-slate-700 shadow-sm',
+                  },
+                ] as const
+              ).map((tab) => {
+                const isActive = statusFilter === tab.value;
+                return (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    key={tab.value}
+                    onClick={() => setStatusFilter(tab.value)}
+                    className={`h-8 px-3 rounded-xl text-xs font-heading font-semibold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition-all ${
+                      isActive
+                        ? tab.activeClass
+                        : 'bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border-kraft-200 dark:border-[#263040] hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
+                    }`}
+                  >
+                    {tab.value !== 'todos' && (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          isActive ? 'bg-white dark:bg-current' : tab.dot
+                        }`}
+                      />
+                    )}
+                    <span>{tab.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                        isActive
+                          ? 'bg-white/20 text-current'
+                          : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+
+            {(searchTerm || statusFilter !== 'todos') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('todos');
+                }}
+                className="text-xs font-heading font-bold text-obra-orange hover:underline shrink-0 pl-2 whitespace-nowrap"
+              >
+                Limpiar
+              </button>
+            )}
           </div>
         </div>
 

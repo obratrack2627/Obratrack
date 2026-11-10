@@ -10,6 +10,7 @@ import {
   Send,
   ChevronDown,
   X,
+  Search,
 } from "lucide-react";
 import { aiHeaders } from "@/lib/ai/client";
 import { dataService } from "@/lib/data-service";
@@ -227,32 +228,167 @@ export default function WhatsAppJefePanel() {
               {busy ? "Actualizando…" : "Actualizar registros"}
             </button>
           </div>
-          <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3 sm:p-4 space-y-3">
-            <div className="grid min-w-0 grid-cols-2 lg:grid-cols-4 gap-3">
-              <label className="col-span-2 lg:col-span-1 min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
-                Buscar
-                <input aria-label="Buscar registro" placeholder="Mensaje, autor o detalle…" value={search} onChange={e => change(setSearch)(e.target.value)} className="block w-full min-w-0 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100" />
-              </label>
-              <label className="min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
-                Tipo de registro
-                <select aria-label="Tipo de registro" value={type} onChange={e => change(setType)(e.target.value)} className="block w-full min-w-0 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100 truncate">
-                  <option value="">Todos los tipos</option>{Object.entries(labels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
+          <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3.5 sm:p-4 shadow-sm space-y-3 min-w-0">
+            <div className="grid min-w-0 grid-cols-2 lg:grid-cols-4 gap-2.5">
+              <div className="col-span-2 lg:col-span-1 relative min-w-0">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  aria-label="Buscar registro"
+                  placeholder="Buscar por mensaje, autor o detalle…"
+                  value={search}
+                  onChange={(e) => change(setSearch)(e.target.value)}
+                  className="block w-full min-w-0 h-10 pl-10 pr-8 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] text-xs text-navy-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-obra-orange"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => change(setSearch)("")}
+                    aria-label="Limpiar búsqueda"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full hover:bg-kraft-200 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center justify-center text-xs transition-colors"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <select
+                aria-label="Tipo de registro"
+                value={type}
+                onChange={(e) => change(setType)(e.target.value)}
+                className="block w-full min-w-0 h-10 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] px-3 text-xs font-medium text-navy-900 dark:text-gray-100 truncate focus:outline-none focus:border-obra-orange"
+              >
+                <option value="">Todos los tipos</option>
+                {Object.entries(labels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Filtrar registros por obra"
+                value={project}
+                onChange={(e) => change(setProject)(e.target.value)}
+                className="block w-full min-w-0 h-10 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] px-3 text-xs font-medium text-navy-900 dark:text-gray-100 truncate focus:outline-none focus:border-obra-orange"
+              >
+                <option value="">Todas las obras</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+              {staff && (
+                <select
+                  aria-label="Autor del registro"
+                  value={author}
+                  onChange={(e) => change(setAuthor)(e.target.value)}
+                  className="col-span-2 lg:col-span-1 block w-full min-w-0 h-10 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] px-3 text-xs font-medium text-navy-900 dark:text-gray-100 truncate focus:outline-none focus:border-obra-orange"
+                >
+                  <option value="">Todos los autores</option>
+                  {authors.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nombre}
+                    </option>
+                  ))}
                 </select>
-              </label>
-              <label className="min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
-                Obra
-                <select aria-label="Filtrar registros por obra" value={project} onChange={e => change(setProject)(e.target.value)} className="block w-full min-w-0 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100 truncate">
-                  <option value="">Todas las obras</option>{projects.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                </select>
-              </label>
-              {staff && <label className="col-span-2 lg:col-span-1 min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
-                Autor
-                <select aria-label="Autor del registro" value={author} onChange={e => change(setAuthor)(e.target.value)} className="block w-full min-w-0 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100 truncate">
-                  <option value="">Todos los autores</option>{authors.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-                </select>
-              </label>}
+              )}
             </div>
-            {(search || type || project || author) && <button type="button" onClick={() => {setSearch('');setType('');setProject('');setAuthor('');setPage(0);}} className="text-xs font-semibold text-obra-orange hover:underline">Limpiar filtros</button>}
+
+            <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-kraft-100 dark:border-[#1E2530] min-w-0">
+              <div
+                role="tablist"
+                aria-label="Filtrar registros por tipo"
+                className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 -mx-1 px-1"
+              >
+                {(
+                  [
+                    {
+                      value: "",
+                      label: "Todos",
+                      dot: "bg-gray-400",
+                      activeClass:
+                        "bg-navy-900 text-white border-navy-900 dark:bg-white dark:text-navy-900 dark:border-white shadow-sm",
+                    },
+                    {
+                      value: "fotografia",
+                      label: "Evidencia",
+                      dot: "bg-obra-orange",
+                      activeClass: "bg-obra-orange text-white border-obra-orange shadow-sm",
+                    },
+                    {
+                      value: "registro",
+                      label: "Registro de obra",
+                      dot: "bg-obra-green",
+                      activeClass: "bg-obra-green text-white border-obra-green shadow-sm",
+                    },
+                    {
+                      value: "cotizacion",
+                      label: "Cotización",
+                      dot: "bg-blue-500",
+                      activeClass: "bg-blue-600 text-white border-blue-600 shadow-sm",
+                    },
+                    {
+                      value: "consulta",
+                      label: "Consulta",
+                      dot: "bg-purple-500",
+                      activeClass: "bg-purple-600 text-white border-purple-600 shadow-sm",
+                    },
+                    {
+                      value: "datos_obra",
+                      label: "Datos pendientes",
+                      dot: "bg-amber-500",
+                      activeClass: "bg-amber-500 text-white border-amber-500 shadow-sm",
+                    },
+                    {
+                      value: "aviso",
+                      label: "Aviso al equipo",
+                      dot: "bg-slate-400",
+                      activeClass: "bg-slate-700 text-white border-slate-700 shadow-sm",
+                    },
+                  ] as const
+                ).map((cat) => {
+                  const isActive = type === cat.value;
+                  return (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      key={cat.value || "todos"}
+                      onClick={() => change(setType)(cat.value)}
+                      className={`h-8 px-3 rounded-xl text-xs font-heading font-semibold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition-all ${
+                        isActive
+                          ? cat.activeClass
+                          : "bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border-kraft-200 dark:border-[#263040] hover:bg-kraft-100 dark:hover:bg-[#1E2530]"
+                      }`}
+                    >
+                      {cat.value !== "" && (
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            isActive ? "bg-white dark:bg-current" : cat.dot
+                          }`}
+                        />
+                      )}
+                      <span>{cat.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {(search || type || project || author) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setType("");
+                    setProject("");
+                    setAuthor("");
+                    setPage(0);
+                  }}
+                  className="text-xs font-heading font-bold text-obra-orange hover:underline shrink-0 pl-2 whitespace-nowrap"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
           </div>
           {error && (
             <p

@@ -24,6 +24,7 @@ import {
   Smartphone,
   Calendar,
   DollarSign,
+  Search,
 } from 'lucide-react';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
@@ -47,6 +48,7 @@ export default function ProyectoCambiosPage() {
   const [cliente, setCliente] = useState<Cliente | null>(null);
   const [registros, setRegistros] = useState<ReclamoCambioObra[]>([]);
   const [filtroTipo, setFiltroTipo] = useState<string>('todos');
+  const [busqueda, setBusqueda] = useState<string>('');
   const [isMapsModalOpen, setIsMapsModalOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
@@ -251,8 +253,16 @@ export default function ProyectoCambiosPage() {
     showToast('Registro eliminado.');
   };
 
-  const registrosFiltrados =
-    filtroTipo === 'todos' ? registros : registros.filter((r) => r.tipo === filtroTipo);
+  const registrosFiltrados = registros.filter((r) => {
+    const matchTipo = filtroTipo === 'todos' || r.tipo === filtroTipo;
+    const q = busqueda.toLowerCase().trim();
+    const matchQuery =
+      !q ||
+      r.titulo.toLowerCase().includes(q) ||
+      (r.descripcion || '').toLowerCase().includes(q) ||
+      (r.solicitado_por || '').toLowerCase().includes(q);
+    return matchTipo && matchQuery;
+  });
 
   const totalCambiosMonto = registros
     .filter((r) => r.tipo === 'solicitud_cambio' && r.estado !== 'rechazado')
@@ -394,27 +404,128 @@ export default function ProyectoCambiosPage() {
           </div>
         </div></CompactSummary>
 
-        {/* Filtros por Tipo */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {[
-            { id: 'todos', label: `Todos (${registros.length})` },
-            { id: 'solicitud_cambio', label: 'Solicitudes de Cambio' },
-            { id: 'reclamo', label: 'Reclamos Cliente' },
-            { id: 'incidente', label: '⚠️ Incidencias Terreno' },
-            { id: 'accidente', label: 'Accidentes' },
-          ].map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setFiltroTipo(f.id)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-heading font-bold whitespace-nowrap transition-all ${
-                filtroTipo === f.id
-                  ? 'bg-[#1E1E1E] dark:bg-[#FF6A00] text-white shadow'
-                  : 'bg-white dark:bg-[#141A23] text-gray-600 dark:text-gray-300 border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00]'
-              }`}
+        {/* Barra de Búsqueda y Filtros por Tipo */}
+        <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3 min-w-0">
+          {/* Fila Superior: Buscador */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 min-w-0">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por título, detalle o solicitante..."
+                className="w-full h-10 pl-10 pr-8 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs text-navy-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-obra-orange focus:bg-white dark:focus:bg-[#141A23] transition-colors font-sans"
+              />
+              {busqueda && (
+                <button
+                  type="button"
+                  onClick={() => setBusqueda('')}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full hover:bg-kraft-200 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center justify-center text-xs transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Fila Inferior: Pestañas por Tipo */}
+          <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-kraft-100 dark:border-[#1E2530] min-w-0">
+            <div
+              role="tablist"
+              aria-label="Filtrar cambios e incidencias por tipo"
+              className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 -mx-1 px-1"
             >
-              {f.label}
-            </button>
-          ))}
+              {(
+                [
+                  {
+                    id: 'todos',
+                    label: 'Todos',
+                    count: registros.length,
+                    dot: 'bg-gray-400',
+                    activeClass:
+                      'bg-navy-900 text-white border-navy-900 dark:bg-white dark:text-navy-900 dark:border-white shadow-sm',
+                  },
+                  {
+                    id: 'solicitud_cambio',
+                    label: 'Solicitudes de Cambio',
+                    count: registros.filter((r) => r.tipo === 'solicitud_cambio').length,
+                    dot: 'bg-blue-500',
+                    activeClass: 'bg-blue-600 text-white border-blue-600 shadow-sm',
+                  },
+                  {
+                    id: 'reclamo',
+                    label: 'Reclamos Cliente',
+                    count: registros.filter((r) => r.tipo === 'reclamo').length,
+                    dot: 'bg-purple-500',
+                    activeClass: 'bg-purple-600 text-white border-purple-600 shadow-sm',
+                  },
+                  {
+                    id: 'incidente',
+                    label: 'Incidencias Terreno',
+                    count: registros.filter((r) => r.tipo === 'incidente').length,
+                    dot: 'bg-amber-500',
+                    activeClass: 'bg-amber-500 text-white border-amber-500 shadow-sm',
+                  },
+                  {
+                    id: 'accidente',
+                    label: 'Accidentes',
+                    count: registros.filter((r) => r.tipo === 'accidente').length,
+                    dot: 'bg-red-500',
+                    activeClass: 'bg-red-600 text-white border-red-600 shadow-sm',
+                  },
+                ] as const
+              ).map((f) => {
+                const isActive = filtroTipo === f.id;
+                return (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    key={f.id}
+                    onClick={() => setFiltroTipo(f.id)}
+                    className={`h-8 px-3 rounded-xl text-xs font-heading font-semibold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition-all ${
+                      isActive
+                        ? f.activeClass
+                        : 'bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border-kraft-200 dark:border-[#263040] hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
+                    }`}
+                  >
+                    {f.id !== 'todos' && (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          isActive ? 'bg-white dark:bg-current' : f.dot
+                        }`}
+                      />
+                    )}
+                    <span>{f.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                        isActive
+                          ? 'bg-white/20 text-current'
+                          : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {f.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {(busqueda || filtroTipo !== 'todos') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBusqueda('');
+                  setFiltroTipo('todos');
+                }}
+                className="text-xs font-heading font-bold text-obra-orange hover:underline shrink-0 pl-2 whitespace-nowrap"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Lista de Registros */}

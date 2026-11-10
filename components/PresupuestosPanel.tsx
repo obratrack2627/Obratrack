@@ -3,7 +3,7 @@ import MoneyAmount from './MoneyAmount';
 import ActionMenu from './ActionMenu';
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, FolderPlus } from "lucide-react";
+import { ArrowUpRight, FolderPlus, Search } from "lucide-react";
 import { aiHeaders } from "@/lib/ai/client";
 import { dataService } from "@/lib/data-service";
 import {
@@ -249,27 +249,153 @@ export default function PresupuestosPanel({
         </div>
       )}
 
-      <div className="grid min-w-0 grid-cols-1 sm:grid-cols-[minmax(0,1fr)_200px] gap-3 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3 sm:p-4">
-        <input
-          aria-label="Buscar presupuesto"
-          placeholder="Buscar obra o cliente"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full min-w-0 max-w-full rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-2.5 text-sm"
-        />
-        <select
-          aria-label="Filtrar por estado"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-2 text-sm"
-        >
-          <option value="todos">Todos los estados</option>
-          {budgetStatuses.map((s) => (
-            <option key={s} value={s}>
-              {labels[s]}
-            </option>
-          ))}
-        </select>
+      <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3 min-w-0">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 min-w-0">
+          <div className="relative flex-1 min-w-0">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              aria-label="Buscar presupuesto"
+              placeholder="Buscar por obra, cliente o alternativa..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full min-w-0 max-w-full h-10 pl-10 pr-8 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs text-navy-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-obra-orange focus:bg-white dark:focus:bg-[#141A23] transition-colors font-sans"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full hover:bg-kraft-200 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center justify-center text-xs transition-colors"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <select
+            aria-label="Filtrar por estado"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="w-full sm:w-52 min-w-0 h-10 px-3 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs font-medium text-navy-900 dark:text-gray-100 focus:outline-none focus:border-obra-orange truncate"
+          >
+            <option value="todos">Todos los estados ({rows.length})</option>
+            {budgetStatuses.map((s) => (
+              <option key={s} value={s}>
+                {labels[s]} ({rows.filter((r) => r.estado === s).length})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-kraft-100 dark:border-[#1E2530] min-w-0">
+          <div
+            role="tablist"
+            aria-label="Pestañas de estado de presupuesto"
+            className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 -mx-1 px-1"
+          >
+            {(
+              [
+                {
+                  value: "todos",
+                  label: "Todos",
+                  count: rows.length,
+                  dot: "bg-gray-400",
+                  activeClass:
+                    "bg-navy-900 text-white border-navy-900 dark:bg-white dark:text-navy-900 dark:border-white shadow-sm",
+                },
+                {
+                  value: "borrador",
+                  label: "Borrador",
+                  count: rows.filter((r) => r.estado === "borrador").length,
+                  dot: "bg-slate-400",
+                  activeClass: "bg-slate-700 text-white border-slate-700 shadow-sm",
+                },
+                {
+                  value: "enviada",
+                  label: "Enviada",
+                  count: rows.filter((r) => r.estado === "enviada").length,
+                  dot: "bg-amber-500",
+                  activeClass: "bg-amber-500 text-white border-amber-500 shadow-sm",
+                },
+                {
+                  value: "aprobada",
+                  label: "Aprobada",
+                  count: rows.filter((r) => r.estado === "aprobada").length,
+                  dot: "bg-obra-green",
+                  activeClass: "bg-obra-green text-white border-obra-green shadow-sm",
+                },
+                {
+                  value: "rechazada",
+                  label: "Rechazada",
+                  count: rows.filter((r) => r.estado === "rechazada").length,
+                  dot: "bg-red-500",
+                  activeClass: "bg-red-600 text-white border-red-600 shadow-sm",
+                },
+                {
+                  value: "no_elegida",
+                  label: "No elegida",
+                  count: rows.filter((r) => r.estado === "no_elegida").length,
+                  dot: "bg-purple-500",
+                  activeClass: "bg-purple-600 text-white border-purple-600 shadow-sm",
+                },
+                {
+                  value: "anulada",
+                  label: "Anulada",
+                  count: rows.filter((r) => r.estado === "anulada").length,
+                  dot: "bg-gray-400",
+                  activeClass: "bg-gray-600 text-white border-gray-600 shadow-sm",
+                },
+              ] as const
+            ).map((tab) => {
+              const isActive = filter === tab.value;
+              return (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  key={tab.value}
+                  onClick={() => setFilter(tab.value)}
+                  className={`h-8 px-3 rounded-xl text-xs font-heading font-semibold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition-all ${
+                    isActive
+                      ? tab.activeClass
+                      : "bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border-kraft-200 dark:border-[#263040] hover:bg-kraft-100 dark:hover:bg-[#1E2530]"
+                  }`}
+                >
+                  {tab.value !== "todos" && (
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        isActive ? "bg-white dark:bg-current" : tab.dot
+                      }`}
+                    />
+                  )}
+                  <span>{tab.label}</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                      isActive
+                        ? "bg-white/20 text-current"
+                        : "bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {(search || filter !== "todos" || groupFilter) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setFilter("todos");
+                setGroupFilter("");
+              }}
+              className="text-xs font-heading font-bold text-obra-orange hover:underline shrink-0 pl-2 whitespace-nowrap"
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
       </div>
 
       {groupFilter && <button type="button" className="text-sm text-obra-orange underline" onClick={() => setGroupFilter('')}>Ver todos los presupuestos</button>}

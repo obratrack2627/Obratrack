@@ -519,8 +519,78 @@ export default function ProyectoFinanzasPage() {
           </ActionMenu>
         </div>
 
-        <nav aria-label="Secciones de finanzas" className="flex flex-wrap gap-2 border-b border-kraft-200 pb-3 dark:border-[#263040]">
-          {[['resumen','Resumen'],['cobros','Cobros'],['materiales','Materiales'],['imprevistos','Imprevistos']].map(([id,label]) => <button type="button" key={id} onClick={() => setFinanceSection(id)} aria-pressed={financeSection === id} className={`rounded-xl px-4 py-2 text-sm font-semibold ${financeSection === id ? 'bg-navy-900 text-white dark:bg-obra-orange' : 'bg-kraft-100 text-gray-600 dark:bg-[#1E2530] dark:text-gray-200'}`}>{label}</button>)}
+        <nav
+          aria-label="Secciones de finanzas"
+          className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-3 sm:p-3.5 shadow-sm flex items-center gap-1.5 overflow-x-auto max-w-full min-w-0"
+        >
+          {(
+            [
+              {
+                id: 'resumen',
+                label: 'Resumen',
+                count: null,
+                dot: 'bg-gray-400',
+                activeClass:
+                  'bg-navy-900 text-white border-navy-900 dark:bg-white dark:text-navy-900 dark:border-white shadow-sm',
+              },
+              {
+                id: 'cobros',
+                label: 'Cobros',
+                count: pagos.length,
+                dot: 'bg-obra-green',
+                activeClass: 'bg-obra-green text-white border-obra-green shadow-sm',
+              },
+              {
+                id: 'materiales',
+                label: 'Materiales',
+                count: materiales.length,
+                dot: 'bg-blue-500',
+                activeClass: 'bg-blue-600 text-white border-blue-600 shadow-sm',
+              },
+              {
+                id: 'imprevistos',
+                label: 'Imprevistos',
+                count: imprevistos.length,
+                dot: 'bg-red-500',
+                activeClass: 'bg-red-600 text-white border-red-600 shadow-sm',
+              },
+            ] as const
+          ).map((sec) => {
+            const isActive = financeSection === sec.id;
+            return (
+              <button
+                type="button"
+                key={sec.id}
+                onClick={() => setFinanceSection(sec.id)}
+                aria-pressed={isActive}
+                className={`h-8 px-3 rounded-xl text-xs font-heading font-semibold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition-all ${
+                  isActive
+                    ? sec.activeClass
+                    : 'bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border-kraft-200 dark:border-[#263040] hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
+                }`}
+              >
+                {sec.id !== 'resumen' && (
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      isActive ? 'bg-white dark:bg-current' : sec.dot
+                    }`}
+                  />
+                )}
+                <span>{sec.label}</span>
+                {sec.count !== null && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                      isActive
+                        ? 'bg-white/20 text-current'
+                        : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {sec.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </nav>
         {/* KPI Cards & Semáforo de Rentabilidad Real */}
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
