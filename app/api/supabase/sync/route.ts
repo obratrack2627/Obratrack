@@ -1,9 +1,10 @@
-import { projectStatuses } from '@/lib/project-status';
+import { syncWriteFailure } from "@/lib/sync/failure";
+import { projectStatuses } from "@/lib/project-status";
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 import { loadAIContext, checkedRows } from "@/lib/ai/context";
-import { signRows } from '@/lib/supabase/private-files';
+import { signRows } from "@/lib/supabase/private-files";
 const mapping: Record<string, string> = {
   proyectos: "proyectos",
   clientes: "clientes",
@@ -18,14 +19,9 @@ const mapping: Record<string, string> = {
   asistencias: "asistencia_obreros",
   reportes_whatsapp: "reportes_whatsapp",
 };
-async function checked(query: any) {
+async function checked(query: any, record = "el registro") {
   const result = await query;
-  if (result.error)
-    throw new AIError(
-      "SYNC_SAVE",
-      "No se pudo confirmar la sincronización. Los cambios siguen pendientes en este dispositivo.",
-      503,
-    );
+  if (result.error) throw syncWriteFailure(result.error, record);
   return result.data;
 }
 async function validateSync(client: any, user: any, body: any) {
@@ -64,8 +60,15 @@ async function validateSync(client: any, user: any, body: any) {
           "Tu perfil solo puede registrar sus reportes y asistencia.",
           403,
         );
-      if (key === 'proyectos' && !projectStatuses.some(status => status.value === row.estado))
-        throw new AIError('SYNC_INVALID', 'El estado de la obra no es válido. Actualiza la página e intenta nuevamente.', 400);
+      if (
+        key === "proyectos" &&
+        !projectStatuses.some((status) => status.value === row.estado)
+      )
+        throw new AIError(
+          "SYNC_INVALID",
+          "El estado de la obra no es válido. Actualiza la página e intenta nuevamente.",
+          400,
+        );
       if (row.proyecto_id && !projects.has(row.proyecto_id))
         throw new AIError(
           "PROJECT_FORBIDDEN",
@@ -91,13 +94,24 @@ async function validateSync(client: any, user: any, body: any) {
           );
       if (key === "usuarios") {
         const existing = tables.usuarios.find((u) => u.id === row.id);
+        const editableTeamRole =
+          existing &&
+          user.rol === "admin" &&
+          !existing.auth_user_id &&
+          !existing.is_dev &&
+          ["supervisor", "terreno"].includes(existing.rol) &&
+          ["supervisor", "terreno"].includes(row.rol);
         if (
           (!existing &&
             (!["supervisor", "terreno"].includes(row.rol) ||
               row.auth_user_id)) ||
           (existing &&
-            (row.rol !== existing.rol ||
-              (row.auth_user_id || null) !== (existing.auth_user_id || null)))
+            ((Object.hasOwn(row, "rol") &&
+              row.rol !== existing.rol &&
+              !editableTeamRole) ||
+              (Object.hasOwn(row, "auth_user_id") &&
+                (row.auth_user_id || null) !==
+                  (existing.auth_user_id || null))))
         )
           throw new AIError(
             "SYNC_FORBIDDEN",
@@ -106,6 +120,7 @@ async function validateSync(client: any, user: any, body: any) {
           );
       }
     }
+  return tables;
 }
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -123,14 +138,45 @@ export async function GET(request: NextRequest) {
       : [];
     const mediaClient = client;
     const allowed = new Set<string>(ids);
-    const [documents, log, incidents, changes, reportFiles, payments] = await Promise.all([
-      signRows(tables.documentos_obra, ['archivo_url'], user.empresa_id, allowed, mediaClient),
-      signRows(tables.bitacora_entradas, ['foto_url'], user.empresa_id, allowed, mediaClient),
-      signRows(service.getImprevistos(), ['foto_url'], user.empresa_id, allowed, mediaClient),
-      signRows(tables.reclamos_cambios_obra, ['foto_url'], user.empresa_id, allowed, mediaClient),
-      signRows(reports, ['foto_url'], user.empresa_id, allowed, mediaClient),
-      signRows(service.getPagos(), ['comprobante_url'], user.empresa_id, allowed, mediaClient),
-    ]);
+    const [documents, log, incidents, changes, reportFiles, payments] =
+      await Promise.all([
+        signRows(
+          tables.documentos_obra,
+          ["archivo_url"],
+          user.empresa_id,
+          allowed,
+          mediaClient,
+        ),
+        signRows(
+          tables.bitacora_entradas,
+          ["foto_url"],
+          user.empresa_id,
+          allowed,
+          mediaClient,
+        ),
+        signRows(
+          service.getImprevistos(),
+          ["foto_url"],
+          user.empresa_id,
+          allowed,
+          mediaClient,
+        ),
+        signRows(
+          tables.reclamos_cambios_obra,
+          ["foto_url"],
+          user.empresa_id,
+          allowed,
+          mediaClient,
+        ),
+        signRows(reports, ["foto_url"], user.empresa_id, allowed, mediaClient),
+        signRows(
+          service.getPagos(),
+          ["comprobante_url"],
+          user.empresa_id,
+          allowed,
+          mediaClient,
+        ),
+      ]);
     return NextResponse.json(
       {
         success: true,
@@ -169,7 +215,7 @@ export async function POST(request: NextRequest) {
       );
     const empresaId = user.empresa_id;
     const body = input.cambios;
-    await validateSync(sb, user, body);
+    const tables = await validateSync(sb, user, body);
 
     // 2. Sincronizar Clientes
     if (Array.isArray(body.clientes) && body.clientes.length > 0) {
@@ -188,29 +234,50 @@ export async function POST(request: NextRequest) {
             },
             { onConflict: "id" },
           ),
+          `el cliente «${c.nombre}»`,
         );
       }
     }
 
-    // 3. Sincronizar Usuarios / Obreros
-    if (Array.isArray(body.usuarios) && body.usuarios.length > 0) {
+    // Actualizar fichas existentes sin volver a insertar cuentas ni tocar sus privilegios.
+    if (Array.isArray(body.usuarios)) {
       for (const u of body.usuarios) {
-        await checked(
-          sb.from("usuarios").upsert(
-            {
-              id: u.id,
-              empresa_id: empresaId,
-              nombre: u.nombre,
-              email: u.email || null,
-              rol: ["admin", "supervisor", "terreno"].includes(u.rol)
-                ? u.rol
-                : "terreno",
-              telefono_whatsapp: u.telefono_whatsapp || "",
-              is_dev: Boolean(u.is_dev),
-            },
-            { onConflict: "id" },
-          ),
+        const existing = tables.usuarios.find((row: any) => row.id === u.id);
+        const fields = Object.fromEntries(
+          ["nombre", "email", "telefono_whatsapp", "rut"]
+            .filter((key) => Object.hasOwn(u, key))
+            .map((key) => [key, key === "nombre" ? u[key] : u[key] || null]),
         );
+        if (existing) {
+          if (Object.hasOwn(u, "rol") && u.rol !== existing.rol)
+            fields.rol = u.rol;
+          if (!Object.keys(fields).length) continue;
+          const saved = await checked(
+            sb
+              .from("usuarios")
+              .update(fields)
+              .eq("id", u.id)
+              .eq("empresa_id", empresaId)
+              .select("id"),
+            `la ficha de «${u.nombre || existing.nombre}»`,
+          );
+          if (!saved?.length)
+            throw new AIError(
+              "SYNC_SAVE",
+              "La ficha del equipo ya no está disponible. Los cambios siguen pendientes en este dispositivo.",
+              409,
+            );
+        } else {
+          await checked(
+            sb
+              .from("usuarios")
+              .upsert(
+                { id: u.id, empresa_id: empresaId, ...fields, rol: u.rol },
+                { onConflict: "id" },
+              ),
+            `la ficha de «${u.nombre || u.id}»`,
+          );
+        }
       }
     }
 
@@ -243,17 +310,20 @@ export async function POST(request: NextRequest) {
             },
             { onConflict: "id" },
           ),
+          `la obra «${p.nombre}»`,
         );
 
         if (Array.isArray(p.trabajadores_ids)) {
           await checked(
             sb.from("proyecto_trabajadores").delete().eq("proyecto_id", p.id),
+            `la asignación de la obra «${p.nombre}»`,
           );
           for (const uid of p.trabajadores_ids) {
             await checked(
               sb
                 .from("proyecto_trabajadores")
                 .upsert({ proyecto_id: p.id, usuario_id: uid }),
+              `la asignación de la obra «${p.nombre}»`,
             );
           }
         }
@@ -280,6 +350,7 @@ export async function POST(request: NextRequest) {
             },
             { onConflict: "id" },
           ),
+          `la partida «${a.nombre}»`,
         );
       }
     }
@@ -306,6 +377,7 @@ export async function POST(request: NextRequest) {
             },
             { onConflict: "id" },
           ),
+          `el material «${m.nombre}»`,
         );
       }
     }
@@ -335,6 +407,7 @@ export async function POST(request: NextRequest) {
             },
             { onConflict: "id" },
           ),
+          `el pago «${pay.id}»`,
         );
       }
     }
@@ -364,6 +437,7 @@ export async function POST(request: NextRequest) {
             },
             { onConflict: "id" },
           ),
+          `el registro de bitácora «${b.titulo}»`,
         );
       }
     }
@@ -388,6 +462,7 @@ export async function POST(request: NextRequest) {
             },
             { onConflict: "id" },
           ),
+          `el imprevisto «${imp.titulo || imp.id}»`,
         );
       }
     }
@@ -420,6 +495,7 @@ export async function POST(request: NextRequest) {
             },
             { onConflict: "id" },
           ),
+          `el reclamo o cambio «${rc.titulo}»`,
         );
       }
     }
@@ -452,6 +528,7 @@ export async function POST(request: NextRequest) {
             },
             { onConflict: "id" },
           ),
+          `el documento «${doc.nombre}»`,
         );
       }
     }
@@ -478,6 +555,7 @@ export async function POST(request: NextRequest) {
             },
             { onConflict: "id" },
           ),
+          `la asistencia de «${asis.trabajador_nombre}»`,
         );
       }
     }
@@ -499,6 +577,7 @@ export async function POST(request: NextRequest) {
           },
           { onConflict: "id" },
         ),
+        `el reporte de WhatsApp «${r.id}»`,
       );
     return NextResponse.json({
       success: true,

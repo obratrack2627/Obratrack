@@ -1,3 +1,4 @@
+import { syncFailureMessage } from '@/lib/sync/failure';
 import { projectStatusLabel } from '@/lib/project-status';
 import {
   Proyecto,
@@ -166,7 +167,7 @@ export class DataService {
       );
       if (existsIndex === -1) {
         usuarios = [active, ...usuarios];
-        this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
+        this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios, false);
       } else {
         usuarios[existsIndex] = {
           ...usuarios[existsIndex],
@@ -190,7 +191,6 @@ export class DataService {
     };
     usuarios.push(newUsuario);
     this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
-    if (!this.aiLocalOnly) { supabaseService.saveUsuario(newUsuario).catch((err) => console.warn('Sync supabase usuario:', err)); }
     return newUsuario;
   }
 
@@ -203,7 +203,6 @@ export class DataService {
       usuarios[index].is_dev = true;
     }
     this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
-    if (!this.aiLocalOnly) { supabaseService.saveUsuario(usuarios[index]).catch((err) => console.warn('Sync supabase usuario:', err)); }
 
     const active = this.getActiveUser();
     if (active && (active.id === id || active.email === usuarios[index].email)) {
@@ -2276,15 +2275,23 @@ export class DataService {
       const {data,error}=await supabase.auth.getSession();
       if(error||!data.session?.access_token) return {success:false,message:'Inicia sesión para sincronizar.'};
       if(!sameSession()) return {success:false,message:'La sesión cambió durante la sincronización.'};
-      const res = await fetch('/api/supabase/sync', {
+      const send = (token: string) => fetch('/api/supabase/sync', {
         method: 'POST',
         signal: AbortSignal.timeout(20000),
-        headers: { 'Content-Type': 'application/json',Authorization:`Bearer ${data.session.access_token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({cambios}),
       });
-
+      let res = await send(data.session.access_token);
+      if (res.status === 401) {
+        try {
+          const refreshed = await supabase.auth.refreshSession();
+          if (!sameSession()) return {success:false,message:'La sesión cambió durante la sincronización.'};
+          if (!refreshed.error && refreshed.data.session?.access_token) res = await send(refreshed.data.session.access_token);
+        } catch { /* Mantener los cambios pendientes si no se puede renovar la sesión. */ }
+      }
       if (!res.ok) {
-        return { success: false, message: 'No se pudieron subir los cambios de este dispositivo. Se conservan para reintentar.' };
+        const payload = await res.json().catch(() => null);
+        return {success:false,message:syncFailureMessage(res.status, payload)};
       }
       if(!sameSession()) return {success:false,message:'La sesión cambió durante la sincronización.'};
       const remaining=this.getItem<Record<string,Record<string,any>>>(dirtyKey,{});

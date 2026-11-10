@@ -348,7 +348,7 @@ test('clientes, equipo, finanzas y suscripción usan ventanas accesibles en un c
   await setup(page, { respuesta: 'Consulta', accion: null }, true);
   for (const [path, button] of [['/clientes', /Nuevo Cliente/], ['/equipo', /Agregar Trabajador/], ['/proyectos/p-existing/finanzas', /Registrar Pago/]]) {
     await page.goto(path as string);
-    if (String(path).endsWith('/finanzas')) await page.getByRole('button', { name: 'Cobros', exact: true }).click();
+    if (String(path).endsWith('/finanzas')) await page.getByRole('navigation', {name:'Secciones de finanzas'}).getByRole('button', { name: /^Cobros\b/ }).click();
     await page.getByRole('button', { name: button as RegExp }).first().click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
@@ -2218,4 +2218,79 @@ test("Gantt permite agregar y eliminar partidas desde un teléfono y bloquea fec
     }),
   ).toHaveCount(0);
   await expect.poll(() => db.actividades.length).toBe(4);
+});
+
+test("sincronización móvil muestra el registro rechazado y conserva el pendiente hasta confirmar el reintento", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setup(page, {}, true);
+  const pending = {
+    usuarios: { [ownerId]: { ...owner, nombre: "Nombre pendiente" } },
+  };
+  await page.addInitScript(
+    (value) =>
+      localStorage.setItem(
+        "obratrack_dirty_v1_fixture-company",
+        JSON.stringify(value),
+      ),
+    pending,
+  );
+  let fail = true,
+    posts = 0;
+  await page.route("**/api/supabase/sync*", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    posts++;
+    expect(route.request().postDataJSON().cambios.usuarios[0].nombre).toBe(
+      "Nombre pendiente",
+    );
+    await route.fulfill({
+      status: fail ? 503 : 200,
+      json: fail
+        ? {
+            code: "SYNC_SAVE",
+            error:
+              "No se pudo guardar la ficha de «Nombre pendiente». Los cambios siguen pendientes en este dispositivo.",
+          }
+        : { success: true },
+    });
+  });
+  await page.goto("/proyectos");
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "No se pudo guardar la ficha de «Nombre pendiente»" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(
+          localStorage.getItem("obratrack_dirty_v1_fixture-company") || "{}",
+        ).usuarios,
+    ),
+  ).toEqual(pending.usuarios);
+  fail = false;
+  await page
+    .getByRole("button", { name: "Reintentar sincronización", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: "Reintentar sincronización",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(posts).toBeGreaterThanOrEqual(2);
+  expect(
+    await page.evaluate(
+      () =>
+        JSON.parse(
+          localStorage.getItem("obratrack_dirty_v1_fixture-company") || "{}",
+        ).usuarios,
+    ),
+  ).toEqual({});
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  ).toBe(true);
 });

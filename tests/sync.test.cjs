@@ -388,3 +388,94 @@ test('un estado inválido se rechaza antes de escribir y conserva la obra cancel
   assert.equal((fixture.tables.get('clientes')||[]).length,0);
  }
 });
+
+test('sincronizar una ficha existente actualiza sus contactos sin reinsertar al administrador ni alterar su acceso', async () => {
+  const profile = {...user,is_dev:true};
+  fixture.tables.set('usuarios',[profile]);
+  fixture.fail('usuarios', 1, 'upsert'); // Las altas de cuentas existentes dispararían el bloqueo de la base.
+  const response = await POST(request({cambios:{usuarios:[{id:user.id,nombre:'Nombre corregido',rol:'admin',email:'nuevo@example.test',rut:'12.345.678-5',is_dev:false}]}}));
+  assert.equal(response.status,200);
+  const saved=fixture.tables.get('usuarios')[0];
+  assert.equal(saved.nombre,'Nombre corregido');
+  assert.equal(saved.auth_user_id,user.auth_user_id);
+  assert.equal(saved.is_dev,true);
+  assert.equal(saved.rol,'admin');
+  assert.equal(saved.rut,'12.345.678-5');
+  assert.ok(!fixture.calls.some(call=>call.table==='usuarios'&&call.mode==='upsert'));
+});
+
+test('sincronización no permite cambiar el vínculo de acceso ni conceder privilegios Dev', async () => {
+  const denied=await POST(request({cambios:{usuarios:[{...user,auth_user_id:null}]}}));
+  assert.equal(denied.status,403);
+  const ignored=await POST(request({cambios:{usuarios:[{...user,is_dev:true,nombre:'Nombre permitido'}]}}));
+  assert.equal(ignored.status,200);
+  assert.equal(fixture.tables.get('usuarios')[0].is_dev,undefined);
+  assert.equal(fixture.tables.get('usuarios')[0].auth_user_id,user.auth_user_id);
+});
+
+test('cargar la ficha activa en un dispositivo nuevo no genera escrituras pendientes', () => {
+  localStorage.setItem('obratrack_usuarios_v7_a', JSON.stringify([{id:'worker-only',empresa_id:'a',nombre:'Trabajador',rol:'terreno'}]));
+  dataService.getUsuarios();
+  assert.equal(localStorage.getItem('obratrack_dirty_v1_a'),null);
+  dataService.updateUsuario(user.id,{nombre:'Edición real'});
+  assert.equal(JSON.parse(localStorage.getItem('obratrack_dirty_v1_a')).usuarios[user.id].nombre,'Edición real');
+});
+
+test('un rechazo identifica la partida y conserva exactamente el cambio pendiente', async () => {
+  fixture.fail('actividades',1,'upsert');
+  const failed=await POST(request({cambios:{actividades:[{id:'act-1',proyecto_id:p1.id,nombre:'Estructura metálica',fecha_inicio:'2026-11-01',fecha_termino:'2026-11-15',estado:'pendiente'}]}}));
+  const payload=await failed.json();
+  assert.match(payload.error,/partida «Estructura metálica»/);
+  const pending={actividades:{'act-1':{id:'act-1',proyecto_id:p1.id,nombre:'Estructura metálica'}}};
+  localStorage.setItem('obratrack_dirty_v1_a',JSON.stringify(pending));
+  global.fetch=async()=>new Response(JSON.stringify(payload),{status:503});
+  const result=await dataService.pushToCloudServer();
+  assert.equal(result.success,false);assert.equal(result.message,payload.error);
+  assert.deepEqual(JSON.parse(localStorage.getItem('obratrack_dirty_v1_a')),pending);
+});
+
+test('renueva una sesión rechazada una sola vez y reenvía el mismo cambio con el token nuevo', async () => {
+  const originalRefresh=fixture.supabase.auth.refreshSession;
+  let refreshes=0;const calls=[];
+  localStorage.setItem('obratrack_dirty_v1_a',JSON.stringify({proyectos:{p1}}));
+  fixture.supabase.auth.refreshSession=async()=>{refreshes++;return {data:{session:{access_token:'renewed-fixture-token'}},error:null};};
+  global.fetch=async(url,options)=>{calls.push(options);return calls.length===1?new Response('{}',{status:401}):new Response('{}',{status:200});};
+  try {
+    const result=await dataService.pushToCloudServer();
+    assert.equal(result.success,true);assert.equal(refreshes,1);assert.equal(calls.length,2);
+    assert.equal(calls[1].headers.Authorization,'Bearer renewed-fixture-token');
+    assert.equal(calls[0].body,calls[1].body);
+    assert.deepEqual(JSON.parse(localStorage.getItem('obratrack_dirty_v1_a')).proyectos,{});
+  } finally {fixture.supabase.auth.refreshSession=originalRefresh;}
+});
+
+test('una sesión que no se puede renovar conserva los cambios y solicita iniciar sesión sin bucles', async () => {
+  const originalRefresh=fixture.supabase.auth.refreshSession;
+  let refreshes=0,posts=0;
+  localStorage.setItem('obratrack_dirty_v1_a',JSON.stringify({proyectos:{p1}}));
+  fixture.supabase.auth.refreshSession=async()=>{refreshes++;return {data:{session:null},error:new Error('Invalid refresh')};};
+  global.fetch=async()=>{posts++;return new Response('{}',{status:401});};
+  try {
+    const result=await dataService.pushToCloudServer();
+    assert.equal(result.success,false);assert.match(result.message,/Vuelve a iniciar sesión/);
+    assert.equal(refreshes,1);assert.equal(posts,1);
+    assert.deepEqual(JSON.parse(localStorage.getItem('obratrack_dirty_v1_a')).proyectos.p1,p1);
+  } finally {fixture.supabase.auth.refreshSession=originalRefresh;}
+});
+
+test('el administrador puede cambiar terreno y supervisor sin convertirlos en cuentas web', async () => {
+  fixture.tables.set('usuarios',[user,{id:'worker-role',empresa_id:'a',nombre:'Trabajador',rol:'terreno',auth_user_id:null,is_dev:false}]);
+  const changed=await POST(request({cambios:{usuarios:[{id:'worker-role',nombre:'Trabajador',rol:'supervisor'}]}}));
+  assert.equal(changed.status,200);
+  const worker=fixture.tables.get('usuarios').find(row=>row.id==='worker-role');
+  assert.equal(worker.rol,'supervisor');assert.equal(worker.auth_user_id,null);assert.equal(worker.is_dev,false);
+  assert.equal((await POST(request({cambios:{usuarios:[{id:'worker-role',rol:'admin'}]}}))).status,403);
+});
+
+test('no muestra cuerpos HTML ni mensajes desconocidos recibidos de un proxy', () => {
+  const {syncFailureMessage,syncWriteFailure}=require('../lib/sync/failure.ts');
+  assert.doesNotMatch(syncFailureMessage(502,{code:'UNKNOWN',error:'PRIVATE INTERNAL DETAIL'}),/PRIVATE/);
+  assert.doesNotMatch(syncFailureMessage(502,'<html>PRIVATE</html>'),/PRIVATE/);
+  assert.match(syncWriteFailure({code:'23503',message:'PRIVATE SQL VALUES'},'el pago').message,/asociado ya no está disponible/);
+  assert.doesNotMatch(syncWriteFailure({code:'23503',message:'PRIVATE SQL VALUES'},'el pago').message,/PRIVATE/);
+});
