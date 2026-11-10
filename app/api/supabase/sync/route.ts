@@ -1,3 +1,4 @@
+import { projectStatuses } from '@/lib/project-status';
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
@@ -63,6 +64,8 @@ async function validateSync(client: any, user: any, body: any) {
           "Tu perfil solo puede registrar sus reportes y asistencia.",
           403,
         );
+      if (key === 'proyectos' && !projectStatuses.some(status => status.value === row.estado))
+        throw new AIError('SYNC_INVALID', 'El estado de la obra no es válido. Actualiza la página e intenta nuevamente.', 400);
       if (row.proyecto_id && !projects.has(row.proyecto_id))
         throw new AIError(
           "PROJECT_FORBIDDEN",
@@ -235,9 +238,7 @@ export async function POST(request: NextRequest) {
                 new Date(Date.now() + 86400000 * 30)
                   .toISOString()
                   .split("T")[0],
-              estado: ["activo", "terminado", "pausado"].includes(p.estado)
-                ? p.estado
-                : "activo",
+              estado: p.estado,
               monto_cotizado: Number(p.monto_cotizado) || 0,
             },
             { onConflict: "id" },

@@ -46,7 +46,7 @@ export function budgetRPCError(error: any): never {
     BUDGET_STATE: 'El presupuesto está rechazado o anulado. Cambia su estado antes de elegirlo.',
     BUDGET_NEEDS_PROJECT: 'Asocia primero este grupo a una obra o crea la obra con la alternativa elegida.',
     BUDGET_FORBIDDEN: 'El presupuesto o la obra no están disponibles para tu cuenta.',
-    PLAN_LIMIT: 'El Plan Gratis admite una obra activa.',
+    PLAN_LIMIT: 'El Plan Gratis admite una obra en curso.',
     BUDGET_INVALID: 'Revisa los datos del presupuesto y sus materiales.',
     BUDGET_OPTION_NAME: 'Ya existe una alternativa con ese nombre. Elige un nombre distinto.',
   };

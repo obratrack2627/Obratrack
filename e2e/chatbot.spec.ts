@@ -13,6 +13,7 @@ test("el Centro de Mando prioriza obras y permite recorrer los módulos de una o
   const flow = page.getByRole('heading', { name: /Flujo Financiero por Obra/ });
   const distribution = page.getByRole('heading', { name: 'Distribución de Cartera', exact: true });
   await expect(active).toBeVisible();
+  await expect(page.locator('[data-project-status="activo"]').first()).toHaveText('En curso');
   const position = await active.boundingBox();
   expect(position!.y).toBeLessThan((await flow.boundingBox())!.y);
   expect(position!.y).toBeLessThan((await distribution.boundingBox())!.y);
@@ -1689,6 +1690,7 @@ test('estado de obra se confirma, persiste al navegar y conserva el valor ante u
   await page.goto('/proyectos/p-existing/gantt');
   const state = page.getByRole('combobox', { name: 'Estado de la obra', exact: true });
   await expect(state).toHaveAttribute('data-project-status', 'activo');
+  await expect(state).toContainText('En curso');
   for (const value of ['pendiente', 'cancelada', 'terminado', 'activo']) {
     await state.click();
     await page.getByRole('option', { name: ({pendiente:'Pendiente',cancelada:'Cancelada',terminado:'Terminada',activo:'En curso'} as Record<string,string>)[value], exact: true }).click();

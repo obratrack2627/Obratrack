@@ -1,5 +1,6 @@
 'use client';
 
+import { projectStatusLabel } from '@/lib/project-status';
 import { conversationRequest } from '@/lib/ai/conversation';
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -445,7 +446,7 @@ export default function CopilotoObreroPage() {
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-[10px] text-gray-500">
-                          <span>📍 {p.comuna || 'Chile'} • {p.estado.toUpperCase()}</span>
+                          <span>📍 {p.comuna || 'Chile'} • {projectStatusLabel(p.estado)}</span>
                           <div className="flex items-center gap-1.5">
                             <Link href={`/proyectos/${p.id}/ia`} className="text-obra-orange text-xs font-bold">Cotizar con IA</Link>
                             <Link

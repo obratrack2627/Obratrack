@@ -1,4 +1,5 @@
 'use client';
+import { ProjectStatusBadge } from '@/components/ProjectStatus';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState } from 'react';
@@ -186,7 +187,7 @@ export default function GoogleMapsProjectViewer({
                 {proyecto.cliente?.nombre || 'Cliente Particular'}
               </p>
               <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                Estado: <span className="font-mono uppercase font-bold text-[#6B8F72]">{proyecto.estado}</span>
+                Estado: <ProjectStatusBadge estado={proyecto.estado} />
               </p>
             </div>
           </div>

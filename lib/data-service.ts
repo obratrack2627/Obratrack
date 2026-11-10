@@ -517,7 +517,7 @@ export class DataService {
       const activeProjects = this.getProyectos().filter((p) => p.estado === 'activo');
       if (activeProjects.length >= 1) {
         throw new Error(
-          'Límite del Plan Gratis alcanzado: solo puedes mantener 1 obra activa simultáneamente. Actualiza a Plan Pro para gestionar obras ilimitadas.'
+          'Límite del Plan Gratis alcanzado: solo puedes mantener 1 obra en curso simultáneamente. Actualiza a Plan Pro para gestionar obras ilimitadas.'
         );
       }
     }

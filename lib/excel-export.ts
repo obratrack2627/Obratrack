@@ -1,3 +1,4 @@
+import { projectStatusLabel } from '@/lib/project-status';
 import type {
   Actividad,
   AsistenciaObrero,
@@ -82,7 +83,7 @@ export async function buildProjectExcelBuffer(
     ['Obra / Proyecto', proyecto.nombre],
     ['Mandante / Cliente', cliente?.nombre || 'No asignado'],
     ['Ubicación', [proyecto.direccion, proyecto.comuna, proyecto.region].filter(Boolean).join(', ')],
-    ['Estado Operativo', proyecto.estado.toUpperCase()],
+    ['Estado Operativo', projectStatusLabel(proyecto.estado)],
     ['Fecha Inicio', proyecto.fecha_inicio],
     ['Fecha Término Estimada', proyecto.fecha_termino_estimada],
     ['Avance Físico Ponderado (%)', `${proyecto.porcentaje_avance_ponderado || 0}%`],

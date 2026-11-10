@@ -380,7 +380,7 @@ export default function ProyectosPage() {
               <span className="text-xl">⚠️</span>
               <div>
                 <p className="text-xs font-bold font-heading">
-                  Límite del Plan Gratis alcanzado ({proyectosActivos.length}/1 Obra Activa)
+                  Límite del Plan Gratis alcanzado ({proyectosActivos.length}/1 obra en curso)
                 </p>
                 <p className="text-[11px] text-amber-800 dark:text-amber-300/90 font-sans">
                   Para gestionar obras ilimitadas, desbloquear el Cotizador con IA y el comparador de precios, activa el <strong>Plan Pro</strong>.
@@ -399,11 +399,11 @@ export default function ProyectosPage() {
         {/* Tarjetas de Resumen KPI */}
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
-          {/* Proyectos Activos */}
+          {/* Obras en curso */}
           <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
-                Proyectos Activos
+                Obras en curso
               </p>
               <h3 className="text-2xl font-bold font-heading text-navy-900 mt-1">
                 {proyectosActivos.length}
@@ -538,7 +538,7 @@ export default function ProyectosPage() {
                     },
                     {
                       value: 'activo',
-                      label: 'Activas',
+                      label: 'En curso',
                       count: proyectos.filter((p) => p.estado === 'activo').length,
                       dot: 'bg-obra-green',
                       activeClass: 'bg-obra-green text-white border-obra-green shadow-sm',

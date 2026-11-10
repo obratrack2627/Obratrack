@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       if (budget.grupo_id) budgetRPCError(error);
       const code = ['BUDGET_CONFLICT', 'BUDGET_STATE', 'PLAN_LIMIT', 'BUDGET_FORBIDDEN'].find((c) => error.message?.includes(c));
-      if (code) throw new AIError(code, code === 'PLAN_LIMIT' ? 'El Plan Gratis admite una obra activa. Cierra la obra actual o cambia de plan.' : 'El presupuesto cambió o no está disponible. Actualiza el listado.', code === 'BUDGET_FORBIDDEN' ? 403 : 409);
+      if (code) throw new AIError(code, code === 'PLAN_LIMIT' ? 'El Plan Gratis admite una obra en curso. Cierra la obra actual o cambia de plan.' : 'El presupuesto cambió o no está disponible. Actualiza el listado.', code === 'BUDGET_FORBIDDEN' ? 403 : 409);
       throw new AIError('BUDGET_CONVERSION', 'No se pudo convertir el presupuesto. No se guardaron cambios parciales; puedes reintentar.', 503);
     }
     return NextResponse.json(data);

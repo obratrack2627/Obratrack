@@ -1,5 +1,6 @@
 'use client';
 import CompactSummary from '@/components/CompactSummary';
+import { ProjectStatusBadge } from '@/components/ProjectStatus';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -238,7 +239,7 @@ export default function DashboardPage() {
         <div className="p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm hover:border-[#FF6A00]/50 transition-all group">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono font-bold uppercase tracking-wider text-gray-500">
-              Obras en Ejecución
+              Obras en curso
             </span>
             <div className="p-2 rounded-xl bg-[#FF6A00]/10 text-[#FF6A00] group-hover:scale-110 transition-transform">
               <Building className="w-5 h-5" />
@@ -391,7 +392,7 @@ export default function DashboardPage() {
 
           <div className="space-y-3">
             {obrasActivas.length === 0 ? (
-              <p className="text-xs text-gray-500 py-6 text-center">No hay obras activas en este momento.</p>
+              <p className="text-xs text-gray-500 py-6 text-center">No hay obras en curso en este momento.</p>
             ) : (
               obrasActivas.map((p) => {
                 const avance = p.porcentaje_avance_ponderado || 0;
@@ -405,9 +406,7 @@ export default function DashboardPage() {
                         <h4 className="font-heading font-bold text-sm text-navy-900 dark:text-white">
                           {p.nombre}
                         </h4>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-[#6B8F72]/20 text-[#6B8F72]">
-                          {p.estado}
-                        </span>
+                        <ProjectStatusBadge estado={p.estado} />
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 font-mono">
                         {p.comuna && (

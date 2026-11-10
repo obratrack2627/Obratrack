@@ -19,7 +19,7 @@ export const PLANES_SUSCRIPCION: PlanSuscripcion[] = [
     soportaExportacionBoletas: false,
     colorAcento: '#9A9A9A', // Gris Cemento
     caracteristicas: [
-      '1 obra activa a la vez',
+      '1 obra en curso a la vez',
       'Georreferenciación en Chile con Google Maps',
       'Directorio de clientes y contactos',
       'Registro de estados de pago y anticipos',

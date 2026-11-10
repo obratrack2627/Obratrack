@@ -37,7 +37,7 @@ export default function manifest(): MetadataRoute.Manifest {
       {
         name: 'Mis Obras',
         short_name: 'Obras',
-        description: 'Acceder directamente a las obras activas en terreno',
+        description: 'Acceder directamente a las obras en curso en terreno',
         url: '/proyectos',
       },
       {

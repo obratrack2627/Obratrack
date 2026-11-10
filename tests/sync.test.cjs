@@ -369,3 +369,22 @@ test('editar una obra confirma nombre y asignación sin crear otro guardado pend
  assert.equal(dataService.getProyectoById('p1').nombre,'Nombre confirmado');
  assert.equal(JSON.parse(localStorage.getItem('obratrack_dirty_v1_a')||'{}').proyectos?.p1,undefined);
 });
+
+test('sincronizar una edición conserva los cinco estados de obra sin reactivar pendientes ni canceladas',async()=>{
+ for(const estado of ['pendiente','cancelada','activo','pausado','terminado']){
+  const result=await POST(request({cambios:{proyectos:[{...p1,estado,nombre:'Nombre editado'}]}}));
+  assert.equal(result.status,200);
+  const saved=fixture.tables.get('proyectos').find(p=>p.id===p1.id);
+  assert.equal(saved.estado,estado);assert.equal(saved.monto_cotizado,p1.monto_cotizado);
+ }
+});
+
+test('un estado inválido se rechaza antes de escribir y conserva la obra cancelada',async()=>{
+ fixture.tables.set('proyectos',[{...p1,estado:'cancelada'}]);
+ for(const estado of ['inexistente','en curso',undefined]){
+  const result=await POST(request({cambios:{clientes:[{id:'client-new',nombre:'No debe crearse'}],proyectos:[{...p1,estado}]}}));
+  assert.equal(result.status,400);assert.equal((await result.json()).code,'SYNC_INVALID');
+  assert.equal(fixture.tables.get('proyectos')[0].estado,'cancelada');
+  assert.equal((fixture.tables.get('clientes')||[]).length,0);
+ }
+});

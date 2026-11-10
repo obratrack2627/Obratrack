@@ -123,7 +123,7 @@ export default function PlanesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
             <div className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-3.5">
               <div className="flex items-center justify-between text-gray-500 dark:text-gray-400">
-                <span className="font-mono uppercase text-[11px]">Obras Activas</span>
+                <span className="font-mono uppercase text-[11px]">Obras en curso</span>
                 <Building2 className="w-4 h-4 text-obra-orange" />
               </div>
               <p className="text-lg font-mono font-bold text-navy-900 dark:text-white mt-1">

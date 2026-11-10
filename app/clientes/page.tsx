@@ -241,7 +241,7 @@ export default function ClientesPage() {
           <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
-                Con Obras Activas
+                Con obras en curso
               </p>
               <h3 className="text-2xl font-bold font-heading text-obra-green mt-1">
                 {clientesConObras}
