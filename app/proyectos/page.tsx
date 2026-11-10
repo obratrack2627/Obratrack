@@ -476,81 +476,152 @@ export default function ProyectosPage() {
         {/* Grid de Proyectos */}
         <div className="space-y-4">
           {/* Barra de Búsqueda y Filtros de Proyectos */}
-          <div className="bg-white border border-kraft-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
-            <div className="relative w-full md:w-80">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Buscar obra, cliente o descripción..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs text-navy-900 focus:outline-none focus:border-obra-orange font-sans"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
-                >
-                  ✕
-                </button>
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3">
+            {/* Fila Superior: Buscador expandido + Selector de Cliente */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <div className="relative flex-1 min-w-0">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Buscar por obra, cliente, comuna o descripción..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full h-10 pl-10 pr-8 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs text-navy-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-obra-orange focus:bg-white dark:focus:bg-[#141A23] transition-colors font-sans"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    aria-label="Limpiar búsqueda"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full hover:bg-kraft-200 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center justify-center text-xs transition-colors"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {clientes.length > 0 && (
+                <div className="relative w-full sm:w-64 shrink-0">
+                  <User className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <select
+                    aria-label="Filtrar por cliente"
+                    value={clientFilter}
+                    onChange={(e) => setClientFilter(e.target.value)}
+                    className="w-full h-10 pl-9 pr-8 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs font-medium text-navy-900 dark:text-gray-100 font-sans focus:outline-none focus:border-obra-orange focus:bg-white dark:focus:bg-[#141A23] transition-colors truncate"
+                  >
+                    <option value="todos">Todos los clientes ({clientes.length})</option>
+                    {clientes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-              {/* Filtro por Cliente */}
-              {clientes.length > 0 && (
-                <select
-                  value={clientFilter}
-                  onChange={(e) => setClientFilter(e.target.value)}
-                  className="text-xs bg-kraft-50 border border-kraft-200 rounded-xl px-3 py-2 text-navy-900 font-sans focus:outline-none focus:border-obra-orange"
-                >
-                  <option value="todos">Todos los Clientes</option>
-                  {clientes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              {/* Filtro por Estado */}
-              <div className="flex items-center gap-1 flex-wrap">
-                <button
-                  onClick={() => setStatusFilter('todos')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold transition-all ${
-                    statusFilter === 'todos'
-                      ? 'bg-navy-800 text-white shadow-sm'
-                      : 'bg-kraft-50 text-gray-600 hover:bg-kraft-100 border border-kraft-200'
-                  }`}
-                >
-                  Todos ({proyectos.length})
-                </button>
-                <button
-                  onClick={() => setStatusFilter('activo')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold transition-all ${
-                    statusFilter === 'activo'
-                      ? 'bg-obra-green text-white shadow-sm'
-                      : 'bg-kraft-50 text-gray-600 hover:bg-kraft-100 border border-kraft-200'
-                  }`}
-                >
-                  Activos ({proyectos.filter((p) => p.estado === 'activo').length})
-                </button>
-                <button
-                  onClick={() => setStatusFilter('terminado')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-semibold transition-all ${
-                    statusFilter === 'terminado'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-kraft-50 text-gray-600 hover:bg-kraft-100 border border-kraft-200'
-                  }`}
-                >
-                  Terminados ({proyectos.filter((p) => p.estado === 'terminado').length})
-                </button>
-                {projectStatuses.filter(item => ['pendiente', 'cancelada', 'pausado'].includes(item.value)).map(item => (
-                  <button type="button" key={item.value} onClick={() => setStatusFilter(item.value)} className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${statusFilter === item.value ? 'bg-navy-800 text-white' : 'bg-kraft-50 text-gray-600 border-kraft-200'}`}>
-                    {item.label} ({proyectos.filter(p => p.estado === item.value).length})
-                  </button>
-                ))}
+            {/* Fila Inferior: Pestañas de Estado con scroll táctil en móvil */}
+            <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-kraft-100 dark:border-[#1E2530]">
+              <div
+                role="tablist"
+                aria-label="Filtrar obras por estado"
+                className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 -mx-1 px-1"
+              >
+                {(
+                  [
+                    {
+                      value: 'todos',
+                      label: 'Todas',
+                      count: proyectos.length,
+                      dot: 'bg-gray-400',
+                      activeClass: 'bg-navy-900 text-white border-navy-900 dark:bg-white dark:text-navy-900 dark:border-white shadow-sm',
+                    },
+                    {
+                      value: 'activo',
+                      label: 'Activas',
+                      count: proyectos.filter((p) => p.estado === 'activo').length,
+                      dot: 'bg-obra-green',
+                      activeClass: 'bg-obra-green text-white border-obra-green shadow-sm',
+                    },
+                    {
+                      value: 'pendiente',
+                      label: 'Pendientes',
+                      count: proyectos.filter((p) => p.estado === 'pendiente').length,
+                      dot: 'bg-amber-500',
+                      activeClass: 'bg-amber-500 text-white border-amber-500 shadow-sm',
+                    },
+                    {
+                      value: 'pausado',
+                      label: 'Pausadas',
+                      count: proyectos.filter((p) => p.estado === 'pausado').length,
+                      dot: 'bg-slate-400',
+                      activeClass: 'bg-slate-700 text-white border-slate-700 shadow-sm',
+                    },
+                    {
+                      value: 'terminado',
+                      label: 'Terminadas',
+                      count: proyectos.filter((p) => p.estado === 'terminado').length,
+                      dot: 'bg-blue-500',
+                      activeClass: 'bg-blue-600 text-white border-blue-600 shadow-sm',
+                    },
+                    {
+                      value: 'cancelada',
+                      label: 'Canceladas',
+                      count: proyectos.filter((p) => p.estado === 'cancelada').length,
+                      dot: 'bg-red-500',
+                      activeClass: 'bg-red-600 text-white border-red-600 shadow-sm',
+                    },
+                  ] as const
+                ).map((tab) => {
+                  const isActive = statusFilter === tab.value;
+                  return (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      key={tab.value}
+                      onClick={() => setStatusFilter(tab.value)}
+                      className={`h-8 px-3 rounded-xl text-xs font-heading font-semibold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition-all ${
+                        isActive
+                          ? tab.activeClass
+                          : 'bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border-kraft-200 dark:border-[#263040] hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
+                      }`}
+                    >
+                      {tab.value !== 'todos' && (
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            isActive ? 'bg-white dark:bg-current' : tab.dot
+                          }`}
+                        />
+                      )}
+                      <span>{tab.label}</span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                          isActive
+                            ? 'bg-white/20 text-current'
+                            : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+
+              {(searchTerm || statusFilter !== 'todos' || clientFilter !== 'todos') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setStatusFilter('todos');
+                    setClientFilter('todos');
+                  }}
+                  className="text-xs font-heading font-bold text-obra-orange hover:underline shrink-0 pl-2 whitespace-nowrap"
+                >
+                  Limpiar
+                </button>
+              )}
             </div>
           </div>
 
@@ -563,6 +634,8 @@ export default function ProyectosPage() {
               const matchSearch =
                 p.nombre.toLowerCase().includes(term) ||
                 (p.descripcion && p.descripcion.toLowerCase().includes(term)) ||
+                (p.comuna && p.comuna.toLowerCase().includes(term)) ||
+                (p.direccion && p.direccion.toLowerCase().includes(term)) ||
                 (p.cliente?.nombre && p.cliente.nombre.toLowerCase().includes(term));
               return matchStatus && matchClient && matchSearch;
             });
