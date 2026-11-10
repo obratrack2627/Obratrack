@@ -382,13 +382,19 @@ export default function WhatsAppJefePanel() {
                   )}
                   {m.adjunto?.path && m.adjunto.mime_type && !m.adjunto.mime_type.startsWith('image/') && <EvidenceLink path={m.adjunto.path} name={m.adjunto.archivo_nombre || 'Archivo de obra'} />}
                   <div className="flex flex-wrap gap-2 items-center text-xs">
-                    <span className="text-green-700">
-                      {category === "datos_obra"
-                        ? "Datos pendientes"
-                        : m.adjunto?.analisis_pendiente
-                          ? "Análisis pendiente"
-                          : "Registrado"}
-                    </span>
+                    {category === "datos_obra" ? (
+                      <span className="text-amber-700 font-medium">
+                        Datos pendientes para crear obra
+                      </span>
+                    ) : m.adjunto?.path && !m.adjunto?.proyecto_id && !m.obras?.length ? (
+                      <span className="text-amber-700 font-medium">
+                        Pendiente de asociar a una obra
+                      </span>
+                    ) : (
+                      <span className="text-green-700 font-medium">
+                        {m.adjunto?.path ? "Guardado en bitácora" : "Registrado"}
+                      </span>
+                    )}
                     {!m.sent_at && (
                       <span className="text-amber-700">
                         Respuesta pendiente

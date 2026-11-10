@@ -71,7 +71,9 @@ export default function DashboardPage() {
         const data = await res.json();
         const msgs = Array.isArray(data?.mensajes) ? data.mensajes : [];
         const pending = msgs.filter(
-          (m: any) => m?.adjunto?.analisis_pendiente || m?.categoria === 'datos_obra'
+          (m: any) =>
+            (m?.adjunto?.path && !m?.adjunto?.proyecto_id && !m?.obras?.length) ||
+            m?.categoria === 'datos_obra'
         ).length;
         setWhatsappPendingCount(pending);
       } catch {
