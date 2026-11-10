@@ -1,3 +1,4 @@
+import { isConversationalName, isPersonName, explicitPersonName } from './person-name';
 import type { PersonDraft } from "@/lib/registrations";
 import { phonesInText } from "@/lib/phone";
 import { projectMentions } from "./project-reference";
@@ -64,9 +65,7 @@ export function personLiterals(
   if (phones.length === 1) draft.telefono = "+" + phones[0];
   if (/\bsupervisor(?:a)?\b/.test(plain)) draft.rol = "supervisor";
   else if (/\b(?:terreno|maestro|maestra)\b/.test(plain)) draft.rol = "terreno";
-  const explicit = message.match(
-    /\b(?:nombre(?: completo)?(?: es)?|se llama)\s*[:=]?\s*([^,;\n]+)/i,
-  )?.[1];
+  const explicit = explicitPersonName(message);
   const leading = message
     .split(/[,;\n]/)[0]
     .replace(
@@ -83,6 +82,8 @@ export function personLiterals(
   if (
     (starts || !previous?.nombre || explicit) &&
     name &&
+    !isConversationalName(name) &&
+    (tipo === "cliente" || isPersonName(name)) &&
     !/@|\d|[?!¿]/.test(name) &&
     !/\b(?:agrega|agregar|registra|registrar|trabajador|cliente|maestro|terreno|supervisor|obra|falta|corrige|cambia)\b/.test(
       norm(name),

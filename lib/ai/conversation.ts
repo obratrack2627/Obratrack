@@ -1,6 +1,7 @@
+import { actionContacts } from './contact-name-command';
 export interface ConversationTurn { rol: 'user' | 'model'; texto: string }
 const normal = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const facts = /\b(obras?|proyectos?|radier|terraza|marca|modelo|prefiero|usar|medidas?|ancho|largo|alto|altura|espesor|cliente|correo|telefono|direccion|comuna|presupuesto|margen|iva|material(?:es)?|cemento|cubierta|terminacion|anticipo|pago|plazo|precio|acordado|corrijo|correccion)\b/;
+const facts = /\b(obras?|proyectos?|radier|terraza|marca|modelo|prefiero|usar|medidas?|ancho|largo|alto|altura|espesor|cliente|correo|telefono|nombre|rut|trabajador|supervisor|direccion|comuna|presupuesto|margen|iva|material(?:es)?|cemento|cubierta|terminacion|anticipo|pago|plazo|precio|acordado|corrijo|correccion)\b/;
 const words = (value: string) => new Set(normal(value).split(/[^a-z0-9]+/).filter((word) => word.length >= 4));
 
 // Recupera antecedentes literales, sin inventar un resumen ni convertir el historial
@@ -45,9 +46,16 @@ export function conversationHistory(input: unknown, query: string): Conversation
 export function conversationRequest(input: unknown, query: string) {
   const selected = conversationHistory(input, query).map((turn) => ({ remitente: turn.rol === 'user' ? 'usuario' : 'agente', texto: turn.texto }));
   if (Array.isArray(input)) {
-    const last = input.findLast(row => row?.rol === 'model' || row?.remitente === 'agente');
-    const model = selected.findLast(row => row.remitente === 'agente');
-    if (last?.accion_ejecutada && model) Object.assign(model, {registro_pendiente:last.accion_ejecutada?.detalles?.borrador_registro || null});
+    let cursor=input.length-1;
+    for(const model of selected.slice().reverse()) {
+      if(model.remitente!=='agente')continue;
+      let source;
+      for(let i=cursor;i>=0;i--)if((input[i]?.rol==='model'||input[i]?.remitente==='agente') && input[i].texto?.trim().slice(0,6000)===model.texto) {source=input[i];cursor=i-1;break;}
+      if(!source?.accion_ejecutada)continue;
+      const details=source.accion_ejecutada.detalles || {};
+      Object.assign(model,{registro_pendiente:details.borrador_registro || null,referencias_contacto:actionContacts(source.accion_ejecutada)});
+      if(Object.hasOwn(details,'edicion_nombre_pendiente'))Object.assign(model,{edicion_nombre_pendiente:details.edicion_nombre_pendiente});
+    }
   }
   return selected;
 }

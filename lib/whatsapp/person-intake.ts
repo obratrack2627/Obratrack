@@ -1,3 +1,4 @@
+import { isConversationalName, isPersonName } from '@/lib/ai/person-name';
 import { registrationFields, type PersonDraft } from "@/lib/registrations";
 import { canonicalPhone, phonesInText } from "@/lib/phone";
 import {
@@ -28,6 +29,7 @@ export function personIntake(
   selectedId?: string,
   users: any[] = [],
 ) {
+  if (previous) previous = {items:previous.items.map(item=>registrationFields(item).draft)};
   if (anotherTask(message, previous?.items[0]?.nombre))
     return {
       actions: actions.filter((action) => !personActions.has(action.tipo)),
@@ -195,6 +197,7 @@ export function personIntake(
     ] as const) {
       if (typeof input[field] !== "string" || !input[field].trim()) continue;
       const value = input[field].trim();
+      if (field === 'nombre' && (isConversationalName(value) || (current.tipo === 'trabajador' && !isPersonName(value)))) continue;
       const known = norm(value) === norm(current[field] || "");
       const phone =
         field === "telefono" &&

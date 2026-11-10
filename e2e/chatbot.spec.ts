@@ -1,3 +1,4 @@
+import { contactNameCommand, contactTurns, withNameEditContext } from '../lib/ai/contact-name-command';
 import { personIntake } from '../lib/whatsapp/person-intake';
 import { pendingPerson, withPersonContext } from '../lib/ai/person-context';
 import { conversationHistory } from '../lib/ai/conversation';
@@ -2336,4 +2337,34 @@ test('ObraBot móvil conserva el alta tras consultar obras y registra teléfono 
   expect(registrations).toBe(1);expect(requests).toBe(4);
   await expect.poll(()=>db.proyecto_trabajadores?.some(row=>row.proyecto_id==='p-existing' && row.usuario_id===db.usuarios.find(user=>user.nombre==='Ramón Escobar')?.id)).toBe(true);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+});
+
+test('ObraBot móvil mantiene el cambio de nombre mientras identifica por RUT y actualiza la misma ficha',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ const db=await setup(page,{},true);
+ const worker={id:'bad-name-worker',empresa_id:company,nombre:'Ya te di todos los datos',rut:'12345678-5',rol:'terreno',telefono_whatsapp:'+56967345678',email:'worker@example.test',auth_user_id:null,is_dev:false};
+ db.usuarios.push(worker);db.proyectos[0].trabajadores_ids=[worker.id];
+ let updates=0;
+ await page.route('**/api/cotizador/chat',async route=>{
+  const body=route.request().postDataJSON();
+  const result=contactNameCommand(body.mensaje,db.usuarios,contactTurns(body.historial),ownerId);
+  expect(result.handled).toBe(true);
+  await route.fulfill({json:withNameEditContext({respuesta:result.question || 'Voy a corregir el nombre de la ficha.',accion:result.action || null,cotizacion:null},result.pending || null,true)});
+ });
+ await page.route('**/rest/v1/rpc/actualizar_contacto_equipo',async route=>{
+  if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'}});
+  updates++;const body=route.request().postDataJSON();
+  expect(body.p_usuario).toBe(worker.id);expect(body.p_datos.rut).toBe(worker.rut);expect(body.p_datos.nombre).toBe('Felipe Melo');
+  Object.assign(worker,body.p_datos);
+  await route.fulfill({json:worker,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'*'}});
+ });
+ await page.goto('/cotizador');
+ await send(page,'Ok pero cámbiale el nombre, se llama Felipe Melo');
+ await expect(page.getByText(/¿A qué trabajador le cambio el nombre?/)).toBeVisible();
+ expect(updates).toBe(0);
+ await send(page,'Su rut es 123456785');
+ await expect(page.getByText(/Actualicé los datos de Felipe Melo/).first()).toBeVisible();
+ expect(updates).toBe(1);expect(db.usuarios).toHaveLength(2);
+ expect(worker.id).toBe('bad-name-worker');expect(worker.rut).toBe('12345678-5');expect(worker.telefono_whatsapp).toBe('+56967345678');
+ expect(db.proyectos[0].trabajadores_ids).toEqual([worker.id]);
 });

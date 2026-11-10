@@ -1,3 +1,4 @@
+import { isConversationalName, isPersonName } from './person-name';
 import { canonicalPhone } from '@/lib/phone';
 import { validarRutChileno } from '@/lib/utils';
 import { isDeveloperEmail } from '@/lib/auth-utils';
@@ -26,6 +27,7 @@ export function validateContactAction(action: Record<string, any>) {
   }
   if (action.nuevo_nombre !== undefined && (!action.nuevo_nombre || action.nuevo_nombre.length > 150))
     throw new AIError('CONTACT_INVALID', 'Indica un nombre de hasta 150 caracteres.', 422);
+  if (action.nuevo_nombre && (isConversationalName(action.nuevo_nombre) || (action.tipo === 'actualizar_trabajador' && !isPersonName(action.nuevo_nombre)))) throw new AIError('CONTACT_INVALID', 'Indica el nombre completo de la persona que quieres registrar en la ficha.', 422);
   if (action.email) {
     action.email = action.email.toLowerCase();
     const parts = action.email.split('@');

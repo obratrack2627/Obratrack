@@ -550,3 +550,18 @@ test('el registro rápido tampoco permite saltarse la pertenencia del chat de un
  assert.equal(out.status,403);assert.equal((await out.json()).code,'PROJECT_FORBIDDEN');
  assert.ok(!fixture.calls.some(call=>['upsert','update'].includes(call.mode)));
 });
+
+test('la edición web conserva el nombre solicitado y usa el RUT siguiente solo para identificar la ficha',async()=>{
+ const {conversationRequest}=require('../lib/ai/conversation.ts');
+ fixture.tables.set('usuarios',[{id:'bad-name',empresa_id:'company-a',nombre:'Ya te di todos los datos',rut:'12345678-5',telefono_whatsapp:'+56967345678',rol:'terreno'}]);
+ const never=async()=>{throw Error('No debe delegar esta corrección al modelo');};
+ const handler=createChatHandler({authorize:authorized,global:never,project:never});
+ const original='Ok pero cámbiale el nombre, se llama Felipe melo';
+ const first=await handler(makeRequest({mensaje:original}));const pending=await first.json();
+ assert.equal(first.status,200);assert.equal(pending.accion,null);assert.equal(pending.accion_ejecutada.detalles.edicion_nombre_pendiente.nuevo_nombre,'Felipe melo');
+ const messages=[{remitente:'usuario',texto:original},{remitente:'agente',texto:pending.respuesta,accion_ejecutada:pending.accion_ejecutada}];
+ const second=await handler(makeRequest({mensaje:'Su rut es 123456785',historial:conversationRequest(messages,'Su rut es 123456785')}));
+ assert.equal(second.status,200);const reply=await second.json();
+ assert.deepEqual(reply.accion,{tipo:'actualizar_trabajador',usuario_id:'bad-name',nuevo_nombre:'Felipe melo'});
+ assert.equal(reply.accion_ejecutada.detalles.edicion_nombre_pendiente,null);
+});

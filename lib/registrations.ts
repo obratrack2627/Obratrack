@@ -1,3 +1,4 @@
+import { isConversationalName, isPersonName } from '@/lib/ai/person-name';
 import { validateContactAction } from '@/lib/ai/contacts';
 export type PersonDraft = { tipo: 'trabajador' | 'cliente'; nombre?: string; rut?: string; telefono?: string; email?: string; rol?: string; proyecto_id?: string; proyecto_nombre?: string; direccion?: string; comuna?: string };
 export function registrationFields(input: PersonDraft) {
@@ -9,7 +10,7 @@ export function registrationFields(input: PersonDraft) {
     if (typeof value !== 'string' || !value.trim()) { missing.push(label); continue; }
     if (field === 'nombre') {
       draft.nombre = value.trim();
-      if (value.length > 150 || (draft.tipo === 'trabajador' && value.trim().split(/\s+/).length < 2)) missing.push(label);
+      if (value.length > 150 || isConversationalName(value) || (draft.tipo === 'trabajador' && !isPersonName(value))) { missing.push(label); delete draft.nombre; }
     } else {
       try {
         const action = validateContactAction({ tipo: 'actualizar_cliente', [field]: value });

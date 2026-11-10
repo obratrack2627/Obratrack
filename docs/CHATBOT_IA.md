@@ -196,3 +196,14 @@ El respaldo anterior a esta corrección es
 sin modificar los registros: `git revert ai/obrabot-contexto-2026-11-10` y publicar
 la reversión en `main`. No cambia la configuración del proveedor de IA ni requiere
 migraciones SQL.
+
+## Nombres y correcciones de fichas
+
+El registro no acepta frases de conversación como «Ya te di todos los datos» como
+nombre. También sanea ese valor en un borrador antiguo y conserva sus demás datos.
+Las correcciones de nombre conservan su intención mientras se identifica la ficha:
+si el siguiente mensaje indica un RUT, este se usa para buscar al integrante y se
+cambia únicamente el nombre solicitado. La ficha recién registrada puede
+identificarse por su resultado guardado; homónimos o referencias desconocidas
+requieren aclaración. La web y WhatsApp conservan esta edición pendiente en sus
+historiales existentes, sin migraciones ni cambios de rol, teléfono o asignaciones.

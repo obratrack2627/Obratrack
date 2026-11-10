@@ -1214,3 +1214,18 @@ test('WhatsApp completa el caso de Ramón con teléfono local y RUT corregido si
  assert.equal(captured.p_changed.proyectos[0].id,'bath');assert.equal(captured.p_acciones.borrador_registro,null);
  const commits=sb.commits;await processPersonalMessage(sb,message('ramon-rut','12.345.678-5'),deps);assert.equal(sb.commits,commits);
 });
+
+test('WhatsApp conserva el cambio a Felipe cuando pide identificar la ficha y no confunde el RUT con un dato a modificar',async()=>{
+ const sb=database();const worker={id:'bad-name',empresa_id:user.empresa_id,nombre:'Ya te di todos los datos',rut:'12345678-5',rol:'terreno',telefono_whatsapp:'+56967345678',email:'worker@example.test'};
+ sb.db.usuarios.push(worker);let captured;const base=sb.rpc.bind(sb);sb.rpc=async(name,params)=>{captured=params;return base(name,params);};
+ const never=async()=>{throw Error('No necesita modelo para esta corrección');};
+ const message=(id,body)=>({id,from:'56912345678',type:'text',text:{body}});
+ const first=await processPersonalMessage(sb,message('felipe-rename','Ok pero cámbiale el nombre, se llama Felipe melo'),{chat:never});
+ assert.match(first.respuesta,/RUT|nombre completo/);assert.equal(captured.p_changed.usuarios.length,0);
+ assert.equal(captured.p_acciones.edicion_nombre_pendiente.nuevo_nombre,'Felipe melo');
+ const next=await processPersonalMessage(sb,message('felipe-identity','Su rut es 123456785'),{chat:never});
+ assert.match(next.respuesta,/Felipe melo/);assert.equal(captured.p_changed.usuarios.length,1);
+ const saved=captured.p_changed.usuarios[0];assert.equal(saved.id,worker.id);assert.equal(saved.nombre,'Felipe melo');
+ assert.equal(saved.rut,worker.rut);assert.equal(saved.telefono_whatsapp,worker.telefono_whatsapp);assert.equal(saved.rol,worker.rol);
+ assert.equal(captured.p_acciones.edicion_nombre_pendiente,null);
+});
