@@ -223,7 +223,10 @@ export default function Sidebar() {
             <Link href="/dashboard" className="hover:opacity-95 transition-opacity">
               <Logo variant="horizontal" theme="dark" size="md" withDescriptor={false} />
             </Link>
-
+            <div className="mt-2.5 pt-2 border-t border-white/10 flex items-center gap-1.5 text-[10px] font-heading font-medium text-gray-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#6B8F72] animate-pulse"></span>
+              <span>El <strong className="text-[#FF6A00]">copiloto</strong> digital del constructor</span>
+            </div>
           </div>
 
           {/* Navigation Links */}
