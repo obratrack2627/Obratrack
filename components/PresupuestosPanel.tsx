@@ -1,4 +1,5 @@
 "use client";
+import MoneyAmount from './MoneyAmount';
 import ActionMenu from './ActionMenu';
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -10,7 +11,7 @@ import {
   type Presupuesto,
   type BudgetStatus,
 } from "@/lib/presupuestos";
-import { formatCLP, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { canonicalPhone } from "@/lib/phone";
 import type { Cliente, Proyecto } from "@/types/database";
 import CotizacionPdfModal from "./CotizacionPdfModal";
@@ -248,13 +249,13 @@ export default function PresupuestosPanel({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-3">
+      <div className="grid min-w-0 grid-cols-1 sm:grid-cols-[minmax(0,1fr)_200px] gap-3 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3 sm:p-4">
         <input
           aria-label="Buscar presupuesto"
           placeholder="Buscar obra o cliente"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-2 text-sm"
+          className="w-full min-w-0 max-w-full rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] p-2.5 text-sm"
         />
         <select
           aria-label="Filtrar por estado"
@@ -287,134 +288,53 @@ export default function PresupuestosPanel({
       )}
 
       {Array.from(new Set(visible.map((r) => r.grupo_id).filter(Boolean))).map((id) => <BudgetGroupCard key={id} rows={visible.filter((r) => r.grupo_id === id)} projects={projects} busy={busy} onChoose={setChoice} onHistory={setHistory} onAlternative={setVariantSource} onView={(row, edit) => { setSelected(row); setEditSelected(edit); }} onUpdate={(row, changes) => void update(row, changes)} />)}
-      {visible.some((r) => !r.grupo_id) && (
-        <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23]">
-          <table className="responsive-records w-full text-sm text-left">
-            <thead className="bg-kraft-100 dark:bg-[#0B0F14]">
-              <tr>
-                {[
-                  "Presupuesto",
-                  "Total con IVA",
-                  "Estado",
-                  "Obra asociada",
-                  "Acciones",
-                ].map((h) => (
-                  <th key={h} className="p-3 font-semibold">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visible.filter((row) => !row.grupo_id).map((row) => {
-                const canConvert =
-                  !row.proyecto_id &&
-                  row.estado !== "anulada" &&
-                  row.estado !== "rechazada";
-                return (
-                  <tr
-                    key={row.id}
-                    className="border-t border-kraft-200 dark:border-[#263040]"
-                  >
-                    <td className="p-3">
-                      <p className="font-semibold text-navy-900 dark:text-white">
-                        {row.cotizacion.titulo_proyecto}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {row.cotizacion.cliente_nombre || "Sin cliente asignado"}{" "}
-                        · {formatDate(row.created_at)} ·{" "}
-                        {row.origen === "whatsapp" ? "WhatsApp" : "Plataforma"}
-                      </p>
-                    </td>
-                    <td data-label="Total con IVA" className="p-3 font-mono whitespace-nowrap font-semibold">
-                      {formatCLP(
-                        row.cotizacion.estructura_financiera
-                          .precio_total_con_iva,
-                      )}
-                    </td>
-                    <td data-label="Estado" className="p-3">
-                      <select
-                        disabled={busy}
-                        aria-label={`Estado de ${row.cotizacion.titulo_proyecto}`}
-                        value={row.estado}
-                        onChange={(e) =>
-                          void update(row, {
-                            estado: e.target.value as BudgetStatus,
-                          })
-                        }
-                        className="rounded-lg border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#0B0F14] p-2"
-                      >
-                        {budgetStatuses.map((s) => (
-                          <option key={s} value={s}>
-                            {labels[s]}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td data-label="Obra asociada" className="p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          disabled={busy}
-                          aria-label={`Obra de ${row.cotizacion.titulo_proyecto}`}
-                          value={row.proyecto_id || ""}
-                          onChange={(e) =>
-                            void update(row, {
-                              proyecto_id: e.target.value || null,
-                            })
-                          }
-                          className="rounded-lg border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#0B0F14] p-2 max-w-48"
-                        >
-                          <option value="">Sin asociar</option>
-                          {projects.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nombre}
-                            </option>
-                          ))}
-                        </select>
-                        {row.proyecto_id && (
-                          <Link
-                            href={`/proyectos/${row.proyecto_id}/finanzas`}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-obra-green hover:underline whitespace-nowrap"
-                          >
-                            <span>Ver obra</span>
-                            <ArrowUpRight className="w-3.5 h-3.5" />
-                          </Link>
-                        )}
-                      </div>
-                    </td>
-                    <td data-label="Acciones" className="p-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          className="text-obra-orange font-semibold whitespace-nowrap hover:underline"
-                          onClick={() => { setEditSelected(false); setSelected(row); }}
-                        >
-                          Ver / PDF
-                        </button>
-                        <button type="button" className="text-sm font-semibold hover:underline" onClick={() => { setEditSelected(true); setSelected(row); }}>Editar</button>
-                        <ActionMenu label={`Más acciones de ${row.cotizacion.titulo_proyecto}`}>
-                        <button type="button" className="text-sm text-gray-500" onClick={() => setHistory(row)}>Historial</button>
-                        <button type="button" disabled={busy} className="text-sm font-semibold text-obra-orange" onClick={() => setVariantSource(row)}>Crear alternativa</button>
-                        {row.proyecto_id && !['rechazada','anulada'].includes(row.estado) && <button type="button" disabled={busy} className="rounded-lg bg-obra-green text-white px-3 py-2 text-xs font-semibold" onClick={() => setChoice(row)}>Aplicar a la obra</button>}
-                        {canConvert && (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void handleConvertirEnObra(row)}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-[#6B8F72] hover:bg-emerald-700 disabled:opacity-50 px-2.5 py-1.5 text-xs font-bold text-white whitespace-nowrap transition-colors"
-                          >
-                            <FolderPlus className="w-3.5 h-3.5" />
-                            <span>Convertir en Obra</span>
-                          </button>
-                        )}
-                        </ActionMenu>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {visible.some(row => !row.grupo_id) && (
+        <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2" aria-label="Listado de presupuestos">
+          {visible.filter(row => !row.grupo_id).map(row => {
+            const canConvert = !row.proyecto_id && !['anulada','rechazada'].includes(row.estado);
+            const tone = row.estado === 'aprobada' ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300' : ['rechazada','anulada'].includes(row.estado) ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300' : 'border-kraft-200 bg-kraft-50 text-gray-700 dark:border-[#263040] dark:bg-[#0B0F14] dark:text-gray-200';
+            return <article key={row.id} aria-label={`Presupuesto ${row.cotizacion.titulo_proyecto}`} className="min-w-0 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-4 sm:p-5 flex flex-col gap-4">
+              <header className="min-w-0 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                  <span className="rounded-md bg-kraft-100 dark:bg-[#1E2530] px-2 py-1">{row.origen === 'whatsapp' ? 'WhatsApp' : 'Plataforma'}</span>
+                  <span>{formatDate(row.created_at)}</span>
+                </div>
+                <h3 className="text-lg font-bold leading-snug text-navy-900 dark:text-white break-words">{row.cotizacion.titulo_proyecto}</h3>
+                <p className="text-sm text-gray-500 break-words">{row.cotizacion.cliente_nombre || 'Sin cliente asignado'}</p>
+              </header>
+              <div className="min-w-0 rounded-xl bg-kraft-50 dark:bg-[#0B0F14] px-4 py-3">
+                <p className="text-xs font-medium text-gray-500 mb-1">Total con IVA</p>
+                <div className="text-2xl font-bold font-mono text-navy-900 dark:text-white"><MoneyAmount value={row.cotizacion.estructura_financiera.precio_total_con_iva} /></div>
+              </div>
+              <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
+                  Estado
+                  <select disabled={busy} aria-label={`Estado de ${row.cotizacion.titulo_proyecto}`} value={row.estado} onChange={e => void update(row,{estado:e.target.value as BudgetStatus})} className={`block w-full min-w-0 max-w-full rounded-xl border px-3 py-2.5 text-sm font-semibold ${tone}`}>
+                    {budgetStatuses.map(status => <option key={status} value={status}>{labels[status]}</option>)}
+                  </select>
+                </label>
+                <div className="min-w-0 space-y-1.5">
+                  <label className="block min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
+                    Obra asociada
+                    <select disabled={busy} aria-label={`Obra de ${row.cotizacion.titulo_proyecto}`} value={row.proyecto_id || ''} onChange={e => void update(row,{proyecto_id:e.target.value || null})} className="block w-full min-w-0 max-w-full truncate rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100">
+                      <option value="">Sin asociar</option>{projects.map(project => <option key={project.id} value={project.id}>{project.nombre}</option>)}
+                    </select>
+                  </label>
+                  {row.proyecto_id && <Link href={`/proyectos/${row.proyecto_id}/finanzas`} className="inline-flex items-center gap-1 text-xs font-semibold text-obra-green hover:underline">Ver obra <ArrowUpRight size={13} /></Link>}
+                </div>
+              </div>
+              <footer className="mt-auto flex items-center gap-2 border-t border-kraft-200 dark:border-[#263040] pt-4">
+                <button type="button" onClick={() => {setEditSelected(false);setSelected(row);}} className="rounded-xl bg-obra-orange px-3.5 py-2 text-sm font-semibold text-white hover:bg-obra-orange-hover">Ver / PDF</button>
+                <button type="button" onClick={() => {setEditSelected(true);setSelected(row);}} className="rounded-xl border border-kraft-200 dark:border-[#263040] px-3.5 py-2 text-sm font-semibold">Editar</button>
+                <div className="ml-auto"><ActionMenu label={`Más acciones de ${row.cotizacion.titulo_proyecto}`}>
+                  <button type="button" onClick={() => setHistory(row)}>Historial</button>
+                  <button type="button" disabled={busy} onClick={() => setVariantSource(row)}>Crear alternativa</button>
+                  {row.proyecto_id && !['rechazada','anulada'].includes(row.estado) && <button type="button" disabled={busy} onClick={() => setChoice(row)}>Aplicar a la obra</button>}
+                  {canConvert && <button type="button" disabled={busy} onClick={() => void handleConvertirEnObra(row)}><FolderPlus size={15} />Convertir en Obra</button>}
+                </ActionMenu></div>
+              </footer>
+            </article>;
+          })}
         </div>
       )}
 

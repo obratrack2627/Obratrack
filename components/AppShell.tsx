@@ -37,9 +37,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="hidden md:flex fixed top-3.5 right-4 z-40 print:hidden">
             <ThemeToggle />
           </div>
-          <main className="workspace-ui flex-1 flex flex-col min-h-screen w-full pt-16 md:pt-0 md:pl-64 transition-all">
+          <main className="workspace-ui min-w-0 flex-1 flex flex-col min-h-screen w-full pt-16 md:pt-0 md:pl-64 transition-all">
             <CloudSync />
-            <div className="flex-1 flex flex-col page-fade-enter">
+            <div className="min-w-0 max-w-full flex-1 flex flex-col page-fade-enter">
               {children}
             </div>
           </main>

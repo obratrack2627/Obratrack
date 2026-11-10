@@ -1,4 +1,5 @@
 'use client';
+import MoneyAmount from "@/components/MoneyAmount";
 import ActionMenu from '@/components/ActionMenu';
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
@@ -525,25 +526,25 @@ export default function ProyectoFinanzasPage() {
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
             <p className="text-xs font-mono font-semibold uppercase text-gray-500">Monto Cotizado (Total)</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white mt-1">{formatCLP(montoCotizado)}</h3>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white mt-1"><MoneyAmount value={montoCotizado} /></h3>
             <p className="text-[11px] text-gray-500 font-sans mt-0.5">Presupuesto acordado</p>
           </div>
 
           <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
             <p className="text-xs font-mono font-semibold uppercase text-gray-500">Total Recaudado</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#6B8F72] mt-1">{formatCLP(totalPagado)}</h3>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#6B8F72] mt-1"><MoneyAmount value={totalPagado} /></h3>
             <p className="text-[11px] text-gray-500 font-sans mt-0.5">{porcentajePagado}% del total presupuestado</p>
           </div>
 
           <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
             <p className="text-xs font-mono font-semibold uppercase text-gray-500">Saldo Por Cobrar</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#FF6A00] mt-1">{formatCLP(saldoPendiente)}</h3>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#FF6A00] mt-1"><MoneyAmount value={saldoPendiente} /></h3>
             <p className="text-[11px] text-gray-500 font-sans mt-0.5">Estados de pago pendientes</p>
           </div>
 
           <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
             <p className="text-xs font-mono font-semibold uppercase text-gray-500">Costos considerados</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-gray-200 mt-1">{formatCLP(totalCostosDirectos)}</h3>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-gray-200 mt-1"><MoneyAmount value={totalCostosDirectos} /></h3>
             <p className="text-[11px] text-gray-500 font-sans mt-0.5">Materiales e imprevistos</p>
           </div>
 
@@ -574,7 +575,7 @@ export default function ProyectoFinanzasPage() {
                 ? 'text-amber-500'
                 : 'text-red-500'
             }`}>
-              {formatCLP(saldoTrasCostos)}
+              <MoneyAmount value={saldoTrasCostos} />
             </h3>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-0.5">
               Sin descontar mano de obra ni gastos generales

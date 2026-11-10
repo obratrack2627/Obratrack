@@ -692,7 +692,7 @@ test("la bandeja del jefe muestra conexión pendiente y abre una cotización rec
   });
   await page.goto("/reportes");
   await expect(
-    page.getByRole("heading", { name: "Gestiona tu obra desde tu WhatsApp" }),
+    page.getByRole("heading", { name: "Canal de WhatsApp" }),
   ).toBeVisible();
   await expect(
     page.getByText("Conexión con Meta pendiente", { exact: true }),
@@ -1698,6 +1698,7 @@ test('estado de obra se confirma, persiste al navegar y conserva el valor ante u
     await expect(state).toHaveAttribute('data-project-status', value);
     expect(db.proyectos[0].estado).toBe(value);
     await page.getByRole('link', { name: 'Obras & Proyectos', exact: true }).click();
+    await page.getByRole('tablist', {name:'Filtrar obras por estado'}).getByRole('tab', {name:/^Todas/}).click();
     await expect(page.locator('[data-project-id="p-existing"] [data-project-status]')).toHaveAttribute('data-project-status', value);
     await expect(page.locator('[data-project-id="p-other"] [data-project-status]')).toHaveAttribute('data-project-status', 'activo');
     await page.getByRole('link', { name: 'Terraza', exact: true }).click();
@@ -1807,4 +1808,103 @@ test('ObraBot flotante cancela la obra recién consultada y confirma el estado g
   expect(db.proyectos[1].estado).toBe('activo');
   expect(db.proyectos[1].monto_cotizado).toBe(12000000);
   await page.screenshot({path:'/tmp/obrabot-logica-contexto.png',fullPage:true});
+});
+
+async function expectMobileWidth(page: Page) {
+  const overflow = await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth }));
+  expect(overflow.document).toBeLessThanOrEqual(overflow.viewport);
+}
+
+test('WhatsApp mantiene el ancho móvil al elegir nombres largos y abrir registros y destinatarios', async ({page}) => {
+  await page.setViewportSize({width:320,height:780});
+  await setup(page,{},true);
+  const longProject='Ampliación y remodelación de espacios de servicios e instalaciones de la comunidad de propietarios del sector norte';
+  const longAuthor='Supervisor de instalaciones y terminaciones de la cuadrilla de obra del sector norte';
+  const longToken='https://documentos.example.test/'+ 'comprobante'.repeat(45);
+  await page.route('**/api/webhook/whatsapp',route=>route.fulfill({json:{cloud_api_configurada:true,numero:'15556154571'}}));
+  await page.route('**/api/whatsapp/mensajes*',route=>route.fulfill({json:{gestion:true,total:1,autores:[{id:'supervisor',nombre:longAuthor}],obras:[{id:'p-existing',nombre:longProject}],mensajes:[{message_id:'long-report',texto:'Revisión del avance y del comprobante '+longToken,respuesta:'## Avance de obra\n**'+longProject+'**\n- Archivo: `'+longToken+'`\n- Comprobante: *"'+longToken+'"*',categoria:'registro',created_at:'2026-11-09T14:00:00Z',sent_at:'2026-11-09T14:00:01Z',autor:{nombre:longAuthor,rol:'supervisor'},obras:[{id:'p-existing',nombre:longProject}],acciones:{titulo:'Avance registrado',resultado_texto:longToken}}]}}));
+  await page.route('**/api/whatsapp/avisos*',route=>route.fulfill({json:new URL(route.request().url()).searchParams.has('id')?{envios:[{id:'recipient',nombre:longAuthor,rol:'supervisor',telefono:'56912345678',estado:'fallido',error_detalle:longToken}]}:{total:1,avisos:[{id:'notice',destinatarios:1,created_at:'2026-11-09T14:00:00Z',mensaje:'Avance para '+longProject,estados:{fallido:1}}]}}));
+  await page.goto('/reportes');
+  await expect(page.getByText('Avance registrado',{exact:true}).first()).toBeVisible();
+  await expectMobileWidth(page);
+  for(const [label,value] of [['Tipo de registro','registro'],['Filtrar registros por obra','p-existing'],['Autor del registro','supervisor']]){
+    await page.getByLabel(label,{exact:true}).selectOption(value);
+    await expectMobileWidth(page);
+  }
+  await page.getByText('Ver detalle',{exact:true}).click();
+  await expect(page.getByText('Respuesta de ObraTrack',{exact:true})).toBeVisible();
+  await expectMobileWidth(page);
+  await page.evaluate(()=>scrollTo(0,0));
+  await page.screenshot({path:'/tmp/obratrack-whatsapp-mobile-details.png',fullPage:true});
+  await page.getByRole('tab',{name:'Avisos enviados',exact:true}).click();
+  await page.getByRole('button',{name:'Ver destinatarios',exact:true}).click();
+  await expect(page.locator('td').filter({hasText:longAuthor})).toBeVisible();
+  await expectMobileWidth(page);
+  await page.evaluate(()=>scrollTo(0,0));
+  await page.screenshot({path:'/tmp/obratrack-whatsapp-mobile-recipients.png',fullPage:true});
+  await page.setViewportSize({width:1440,height:1000});
+  await expect(page.getByRole('main')).toHaveCSS('padding-left','256px');
+  await page.getByRole('tab',{name:'Registros',exact:true}).click();
+  await expect(page.getByText('Avance registrado',{exact:true}).first()).toBeVisible();
+  await page.screenshot({path:'/tmp/obratrack-whatsapp-desktop.png',fullPage:true});
+});
+
+test('los indicadores móviles permanecen visibles y ajustan los importes completos sin desbordarse',async({page})=>{
+ await page.setViewportSize({width:320,height:780});
+ const db=await setup(page,{},true);
+ db.proyectos[0].monto_cotizado=987654321000;
+ db.pagos=[{id:'large-payment',proyecto_id:'p-existing',monto:123456789000,estado:'completado',fecha:'2026-11-09'}];
+ for(const path of ['/dashboard','/proyectos','/clientes','/equipo','/asistencia','/proyectos/p-existing/finanzas','/proyectos/p-existing/documentos','/proyectos/p-existing/cambios','/proyectos/p-existing/asistencia','/proyectos/p-existing/ia']){
+  await page.goto(path);
+  await expect(page.locator('.summary-overview')).toBeVisible();
+  await expect(page.getByText('Ver resumen',{exact:true})).toHaveCount(0);
+  await expectMobileWidth(page);
+  expect(await page.locator('.workspace-metrics > div').evaluateAll(nodes=>Math.max(...nodes.map(node=>node.getBoundingClientRect().height)))).toBeLessThan(350);
+  if(await page.locator('.money-amount').count())await expect.poll(()=>page.locator('.money-amount').evaluateAll(nodes=>nodes.every(node=>(node.firstElementChild?.scrollWidth||0)<=node.clientWidth+1))).toBe(true);
+ }
+ await page.goto('/dashboard');
+ await expect(page.locator('.money-amount').first()).toContainText('987.654.321.000');
+ await page.screenshot({path:'/tmp/obratrack-summaries-mobile.png',fullPage:true});
+ const size=await page.locator('.money-amount > span').first().evaluate(el=>Number.parseFloat(getComputedStyle(el).fontSize));
+ await page.setViewportSize({width:1440,height:1000});
+ await expect.poll(()=>page.locator('.money-amount > span').first().evaluate(el=>Number.parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThan(size);
+});
+
+test('Obras abre En curso y Todas mantiene las obras en curso al principio',async({page})=>{
+ const db=await setup(page,{},true);
+ db.proyectos.unshift({...db.proyectos[0],id:'ended',nombre:'Obra terminada',estado:'terminado'});
+ db.proyectos.push({...db.proyectos[0],id:'pending',nombre:'Obra pendiente',estado:'pendiente'});
+ await page.goto('/proyectos');
+ const tabs=page.getByRole('tablist',{name:'Filtrar obras por estado'});
+ await expect(tabs.getByRole('tab',{name:/^En curso/})).toHaveAttribute('aria-selected','true');
+ await expect(page.locator('[data-project-id]')).toHaveCount(1);
+ await expect(page.locator('[data-project-id]').first()).toHaveAttribute('data-project-id','p-existing');
+ await tabs.getByRole('tab',{name:/^Todas/}).click();
+ await expect(page.locator('[data-project-id]')).toHaveCount(3);
+ await expect(page.locator('[data-project-id]').first()).toHaveAttribute('data-project-id','p-existing');
+});
+
+test('los presupuestos usan tarjetas adaptables y el teléfono no recibe un color de barra impuesto',async({page})=>{
+ await page.setViewportSize({width:320,height:780});
+ const db=await setup(page,{},true);
+ db.proyectos[0].nombre='Obra de ampliación y mejoramiento del conjunto habitacional y sus espacios comunitarios';
+ const quote=normalizeQuote({titulo_proyecto:'Terminaciones e instalaciones para espacios comunitarios',cliente_nombre:'Comunidad de propietarios del conjunto habitacional del sector norte',modo_presupuesto:'precio_acordado',tratamiento_iva:'incluido',partidas_venta:[{nombre:'Construcción acordada',cantidad:1,unidad:'gl',precio_unitario:987654321000}],materiales:[],mano_de_obra:[]});
+ let budget:any={id:quote.id,cotizacion:quote,estado:'borrador',origen:'whatsapp',proyecto_id:null,created_at:'2026-11-09T14:00:00Z',updated_at:'2026-11-09T14:00:00Z'};
+ await page.route('**/api/presupuestos*',route=>{if(route.request().method()==='PATCH'){budget={...budget,...route.request().postDataJSON()};return route.fulfill({json:{presupuesto:budget}});}return route.fulfill({json:{presupuestos:[budget]}});});
+ await page.goto('/proyectos?tab=presupuestos');
+ const card=page.getByRole('article',{name:`Presupuesto ${quote.titulo_proyecto}`,exact:true});
+ await expect(card).toBeVisible();await expectMobileWidth(page);
+ await expect(card.getByRole('button',{name:'Ver / PDF',exact:true})).toBeVisible();
+ await expect.poll(()=>card.locator('.money-amount').evaluateAll(nodes=>nodes.every(node=>(node.firstElementChild?.scrollWidth||0)<=node.clientWidth+1))).toBe(true);
+ await expect(page.locator('meta[name="theme-color"]')).toHaveCount(0);
+ const manifest=await(await page.request.get('/manifest.webmanifest')).json();expect(manifest.theme_color).toBeUndefined();
+ await card.getByLabel(`Obra de ${quote.titulo_proyecto}`,{exact:true}).selectOption('p-existing');
+ await expectMobileWidth(page);
+ await expect(card).toBeVisible();
+ await page.evaluate(()=>scrollTo(0,0));
+ await page.screenshot({path:'/tmp/obratrack-budgets-mobile.png',fullPage:true});
+ await page.setViewportSize({width:1440,height:1000});
+ await expect(page.getByRole('main')).toHaveCSS('padding-left','256px');
+ await expectMobileWidth(page);
+ await page.screenshot({path:'/tmp/obratrack-budgets-desktop.png',fullPage:true});
 });

@@ -1,4 +1,5 @@
 'use client';
+import MoneyAmount from "@/components/MoneyAmount";
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
@@ -261,7 +262,7 @@ export default function ClientesPage() {
                 Total cotizado
               </p>
               <h3 className="text-xl font-bold font-mono text-navy-900 mt-1">
-                {formatCLP(totalContratadoGeneral)}
+                <MoneyAmount value={totalContratadoGeneral} />
               </h3>
               <p className="text-[11px] text-gray-500 font-sans mt-0.5">
                 Presupuestos asociados a sus obras

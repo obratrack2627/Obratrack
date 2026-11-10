@@ -1,4 +1,5 @@
 'use client';
+import MoneyAmount from "@/components/MoneyAmount";
 import CompactSummary from '@/components/CompactSummary';
 import { projectStatuses } from '@/lib/project-status';
 import { ProjectStatusBadge } from '@/components/ProjectStatus';
@@ -46,7 +47,7 @@ import Navbar from '@/components/Navbar';
 import PresupuestosPanel from '@/components/PresupuestosPanel';
 import { dataService } from '@/lib/data-service';
 import { Proyecto, Cliente, Usuario, SubscriptionPlanId, ProjectStatus } from '@/types/database';
-import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
+import { formatDate, formatThousands, parseThousands } from '@/lib/utils';
 import { getCoordenadasComuna } from '@/lib/chile-locations';
 import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 import GoogleMapsLocationPicker from '@/components/GoogleMapsLocationPicker';
@@ -78,7 +79,7 @@ export default function ProyectosPage() {
 
   // Filtros de búsqueda y estado
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'todos' | ProjectStatus>('todos');
+  const [statusFilter, setStatusFilter] = useState<'todos' | ProjectStatus>('activo');
   const [clientFilter, setClientFilter] = useState<string>('todos');
 
   // Formulario nuevo proyecto
@@ -424,7 +425,7 @@ export default function ProyectosPage() {
                 Cotizado Total
               </p>
               <h3 className="text-xl font-bold font-mono text-navy-900 mt-1">
-                {formatCLP(cotizadoTotal)}
+                <MoneyAmount value={cotizadoTotal} />
               </h3>
               <p className="text-[11px] text-gray-500 font-sans mt-0.5">
                 En obras en ejecución
@@ -442,7 +443,7 @@ export default function ProyectosPage() {
                 Total Cobrado
               </p>
               <h3 className="text-xl font-bold font-mono text-obra-green mt-1">
-                {formatCLP(totalCobrado)}
+                <MoneyAmount value={totalCobrado} />
               </h3>
               <p className="text-[11px] text-gray-500 font-sans mt-0.5">
                 {cotizadoTotal > 0 ? Math.round((totalCobrado / cotizadoTotal) * 100) : 0}% recaudado
@@ -460,7 +461,7 @@ export default function ProyectosPage() {
                 Saldo Por Cobrar
               </p>
               <h3 className="text-xl font-bold font-mono text-obra-red mt-1">
-                {formatCLP(porCobrar)}
+                <MoneyAmount value={porCobrar} />
               </h3>
               <p className="text-[11px] text-gray-500 font-sans mt-0.5">
                 Estados de pago pendientes
@@ -638,7 +639,7 @@ export default function ProyectosPage() {
                 (p.direccion && p.direccion.toLowerCase().includes(term)) ||
                 (p.cliente?.nombre && p.cliente.nombre.toLowerCase().includes(term));
               return matchStatus && matchClient && matchSearch;
-            });
+            }).sort((a, b) => Number(b.estado === 'activo') - Number(a.estado === 'activo'));
 
             if (filteredProyectos.length === 0) {
               return (
@@ -813,18 +814,18 @@ export default function ProyectosPage() {
                         <div className="bg-kraft-50 border border-kraft-200/60 rounded-lg p-3 space-y-1.5 mb-4">
                           <div className="flex justify-between text-xs">
                             <span className="text-gray-500 font-mono">Cotizado:</span>
-                            <span className="font-mono font-bold text-navy-900">{formatCLP(cotizado)}</span>
+                            <span className="min-w-0 max-w-[62%] flex-1 text-right font-mono font-bold text-navy-900"><MoneyAmount value={cotizado} /></span>
                           </div>
                           <div className="flex justify-between text-xs">
-                            <span className="text-gray-500 font-mono">Pagado:</span>
-                            <span className="font-mono font-bold text-obra-green">
-                              {formatCLP(pagado)} ({percentPago}%)
+                            <span className="text-gray-500 font-mono">Pagado ({percentPago}%):</span>
+                            <span className="min-w-0 max-w-[62%] flex-1 text-right font-mono font-bold text-obra-green">
+                              <MoneyAmount value={pagado} />
                             </span>
                           </div>
                           <div className="flex justify-between text-xs pt-1 border-t border-kraft-200/60">
                             <span className="text-gray-500 font-mono">Saldo:</span>
-                            <span className="font-mono font-semibold text-obra-red">
-                              {formatCLP(proj.saldo_pendiente)}
+                            <span className="min-w-0 max-w-[62%] flex-1 text-right font-mono font-semibold text-obra-red">
+                              <MoneyAmount value={proj.saldo_pendiente ?? 0} />
                             </span>
                           </div>
                         </div>

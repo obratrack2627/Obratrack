@@ -12,8 +12,9 @@ import { dataService } from "@/lib/data-service";
 import Link from 'next/link';
 
 export default function AIMessageTools({
-  message,
+  message, compact = false,
 }: {
+  compact?: boolean;
   message: {
     cotizacion_generada?: CotizacionEstimacion;
     comparacion_materiales?: import("@/lib/materials/types").ComparacionMateriales;
@@ -56,7 +57,7 @@ export default function AIMessageTools({
       {message.comparacion_materiales && (
         <MaterialPriceComparison data={message.comparacion_materiales} />
       )}
-      {quote && (
+      {quote && (!compact || options.length > 0) && (
         <section
           aria-label="Resumen del presupuesto"
           className="rounded-xl border border-kraft-200 dark:border-gray-700 p-3 space-y-2"
@@ -124,7 +125,7 @@ export default function AIMessageTools({
           Ver cotización / PDF
         </button>
       )}
-      {quote && !options.length && <QuoteProjectProposal key={quote.id} quote={quote} projectId={budgetProject} />}
+      {quote && !compact && !options.length && <QuoteProjectProposal key={quote.id} quote={quote} projectId={budgetProject} />}
       {message.pendiente_sincronizacion && !status.startsWith("Guardado") && (
         <button
           type="button"

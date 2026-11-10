@@ -1,4 +1,5 @@
 'use client';
+import MoneyAmount from "@/components/MoneyAmount";
 import CompactSummary from '@/components/CompactSummary';
 
 import { conversationRequest } from '@/lib/ai/conversation';
@@ -45,7 +46,7 @@ import {
   MensajeChatProyecto,
   AccionAsistenteIA,
 } from '@/types/database';
-import { formatCLP, formatDate } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
@@ -377,14 +378,14 @@ export default function ProyectoIAPage() {
           <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm">
             <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Presupuesto Total</p>
             <p className="text-xl font-bold font-mono text-navy-900 dark:text-white mt-1">
-              {formatCLP(proyecto.monto_cotizado || 0)}
+              <MoneyAmount value={proyecto.monto_cotizado || 0} />
             </p>
           </div>
 
           <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm">
             <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Saldo Por Cobrar</p>
             <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
-              {formatCLP(saldoPendiente)}
+              <MoneyAmount value={saldoPendiente} />
             </p>
           </div>
 

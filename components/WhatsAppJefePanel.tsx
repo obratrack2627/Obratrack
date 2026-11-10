@@ -134,11 +134,11 @@ export default function WhatsAppJefePanel() {
     }
   }
   return (
-    <div className="space-y-5">
-      <section className="rounded-2xl border bg-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
-        <div>
+    <div className="whatsapp-workspace space-y-5">
+      <section className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
           <h2 className="font-heading font-bold">
-            Gestiona tu obra desde tu WhatsApp
+            Canal de WhatsApp
           </h2>
           <p className="text-sm text-gray-500 mt-1">
             Tu teléfono: {phone || "Pendiente en tu ficha"} ·{" "}
@@ -174,7 +174,7 @@ export default function WhatsAppJefePanel() {
         {status?.cloud_api_configurada && status.numero &&
           (!connection || connection.estado === "disponible") && (
           <a
-            className="inline-flex items-center gap-2 rounded-xl bg-green-700 text-white px-4 py-2 text-sm"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-green-700 text-white px-4 py-2.5 text-sm font-semibold"
             href={`https://wa.me/${status.numero.replace(/\D/g, "")}`}
             target="_blank"
             rel="noreferrer"
@@ -185,7 +185,7 @@ export default function WhatsAppJefePanel() {
         )}
       </section>
       <div
-        className="flex gap-2 border-b"
+        className="flex min-w-0 gap-1 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-100 dark:bg-[#0B0F14] p-1"
         role="tablist"
         aria-label="Actividad de WhatsApp"
       >
@@ -193,7 +193,7 @@ export default function WhatsAppJefePanel() {
           role="tab"
           aria-selected={tab === "registros"}
           onClick={() => setTab("registros")}
-          className={`px-4 py-3 text-sm font-semibold border-b-2 ${tab === "registros" ? "border-obra-orange text-obra-orange" : "border-transparent"}`}
+          className={`flex-1 sm:flex-none rounded-lg px-4 py-2.5 text-sm font-semibold ${tab === "registros" ? "bg-white dark:bg-[#1E2530] text-obra-orange shadow-sm" : "text-gray-500"}`}
         >
           Registros
         </button>
@@ -202,7 +202,7 @@ export default function WhatsAppJefePanel() {
             role="tab"
             aria-selected={tab === "envios"}
             onClick={() => setTab("envios")}
-            className={`px-4 py-3 text-sm font-semibold border-b-2 ${tab === "envios" ? "border-obra-orange text-obra-orange" : "border-transparent"}`}
+            className={`flex-1 sm:flex-none rounded-lg px-4 py-2.5 text-sm font-semibold ${tab === "envios" ? "bg-white dark:bg-[#1E2530] text-obra-orange shadow-sm" : "text-gray-500"}`}
           >
             Avisos enviados
           </button>
@@ -227,55 +227,32 @@ export default function WhatsAppJefePanel() {
               {busy ? "Actualizando…" : "Actualizar registros"}
             </button>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <input
-              aria-label="Buscar registro"
-              placeholder="Buscar registro"
-              value={search}
-              onChange={(e) => change(setSearch)(e.target.value)}
-              className="rounded-xl border bg-white p-2.5 text-sm min-w-0"
-            />
-            <select
-              aria-label="Tipo de registro"
-              value={type}
-              onChange={(e) => change(setType)(e.target.value)}
-              className="rounded-xl border bg-white p-2.5 text-sm"
-            >
-              <option value="">Todos los tipos</option>
-              {Object.entries(labels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Filtrar registros por obra"
-              value={project}
-              onChange={(e) => change(setProject)(e.target.value)}
-              className="rounded-xl border bg-white p-2.5 text-sm"
-            >
-              <option value="">Todas las obras</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                </option>
-              ))}
-            </select>
-            {staff && (
-              <select
-                aria-label="Autor del registro"
-                value={author}
-                onChange={(e) => change(setAuthor)(e.target.value)}
-                className="rounded-xl border bg-white p-2.5 text-sm"
-              >
-                <option value="">Todos los autores</option>
-                {authors.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.nombre}
-                  </option>
-                ))}
-              </select>
-            )}
+          <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3 sm:p-4 space-y-3">
+            <div className="grid min-w-0 grid-cols-2 lg:grid-cols-4 gap-3">
+              <label className="col-span-2 lg:col-span-1 min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
+                Buscar
+                <input aria-label="Buscar registro" placeholder="Mensaje, autor o detalle…" value={search} onChange={e => change(setSearch)(e.target.value)} className="block w-full min-w-0 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100" />
+              </label>
+              <label className="min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
+                Tipo de registro
+                <select aria-label="Tipo de registro" value={type} onChange={e => change(setType)(e.target.value)} className="block w-full min-w-0 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100 truncate">
+                  <option value="">Todos los tipos</option>{Object.entries(labels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label className="min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
+                Obra
+                <select aria-label="Filtrar registros por obra" value={project} onChange={e => change(setProject)(e.target.value)} className="block w-full min-w-0 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100 truncate">
+                  <option value="">Todas las obras</option>{projects.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </label>
+              {staff && <label className="col-span-2 lg:col-span-1 min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
+                Autor
+                <select aria-label="Autor del registro" value={author} onChange={e => change(setAuthor)(e.target.value)} className="block w-full min-w-0 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100 truncate">
+                  <option value="">Todos los autores</option>{authors.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                </select>
+              </label>}
+            </div>
+            {(search || type || project || author) && <button type="button" onClick={() => {setSearch('');setType('');setProject('');setAuthor('');setPage(0);}} className="text-xs font-semibold text-obra-orange hover:underline">Limpiar filtros</button>}
           </div>
           {error && (
             <p
@@ -320,10 +297,10 @@ export default function WhatsAppJefePanel() {
               return (
                 <article
                   key={m.message_id}
-                  className="rounded-2xl border bg-white p-4 sm:p-5 space-y-3"
+                  className="min-w-0 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-4 sm:p-5 space-y-4"
                 >
                   <div className="flex items-start gap-3">
-                    <span className="rounded-xl bg-obra-orange/10 p-2.5 text-obra-orange">
+                    <span className="shrink-0 rounded-xl bg-obra-orange/10 p-2.5 text-obra-orange">
                       <Icon className="h-4 w-4" />
                     </span>
                     <div className="flex-1 min-w-0">
@@ -347,7 +324,7 @@ export default function WhatsAppJefePanel() {
                       </p>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-700 break-words">
+                  <p className="rounded-xl bg-kraft-50 dark:bg-[#0B0F14] p-3 text-sm text-gray-700 dark:text-gray-300 break-words">
                     {String(m.texto || "").slice(0, 220)}
                     {m.texto?.length > 220 ? "…" : ""}
                   </p>
@@ -356,7 +333,7 @@ export default function WhatsAppJefePanel() {
                       {m.obras.map((p: any) => (
                         <Link
                           key={p.id}
-                          className="text-xs text-obra-orange hover:underline"
+                          className="max-w-full rounded-lg border border-obra-orange/20 px-2 py-1 text-xs font-medium text-obra-orange hover:underline"
                           href={`/proyectos/${p.id}/gantt`}
                         >
                           {p.nombre}
@@ -409,25 +386,25 @@ export default function WhatsAppJefePanel() {
                       </button>
                     )}
                   </div>
-                  <AIMessageTools
+                  <AIMessageTools compact
                     message={{ cotizacion_generada: m.cotizacion || undefined }}
                   />
-                  <details className="border-t pt-3">
+                  <details className="min-w-0 border-t border-kraft-200 dark:border-[#263040] pt-3">
                     <summary className="cursor-pointer text-sm font-medium flex items-center gap-1">
                       Ver detalle <ChevronDown className="h-4 w-4" />
                     </summary>
-                    <div className="mt-3 grid md:grid-cols-2 gap-4 text-sm">
-                      <div className="rounded-xl bg-kraft-50 p-3">
+                    <div className="min-w-0 mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      <div className="min-w-0 rounded-xl bg-kraft-50 dark:bg-[#0B0F14] p-3">
                         <p className="text-xs text-gray-500 mb-2">
                           Mensaje recibido
                         </p>
-                        <ChatMessageFormatter content={m.texto || ""} />
+                        <ChatMessageFormatter className="message-content" content={m.texto || ""} />
                       </div>
-                      <div className="rounded-xl bg-gray-50 p-3">
+                      <div className="min-w-0 rounded-xl bg-kraft-50 dark:bg-[#0B0F14] p-3">
                         <p className="text-xs text-gray-500 mb-2">
                           Respuesta de ObraTrack
                         </p>
-                        <ChatMessageFormatter content={m.respuesta || ""} />
+                        <ChatMessageFormatter className="message-content" content={m.respuesta || ""} />
                       </div>
                     </div>
                     {actions.length > 0 && (
@@ -435,7 +412,7 @@ export default function WhatsAppJefePanel() {
                         {actions.map((a: any, i: number) => (
                           <li key={i} className="rounded-xl border p-3">
                             <p className="font-medium">{a.titulo}</p>
-                            <p className="text-gray-600 mt-1">
+                            <p className="text-gray-600 dark:text-gray-300 mt-1 break-words">
                               {a.resultado_texto}
                             </p>
                             {a.link_destino &&

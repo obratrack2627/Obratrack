@@ -28,3 +28,20 @@ Para regresar también al comportamiento funcional anterior, revertir después
 
 Si hay cambios posteriores en los mismos archivos, revisar y resolver sus posibles
 conflictos antes de publicar la reversión.
+
+## Reportes, presupuestos y uso móvil
+
+La actualización de reportes y presupuestos conserva el respaldo
+`backup/antes-ajustes-movil-2026-11-09`. El cambio publicado se identifica con
+`ux/reportes-presupuestos-movil-2026-11-09`.
+
+Para revertir esta actualización manteniendo los datos y las correcciones anteriores:
+
+```bash
+git revert ux/reportes-presupuestos-movil-2026-11-09
+git push origin main
+```
+
+Incluye la estructura de reportes y presupuestos, indicadores visibles en celular,
+ajuste de importes, filtro inicial En curso y configuración de las barras del teléfono.
+No cambia el esquema de la base de datos ni modifica registros existentes.

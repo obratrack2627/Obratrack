@@ -81,7 +81,7 @@ export default function WhatsAppAvisosPanel() {
     }
   }
   return (
-    <section className="space-y-4" aria-label="Avisos enviados al equipo">
+    <section className="min-w-0 space-y-4" aria-label="Avisos enviados al equipo">
       <div className="flex flex-wrap justify-between gap-3">
         <div>
           <h3 className="font-bold text-lg">
@@ -124,7 +124,7 @@ export default function WhatsAppAvisosPanel() {
       {rows.map((row) => (
         <article
           key={row.id}
-          className="rounded-2xl border bg-white p-4 sm:p-5 space-y-3"
+          className="min-w-0 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-4 sm:p-5 space-y-3"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-semibold">
@@ -148,7 +148,7 @@ export default function WhatsAppAvisosPanel() {
               </span>
             ))}
           </div>
-          <div className="flex gap-4 text-sm">
+          <div className="flex flex-wrap gap-3 text-sm">
             <button
               className="underline"
               onClick={() => {
@@ -171,8 +171,8 @@ export default function WhatsAppAvisosPanel() {
             )}
           </div>
           {open === row.id && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
+            <div className="min-w-0 max-w-full">
+              <table className="recipient-table w-full table-fixed text-sm text-left">
                 <thead>
                   <tr>
                     {["Destinatario", "Teléfono", "Estado", "Detalle"].map(
@@ -187,7 +187,7 @@ export default function WhatsAppAvisosPanel() {
                 <tbody>
                   {details.map((d) => (
                     <tr key={d.id}>
-                      <td className="p-2">
+                      <td data-label="Destinatario" className="p-2 break-words">
                         {d.nombre}
                         <p className="text-xs text-gray-500">
                           {d.rol === "terreno"
@@ -197,13 +197,13 @@ export default function WhatsAppAvisosPanel() {
                               : "Administración"}
                         </p>
                       </td>
-                      <td className="p-2 whitespace-nowrap">
+                      <td data-label="Teléfono" className="p-2 break-words">
                         {d.telefono ? "+" + d.telefono : "Sin registrar"}
                       </td>
-                      <td className="p-2 whitespace-nowrap">
+                      <td data-label="Estado" className="p-2 break-words">
                         {labels[d.estado] || d.estado}
                       </td>
-                      <td className="p-2 text-xs text-gray-600">
+                      <td data-label="Detalle" className="p-2 text-xs text-gray-600 dark:text-gray-300 break-words">
                         {d.error_detalle || "—"}
                       </td>
                     </tr>

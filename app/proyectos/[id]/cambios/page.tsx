@@ -1,4 +1,5 @@
 'use client';
+import MoneyAmount from "@/components/MoneyAmount";
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
@@ -354,7 +355,7 @@ export default function ProyectoCambiosPage() {
               <RefreshCw className="w-4 h-4 text-blue-500" />
             </div>
             <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
-              {formatCLP(totalCambiosMonto)}
+              <MoneyAmount value={totalCambiosMonto} />
             </p>
             <p className="text-[11px] text-gray-500 mt-1">Impacto económico acumulado</p>
           </div>

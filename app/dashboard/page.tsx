@@ -1,4 +1,5 @@
 'use client';
+import MoneyAmount from "@/components/MoneyAmount";
 import CompactSummary from '@/components/CompactSummary';
 import { ProjectStatusBadge } from '@/components/ProjectStatus';
 
@@ -278,7 +279,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3">
             <span className="text-2xl lg:text-3xl font-heading font-black text-navy-900 dark:text-white">
-              {formatCLP(totalCotizado)}
+              <MoneyAmount value={totalCotizado} />
             </span>
           </div>
           <p className="mt-3 text-xs text-gray-500 font-mono">
@@ -298,12 +299,12 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3">
             <span className="text-2xl lg:text-3xl font-heading font-black text-[#6B8F72]">
-              {formatCLP(totalCobrado)}
+              <MoneyAmount value={totalCobrado} />
             </span>
           </div>
-          <div className="mt-3 flex items-center justify-between text-xs font-mono text-gray-500">
-            <span>Saldo por cobrar:</span>
-            <strong className="text-[#FF6A00]">{formatCLP(saldoPendiente)}</strong>
+          <div className="mt-3 space-y-1 text-xs font-mono text-gray-500">
+            <span className="block">Saldo por cobrar:</span>
+            <strong className="block min-w-0 text-[#FF6A00]"><MoneyAmount value={saldoPendiente} /></strong>
           </div>
         </div>
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { X, Plus, Check } from 'lucide-react';
 import ModalOverlay from './ModalOverlay';
+import MoneyAmount from './MoneyAmount';
 import QuoteEditor from './QuoteEditor';
 import CotizacionPdfModal from './CotizacionPdfModal';
 import { aiHeaders } from '@/lib/ai/client';
@@ -12,7 +13,7 @@ import { budgetStatuses, type Presupuesto, type BudgetStatus } from '@/lib/presu
 import type { CotizacionEstimacion } from '@/types/database';
 import { formatCLP } from '@/lib/utils';
 
-const input = 'w-full rounded-lg border border-kraft-200 dark:border-gray-600 bg-white dark:bg-[#141A23] p-2 text-sm';
+const input = 'w-full min-w-0 max-w-full rounded-lg border border-kraft-200 dark:border-gray-600 bg-white dark:bg-[#141A23] p-2 text-sm';
 export const budgetLabels: Record<BudgetStatus, string> = { borrador: 'Borrador', enviada: 'Enviada', aprobada: 'Aprobada', rechazada: 'Rechazada', anulada: 'Anulada', no_elegida: 'No elegida' };
 const name = (row: Presupuesto) => row.cotizacion.nombre_alternativa || row.nombre_alternativa || row.cotizacion.titulo_proyecto;
 
@@ -89,17 +90,17 @@ export function BudgetGroupCard({ rows, projects, busy, onChoose, onAlternative,
   const group = rows[0].grupo!;
   const chosen = rows.find((r) => r.id === group.seleccionado_id);
   const reference = chosen || rows[0];
-  return <section className="rounded-2xl border border-kraft-200 dark:border-gray-700 bg-white dark:bg-[#141A23] p-4 sm:p-5 space-y-4" aria-label={`Alternativas de ${group.nombre}`}>
+  return <section className="min-w-0 rounded-2xl border border-kraft-200 dark:border-gray-700 bg-white dark:bg-[#141A23] p-4 sm:p-5 space-y-4" aria-label={`Alternativas de ${group.nombre}`}>
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-bold text-lg">{group.nombre}</h3><p className="text-xs text-gray-500">{group.tipo === 'principal' ? 'Presupuesto principal' : 'Alcance complementario'} · {rows.length} {rows.length === 1 ? 'propuesta' : 'alternativas'}</p></div><button type="button" disabled={busy} onClick={() => onAlternative(reference)} className="inline-flex items-center gap-1 text-sm font-semibold text-obra-orange"><Plus size={16} />Crear alternativa</button></div>
-    <div className="flex flex-wrap gap-3 items-center"><label className="text-sm flex-1 min-w-40"><span className="sr-only">Obra de {group.nombre}</span><select aria-label={`Obra de ${group.nombre}`} disabled={busy || group.aplicado} value={group.proyecto_id || ''} className={input} onChange={(e) => onUpdate(reference, { proyecto_id: e.target.value || null })}><option value="">Obra por crear</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></label>{group.proyecto_id && <Link className="text-sm text-obra-green underline" href={`/proyectos/${group.proyecto_id}/presupuestos`}>Ver obra</Link>}</div>
+    <div className="flex flex-wrap gap-3 items-center"><label className="text-sm flex-1 min-w-0"><span className="sr-only">Obra de {group.nombre}</span><select aria-label={`Obra de ${group.nombre}`} disabled={busy || group.aplicado} value={group.proyecto_id || ''} className={input} onChange={(e) => onUpdate(reference, { proyecto_id: e.target.value || null })}><option value="">Obra por crear</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></label>{group.proyecto_id && <Link className="text-sm text-obra-green underline" href={`/proyectos/${group.proyecto_id}/presupuestos`}>Ver obra</Link>}</div>
     {group.aplicado && chosen && <p className="rounded-xl bg-obra-green/10 p-3 text-sm"><Check size={16} className="inline mr-2 text-obra-green" /><strong>Aplicada: {name(chosen)}</strong> · {formatCLP(Number(group.monto_aplicado))}</p>}
-    <div className="grid gap-3 lg:grid-cols-2">{rows.map((row) => {
+    <div className="grid min-w-0 gap-4 lg:grid-cols-2">{rows.map((row) => {
       const selected = group.aplicado && group.seleccionado_id === row.id;
       const total = row.cotizacion.estructura_financiera.precio_total_con_iva;
       const diff = total - reference.cotizacion.estructura_financiera.precio_total_con_iva;
-      return <article key={row.id} className={`rounded-xl border p-3 space-y-3 ${selected ? 'border-obra-green' : 'border-gray-200 dark:border-gray-700'}`} aria-label={`Opción ${name(row)}`}>
-        <div><p className="font-semibold">{name(row)}</p><p className="text-xl font-bold">{formatCLP(total)}</p>{row.id !== reference.id && <p className="text-xs text-gray-500">{diff === 0 ? 'Mismo importe' : `${diff > 0 ? '+' : '−'}${formatCLP(Math.abs(diff))}`} respecto de {name(reference)}</p>}</div>
-        <details className="text-xs"><summary className="cursor-pointer">Ver alcance y materiales</summary><p className="mt-2 whitespace-pre-line">{row.cotizacion.resumen_ejecutivo}</p><ul className="mt-2 space-y-1">{(row.cotizacion.partidas_venta || []).map((p, i) => <li key={`p${i}`}>{p.nombre}: {formatCLP(p.subtotal)}</li>)}{row.cotizacion.materiales.map((m, i) => <li key={`m${i}`}>{m.nombre} · {m.cantidad} {m.unidad}</li>)}</ul></details>
+      return <article key={row.id} className={`min-w-0 rounded-xl border bg-kraft-50/60 dark:bg-[#0B0F14] p-4 space-y-4 ${selected ? 'border-obra-green' : 'border-gray-200 dark:border-gray-700'}`} aria-label={`Opción ${name(row)}`}>
+        <div><p className="font-semibold">{name(row)}</p><div className="text-2xl font-bold font-mono"><MoneyAmount value={total} /></div>{row.id !== reference.id && <p className="text-xs text-gray-500">{diff === 0 ? 'Mismo importe' : `${diff > 0 ? '+' : '−'}${formatCLP(Math.abs(diff))}`} respecto de {name(reference)}</p>}</div>
+        <details className="min-w-0 text-xs break-words"><summary className="cursor-pointer">Ver alcance y materiales</summary><p className="mt-2 whitespace-pre-line">{row.cotizacion.resumen_ejecutivo}</p><ul className="mt-2 space-y-1">{(row.cotizacion.partidas_venta || []).map((p, i) => <li key={`p${i}`}>{p.nombre}: {formatCLP(p.subtotal)}</li>)}{row.cotizacion.materiales.map((m, i) => <li key={`m${i}`}>{m.nombre} · {m.cantidad} {m.unidad}</li>)}</ul></details>
         <select aria-label={`Estado de ${name(row)}`} className={input} value={row.estado} disabled={busy || selected} onChange={(e) => e.target.value === 'aprobada' ? onChoose(row) : onUpdate(row, { estado: e.target.value })}>{budgetStatuses.map((s) => <option key={s} value={s}>{budgetLabels[s]}</option>)}</select>
         <div className="flex flex-wrap items-center gap-3 text-sm"><button type="button" onClick={() => onHistory(row)} className="text-gray-500">Historial</button><button type="button" onClick={() => onView(row, false)} className="text-obra-orange font-semibold">Ver / PDF</button>{!selected && <button type="button" onClick={() => onView(row, true)} className="font-semibold">Editar</button>}{!selected && !['rechazada','anulada'].includes(row.estado) && <button type="button" disabled={busy} onClick={() => onChoose(row)} className="rounded-lg bg-obra-green text-white px-3 py-2 font-semibold">Elegir y aplicar</button>}{selected && <span className="text-obra-green font-semibold">Elegida para ejecución</span>}</div>
       </article>;

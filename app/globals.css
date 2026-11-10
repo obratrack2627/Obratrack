@@ -338,7 +338,7 @@ html[data-mobile-nav-open] #obrabot-widget { visibility: hidden; pointer-events:
 /* Espacio de trabajo: jerarquía consistente y controles cómodos en celular. */
 .workspace-metrics { gap: .75rem; }
 .workspace-metrics > div { padding: 1rem; box-shadow: none; }
-.action-menu summary::-webkit-details-marker, .compact-summary summary::-webkit-details-marker { display: none; }
+.action-menu summary::-webkit-details-marker { display: none; }
 .action-menu > div > button, .action-menu > div > a { display: flex; align-items: center; gap: .5rem; width: 100%; padding: .65rem .75rem; border-radius: .5rem; text-align: left; font-size: .875rem; }
 .action-menu > div > button:hover, .action-menu > div > a:hover { background: #FAF8F5; }
 .dark .action-menu > div > button:hover, .dark .action-menu > div > a:hover { background: #1E2530; }
@@ -348,12 +348,32 @@ html[data-mobile-nav-open] #obrabot-widget { visibility: hidden; pointer-events:
   .workspace-metrics h3 { font-size: 1.1rem; line-height: 1.4; }
   .workspace-ui input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']), .workspace-ui textarea, .workspace-ui select { font-size: 16px; }
 }
+
+
+/* Los controles nativos y el contenido abierto no deben imponer un ancho de escritorio. */
+.workspace-metrics, .workspace-metrics > div { min-width: 0; max-width: 100%; }
+.workspace-metrics > div > div, .workspace-metrics h3, .workspace-metrics p { min-width: 0; }
+.money-amount { line-height: 1.3; }
+.whatsapp-workspace { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.whatsapp-workspace section, .whatsapp-workspace article, .whatsapp-workspace details, .whatsapp-workspace details > div { min-width: 0; max-width: 100%; }
+.whatsapp-workspace select, .whatsapp-workspace input { width: 100%; min-width: 0; max-width: 100%; }
+.whatsapp-workspace pre { max-width: 100%; overflow-x: auto; }
+.whatsapp-workspace .message-content { overflow-wrap: anywhere; }
+.whatsapp-workspace .message-content .flex-1 { min-width: 0; }
+.whatsapp-workspace .message-content code, .whatsapp-workspace .message-content span { overflow-wrap: anywhere; max-width: 100%; }
 @media (max-width: 767px) {
-  .responsive-records, .responsive-records tbody { display: block; }
-  .responsive-records thead { display: none; }
-  .responsive-records tr { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); padding: .5rem; gap: .25rem; }
-  .responsive-records td { display: block; min-width: 0; padding: .5rem; overflow-wrap: anywhere; }
-  .responsive-records td:nth-child(1), .responsive-records td:nth-child(4), .responsive-records td:last-child { grid-column: 1 / -1; }
-  .responsive-records td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 600; color: #6B7280; margin-bottom: .4rem; }
-  .responsive-records td:last-child > div { justify-content: flex-start; }
+  .workspace-metrics { gap: .75rem; }
+  .workspace-metrics > div { padding: .9rem; }
+  .workspace-metrics > div > .flex > span { min-width: 0; overflow-wrap: anywhere; }
 }
+@media (max-width: 767px) {
+  .recipient-table, .recipient-table tbody { display: block; width: 100%; }
+  .recipient-table thead { display: none; }
+  .recipient-table tr { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); border: 1px solid var(--border-color, #E5DFC9); border-radius: .75rem; padding: .5rem; margin-top: .5rem; }
+  .recipient-table td { min-width: 0; display: block; overflow-wrap: anywhere; }
+  .recipient-table td:first-child, .recipient-table td:last-child { grid-column: 1 / -1; }
+  .recipient-table td::before { content: attr(data-label); display: block; margin-bottom: .25rem; color: #6B7280; font-size: .7rem; font-weight: 600; }
+}
+.budget-workspace { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.budget-workspace section, .budget-workspace article, .budget-workspace select { min-width: 0; max-width: 100%; }
+.budget-workspace section > div > div { min-width: 0; }
