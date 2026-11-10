@@ -316,8 +316,8 @@ export default function ProyectoCambiosPage() {
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#FAF8F5] dark:bg-[#0E131B] pb-16">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#1E1E1E] text-white px-4 py-3 rounded-2xl shadow-2xl border border-[#FF6A00] flex items-center gap-2 text-xs font-semibold">
-          <Sparkles className="w-4 h-4 text-[#FF6A00] shrink-0" />
+        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
+          <CheckCircle2 className="w-4 h-4 text-obra-orange shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -359,48 +359,56 @@ export default function ProyectoCambiosPage() {
 
         {/* Tarjetas KPI */}
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-              <span>Adicionales / Cambios</span>
-              <RefreshCw className="w-4 h-4 text-blue-500" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Adicionales / Cambios</p>
+              <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
+                <RefreshCw className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               <MoneyAmount value={totalCambiosMonto} />
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Impacto económico acumulado</p>
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Impacto económico acumulado</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-              <span>Pendientes de Aprobación</span>
-              <Clock className="w-4 h-4 text-amber-500" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Pendientes de Aprobación</p>
+              <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {pendientesCount}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Requieren decisión o cierre</p>
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Requieren decisión o cierre</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-              <span>Reclamos e Incidencias</span>
-              <MessageSquareWarning className="w-4 h-4 text-purple-500" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Reclamos e Incidencias</p>
+              <div className="w-8 h-8 rounded-lg bg-purple-500/15 text-purple-500 flex items-center justify-center shrink-0">
+                <MessageSquareWarning className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {reclamosIncidenciasCount}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Postventa y hallazgos técnicos</p>
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Postventa y hallazgos técnicos</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
-              <span>Seguridad / Accidentes</span>
-              <ShieldAlert className="w-4 h-4 text-red-500" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Seguridad / Accidentes</p>
+              <div className="w-8 h-8 rounded-lg bg-red-500/15 text-red-500 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {accidentesCount}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Prevención de riesgos en faena</p>
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Prevención de riesgos en faena</p>
           </div>
         </div></CompactSummary>
 

@@ -211,55 +211,55 @@ export default function EquipoPage() {
         
         {/* KPI Cards de Equipo */}
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">
                 Total Cuadrilla
               </p>
-              <h3 className="text-2xl font-bold font-heading text-navy-900 mt-1">
-                {usuarios.length}
-              </h3>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                Personal activo en la empresa
-              </p>
+              <div className="w-8 h-8 rounded-lg bg-navy-800 text-obra-orange flex items-center justify-center shrink-0">
+                <Users className="w-4 h-4" />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-lg bg-navy-800 text-obra-orange flex items-center justify-center">
-              <Users className="w-6 h-6" />
-            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-heading text-navy-900 dark:text-white">
+              {usuarios.length}
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
+              Personal activo en la empresa
+            </p>
           </div>
 
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">
                 Maestros en Terreno (WhatsApp)
               </p>
-              <h3 className="text-2xl font-bold font-heading text-obra-green mt-1">
-                {countTerreno}
-              </h3>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                Habilitados para reportar por audio
-              </p>
+              <div className="w-8 h-8 rounded-lg bg-obra-green-light dark:bg-obra-green/15 text-obra-green flex items-center justify-center shrink-0">
+                <HardHat className="w-4 h-4" />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-lg bg-obra-green-light text-obra-green flex items-center justify-center">
-              <HardHat className="w-6 h-6" />
-            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-heading text-obra-green">
+              {countTerreno}
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
+              Habilitados para reportar por audio
+            </p>
           </div>
 
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">
                 Supervisores & Admins
               </p>
-              <h3 className="text-2xl font-bold font-heading text-navy-900 mt-1">
-                {countSupervisor + countAdmin}
-              </h3>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                Control de Gantt, Finanzas y Aprobación
-              </p>
+              <div className="w-8 h-8 rounded-lg bg-obra-orange-light dark:bg-obra-orange/15 text-obra-orange flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-lg bg-obra-orange-light text-obra-orange flex items-center justify-center">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-heading text-navy-900 dark:text-white">
+              {countSupervisor + countAdmin}
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
+              Control de Gantt, Finanzas y Aprobación
+            </p>
           </div>
         </div></CompactSummary>
 

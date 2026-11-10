@@ -205,13 +205,8 @@ export default function ProjectTabsHeader({
         </div>
       </div>
 
-      {/* Fila Inferior: Pestañas de Navegación Rápida por Obra */}
-      <div className="md:hidden px-4 py-2 border-t border-kraft-100 dark:border-[#1E2530]">
-        <select aria-label="Sección de la obra" value={tabs.find(tab => pathname?.startsWith(tab.href))?.href || tabs[0].href} onChange={event => router.push(event.target.value)} className="w-full rounded-lg border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] px-3 py-2 text-sm font-semibold">
-          {tabs.filter(tab => tab.id !== 'presupuestos' || ['admin','supervisor'].includes(dataService.getActiveUser()?.rol || '')).map(tab => <option key={tab.id} value={tab.href}>{tab.label}</option>)}
-        </select>
-      </div>
-      <div className="hidden md:flex px-4 sm:px-6 items-center gap-1 overflow-x-auto no-scrollbar border-t border-kraft-100 dark:border-[#1E2530] pt-1">
+      {/* Fila Inferior: Pestañas de Navegación Rápida por Obra (Responsiva con scroll limpio en móvil y web) */}
+      <div className="flex px-4 sm:px-6 items-center gap-1 overflow-x-auto no-scrollbar border-t border-kraft-100 dark:border-[#1E2530] pt-1">
         {tabs.filter(tab=>tab.id!=='presupuestos'||['admin','supervisor'].includes(dataService.getActiveUser()?.rol||'')).map((tab) => {
           const Icon = tab.icon;
           const isActive = pathname?.startsWith(tab.href);

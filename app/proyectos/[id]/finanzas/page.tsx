@@ -594,41 +594,61 @@ export default function ProyectoFinanzasPage() {
         </nav>
         {/* KPI Cards & Semáforo de Rentabilidad Real */}
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
-            <p className="text-xs font-mono font-semibold uppercase text-gray-500">Monto Cotizado (Total)</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white mt-1"><MoneyAmount value={montoCotizado} /></h3>
-            <p className="text-[11px] text-gray-500 font-sans mt-0.5">Presupuesto acordado</p>
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Monto Cotizado (Total)</p>
+              <div className="w-8 h-8 rounded-lg bg-navy-800 text-obra-orange flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4" />
+              </div>
+            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white"><MoneyAmount value={montoCotizado} /></h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">Presupuesto acordado</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
-            <p className="text-xs font-mono font-semibold uppercase text-gray-500">Total Recaudado</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#6B8F72] mt-1"><MoneyAmount value={totalPagado} /></h3>
-            <p className="text-[11px] text-gray-500 font-sans mt-0.5">{porcentajePagado}% del total presupuestado</p>
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Total Recaudado</p>
+              <div className="w-8 h-8 rounded-lg bg-obra-green-light dark:bg-obra-green/15 text-[#6B8F72] flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#6B8F72]"><MoneyAmount value={totalPagado} /></h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">{porcentajePagado}% del total presupuestado</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
-            <p className="text-xs font-mono font-semibold uppercase text-gray-500">Saldo Por Cobrar</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#FF6A00] mt-1"><MoneyAmount value={saldoPendiente} /></h3>
-            <p className="text-[11px] text-gray-500 font-sans mt-0.5">Estados de pago pendientes</p>
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Saldo Por Cobrar</p>
+              <div className="w-8 h-8 rounded-lg bg-obra-orange-light dark:bg-obra-orange/15 text-[#FF6A00] flex items-center justify-center shrink-0">
+                <DollarSign className="w-4 h-4" />
+              </div>
+            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#FF6A00]"><MoneyAmount value={saldoPendiente} /></h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">Estados de pago pendientes</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 sm:p-5 shadow-sm">
-            <p className="text-xs font-mono font-semibold uppercase text-gray-500">Costos considerados</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-gray-200 mt-1"><MoneyAmount value={totalCostosDirectos} /></h3>
-            <p className="text-[11px] text-gray-500 font-sans mt-0.5">Materiales e imprevistos</p>
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Costos considerados</p>
+              <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
+                <Package className="w-4 h-4" />
+              </div>
+            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-gray-200"><MoneyAmount value={totalCostosDirectos} /></h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">Materiales e imprevistos</p>
           </div>
 
           {/* Tarjeta de Saldo presupuestado y Semáforo */}
-          <div className={`rounded-xl p-4 sm:p-5 shadow-sm border ${
+          <div className={`rounded-2xl p-4 sm:p-5 shadow-sm border flex flex-col justify-between ${
             porcentajeDisponible >= 25
               ? 'bg-[#6B8F72]/10 border-[#6B8F72]/40 text-navy-900 dark:text-white'
               : porcentajeDisponible >= 10
               ? 'bg-amber-500/10 border-amber-500/40 text-navy-900 dark:text-white'
               : 'bg-red-500/10 border-red-500/40 text-navy-900 dark:text-white'
           }`}>
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400">Saldo del presupuesto</p>
-              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Saldo del presupuesto</p>
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg shrink-0 ${
                 porcentajeDisponible >= 25
                   ? 'bg-[#6B8F72] text-white'
                   : porcentajeDisponible >= 10
@@ -638,7 +658,7 @@ export default function ProyectoFinanzasPage() {
                 {porcentajeDisponible}%
               </span>
             </div>
-            <h3 className={`text-xl sm:text-2xl font-bold font-mono mt-1 ${
+            <h3 className={`text-xl sm:text-2xl font-bold font-mono ${
               porcentajeDisponible >= 25
                 ? 'text-[#6B8F72]'
                 : porcentajeDisponible >= 10
@@ -647,7 +667,7 @@ export default function ProyectoFinanzasPage() {
             }`}>
               <MoneyAmount value={saldoTrasCostos} />
             </h3>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-0.5">
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
               Sin descontar mano de obra ni gastos generales
             </p>
           </div>
@@ -724,7 +744,15 @@ export default function ProyectoFinanzasPage() {
 
               <div className="divide-y divide-kraft-200/80 max-h-64 overflow-y-auto pr-1">
                 {pagos.length === 0 ? (
-                  <p className="text-xs text-gray-500 py-6 text-center">No se han registrado pagos.</p>
+                  <div className="py-8 text-center space-y-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-obra-green-light dark:bg-obra-green/15 text-obra-green flex items-center justify-center mx-auto">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs font-heading font-bold text-navy-900 dark:text-white">No se han registrado pagos</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+                      Registra anticipos o estados de pago del cliente para actualizar el flujo recaudado de la obra.
+                    </p>
+                  </div>
                 ) : (
                   pagos.map((pago) => (
                     <div key={pago.id} className="py-2.5 flex items-center justify-between text-xs gap-2">
@@ -779,7 +807,15 @@ export default function ProyectoFinanzasPage() {
 
               <div className="divide-y divide-kraft-200/80 max-h-64 overflow-y-auto pr-1">
                 {imprevistos.length === 0 ? (
-                  <p className="text-xs text-gray-500 py-6 text-center">Sin imprevistos registrados.</p>
+                  <div className="py-8 text-center space-y-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-obra-red-light dark:bg-obra-red/15 text-obra-red flex items-center justify-center mx-auto">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs font-heading font-bold text-navy-900 dark:text-white">Sin imprevistos registrados</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+                      Reporta gastos extraordinarios o emergencias de terreno para controlar el margen real de la obra.
+                    </p>
+                  </div>
                 ) : (
                   imprevistos.map((imp) => (
                     <div key={imp.id} className="py-2.5 flex items-start justify-between gap-2 text-xs">

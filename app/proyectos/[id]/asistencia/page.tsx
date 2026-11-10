@@ -15,6 +15,8 @@ import {
   Smartphone,
   Sparkles,
   Download,
+  Search,
+  CheckCircle2,
 } from 'lucide-react';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
@@ -52,6 +54,8 @@ export default function ProyectoAsistenciaPage() {
   const [bulkError, setBulkError] = useState('');
   const [nuevoNombre, setNuevoNombre] = useState('');
   const [nuevoRol, setNuevoRol] = useState('Maestro / Jornal');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState<'todos' | 'presente' | 'atraso' | 'ausente' | 'sin_registro'>('todos');
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -208,6 +212,25 @@ export default function ProyectoAsistenciaPage() {
     return items;
   }, [cuadrilla, asistenciasDia]);
 
+  const listaPlanillaFiltrada = React.useMemo(() => {
+    return listaPlanilla.filter((item) => {
+      const est = item.registro?.estado;
+      const matchEstado =
+        estadoFiltro === 'todos' ||
+        (estadoFiltro === 'presente' && est === 'presente') ||
+        (estadoFiltro === 'atraso' && est === 'atraso') ||
+        (estadoFiltro === 'ausente' && (est === 'ausente' || est === 'licencia' || est === 'permiso')) ||
+        (estadoFiltro === 'sin_registro' && !est);
+      const q = searchTerm.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        item.nombre.toLowerCase().includes(q) ||
+        (item.rol || '').toLowerCase().includes(q) ||
+        (item.registro?.observacion || '').toLowerCase().includes(q);
+      return matchEstado && matchSearch;
+    });
+  }, [listaPlanilla, estadoFiltro, searchTerm]);
+
   const presentesCount = asistenciasDia.filter(
     (a) => a.estado === 'presente' || a.estado === 'atraso'
   ).length;
@@ -230,8 +253,8 @@ export default function ProyectoAsistenciaPage() {
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#FAF8F5] dark:bg-[#0E131B] pb-16">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#1E1E1E] text-white px-4 py-3 rounded-2xl shadow-2xl border border-[#FF6A00] flex items-center gap-2 text-xs font-semibold">
-          <Sparkles className="w-4 h-4 text-[#FF6A00] shrink-0" />
+        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
+          <CheckCircle2 className="w-4 h-4 text-obra-orange shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -294,85 +317,170 @@ export default function ProyectoAsistenciaPage() {
         </section>}
         {/* KPIs de Asistencia */}
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Presentes / En Faena ({formatDate(fechaSeleccionada)})</span>
-              <UserCheck className="w-4 h-4 text-[#6B8F72]" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Presentes / En Faena</p>
+              <div className="w-8 h-8 rounded-lg bg-[#6B8F72]/15 text-[#6B8F72] flex items-center justify-center shrink-0">
+                <UserCheck className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {presentesCount} / {listaPlanilla.length}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Obreros activos en la jornada</p>
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Obreros activos ({formatDate(fechaSeleccionada)})</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Ausencias / Licencias Hoy</span>
-              <UserX className="w-4 h-4 text-red-500" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Ausencias / Licencias</p>
+              <div className="w-8 h-8 rounded-lg bg-red-500/15 text-red-500 flex items-center justify-center shrink-0">
+                <UserX className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {ausentesCount}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Inasistencias registradas</p>
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Inasistencias registradas</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Horas-Hombre Acumuladas</span>
-              <Clock className="w-4 h-4 text-[#FF6A00]" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Horas-Hombre Acumuladas</p>
+              <div className="w-8 h-8 rounded-lg bg-[#FF6A00]/15 text-[#FF6A00] flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {totalHorasAcumuladas.toFixed(1)} hrs
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Total histórico en esta obra</p>
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total histórico en esta obra</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Equipo Asignado</span>
-              <Users className="w-4 h-4 text-blue-500" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Equipo Asignado</p>
+              <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
+                <Users className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {cuadrilla.length}
-            </p>
-            <Link href="/equipo" className="text-[11px] text-[#FF6A00] font-bold hover:underline mt-1 inline-block">
+            </h3>
+            <Link href="/equipo" className="text-xs text-[#FF6A00] font-bold hover:underline mt-1 inline-block">
               Gestionar cuadrilla →
             </Link>
           </div>
         </div></CompactSummary>
 
-        {/* Planilla Diaria Interactiva */}
-        <div className="bg-white dark:bg-[#141A23] rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-kraft-100 dark:border-[#263040] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h3 className="text-sm font-heading font-bold text-navy-900 dark:text-white flex items-center gap-2">
-              <ClipboardCheck className="w-4 h-4 text-[#FF6A00]" />
-              <span>Planilla de Asistencia — {formatDate(fechaSeleccionada)}</span>
-            </h3>
+        {/* Barra de Filtros y Buscador Unificada */}
+        <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3 min-w-0">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5 min-w-0">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Buscar trabajador por nombre o especialidad..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full min-w-0 pl-10 pr-8 py-2 bg-[#FAF8F5] dark:bg-[#1E2530] border border-kraft-200 dark:border-[#2F3B4B] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-obra-orange text-navy-900 dark:text-white placeholder:text-gray-400"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs font-bold px-1.5 py-0.5 rounded"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
 
             {/* Agregar trabajador eventual en la jornada */}
-            <form onSubmit={handleAgregarObreroDia} className="flex items-center gap-2">
+            <form onSubmit={handleAgregarObreroDia} className="flex items-center gap-2 shrink-0">
               <input
                 type="text"
                 placeholder="Nombre obrero adicional..."
                 value={nuevoNombre}
                 onChange={(e) => setNuevoNombre(e.target.value)}
-                className="px-3 py-1.5 rounded-xl border border-kraft-200 dark:border-[#263040] bg-[#FAF8F5] dark:bg-[#1E2530] text-xs text-navy-900 dark:text-white"
+                className="px-3 py-2 rounded-xl border border-kraft-200 dark:border-[#2F3B4B] bg-[#FAF8F5] dark:bg-[#1E2530] text-xs text-navy-900 dark:text-white"
               />
               <input
                 type="text"
                 placeholder="Cargo (ej. Gasfíter)"
                 value={nuevoRol}
                 onChange={(e) => setNuevoRol(e.target.value)}
-                className="w-32 px-2.5 py-1.5 rounded-xl border border-kraft-200 dark:border-[#263040] bg-[#FAF8F5] dark:bg-[#1E2530] text-xs text-navy-900 dark:text-white hidden sm:block"
+                className="w-32 px-2.5 py-2 rounded-xl border border-kraft-200 dark:border-[#2F3B4B] bg-[#FAF8F5] dark:bg-[#1E2530] text-xs text-navy-900 dark:text-white hidden sm:block"
               />
               <button
                 type="submit"
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#FF6A00] text-white text-xs font-bold"
+                className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-[#FF6A00] text-white text-xs font-bold shrink-0"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Agregar</span>
               </button>
             </form>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-kraft-100 dark:border-[#263040] min-w-0">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 flex-nowrap sm:flex-wrap flex-1 min-w-0 max-w-full no-scrollbar">
+              {[
+                { key: 'todos', label: 'Todos', count: listaPlanilla.length, dot: null, activeClass: 'bg-navy-900 text-white border-navy-900 dark:bg-obra-orange dark:border-obra-orange shadow-sm' },
+                { key: 'presente', label: 'Presentes', count: listaPlanilla.filter((i) => i.registro?.estado === 'presente' || i.registro?.estado === 'atraso').length, dot: 'bg-[#6B8F72]', activeClass: 'bg-[#6B8F72] text-white border-[#6B8F72] shadow-sm' },
+                { key: 'atraso', label: 'Atrasos', count: listaPlanilla.filter((i) => i.registro?.estado === 'atraso').length, dot: 'bg-amber-500', activeClass: 'bg-amber-600 text-white border-amber-600 shadow-sm' },
+                { key: 'ausente', label: 'Ausentes / Licencia', count: listaPlanilla.filter((i) => i.registro?.estado === 'ausente' || i.registro?.estado === 'licencia' || i.registro?.estado === 'permiso').length, dot: 'bg-red-500', activeClass: 'bg-red-600 text-white border-red-600 shadow-sm' },
+                { key: 'sin_registro', label: 'Sin registro', count: listaPlanilla.filter((i) => !i.registro).length, dot: 'bg-gray-400', activeClass: 'bg-slate-600 text-white border-slate-600 shadow-sm' },
+              ].map((pill) => {
+                const isActive = estadoFiltro === pill.key;
+                return (
+                  <button
+                    key={pill.key}
+                    type="button"
+                    onClick={() => setEstadoFiltro(pill.key as typeof estadoFiltro)}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                      isActive
+                        ? pill.activeClass
+                        : 'bg-[#FAF8F5] dark:bg-[#1E2530] text-gray-600 dark:text-gray-300 border-kraft-200 dark:border-[#2F3B4B] hover:border-gray-400'
+                    }`}
+                  >
+                    {pill.dot && (
+                      <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : pill.dot}`} />
+                    )}
+                    <span>{pill.label}</span>
+                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-kraft-200/70 dark:bg-[#263040] text-gray-600 dark:text-gray-300'
+                    }`}>
+                      {pill.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {(searchTerm !== '' || estadoFiltro !== 'todos') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setEstadoFiltro('todos');
+                }}
+                className="shrink-0 text-xs font-semibold text-obra-orange hover:underline px-2 py-1"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Planilla Diaria Interactiva */}
+        <div className="bg-white dark:bg-[#141A23] rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-kraft-100 dark:border-[#263040] flex items-center justify-between gap-3">
+            <h3 className="text-sm font-heading font-bold text-navy-900 dark:text-white flex items-center gap-2">
+              <ClipboardCheck className="w-4 h-4 text-[#FF6A00]" />
+              <span>Planilla de Asistencia — {formatDate(fechaSeleccionada)}</span>
+            </h3>
+            <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+              {listaPlanillaFiltrada.length} {listaPlanillaFiltrada.length === 1 ? 'trabajador' : 'trabajadores'}
+            </span>
           </div>
 
           <div className="overflow-x-auto">
@@ -388,7 +496,7 @@ export default function ProyectoAsistenciaPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-kraft-100 dark:divide-[#1E2530] text-xs">
-                {listaPlanilla.map((item, idx) => {
+                {listaPlanillaFiltrada.map((item, idx) => {
                   const reg = item.registro;
                   const est = reg?.estado;
                   return (

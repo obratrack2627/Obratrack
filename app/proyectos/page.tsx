@@ -369,10 +369,38 @@ export default function ProyectosPage() {
 
       <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
         
-        {!isTerreno && <div role="tablist" aria-label="Proyectos y obras" className="flex gap-3 border-b">
-          <button role="tab" aria-selected={tab==='obras'} onClick={()=>setTab('obras')} className={`px-4 py-3 font-semibold ${tab==='obras'?'border-b-2 border-obra-orange text-obra-orange':''}`}>Obras</button>
-          <button role="tab" aria-selected={tab==='presupuestos'} onClick={()=>setTab('presupuestos')} className={`px-4 py-3 font-semibold ${tab==='presupuestos'?'border-b-2 border-obra-orange text-obra-orange':''}`}>Presupuestos</button>
-        </div>}
+        {!isTerreno && (
+          <div
+            role="tablist"
+            aria-label="Proyectos y obras"
+            className="flex sm:inline-flex min-w-0 gap-1 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-100 dark:bg-[#0B0F14] p-1"
+          >
+            <button
+              role="tab"
+              aria-selected={tab === 'obras'}
+              onClick={() => setTab('obras')}
+              className={`flex-1 sm:flex-none rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+                tab === 'obras'
+                  ? 'bg-white dark:bg-[#1E2530] text-obra-orange shadow-sm'
+                  : 'text-gray-500 hover:text-navy-900 dark:hover:text-gray-200'
+              }`}
+            >
+              Obras
+            </button>
+            <button
+              role="tab"
+              aria-selected={tab === 'presupuestos'}
+              onClick={() => setTab('presupuestos')}
+              className={`flex-1 sm:flex-none rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+                tab === 'presupuestos'
+                  ? 'bg-white dark:bg-[#1E2530] text-obra-orange shadow-sm'
+                  : 'text-gray-500 hover:text-navy-900 dark:hover:text-gray-200'
+              }`}
+            >
+              Presupuestos
+            </button>
+          </div>
+        )}
         {tab==='presupuestos'&&!isTerreno ? <PresupuestosPanel/> : <>
         {/* Banner Informativo si está en Plan Gratis y llegó al límite */}
         {activePlan === 'gratis' && proyectosActivos.length >= 1 && (
@@ -401,75 +429,75 @@ export default function ProyectosPage() {
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Obras en curso */}
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">
                 Obras en curso
               </p>
-              <h3 className="text-2xl font-bold font-heading text-navy-900 mt-1">
-                {proyectosActivos.length}
-              </h3>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                {proyectos.length} proyectos en total
-              </p>
+              <div className="w-8 h-8 rounded-lg bg-navy-800 text-obra-orange flex items-center justify-center shrink-0">
+                <Building2 className="w-4 h-4" />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-lg bg-navy-800 text-obra-orange flex items-center justify-center">
-              <Building2 className="w-6 h-6" />
-            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-heading text-navy-900 dark:text-white">
+              {proyectosActivos.length}
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
+              {proyectos.length} proyectos en total
+            </p>
           </div>
 
           {/* Cotizado Total */}
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">
                 Cotizado Total
               </p>
-              <h3 className="text-xl font-bold font-mono text-navy-900 mt-1">
-                <MoneyAmount value={cotizadoTotal} />
-              </h3>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                En obras en ejecución
-              </p>
+              <div className="w-8 h-8 rounded-lg bg-obra-orange-light dark:bg-obra-orange/15 text-obra-orange flex items-center justify-center shrink-0">
+                <DollarSign className="w-4 h-4" />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-lg bg-obra-orange-light text-obra-orange flex items-center justify-center">
-              <DollarSign className="w-6 h-6" />
-            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white">
+              <MoneyAmount value={cotizadoTotal} />
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
+              En obras en ejecución
+            </p>
           </div>
 
           {/* Total Cobrado */}
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">
                 Total Cobrado
               </p>
-              <h3 className="text-xl font-bold font-mono text-obra-green mt-1">
-                <MoneyAmount value={totalCobrado} />
-              </h3>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                {cotizadoTotal > 0 ? Math.round((totalCobrado / cotizadoTotal) * 100) : 0}% recaudado
-              </p>
+              <div className="w-8 h-8 rounded-lg bg-obra-green-light dark:bg-obra-green/15 text-obra-green flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-lg bg-obra-green-light text-obra-green flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-obra-green">
+              <MoneyAmount value={totalCobrado} />
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
+              {cotizadoTotal > 0 ? Math.round((totalCobrado / cotizadoTotal) * 100) : 0}% recaudado
+            </p>
           </div>
 
           {/* Por Cobrar */}
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">
                 Saldo Por Cobrar
               </p>
-              <h3 className="text-xl font-bold font-mono text-obra-red mt-1">
-                <MoneyAmount value={porCobrar} />
-              </h3>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                Estados de pago pendientes
-              </p>
+              <div className="w-8 h-8 rounded-lg bg-obra-red-light dark:bg-obra-red/15 text-obra-red flex items-center justify-center shrink-0">
+                <TrendingUp className="w-4 h-4" />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-lg bg-obra-red-light text-obra-red flex items-center justify-center">
-              <TrendingUp className="w-6 h-6" />
-            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-obra-red">
+              <MoneyAmount value={porCobrar} />
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
+              Estados de pago pendientes
+            </p>
           </div>
 
         </div></CompactSummary>

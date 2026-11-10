@@ -14,6 +14,8 @@ import {
   ArrowRight,
   Smartphone,
   Sparkles,
+  Search,
+  CheckCircle2,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
@@ -25,6 +27,8 @@ export default function ControlAsistenciaGlobalPage() {
   const [asistencias, setAsistencias] = useState<AsistenciaObrero[]>([]);
   const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0]);
   const [obraFiltro, setObraFiltro] = useState('todas');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState<'todos' | 'presente' | 'atraso' | 'ausente'>('todos');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -82,10 +86,26 @@ export default function ControlAsistenciaGlobalPage() {
     URL.revokeObjectURL(url);
   };
 
-  const asistenciasFiltradas = asistencias.filter((a) => {
+  const asistenciasBase = asistencias.filter((a) => {
     const matchFecha = !fechaFiltro || a.fecha === fechaFiltro;
     const matchObra = obraFiltro === 'todas' || a.proyecto_id === obraFiltro;
     return matchFecha && matchObra;
+  });
+
+  const asistenciasFiltradas = asistenciasBase.filter((a) => {
+    const matchEstado =
+      estadoFiltro === 'todos' ||
+      (estadoFiltro === 'presente' && a.estado === 'presente') ||
+      (estadoFiltro === 'atraso' && a.estado === 'atraso') ||
+      (estadoFiltro === 'ausente' && (a.estado === 'ausente' || a.estado === 'licencia' || a.estado === 'permiso'));
+    const q = searchTerm.toLowerCase().trim();
+    const obraNombre = (proyectos.find((p) => p.id === a.proyecto_id)?.nombre || '').toLowerCase();
+    const matchQuery =
+      !q ||
+      a.trabajador_nombre.toLowerCase().includes(q) ||
+      (a.trabajador_rol || '').toLowerCase().includes(q) ||
+      obraNombre.includes(q);
+    return matchEstado && matchQuery;
   });
 
   const presentesHoy = asistencias.filter(
@@ -102,8 +122,8 @@ export default function ControlAsistenciaGlobalPage() {
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#FAF8F5] dark:bg-[#0E131B] pb-16">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#1E1E1E] text-white px-4 py-3 rounded-2xl shadow-2xl border border-[#FF6A00] flex items-center gap-2 text-xs font-semibold">
-          <Sparkles className="w-4 h-4 text-[#FF6A00]" />
+        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
+          <CheckCircle2 className="w-4 h-4 text-obra-orange shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -125,48 +145,56 @@ export default function ControlAsistenciaGlobalPage() {
       <div className="p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
         {/* KPIs Globales */}
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Obreros Presentes ({formatDate(fechaFiltro)})</span>
-              <UserCheck className="w-4 h-4 text-[#6B8F72]" />
+          <div className="bg-white dark:bg-[#141A23] p-4 sm:p-5 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Obreros Presentes ({formatDate(fechaFiltro)})</span>
+              <div className="w-8 h-8 rounded-lg bg-obra-green-light dark:bg-obra-green/15 text-[#6B8F72] flex items-center justify-center shrink-0">
+                <UserCheck className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-2xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {presentesHoy}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">En todas las faenas activas</p>
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">En todas las faenas activas</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Atrasos del Día</span>
-              <Clock className="w-4 h-4 text-amber-500" />
+          <div className="bg-white dark:bg-[#141A23] p-4 sm:p-5 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Atrasos del Día</span>
+              <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-2xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {atrasosHoy}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Ingreso posterior al horario</p>
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Ingreso posterior al horario</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Ausencias / Licencias</span>
-              <UserX className="w-4 h-4 text-red-500" />
+          <div className="bg-white dark:bg-[#141A23] p-4 sm:p-5 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Ausencias / Licencias</span>
+              <div className="w-8 h-8 rounded-lg bg-red-500/15 text-red-500 flex items-center justify-center shrink-0">
+                <UserX className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-2xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {ausenciasHoy}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Sin ingreso en jornada seleccionada</p>
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Sin ingreso en jornada seleccionada</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Horas-Hombre Totales</span>
-              <ClipboardCheck className="w-4 h-4 text-[#FF6A00]" />
+          <div className="bg-white dark:bg-[#141A23] p-4 sm:p-5 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Horas-Hombre Totales</span>
+              <div className="w-8 h-8 rounded-lg bg-obra-orange-light dark:bg-obra-orange/15 text-[#FF6A00] flex items-center justify-center shrink-0">
+                <ClipboardCheck className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-2xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {totalHorasMes.toFixed(1)} h
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Horas registradas</p>
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">Horas registradas</p>
           </div>
         </div></CompactSummary>
 
@@ -224,28 +252,47 @@ export default function ControlAsistenciaGlobalPage() {
           </div>
         </div>
 
-        {/* Tabla Consolidada */}
-        <div className="bg-white dark:bg-[#141A23] rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-kraft-100 dark:border-[#263040] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <h3 className="text-sm font-heading font-bold text-navy-900 dark:text-white">
-              Registro Detallado de Marcajes
-            </h3>
+        {/* Barra Unificada de Búsqueda y Filtros de Asistencia */}
+        <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3 min-w-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 min-w-0">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por trabajador, cargo u obra..."
+                className="w-full h-10 pl-10 pr-8 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs text-navy-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-obra-orange focus:bg-white dark:focus:bg-[#141A23] transition-colors font-sans"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full hover:bg-kraft-200 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center justify-center text-xs transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1.5 bg-[#FAF8F5] dark:bg-[#1E2530] px-3 py-1.5 rounded-xl border border-kraft-200 dark:border-[#263040]">
-                <Calendar className="w-3.5 h-3.5 text-[#FF6A00]" />
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0 min-w-0">
+              <div className="flex items-center gap-1.5 h-10 bg-kraft-50 dark:bg-[#0F141C] px-3 rounded-xl border border-kraft-200 dark:border-[#263040] min-w-0">
+                <Calendar className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
                 <input
                   type="date"
+                  aria-label="Filtrar por fecha"
                   value={fechaFiltro}
                   onChange={(e) => setFechaFiltro(e.target.value)}
-                  className="bg-transparent text-xs font-mono text-navy-900 dark:text-white focus:outline-none"
+                  className="bg-transparent text-xs font-mono text-navy-900 dark:text-white focus:outline-none min-w-0"
                 />
               </div>
 
               <select
+                aria-label="Filtrar asistencia por obra"
                 value={obraFiltro}
                 onChange={(e) => setObraFiltro(e.target.value)}
-                className="px-3 py-1.5 rounded-xl border border-kraft-200 dark:border-[#263040] bg-[#FAF8F5] dark:bg-[#1E2530] text-xs text-navy-900 dark:text-white"
+                className="h-10 px-3 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] text-xs font-medium text-navy-900 dark:text-white truncate min-w-0 max-w-full sm:w-52"
               >
                 <option value="todas">Todas las obras</option>
                 {proyectos.map((p) => (
@@ -257,9 +304,119 @@ export default function ControlAsistenciaGlobalPage() {
             </div>
           </div>
 
+          <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-kraft-100 dark:border-[#1E2530] min-w-0">
+            <div
+              role="tablist"
+              aria-label="Filtrar asistencia por estado"
+              className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-full pb-1 sm:pb-0 -mx-1 px-1"
+            >
+              {(
+                [
+                  {
+                    value: 'todos',
+                    label: 'Todos',
+                    count: asistenciasBase.length,
+                    dot: 'bg-gray-400',
+                    activeClass:
+                      'bg-navy-900 text-white border-navy-900 dark:bg-white dark:text-navy-900 dark:border-white shadow-sm',
+                  },
+                  {
+                    value: 'presente',
+                    label: 'Presentes',
+                    count: asistenciasBase.filter((a) => a.estado === 'presente').length,
+                    dot: 'bg-obra-green',
+                    activeClass: 'bg-obra-green text-white border-obra-green shadow-sm',
+                  },
+                  {
+                    value: 'atraso',
+                    label: 'Atrasos',
+                    count: asistenciasBase.filter((a) => a.estado === 'atraso').length,
+                    dot: 'bg-amber-500',
+                    activeClass: 'bg-amber-500 text-white border-amber-500 shadow-sm',
+                  },
+                  {
+                    value: 'ausente',
+                    label: 'Ausencias / Licencias',
+                    count: asistenciasBase.filter(
+                      (a) => a.estado === 'ausente' || a.estado === 'licencia' || a.estado === 'permiso'
+                    ).length,
+                    dot: 'bg-red-500',
+                    activeClass: 'bg-red-600 text-white border-red-600 shadow-sm',
+                  },
+                ] as const
+              ).map((tab) => {
+                const isActive = estadoFiltro === tab.value;
+                return (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    key={tab.value}
+                    onClick={() => setEstadoFiltro(tab.value)}
+                    className={`h-8 px-3 rounded-xl text-xs font-heading font-semibold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition-all ${
+                      isActive
+                        ? tab.activeClass
+                        : 'bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border-kraft-200 dark:border-[#263040] hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
+                    }`}
+                  >
+                    {tab.value !== 'todos' && (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          isActive ? 'bg-white dark:bg-current' : tab.dot
+                        }`}
+                      />
+                    )}
+                    <span>{tab.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                        isActive
+                          ? 'bg-white/20 text-current'
+                          : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {(searchTerm || estadoFiltro !== 'todos' || obraFiltro !== 'todas') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setEstadoFiltro('todos');
+                  setObraFiltro('todas');
+                }}
+                className="text-xs font-heading font-bold text-obra-orange hover:underline shrink-0 pl-2 whitespace-nowrap"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Tabla Consolidada */}
+        <div className="bg-white dark:bg-[#141A23] rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-kraft-100 dark:border-[#263040] flex items-center justify-between gap-3">
+            <h3 className="text-sm font-heading font-bold text-navy-900 dark:text-white flex items-center gap-2">
+              <ClipboardCheck className="w-4 h-4 text-[#FF6A00]" />
+              <span>Registro Detallado de Marcajes — {formatDate(fechaFiltro)}</span>
+            </h3>
+          </div>
+
           {asistenciasFiltradas.length === 0 ? (
-            <div className="p-8 text-center text-xs text-gray-500">
-              No hay asistencias registradas para la fecha y filtro seleccionados. Usa el botón &quot;Pasar lista 1 clic&quot; arriba o entra a una obra.
+            <div className="p-10 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#FF6A00]/10 text-[#FF6A00] flex items-center justify-center mx-auto">
+                <ClipboardCheck className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-heading font-bold text-navy-900 dark:text-white">
+                Sin marcajes para los filtros seleccionados
+              </h4>
+              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                No hay asistencias registradas para esta fecha o filtro. Puedes usar el botón &quot;✓ Pasar lista 1 clic&quot; en las tarjetas de arriba o entrar a la planilla de una obra.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">

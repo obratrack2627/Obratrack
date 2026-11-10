@@ -238,55 +238,55 @@ export default function ClientesPage() {
         
         {/* KPI Cards de Clientes */}
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">
                 Clientes Registrados
               </p>
-              <h3 className="text-2xl font-bold font-heading text-navy-900 mt-1">
-                {clientes.length}
-              </h3>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                Mandantes y personas particulares
-              </p>
+              <div className="w-8 h-8 rounded-lg bg-navy-800 text-obra-orange flex items-center justify-center shrink-0">
+                <Building className="w-4 h-4" />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-lg bg-navy-800 text-obra-orange flex items-center justify-center">
-              <Building className="w-6 h-6" />
-            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-heading text-navy-900 dark:text-white">
+              {clientes.length}
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
+              Mandantes y personas particulares
+            </p>
           </div>
 
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">
                 Con obras en curso
               </p>
-              <h3 className="text-2xl font-bold font-heading text-obra-green mt-1">
-                {clientesConObras}
-              </h3>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                Mandantes con proyectos en curso
-              </p>
+              <div className="w-8 h-8 rounded-lg bg-obra-green-light dark:bg-obra-green/15 text-obra-green flex items-center justify-center shrink-0">
+                <FolderOpen className="w-4 h-4" />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-lg bg-obra-green-light text-obra-green flex items-center justify-center">
-              <FolderOpen className="w-6 h-6" />
-            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-heading text-obra-green">
+              {clientesConObras}
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
+              Mandantes con proyectos en curso
+            </p>
           </div>
 
-          <div className="bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs font-mono font-semibold uppercase text-gray-500 tracking-wider">
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">
                 Total cotizado
               </p>
-              <h3 className="text-xl font-bold font-mono text-navy-900 mt-1">
-                <MoneyAmount value={totalContratadoGeneral} />
-              </h3>
-              <p className="text-[11px] text-gray-500 font-sans mt-0.5">
-                Presupuestos asociados a sus obras
-              </p>
+              <div className="w-8 h-8 rounded-lg bg-obra-orange-light dark:bg-obra-orange/15 text-obra-orange flex items-center justify-center shrink-0">
+                <DollarSign className="w-4 h-4" />
+              </div>
             </div>
-            <div className="w-11 h-11 rounded-lg bg-obra-orange-light text-obra-orange flex items-center justify-center">
-              <DollarSign className="w-6 h-6" />
-            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white">
+              <MoneyAmount value={totalContratadoGeneral} />
+            </h3>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
+              Presupuestos asociados a sus obras
+            </p>
           </div>
         </div></CompactSummary>
 

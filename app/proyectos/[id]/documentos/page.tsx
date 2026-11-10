@@ -241,8 +241,8 @@ export default function ProyectoDocumentosPage() {
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#FAF8F5] dark:bg-[#0E131B] pb-16">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#1E1E1E] text-white px-4 py-3 rounded-2xl shadow-2xl border border-[#FF6A00] flex items-center gap-2 text-xs font-semibold">
-          <Sparkles className="w-4 h-4 text-[#FF6A00] shrink-0" />
+        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
+          <CheckCircle2 className="w-4 h-4 text-obra-orange shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
@@ -284,50 +284,58 @@ export default function ProyectoDocumentosPage() {
 
         {/* KPIs del Repositorio */}
         <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Total Archivos & Respaldos</span>
-              <FolderOpen className="w-4 h-4 text-[#FF6A00]" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Total Archivos & Respaldos</p>
+              <div className="w-8 h-8 rounded-lg bg-[#FF6A00]/15 text-[#FF6A00] flex items-center justify-center shrink-0">
+                <FolderOpen className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {documentos.length}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Almacenados por obra</p>
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Almacenados por obra</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Contratos y Planos</span>
-              <Map className="w-4 h-4 text-cyan-500" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Contratos y Planos</p>
+              <div className="w-8 h-8 rounded-lg bg-cyan-500/15 text-cyan-500 flex items-center justify-center shrink-0">
+                <Map className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {documentos.filter((d) => d.categoria === 'contrato' || d.categoria === 'plano').length}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Documentación técnica y legal</p>
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Documentación técnica y legal</p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Facturación / Boletas</span>
-              <Receipt className="w-4 h-4 text-emerald-500" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Facturación / Boletas</p>
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                <Receipt className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {formatCLP(totalFacturadoDocs)}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {documentos.filter((d) => d.categoria === 'factura_boleta').length} comprobantes tributarios
             </p>
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Correos Asociados</span>
-              <Mail className="w-4 h-4 text-amber-500" />
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Correos Asociados</p>
+              <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                <Mail className="w-4 h-4" />
+              </div>
             </div>
-            <p className="text-xl font-heading font-black text-navy-900 dark:text-white">
+            <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">
               {documentos.filter((d) => d.categoria === 'correo').length}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-1">Comunicaciones y acuerdos formales</p>
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Comunicaciones y acuerdos formales</p>
           </div>
         </div></CompactSummary>
 

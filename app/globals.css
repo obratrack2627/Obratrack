@@ -377,3 +377,12 @@ html[data-mobile-nav-open] #obrabot-widget { visibility: hidden; pointer-events:
 .budget-workspace { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .budget-workspace section, .budget-workspace article, .budget-workspace select { min-width: 0; max-width: 100%; }
 .budget-workspace section > div > div { min-width: 0; }
+
+/* Ocultar barra de scroll nativa en pestañas horizontales manteniendo desplazamiento táctil y con rueda */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
