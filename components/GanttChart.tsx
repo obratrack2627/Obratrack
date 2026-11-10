@@ -1,723 +1,448 @@
-'use client';
-import ModalOverlay from '@/components/ModalOverlay';
-
-import React, { useState } from 'react';
-import { Actividad, Usuario } from '@/types/database';
-import { formatDate } from '@/lib/utils';
+"use client";
+import { useEffect, useState } from "react";
 import {
-  CheckCircle2,
-  Clock,
   Calendar,
-  User,
+  Check,
   Edit3,
-  Plus,
-  Trash2,
-  AlertTriangle,
-  X,
   GanttChartSquare,
   LayoutList,
-  Check,
-  TrendingUp,
-} from 'lucide-react';
+  Plus,
+  User,
+  AlertTriangle,
+} from "lucide-react";
+import type { Actividad, Usuario } from "@/types/database";
+import {
+  activityDates,
+  dateLabel,
+  progressValue,
+  scheduleBounds,
+  todayDay,
+} from "@/lib/gantt/timeline";
+import ModalOverlay from "./ModalOverlay";
+import ActivityEditor from "./ActivityEditor";
+import GanttTimeline from "./GanttTimeline";
+import styles from "./GanttChart.module.css";
 
 interface GanttChartProps {
   actividades: Actividad[];
   usuarios: Usuario[];
   assignedWorkerIds?: string[];
+  progress?: number;
   onUpdateActivity: (id: string, updates: Partial<Actividad>) => void;
   onDeleteActivity?: (id: string) => void;
   onAddActivity: () => void;
 }
-
-const formatRoleLabel = (rol: Usuario['rol']) =>
-  rol === 'admin' ? 'Administrador' : rol === 'supervisor' ? 'Supervisor' : 'Terreno';
+const labels: Record<Actividad["estado"], string> = {
+  pendiente: "Pendiente",
+  en_curso: "En curso",
+  terminada: "Terminada",
+};
+function Status({ activity }: { activity: Actividad }) {
+  return (
+    <span className={styles.status} data-status={activity.estado}>
+      {activity.estado === "terminada" && <Check size={12} />}{" "}
+      {labels[activity.estado]}
+    </span>
+  );
+}
 
 export default function GanttChart({
   actividades,
   usuarios,
   assignedWorkerIds,
+  progress,
   onUpdateActivity,
   onDeleteActivity,
   onAddActivity,
 }: GanttChartProps) {
-  const [selectedActivity, setSelectedActivity] = useState<Actividad | null>(null);
-  const [activityToDelete, setActivityToDelete] = useState<Actividad | null>(null);
-  const [viewMode, setViewMode] = useState<'gantt' | 'cards'>('gantt');
-  const [filterStatus, setFilterStatus] = useState<'todos' | 'pendiente' | 'en_curso' | 'terminada'>('todos');
-
-  // Filtrado de actividades
-  const filteredActivities = actividades.filter((act) => {
-    if (filterStatus === 'todos') return true;
-    return act.estado === filterStatus;
-  });
-
-  // Contador de estados
+  const [selected, setSelected] = useState<Actividad | null>(null);
+  const [toDelete, setToDelete] = useState<Actividad | null>(null);
+  const [view, setView] = useState<"auto" | "gantt" | "cards">("auto");
+  const [mobile, setMobile] = useState<boolean | null>(null);
+  const [filter, setFilter] = useState<"todos" | Actividad["estado"]>("todos");
+  useEffect(() => {
+    const media = matchMedia("(max-width: 1023px)");
+    const change = () => setMobile(media.matches);
+    change();
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
+  const mode =
+    view === "auto"
+      ? mobile === null
+        ? "auto"
+        : mobile
+          ? "cards"
+          : "gantt"
+      : view;
+  const ordered = [...actividades].sort((a, b) => a.orden - b.orden);
+  const filtered = ordered.filter(
+    (activity) => filter === "todos" || activity.estado === filter,
+  );
   const counts = {
-    todos: actividades.length,
-    pendiente: actividades.filter((a) => a.estado === 'pendiente').length,
-    en_curso: actividades.filter((a) => a.estado === 'en_curso').length,
-    terminada: actividades.filter((a) => a.estado === 'terminada').length,
+    todos: ordered.length,
+    pendiente: ordered.filter((a) => a.estado === "pendiente").length,
+    en_curso: ordered.filter((a) => a.estado === "en_curso").length,
+    terminada: ordered.filter((a) => a.estado === "terminada").length,
   };
-
-  // Helper para incremento rápido de avance con un toque
-  const handleQuickProgress = (act: Actividad, nuevoAvance: number) => {
-    const avanceClamped = Math.min(100, Math.max(0, nuevoAvance));
-    const nuevoEstado =
-      avanceClamped === 100 ? 'terminada' : avanceClamped > 0 ? 'en_curso' : 'pendiente';
-
-    onUpdateActivity(act.id, {
-      porcentaje_avance: avanceClamped,
-      estado: nuevoEstado,
+  const bounds = scheduleBounds(ordered);
+  const totalDays = ordered.reduce(
+    (sum, activity) => sum + (activityDates(activity)?.days || 1),
+    0,
+  );
+  const weighted = totalDays
+    ? ordered.reduce(
+        (sum, activity) =>
+          sum +
+          progressValue(activity.porcentaje_avance) *
+            (activityDates(activity)?.days || 1),
+        0,
+      ) / totalDays
+    : 0;
+  const overall = Math.round(progressValue(progress ?? weighted));
+  const quickProgress = (activity: Actividad, value: number) => {
+    const next = progressValue(value);
+    onUpdateActivity(activity.id, {
+      porcentaje_avance: next,
+      estado: next === 100 ? "terminada" : next > 0 ? "en_curso" : "pendiente",
     });
   };
-
-  // Si no hay partidas registradas
-  if (actividades.length === 0) {
-    return (
-      <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-12 text-center shadow-sm">
-        <p className="text-gray-500 dark:text-gray-400 text-sm mb-4 font-sans">
-          No hay partidas registradas en la Carta Gantt aún.
-        </p>
-        <button
-          onClick={onAddActivity}
-          className="px-4 py-2 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl font-heading inline-flex items-center gap-1.5 shadow-sm transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Agregar Primera Partida</span>
-        </button>
-      </div>
-    );
-  }
-
-  // Encontrar fecha mínima y máxima para calcular la escala
-  const startDates = actividades.map((a) => new Date(a.fecha_inicio).getTime());
-  const endDates = actividades.map((a) => new Date(a.fecha_termino).getTime());
-  const minTime = Math.min(...startDates);
-  const maxTime = Math.max(...endDates);
-  const totalDays = Math.max(1, Math.round((maxTime - minTime) / (1000 * 60 * 60 * 24)));
-
   return (
-    <div className="space-y-4">
-      {/* Barra de Herramientas Superior: Selector de Vista & Filtros */}
-      <div className="bg-white dark:bg-[#141A23] p-3.5 sm:p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm space-y-3 min-w-0">
-        {/* Fila Superior: Selector de Vista + Botón Nueva Partida */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 min-w-0">
-          <div className="flex items-center gap-1 bg-kraft-50 dark:bg-[#0F141C] p-1 rounded-xl border border-kraft-200 dark:border-[#263040] h-10">
-            <button
-              type="button"
-              onClick={() => setViewMode('gantt')}
-              className={`flex items-center gap-1.5 px-3 h-full rounded-lg text-xs font-heading font-bold transition-all ${
-                viewMode === 'gantt'
-                  ? 'bg-navy-900 text-white dark:bg-white dark:text-navy-900 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
-              }`}
-            >
-              <GanttChartSquare className="w-3.5 h-3.5 text-[#FF6A00]" />
-              <span>Gantt Gráfico</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setViewMode('cards')}
-              className={`flex items-center gap-1.5 px-3 h-full rounded-lg text-xs font-heading font-bold transition-all ${
-                viewMode === 'cards'
-                  ? 'bg-navy-900 text-white dark:bg-white dark:text-navy-900 shadow-sm'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
-              }`}
-            >
-              <LayoutList className="w-3.5 h-3.5 text-[#6B8F72]" />
-              <span>Tarjetas de Faena</span>
-            </button>
+    <section className={styles.root} aria-label="Planificación de obra">
+      <header className={styles.heading}>
+        <div>
+          <h2>Planificación de obra</h2>
+          <p className={styles.subtitle}>
+            {ordered.length} {ordered.length === 1 ? "partida" : "partidas"}
+            {bounds
+              ? ` · ${dateLabel(bounds.start)} – ${dateLabel(bounds.end, true)}`
+              : ""}
+          </p>
+        </div>
+        <button
+          type="button"
+          className={styles.primary}
+          onClick={onAddActivity}
+        >
+          <Plus size={17} />
+          Nueva partida
+        </button>
+      </header>
+      <div
+        className={styles.summary}
+        role="group"
+        aria-label="Resumen de planificación"
+      >
+        <div className={styles.overall}>
+          <div>
+            <span>Avance general</span>
+            <strong>{overall}%</strong>
           </div>
-
+          <div
+            className={styles.track}
+            role="progressbar"
+            aria-label="Avance general de la obra"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={overall}
+          >
+            <span style={{ width: `${overall}%` }} />
+          </div>
+        </div>
+        <div className={styles.counts}>
+          <span>
+            <i className={styles.dot} style={{ background: "#6B8F72" }} />
+            {counts.terminada}{" "}
+            {counts.terminada === 1 ? "terminada" : "terminadas"}
+          </span>
+          <span>
+            <i className={styles.dot} style={{ background: "#FF6A00" }} />
+            {counts.en_curso} en curso
+          </span>
+          <span>
+            <i className={styles.dot} style={{ background: "#9CA3AF" }} />
+            {counts.pendiente}{" "}
+            {counts.pendiente === 1 ? "pendiente" : "pendientes"}
+          </span>
+        </div>
+      </div>
+      <div className={styles.toolbar}>
+        <div
+          className={styles.viewSwitch}
+          role="group"
+          aria-label="Vista de planificación"
+        >
           <button
             type="button"
-            onClick={onAddActivity}
-            className="h-10 px-3.5 bg-[#FF6A00] hover:bg-[#E55F00] text-white rounded-xl text-xs font-bold font-heading inline-flex items-center gap-1.5 shadow-sm shrink-0 transition-colors"
+            aria-pressed={mode === "gantt"}
+            onClick={() => setView("gantt")}
           >
-            <Plus className="w-4 h-4" />
-            <span>Nueva Partida</span>
+            <GanttChartSquare size={16} />
+            Gantt gráfico
+          </button>
+          <button
+            type="button"
+            className={styles.cardsToggle}
+            aria-pressed={mode === "cards"}
+            onClick={() => setView("cards")}
+          >
+            <LayoutList size={16} />
+            Tarjetas de faena
           </button>
         </div>
-
-        {/* Fila Inferior: Pestañas de Estado */}
-        <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-kraft-100 dark:border-[#1E2530] min-w-0">
-          <div
-            role="tablist"
-            aria-label="Filtrar partidas por estado"
-            className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 -mx-1 px-1"
-          >
-            {(
-              [
-                {
-                  value: 'todos',
-                  label: 'Todas',
-                  count: counts.todos,
-                  dot: 'bg-gray-400',
-                  activeClass:
-                    'bg-navy-900 text-white border-navy-900 dark:bg-white dark:text-navy-900 dark:border-white shadow-sm',
-                },
-                {
-                  value: 'en_curso',
-                  label: 'En curso',
-                  count: counts.en_curso,
-                  dot: 'bg-obra-orange',
-                  activeClass: 'bg-obra-orange text-white border-obra-orange shadow-sm',
-                },
-                {
-                  value: 'pendiente',
-                  label: 'Pendientes',
-                  count: counts.pendiente,
-                  dot: 'bg-amber-500',
-                  activeClass: 'bg-amber-500 text-white border-amber-500 shadow-sm',
-                },
-                {
-                  value: 'terminada',
-                  label: 'Terminadas',
-                  count: counts.terminada,
-                  dot: 'bg-obra-green',
-                  activeClass: 'bg-obra-green text-white border-obra-green shadow-sm',
-                },
-              ] as const
-            ).map((tab) => {
-              const isActive = filterStatus === tab.value;
-              return (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  key={tab.value}
-                  onClick={() => setFilterStatus(tab.value)}
-                  className={`h-8 px-3 rounded-xl text-xs font-heading font-semibold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition-all ${
-                    isActive
-                      ? tab.activeClass
-                      : 'bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border-kraft-200 dark:border-[#263040] hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
-                  }`}
-                >
-                  {tab.value !== 'todos' && (
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        isActive ? 'bg-white dark:bg-current' : tab.dot
-                      }`}
-                    />
-                  )}
-                  <span>{tab.label}</span>
-                  <span
-                    className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
-                      isActive
-                        ? 'bg-white/20 text-current'
-                        : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {filterStatus !== 'todos' && (
-            <button
-              type="button"
-              onClick={() => setFilterStatus('todos')}
-              className="text-xs font-heading font-bold text-obra-orange hover:underline shrink-0 pl-2 whitespace-nowrap"
-            >
-              Limpiar
-            </button>
+        <div
+          className={styles.filters}
+          role="group"
+          aria-label="Filtrar partidas"
+        >
+          {(["todos", "pendiente", "en_curso", "terminada"] as const).map(
+            (status) => (
+              <button
+                type="button"
+                key={status}
+                aria-pressed={filter === status}
+                onClick={() => setFilter(status)}
+              >
+                {status === "todos"
+                  ? "Todas"
+                  : status === "pendiente"
+                    ? "Pendientes"
+                    : status === "terminada"
+                      ? "Terminadas"
+                      : "En curso"}{" "}
+                <span>({counts[status]})</span>
+              </button>
+            ),
           )}
         </div>
       </div>
-
-      {/* VISTA 1: CRONOGRAMA GANTT HORIZONTAL (ESCRITORIO / TABLETS) */}
-      {viewMode === 'gantt' && (
-        <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto w-full">
-            <div className="min-w-[680px]">
-              {/* Cabecera de la tabla / Gantt */}
-              <div className="grid grid-cols-12 bg-navy-900 text-white text-xs font-mono font-semibold py-3 px-4 border-b border-navy-800">
-                <div className="col-span-4 sm:col-span-3">Actividad / Partida</div>
-                <div className="col-span-2 hidden sm:block">Responsable</div>
-                <div className="col-span-2 sm:col-span-2">Fechas</div>
-                <div className="col-span-1 sm:col-span-1 text-center">% Avance</div>
-                <div className="col-span-4 sm:col-span-4 pl-4">Línea de Tiempo (Gantt)</div>
-                <div className="col-span-1 sm:col-span-0 text-right hidden sm:block"></div>
-              </div>
-
-              {/* Filas de Actividades */}
-              <div className="divide-y divide-kraft-200/80 dark:divide-[#263040]">
-                {filteredActivities.map((act, idx) => {
-                  const start = new Date(act.fecha_inicio).getTime();
-                  const end = new Date(act.fecha_termino).getTime();
-                  const offsetDays = Math.max(0, Math.round((start - minTime) / (1000 * 60 * 60 * 24)));
-                  const durationDays = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)));
-
-                  const leftPercent = (offsetDays / totalDays) * 100;
-                  const widthPercent = Math.min(100 - leftPercent, (durationDays / totalDays) * 100);
-
-                  let statusColor = 'bg-gray-400';
-                  let statusBadge = 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
-                  if (act.estado === 'en_curso') {
-                    statusColor = 'bg-[#FF6A00]';
-                    statusBadge = 'bg-[#FF6A00]/15 text-[#FF6A00] border border-[#FF6A00]/30';
-                  } else if (act.estado === 'terminada') {
-                    statusColor = 'bg-[#6B8F72]';
-                    statusBadge = 'bg-[#6B8F72]/15 text-[#6B8F72] border border-[#6B8F72]/30';
-                  }
-
-                  return (
-                    <div
-                      key={act.id}
-                      className="grid grid-cols-12 items-center py-3.5 px-4 text-xs hover:bg-kraft-50/80 dark:hover:bg-[#1E2530]/60 transition-colors group"
-                    >
-                      {/* Nombre y orden */}
-                      <div className="col-span-4 sm:col-span-3 pr-2">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-kraft-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-mono text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {idx + 1}
-                          </span>
-                          <span
-                            className="font-semibold text-navy-900 dark:text-white truncate cursor-pointer hover:text-[#FF6A00]"
-                            title={act.nombre}
-                            onClick={() => setSelectedActivity(act)}
-                          >
-                            {act.nombre}
-                          </span>
-                        </div>
-                        <span className={`inline-block text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded mt-1 ${statusBadge}`}>
-                          {act.estado.replace('_', ' ')}
+      {!ordered.length ? (
+        <div className={styles.empty}>
+          <p>
+            Aún no hay partidas. Agrega la primera para comenzar a planificar
+            esta obra.
+          </p>
+          <button
+            type="button"
+            className={styles.primary}
+            onClick={onAddActivity}
+          >
+            <Plus size={16} />
+            Agregar primera partida
+          </button>
+        </div>
+      ) : !filtered.length ? (
+        <div className={styles.empty}>
+          <p>No hay partidas con este estado.</p>
+          <button
+            type="button"
+            className={styles.edit}
+            onClick={() => setFilter("todos")}
+          >
+            Ver todas las partidas
+          </button>
+        </div>
+      ) : (
+        <>
+          <div
+            hidden={mode === "cards"}
+            className={mode === "auto" ? styles.autoGraph : undefined}
+          >
+            <GanttTimeline
+              actividades={filtered}
+              startDay={bounds?.start}
+              onEdit={setSelected}
+            />
+          </div>
+          <div
+            hidden={mode === "gantt"}
+            className={mode === "auto" ? styles.autoCards : undefined}
+          >
+            <div
+              className={styles.cards}
+              role="group"
+              aria-label="Tarjetas de faena"
+            >
+              {filtered.map((activity) => {
+                const range = activityDates(activity),
+                  percent = progressValue(activity.porcentaje_avance);
+                const overdue =
+                  range &&
+                  activity.estado !== "terminada" &&
+                  percent < 100 &&
+                  todayDay() > range.end
+                    ? todayDay() - range.end
+                    : 0;
+                return (
+                  <article
+                    key={activity.id}
+                    className={styles.card}
+                    aria-label={`Partida ${activity.nombre}`}
+                  >
+                    <div className={styles.cardTop}>
+                      <span className={styles.order}>
+                        Partida {activity.orden}
+                      </span>
+                      <Status activity={activity} />
+                    </div>
+                    <h3>{activity.nombre}</h3>
+                    <div className={styles.cardDates}>
+                      <Calendar size={14} />
+                      <span>
+                        {range
+                          ? `${dateLabel(range.start)} – ${dateLabel(range.end, true)}`
+                          : "Fechas por revisar"}
+                      </span>
+                    </div>
+                    {overdue > 0 && (
+                      <p className={styles.overdue}>
+                        Plazo vencido · {overdue}{" "}
+                        {overdue === 1 ? "día" : "días"}
+                      </p>
+                    )}
+                    <div className={styles.cardProgress}>
+                      <div>
+                        <span>Avance reportado</span>
+                        <strong>{percent}%</strong>
+                      </div>
+                      <div
+                        className={styles.track}
+                        role="progressbar"
+                        aria-label={`Avance de ${activity.nombre}`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={percent}
+                      >
+                        <span
+                          style={{
+                            width: `${percent}%`,
+                            background:
+                              activity.estado === "terminada"
+                                ? "#6B8F72"
+                                : "#FF6A00",
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className={styles.cardFooter}>
+                      <button
+                        type="button"
+                        className={styles.assignee}
+                        aria-label={`Cambiar responsable de ${activity.nombre}`}
+                        onClick={() => setSelected(activity)}
+                      >
+                        <User size={15} className="shrink-0" />
+                        <span>
+                          {activity.responsable?.nombre || "Sin asignar"}
                         </span>
-                      </div>
-
-                      {/* Responsable */}
-                      <div className="col-span-2 hidden sm:flex items-center gap-1.5 text-gray-600 dark:text-gray-300 truncate">
-                        {act.responsable?.nombre ? (
-                          <div className="w-6 h-6 rounded-full bg-navy-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                            {act.responsable.nombre.charAt(0).toUpperCase()}
-                          </div>
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-kraft-100 dark:bg-gray-800 text-gray-400 flex items-center justify-center shrink-0">
-                            <User className="w-3.5 h-3.5" />
-                          </div>
-                        )}
-                        <span className="truncate">{act.responsable?.nombre || 'Sin asignar'}</span>
-                      </div>
-
-                      {/* Fechas */}
-                      <div className="col-span-2 sm:col-span-2 text-[11px] font-mono text-gray-500 dark:text-gray-400">
-                        <div>{formatDate(act.fecha_inicio)}</div>
-                        <div>{formatDate(act.fecha_termino)}</div>
-                      </div>
-
-                      {/* % Avance & Control rápido */}
-                      <div className="col-span-1 sm:col-span-1 text-center">
-                        <button
-                          onClick={() => setSelectedActivity(act)}
-                          className="font-mono font-bold text-xs text-navy-900 dark:text-gray-200 hover:text-[#FF6A00] underline decoration-dotted"
-                          title="Haga clic para editar detalle"
-                        >
-                          {act.porcentaje_avance}%
-                        </button>
-                      </div>
-
-                      {/* Barra Horizontal Gantt */}
-                      <div className="col-span-4 sm:col-span-4 pl-4 relative h-8 flex items-center">
-                        <div className="w-full h-3 bg-kraft-100 dark:bg-gray-800 rounded-full relative overflow-hidden">
-                          {/* Barra de duración */}
-                          <div
-                            style={{
-                              left: `${leftPercent}%`,
-                              width: `${Math.max(8, widthPercent)}%`,
-                            }}
-                            className={`absolute top-0 bottom-0 ${statusColor} rounded-full flex items-center justify-end px-1 shadow-sm cursor-pointer hover:brightness-110`}
-                            onClick={() => setSelectedActivity(act)}
-                            title={`${act.nombre}: ${durationDays} días (${act.porcentaje_avance}% avance)`}
-                          >
-                            <span className="text-[9px] font-mono font-bold text-white drop-shadow">
-                              {act.porcentaje_avance}%
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Acciones de Edición en Hover */}
-                      <div className="col-span-1 sm:col-span-0 text-right hidden sm:flex items-center justify-end gap-1">
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.edit}
+                        aria-label={`Editar ${activity.nombre}`}
+                        onClick={() => setSelected(activity)}
+                      >
+                        <Edit3 size={14} />
+                        Editar
+                      </button>
+                    </div>
+                    {percent < 100 && (
+                      <div
+                        className={styles.quick}
+                        role="group"
+                        aria-label={`Actualizar avance de ${activity.nombre}`}
+                      >
                         <button
                           type="button"
-                          onClick={() => setSelectedActivity(act)}
-                          className="p-1 text-gray-400 hover:text-[#FF6A00] rounded transition-colors"
-                          title="Editar partida"
+                          onClick={() => quickProgress(activity, percent + 25)}
+                          title="Aumentar el avance en 25 puntos"
                         >
-                          <Edit3 className="w-3.5 h-3.5" />
+                          +25%
+                        </button>
+                        <button
+                          type="button"
+                          disabled={percent >= 50}
+                          onClick={() => quickProgress(activity, 50)}
+                          title="Fijar avance en 50%"
+                        >
+                          50%
+                        </button>
+                        <button
+                          type="button"
+                          disabled={percent >= 75}
+                          onClick={() => quickProgress(activity, 75)}
+                          title="Fijar avance en 75%"
+                        >
+                          75%
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => quickProgress(activity, 100)}
+                          title="Marcar como terminada"
+                        >
+                          100%
                         </button>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           </div>
-        </div>
+        </>
       )}
-
-      {/* VISTA 2: TARJETAS DE FAENA / AGENDA MÓVIL (100% ERGONÓMICA EN TERRENO) */}
-      {viewMode === 'cards' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredActivities.map((act, idx) => {
-            return (
-              <div
-                key={act.id}
-                className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 shadow-sm hover:border-[#FF6A00]/50 transition-all space-y-3"
-              >
-                {/* Cabecera Tarjeta: Número, Nombre y Estado */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-[#FF6A00]/10 text-[#FF6A00] font-mono font-bold text-xs flex items-center justify-center shrink-0">
-                      {idx + 1}
-                    </span>
-                    <div>
-                      <h4 className="font-heading font-black text-sm text-navy-900 dark:text-white leading-tight">
-                        {act.nombre}
-                      </h4>
-                      <p className="text-[11px] text-gray-500 font-mono mt-0.5">
-                        {formatDate(act.fecha_inicio)} al {formatDate(act.fecha_termino)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <span
-                    className={`text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded-full shrink-0 ${
-                      act.estado === 'terminada'
-                        ? 'bg-[#6B8F72]/15 text-[#6B8F72] border border-[#6B8F72]/30'
-                        : act.estado === 'en_curso'
-                        ? 'bg-[#FF6A00]/15 text-[#FF6A00] border border-[#FF6A00]/30'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                    }`}
-                  >
-                    {act.estado.replace('_', ' ')}
-                  </span>
-                </div>
-
-                {/* Barra de Progreso Visual */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-gray-500">Avance reportado:</span>
-                    <strong className="text-[#FF6A00]">{act.porcentaje_avance}%</strong>
-                  </div>
-                  <div className="w-full bg-kraft-100 dark:bg-gray-800 h-2 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        act.porcentaje_avance === 100
-                          ? 'bg-[#6B8F72]'
-                          : act.porcentaje_avance > 0
-                          ? 'bg-[#FF6A00]'
-                          : 'bg-gray-300 dark:bg-gray-700'
-                      }`}
-                      style={{ width: `${act.porcentaje_avance}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Responsable asignado */}
-                <div className="flex items-center justify-between text-xs pt-1 border-t border-kraft-100 dark:border-gray-800 text-gray-600 dark:text-gray-400">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <User className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="truncate">{act.responsable?.nombre || 'Sin maestro asignado'}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedActivity(act)}
-                    className="text-[#FF6A00] font-heading font-bold text-xs hover:underline flex items-center gap-1"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    <span>Editar</span>
-                  </button>
-                </div>
-
-                {/* Botones de Actualización Rápida en Faena (1 Toque) */}
-                <div className="grid grid-cols-4 gap-1.5 pt-1 font-mono text-xs">
-                  <button
-                    type="button"
-                    onClick={() => handleQuickProgress(act, (act.porcentaje_avance || 0) + 25)}
-                    className="py-1.5 px-1 bg-kraft-100 dark:bg-[#1E2530] hover:bg-kraft-200 text-navy-900 dark:text-white rounded-lg font-bold text-center border border-kraft-200 dark:border-[#263040]"
-                    title="Aumentar 25%"
-                  >
-                    +25%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickProgress(act, 50)}
-                    className="py-1.5 px-1 bg-kraft-100 dark:bg-[#1E2530] hover:bg-kraft-200 text-navy-900 dark:text-white rounded-lg font-bold text-center border border-kraft-200 dark:border-[#263040]"
-                    title="Fijar en 50%"
-                  >
-                    50%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickProgress(act, 75)}
-                    className="py-1.5 px-1 bg-kraft-100 dark:bg-[#1E2530] hover:bg-kraft-200 text-navy-900 dark:text-white rounded-lg font-bold text-center border border-kraft-200 dark:border-[#263040]"
-                    title="Fijar en 75%"
-                  >
-                    75%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleQuickProgress(act, 100)}
-                    className="py-1.5 px-1 bg-[#6B8F72] hover:bg-[#5A7C60] text-white rounded-lg font-bold text-center shadow-sm flex items-center justify-center gap-1"
-                    title="Terminada al 100%"
-                  >
-                    <Check className="w-3 h-3" />
-                    <span>100%</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {selected && (
+        <ActivityEditor
+          key={selected.id}
+          activity={selected}
+          usuarios={usuarios}
+          assignedWorkerIds={assignedWorkerIds}
+          onSave={onUpdateActivity}
+          onClose={() => setSelected(null)}
+          onDelete={
+            onDeleteActivity
+              ? (activity) => {
+                  setSelected(null);
+                  setToDelete(activity);
+                }
+              : undefined
+          }
+        />
       )}
-
-      {/* Modal de Edición Completa de Partida */}
-      {selectedActivity && (
-        <ModalOverlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-kraft-200 dark:border-gray-800">
-              <h3 className="font-heading font-black text-lg text-navy-900 dark:text-white">
-                Editar Partida de Faena
-              </h3>
-              <button
-                onClick={() => setSelectedActivity(null)}
-                className="p-1 rounded-lg text-gray-400 hover:bg-kraft-100 dark:hover:bg-gray-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-                  Nombre de la Actividad
-                </label>
-                <input
-                  type="text"
-                  value={selectedActivity.nombre}
-                  onChange={(e) =>
-                    setSelectedActivity({
-                      ...selectedActivity,
-                      nombre: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 bg-kraft-50 dark:bg-[#1E2530] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs font-medium text-navy-900 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase">
-                    Porcentaje de Avance
-                  </label>
-                  <span className="font-mono font-bold text-xs text-[#FF6A00]">
-                    {selectedActivity.porcentaje_avance}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={selectedActivity.porcentaje_avance}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    const newStatus =
-                      val === 100 ? 'terminada' : val > 0 ? 'en_curso' : 'pendiente';
-                    setSelectedActivity({
-                      ...selectedActivity,
-                      porcentaje_avance: val,
-                      estado: newStatus,
-                    });
-                  }}
-                  className="w-full accent-[#FF6A00]"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-                    Estado
-                  </label>
-                  <select
-                    value={selectedActivity.estado}
-                    onChange={(e) =>
-                      setSelectedActivity({
-                        ...selectedActivity,
-                        estado: e.target.value as any,
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-kraft-50 dark:bg-[#1E2530] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs text-navy-900 dark:text-white"
-                  >
-                    <option value="pendiente">Pendiente (Gris)</option>
-                    <option value="en_curso">En Curso (Naranja)</option>
-                    <option value="terminada">Terminada (Verde)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-                    Responsable
-                  </label>
-                  <select
-                    value={selectedActivity.responsable_id || ''}
-                    onChange={(e) =>
-                      setSelectedActivity({
-                        ...selectedActivity,
-                        responsable_id: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-kraft-50 dark:bg-[#1E2530] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs text-navy-900 dark:text-white"
-                  >
-                    <option value="">-- Sin asignar --</option>
-                    {usuarios
-                      .filter((u) => !assignedWorkerIds?.length || assignedWorkerIds.includes(u.id))
-                      .map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.nombre} ({formatRoleLabel(u.rol)})
-                        </option>
-                      ))}
-                    {assignedWorkerIds?.length ? (
-                      <optgroup label="Otros integrantes">
-                        {usuarios
-                          .filter((u) => !assignedWorkerIds.includes(u.id))
-                          .map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.nombre} ({formatRoleLabel(u.rol)})
-                            </option>
-                          ))}
-                      </optgroup>
-                    ) : null}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-                    Fecha Inicio
-                  </label>
-                  <input
-                    type="date"
-                    value={selectedActivity.fecha_inicio}
-                    onChange={(e) =>
-                      setSelectedActivity({
-                        ...selectedActivity,
-                        fecha_inicio: e.target.value,
-                      })
-                    }
-                    className="w-full px-2.5 py-2 bg-kraft-50 dark:bg-[#1E2530] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs font-mono text-navy-900 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
-                    Fecha Término
-                  </label>
-                  <input
-                    type="date"
-                    value={selectedActivity.fecha_termino}
-                    onChange={(e) =>
-                      setSelectedActivity({
-                        ...selectedActivity,
-                        fecha_termino: e.target.value,
-                      })
-                    }
-                    className="w-full px-2.5 py-2 bg-kraft-50 dark:bg-[#1E2530] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs font-mono text-navy-900 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-2 pt-4 border-t border-kraft-200 dark:border-gray-800">
-                {onDeleteActivity ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const toDel = selectedActivity;
-                      setSelectedActivity(null);
-                      setActivityToDelete(toDel);
-                    }}
-                    className="px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl font-semibold transition-colors flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Eliminar</span>
-                  </button>
-                ) : (
-                  <div />
-                )}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedActivity(null)}
-                    className="px-3.5 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onUpdateActivity(selectedActivity.id, {
-                        nombre: selectedActivity.nombre,
-                        porcentaje_avance: selectedActivity.porcentaje_avance,
-                        estado: selectedActivity.estado,
-                        responsable_id: selectedActivity.responsable_id,
-                        fecha_inicio: selectedActivity.fecha_inicio,
-                        fecha_termino: selectedActivity.fecha_termino,
-                      });
-                      setSelectedActivity(null);
-                    }}
-                    className="px-4 py-2 bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl font-heading shadow-sm"
-                  >
-                    Guardar Cambios
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </ModalOverlay>
-      )}
-
-      {/* Modal Confirmación Eliminación */}
-      {activityToDelete && (
-        <ModalOverlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/50 text-red-600 mx-auto flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="font-heading font-black text-base text-navy-900 dark:text-white">
-                ¿Eliminar esta partida?
-              </h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Se eliminará "{activityToDelete.nombre}" del cronograma de la Carta Gantt.
-              </p>
-            </div>
-            <div className="flex items-center justify-center gap-2 pt-2">
+      {toDelete && (
+        <ModalOverlay
+          onClose={() => setToDelete(null)}
+          aria-label="Eliminar partida"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-6 space-y-4">
+            <AlertTriangle size={28} className="text-red-600" />
+            <h3 className="text-lg font-bold">¿Eliminar esta partida?</h3>
+            <p className="text-sm text-gray-500 break-words">
+              Se eliminará «{toDelete.nombre}» del cronograma.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setActivityToDelete(null)}
-                className="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-gray-900"
+                onClick={() => setToDelete(null)}
+                className="min-h-11 rounded-xl px-4 text-sm"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  if (onDeleteActivity) onDeleteActivity(activityToDelete.id);
-                  setActivityToDelete(null);
+                  onDeleteActivity?.(toDelete.id);
+                  setToDelete(null);
                 }}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl font-heading shadow-sm"
+                className="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white"
               >
-                Sí, Eliminar
+                Sí, eliminar
               </button>
             </div>
           </div>
         </ModalOverlay>
       )}
-    </div>
+    </section>
   );
 }

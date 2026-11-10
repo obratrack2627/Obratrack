@@ -31,6 +31,7 @@ import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import { dataService } from '@/lib/data-service';
 import { Proyecto, Actividad, Usuario, BitacoraEntrada, Cliente } from '@/types/database';
 import { formatDate } from '@/lib/utils';
+import { activityDates } from '@/lib/gantt/timeline';
 
 export default function ProyectoGanttPage() {
   const params = useParams();
@@ -57,6 +58,7 @@ export default function ProyectoGanttPage() {
   // Formulario nueva actividad
   const [nombreActividad, setNombreActividad] = useState('');
   const [responsableId, setResponsableId] = useState('');
+  const [activityError, setActivityError] = useState('');
   const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split('T')[0]);
   const [fechaTermino, setFechaTermino] = useState(
     new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -125,7 +127,9 @@ export default function ProyectoGanttPage() {
   };
 
   const handleUpdateActivity = (actId: string, updates: Partial<Actividad>) => {
-    dataService.updateActividad(actId, updates);
+    if (!dataService.updateActividad(actId, updates)) {
+      throw new Error('La partida ya no está disponible. Actualiza la página e inténtalo nuevamente.');
+    }
     loadData();
     showToast('Partida actualizada.');
   };
@@ -138,7 +142,12 @@ export default function ProyectoGanttPage() {
 
   const handleAddActivity = (e: React.FormEvent) => {
     e.preventDefault();
+    setActivityError('');
     if (!nombreActividad.trim()) return;
+    if (!activityDates({ fecha_inicio: fechaInicio, fecha_termino: fechaTermino })) {
+      setActivityError('Revisa las fechas: el término no puede ser anterior al inicio.');
+      return;
+    }
 
     dataService.createActividad({
       proyecto_id: projectId,
@@ -148,7 +157,7 @@ export default function ProyectoGanttPage() {
       fecha_termino: fechaTermino,
       porcentaje_avance: 0,
       estado: 'pendiente',
-      orden: actividades.length + 1,
+      orden: Math.max(0, ...actividades.map(activity => activity.orden)) + 1,
     });
 
     setIsAddModalOpen(false);
@@ -256,10 +265,12 @@ export default function ProyectoGanttPage() {
         onOpenMaps={() => setIsMapsModalOpen(true)}
       />
 
-      <div className="p-6 max-w-7xl w-full mx-auto space-y-6">
+      <div className="min-w-0 p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
         
         {/* Componente Gantt Interactivo (con CRUD completo) */}
         <GanttChart
+          key={projectId}
+          progress={proyecto.porcentaje_avance_ponderado}
           actividades={actividades}
           usuarios={
             proyecto.trabajadores_ids?.length
@@ -272,11 +283,11 @@ export default function ProyectoGanttPage() {
           assignedWorkerIds={proyecto.trabajadores_ids}
           onUpdateActivity={handleUpdateActivity}
           onDeleteActivity={handleDeleteActivity}
-          onAddActivity={() => setIsAddModalOpen(true)}
+          onAddActivity={() => { setActivityError(''); setIsAddModalOpen(true); }}
         />
 
         {/* Sección Bitácora Diaria de Obra y Registro Fotográfico */}
-        <div className="bg-white border border-kraft-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="min-w-0 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200">
             <div>
               <h3 className="font-heading font-black text-lg text-navy-900 flex items-center gap-2">
@@ -390,41 +401,43 @@ export default function ProyectoGanttPage() {
 
       {/* Modal: + Agregar Partida / Actividad */}
       {isAddModalOpen && (
-        <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <ModalOverlay onClose={() => setIsAddModalOpen(false)} aria-label="Nueva partida" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative w-full max-w-md my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl sm:rounded-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6 shadow-2xl animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
                 <Plus className="w-4 h-4 text-obra-orange" />
-                <span>Agregar Nueva Partida / Tarea</span>
+                <span>Nueva partida</span>
               </h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-700">
+              <button type="button" aria-label="Cerrar nueva partida" onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleAddActivity} className="space-y-4">
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  Nombre de la Partida *
+                <label htmlFor="new-activity-name" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  Nombre de la partida
                 </label>
                 <input
+                  id="new-activity-name"
                   type="text"
                   required
                   placeholder="Ej: Instalación de Porcelanato 60x60"
                   value={nombreActividad}
                   onChange={(e) => setNombreActividad(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-semibold"
+                  className="block w-full min-w-0 max-w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-base focus:outline-none focus:border-obra-orange font-semibold"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  Responsable Asignado
+                <label htmlFor="new-activity-owner" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  Responsable
                 </label>
                 <select
+                  id="new-activity-owner"
                   value={responsableId}
                   onChange={(e) => setResponsableId(e.target.value)}
-                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  className="block w-full min-w-0 max-w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-base"
                 >
                   <option value="">Sin asignar / Cuadrilla General</option>
                   {usuarios
@@ -448,33 +461,37 @@ export default function ProyectoGanttPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                    Fecha Inicio
+                  <label htmlFor="new-activity-start" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Fecha de inicio
                   </label>
                   <input
+                    id="new-activity-start"
                     type="date"
                     required
                     value={fechaInicio}
                     onChange={(e) => setFechaInicio(e.target.value)}
-                    className="w-full px-2.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
+                    className="block w-full min-w-0 max-w-full px-2.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-base font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                    Fecha Término
+                  <label htmlFor="new-activity-end" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Fecha de término
                   </label>
                   <input
+                    id="new-activity-end"
                     type="date"
+                    min={fechaInicio}
                     required
                     value={fechaTermino}
                     onChange={(e) => setFechaTermino(e.target.value)}
-                    className="w-full px-2.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
+                    className="block w-full min-w-0 max-w-full px-2.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-base font-mono"
                   />
                 </div>
               </div>
 
+              {activityError && <p role="alert" className="text-sm text-red-600">{activityError}</p>}
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-kraft-200">
                 <button
                   type="button"

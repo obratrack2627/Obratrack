@@ -1926,3 +1926,296 @@ test('la app instalada desde Chrome no impone colores a las barras del sistema',
  await expect(page).toHaveURL(/\/proyectos\/p-existing\/gantt/);
  await expect(page.locator('meta[name="theme-color"]')).toHaveCount(0);
 });
+
+async function setupGantt(page: Page) {
+  const db = await setup(page, { respuesta: "Consulta", accion: null }, true);
+  const names = [
+    "Trazo, excavaciones y construcción de muros",
+    "Fabricación y montaje de estructura metálica",
+    "Estructura y cubierta de cobertizo",
+    "Instalación de Metalsiding y revestimientos",
+  ];
+  const dates = [
+    ["2026-11-02", "2026-11-09"],
+    ["2026-11-09", "2026-11-16"],
+    ["2026-11-16", "2026-11-24"],
+    ["2026-11-24", "2026-12-02"],
+  ];
+  db.actividades = names.map((nombre, i) => ({
+    id: "gantt-" + i,
+    proyecto_id: "p-existing",
+    nombre,
+    fecha_inicio: dates[i][0],
+    fecha_termino: dates[i][1],
+    porcentaje_avance: i === 0 ? 100 : i === 1 ? 50 : 0,
+    estado: i === 0 ? "terminada" : i === 1 ? "en_curso" : "pendiente",
+    orden: i + 1,
+  }));
+  db.usuarios.push({
+    id: "worker-gantt",
+    empresa_id: company,
+    nombre: "Miguel Soto",
+    rol: "terreno",
+  });
+  db.proyectos[0].trabajadores_ids = ["worker-gantt"];
+  // Cargar el mismo conjunto tanto desde caché como desde la sincronización simulada.
+  await page.addInitScript(
+    ({ activities, users }) => {
+      localStorage.setItem(
+        "obratrack_actividades_v7_fixture-company",
+        JSON.stringify(activities),
+      );
+      localStorage.setItem(
+        "obratrack_usuarios_v7_fixture-company",
+        JSON.stringify(users),
+      );
+    },
+    { activities: db.actividades, users: db.usuarios },
+  );
+  return db;
+}
+
+test("Gantt usa un calendario común, mantiene la escala al filtrar y permite navegar sin alterar datos", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1536, height: 1050 });
+  const db = await setupGantt(page);
+  const before = JSON.stringify(db.actividades);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/proyectos/p-existing/gantt");
+  const module = page.getByRole("region", {
+    name: "Planificación de obra",
+    exact: true,
+  });
+  await expect(
+    module.getByRole("button", { name: "Gantt gráfico", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const calendar = module.getByRole("region", {
+    name: "Calendario de partidas",
+  });
+  await expect(calendar.locator("[data-activity-bar]")).toHaveCount(4);
+  const positions = await calendar
+    .locator("[data-activity-bar]")
+    .evaluateAll((elements) =>
+      elements.map((el) => Number.parseFloat((el as HTMLElement).style.left)),
+    );
+  expect(positions[0]).toBeLessThan(positions[1]);
+  expect(positions[1]).toBeLessThan(positions[2]);
+  await module
+    .getByRole("button", { name: "Pendientes (2)", exact: true })
+    .click();
+  await expect(calendar.locator("[data-activity-bar]")).toHaveCount(2);
+  expect(
+    await calendar
+      .locator("[data-activity-bar]")
+      .first()
+      .evaluate((el) => Number.parseFloat((el as HTMLElement).style.left)),
+  ).toBe(positions[2]);
+  await module.getByRole("button", { name: "Todas (4)", exact: true }).click();
+  await module.screenshot({ path: "/tmp/obratrack-gantt-desktop.png" });
+  await module.getByRole("button", { name: "Periodo siguiente" }).click();
+  await expect(calendar.locator("[data-activity-bar]")).toHaveCount(0);
+  await module.getByRole("button", { name: "Inicio", exact: true }).click();
+  await expect(calendar.locator("[data-activity-bar]")).toHaveCount(4);
+  await module.getByLabel("Escala del calendario").selectOption("meses");
+  await expect(
+    calendar.getByText("enero de 2027", { exact: true }),
+  ).toBeVisible();
+  expect(JSON.stringify(db.actividades)).toBe(before);
+  expect(errors).toEqual([]);
+});
+
+test("Gantt móvil prioriza tarjetas y conserva responsables, avances, fechas y edición", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const db = await setupGantt(page);
+  await page.goto("/proyectos/p-existing/gantt");
+  const module = page.getByRole("region", {
+    name: "Planificación de obra",
+    exact: true,
+  });
+  await expect(
+    module.getByRole("button", { name: "Tarjetas de faena", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    module.getByRole("region", { name: "Calendario de partidas" }),
+  ).toBeHidden();
+  const card = module.getByRole("article", {
+    name: "Partida Fabricación y montaje de estructura metálica",
+    exact: true,
+  });
+  await expect(card).toBeVisible();
+  await card.getByRole("button", { name: "+25%", exact: true }).click();
+  await expect(card.getByRole("progressbar")).toHaveAttribute(
+    "aria-valuenow",
+    "75",
+  );
+  await expect.poll(() => db.actividades[1].porcentaje_avance).toBe(75);
+  await card.getByRole("button", { name: /Editar Fabricación/ }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Editar Partida de Faena",
+    exact: true,
+  });
+  await dialog
+    .getByRole("combobox", { name: "Responsable", exact: true })
+    .selectOption("worker-gantt");
+  await dialog
+    .getByLabel("Fecha de término", { exact: true })
+    .fill("2026-11-18");
+  await dialog
+    .getByRole("button", { name: "Guardar cambios", exact: true })
+    .click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    card.getByRole("button", { name: /Cambiar responsable/ }),
+  ).toHaveText("Miguel Soto");
+  await expect.poll(() => db.actividades[1].fecha_termino).toBe("2026-11-18");
+  await card.getByRole("button", { name: "100%", exact: true }).click();
+  await expect(card.getByRole("progressbar")).toHaveAttribute(
+    "aria-valuenow",
+    "100",
+  );
+  await expect(card.getByText("Terminada", { exact: true })).toBeVisible();
+  await expect.poll(() => db.actividades[1].estado).toBe("terminada");
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({
+    path: "/tmp/obratrack-gantt-mobile-cards.png",
+    fullPage: true,
+  });
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await module
+    .getByRole("button", { name: "Gantt gráfico", exact: true })
+    .click();
+  const calendar = module.getByRole("region", {
+    name: "Calendario de partidas",
+  });
+  await expect(calendar).toBeVisible();
+  expect(await calendar.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(
+    true,
+  );
+  await calendar.evaluate((el) => (el.scrollLeft = 250));
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth + 1,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: "/tmp/obratrack-gantt-mobile-calendar.png",
+    fullPage: true,
+  });
+  await expect(
+    calendar.getByRole("button", {
+      name: "Trazo, excavaciones y construcción de muros",
+      exact: true,
+    }),
+  ).toBeInViewport();
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  await module.screenshot({ path: "/tmp/obratrack-gantt-mobile-dark.png" });
+  await module
+    .getByRole("button", { name: "En curso (0)", exact: true })
+    .click();
+  await expect(
+    module.getByText("No hay partidas con este estado.", { exact: true }),
+  ).toBeVisible();
+  await module
+    .getByRole("button", { name: "Ver todas las partidas", exact: true })
+    .click();
+  await expect(calendar).toBeVisible();
+});
+
+test("Gantt permite agregar y eliminar partidas desde un teléfono y bloquea fechas invertidas", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  const db = await setupGantt(page);
+  await page.goto("/proyectos/p-existing/gantt");
+  const module = page.getByRole("region", {
+    name: "Planificación de obra",
+    exact: true,
+  });
+  await module
+    .getByRole("button", { name: "Nueva partida", exact: true })
+    .click();
+  const add = page.getByRole("dialog", { name: "Nueva partida", exact: true });
+  await add
+    .getByLabel("Nombre de la partida", { exact: true })
+    .fill("Revisión final");
+  await add.getByLabel("Fecha de inicio", { exact: true }).fill("2026-12-03");
+  await add.getByLabel("Fecha de término", { exact: true }).fill("2026-12-02");
+  await add
+    .getByRole("button", { name: "Guardar Partida", exact: true })
+    .click();
+  await expect(add).toBeVisible();
+  expect(db.actividades).toHaveLength(4);
+  expect(
+    await add
+      .getByLabel("Fecha de término", { exact: true })
+      .evaluate((el: HTMLInputElement) => el.validity.rangeUnderflow),
+  ).toBe(true);
+  await add.getByLabel("Fecha de término", { exact: true }).fill("2026-12-04");
+  await add
+    .getByRole("button", { name: "Guardar Partida", exact: true })
+    .click();
+  await expect(add).toBeHidden();
+  const card = module.getByRole("article", {
+    name: "Partida Revisión final",
+    exact: true,
+  });
+  await expect(card).toBeVisible();
+  await expect.poll(() => db.actividades.length).toBe(5);
+  await card
+    .getByRole("button", { name: "Editar Revisión final", exact: true })
+    .click();
+  const editor = page.getByRole("dialog", {
+    name: "Editar Partida de Faena",
+    exact: true,
+  });
+  const box = await editor.locator("form").boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(321);
+  await editor
+    .getByLabel("Nombre de la actividad", { exact: true })
+    .fill("Revisión de entrega");
+  await editor
+    .getByRole("button", { name: "Guardar cambios", exact: true })
+    .click();
+  await module
+    .getByRole("button", { name: "Editar Revisión de entrega", exact: true })
+    .click();
+  await editor.getByRole("button", { name: "Eliminar", exact: true }).click();
+  const confirm = page.getByRole("dialog", {
+    name: "Eliminar partida",
+    exact: true,
+  });
+  await confirm.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(
+    module.getByRole("article", {
+      name: "Partida Revisión de entrega",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await module
+    .getByRole("button", { name: "Editar Revisión de entrega", exact: true })
+    .click();
+  await editor.getByRole("button", { name: "Eliminar", exact: true }).click();
+  await confirm
+    .getByRole("button", { name: "Sí, eliminar", exact: true })
+    .click();
+  await expect(
+    module.getByRole("article", {
+      name: "Partida Revisión de entrega",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect.poll(() => db.actividades.length).toBe(4);
+});
