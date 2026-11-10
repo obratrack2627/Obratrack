@@ -18,9 +18,24 @@ export function resolveEntity<T extends { id: string; nombre: string }>(
     const exact = items.filter(
       (p) => p.id === ident || normalize(p.nombre) === value,
     );
-    const found = exact.length
+    let found = exact.length
       ? exact
       : items.filter((p) => normalize(p.nombre).includes(value));
+    if (!found.length) {
+      const stripped = value
+        .replace(/^(?:la\s+|el\s+)?(?:obra|proyecto)\s+(?:de\s+|del\s+|en\s+)?/, '')
+        .trim();
+      if (stripped.length >= 3) {
+        found = items.filter((p) => {
+          const normName = normalize(p.nombre);
+          const baseName = normName.split(/\s*[—–-]\s*/)[0]?.trim() || '';
+          return (
+            normName.includes(stripped) ||
+            (baseName.length >= 4 && stripped.includes(baseName))
+          );
+        });
+      }
+    }
     if (found.length === 1) return found[0];
     throw new Error(
       found.length
@@ -118,6 +133,9 @@ export function prepareActionPlan(
           'Esta acción corresponde a otra obra. Abre su asistente o usa el chat general.',
         );
       if (!p.id.startsWith('planned-')) a.proyecto_id = p.id;
+      if (a.tipo === 'actualizar_proyecto' && typeof a.nuevo_nombre === 'string' && a.nuevo_nombre.trim()) {
+        p.nombre = a.nuevo_nombre.trim();
+      }
       a.proyecto_nombre = p.nombre;
       if (a.tipo === 'actualizar_avance') {
         const act = resolveEntity(

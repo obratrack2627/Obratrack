@@ -29,6 +29,17 @@ import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
 import { Cliente, Proyecto } from '@/types/database';
 import { formatCLP, formatRUT } from '@/lib/utils';
+import { canonicalPhone } from '@/lib/phone';
+
+function normalizeOptionalPhone(raw: string): { value: string; valid: boolean } {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === '+569' || trimmed === '+56 9' || trimmed === '569') {
+    return { value: '', valid: true };
+  }
+  const canonical = canonicalPhone(trimmed);
+  if (!canonical) return { value: '', valid: false };
+  return { value: `+${canonical}`, valid: true };
+}
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -89,12 +100,18 @@ export default function ClientesPage() {
     e.preventDefault();
     if (!nombre.trim()) return;
 
+    const phoneResult = normalizeOptionalPhone(telefono);
+    if (!phoneResult.valid) {
+      showToast('Ingresa un teléfono chileno válido (+569XXXXXXXX) o déjalo en blanco.');
+      return;
+    }
+
     const activeUser = dataService.getActiveUser();
 
     dataService.createCliente({
       empresa_id: activeUser?.empresa_id || 'e1111111-1111-4111-a111-111111111111',
       nombre: nombre.trim(),
-      telefono: telefono.trim(),
+      telefono: phoneResult.value,
       email: email.trim(),
       rut: rut.trim(),
       direccion: direccion.trim(),
@@ -113,7 +130,8 @@ export default function ClientesPage() {
   const handleOpenEdit = (cliente: Cliente) => {
     setEditingCliente(cliente);
     setEditNombre(cliente.nombre);
-    setEditTelefono(cliente.telefono || '+569');
+    const validPhone = canonicalPhone(cliente.telefono || '');
+    setEditTelefono(validPhone ? `+${validPhone}` : '+569');
     setEditEmail(cliente.email || '');
     setEditRut(cliente.rut || '');
     setEditDireccion(cliente.direccion || '');
@@ -123,9 +141,15 @@ export default function ClientesPage() {
     e.preventDefault();
     if (!editingCliente || !editNombre.trim()) return;
 
+    const phoneResult = normalizeOptionalPhone(editTelefono);
+    if (!phoneResult.valid) {
+      showToast('Ingresa un teléfono chileno válido (+569XXXXXXXX) o déjalo en blanco.');
+      return;
+    }
+
     dataService.updateCliente(editingCliente.id, {
       nombre: editNombre.trim(),
-      telefono: editTelefono.trim(),
+      telefono: phoneResult.value,
       email: editEmail.trim(),
       rut: editRut.trim(),
       direccion: editDireccion.trim(),
@@ -161,8 +185,9 @@ export default function ClientesPage() {
     });
   }, [clientes, searchTerm]);
 
-  // Métricas
-  const totalContratadoGeneral = proyectos.reduce(
+  // Métricas (excluyendo obras canceladas)
+  const proyectosVigentes = proyectos.filter((p) => p.estado !== 'cancelada');
+  const totalContratadoGeneral = proyectosVigentes.reduce(
     (sum, p) => sum + (Number(p.monto_cotizado) || 0),
     0
   );
@@ -338,7 +363,7 @@ export default function ClientesPage() {
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredClientes.map((c) => {
-              const obrasCliente = proyectos.filter((p) => p.cliente_id === c.id);
+              const obrasCliente = proyectosVigentes.filter((p) => p.cliente_id === c.id);
               const totalCotizadoCliente = obrasCliente.reduce(
                 (sum, p) => sum + (Number(p.monto_cotizado) || 0),
                 0
@@ -347,6 +372,7 @@ export default function ClientesPage() {
                 (sum, p) => sum + (Number(p.total_pagado) || 0),
                 0
               );
+              const validPhone = canonicalPhone(c.telefono || '');
 
               return (
                 <div
@@ -391,11 +417,11 @@ export default function ClientesPage() {
                     </div>
 
                     <div className="space-y-2 text-xs text-gray-600 font-sans border-t border-kraft-200/80 pt-3">
-                      {c.telefono ? (
+                      {validPhone ? (
                         <div className="flex items-center gap-2 font-mono">
                           <Phone className="w-3.5 h-3.5 text-obra-green shrink-0" />
-                          <a href={`tel:${c.telefono}`} className="hover:text-navy-900 truncate">
-                            {c.telefono}
+                          <a href={`tel:+${validPhone}`} className="hover:text-navy-900 truncate">
+                            +{validPhone}
                           </a>
                         </div>
                       ) : (
@@ -492,11 +518,12 @@ export default function ClientesPage() {
                 </thead>
                 <tbody className="divide-y divide-kraft-200/80 font-sans">
                   {filteredClientes.map((c) => {
-                    const obrasCliente = proyectos.filter((p) => p.cliente_id === c.id);
+                    const obrasCliente = proyectosVigentes.filter((p) => p.cliente_id === c.id);
                     const totalCotizadoCliente = obrasCliente.reduce(
                       (sum, p) => sum + (Number(p.monto_cotizado) || 0),
                       0
                     );
+                    const validPhone = canonicalPhone(c.telefono || '');
 
                     return (
                       <tr key={c.id} className="hover:bg-kraft-50/60 transition-colors">
@@ -505,9 +532,9 @@ export default function ClientesPage() {
                           {c.rut ? formatRUT(c.rut) : '-'}
                         </td>
                         <td className="py-3 px-4 font-mono text-gray-600">
-                          {c.telefono ? (
-                            <a href={`tel:${c.telefono}`} className="text-obra-green hover:underline">
-                              {c.telefono}
+                          {validPhone ? (
+                            <a href={`tel:+${validPhone}`} className="text-obra-green hover:underline">
+                              +{validPhone}
                             </a>
                           ) : (
                             '-'

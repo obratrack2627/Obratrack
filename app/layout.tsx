@@ -53,6 +53,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'ObraTrack',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
   formatDetection: {
     telephone: false,
   },

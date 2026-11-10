@@ -75,6 +75,27 @@ export default function ProyectoGanttPage() {
   const [editFotoBitacora, setEditFotoBitacora] = useState('');
   const [editTipoBitacora, setEditTipoBitacora] = useState<'avance' | 'incidente' | 'clima' | 'entrega_material'>('avance');
   const [editFechaBitacora, setEditFechaBitacora] = useState('');
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  const roleLabel = (rol: Usuario['rol']) =>
+    rol === 'admin' ? 'Administrador' : rol === 'supervisor' ? 'Supervisor' : 'Terreno';
+
+  const handleUploadBitacoraPhoto = async (
+    file: File | undefined,
+    setter: (url: string) => void,
+  ) => {
+    if (!file || !projectId) return;
+    setIsUploadingPhoto(true);
+    try {
+      const res = await dataService.uploadArchivoObra(file, projectId, 'bitacora-fotos');
+      setter(res.publicUrl);
+      showToast('Fotografía cargada.');
+    } catch {
+      showToast('No se pudo cargar la fotografía.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
 
   const loadData = () => {
     if (!projectId) return;
@@ -240,7 +261,15 @@ export default function ProyectoGanttPage() {
         {/* Componente Gantt Interactivo (con CRUD completo) */}
         <GanttChart
           actividades={actividades}
-          usuarios={usuarios}
+          usuarios={
+            proyecto.trabajadores_ids?.length
+              ? [
+                  ...usuarios.filter((u) => proyecto.trabajadores_ids?.includes(u.id)),
+                  ...usuarios.filter((u) => !proyecto.trabajadores_ids?.includes(u.id)),
+                ]
+              : usuarios
+          }
+          assignedWorkerIds={proyecto.trabajadores_ids}
           onUpdateActivity={handleUpdateActivity}
           onDeleteActivity={handleDeleteActivity}
           onAddActivity={() => setIsAddModalOpen(true)}
@@ -398,11 +427,24 @@ export default function ProyectoGanttPage() {
                   className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
                 >
                   <option value="">Sin asignar / Cuadrilla General</option>
-                  {usuarios.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nombre} ({u.rol})
-                    </option>
-                  ))}
+                  {usuarios
+                    .filter((u) => !proyecto.trabajadores_ids?.length || proyecto.trabajadores_ids.includes(u.id))
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nombre} ({roleLabel(u.rol)})
+                      </option>
+                    ))}
+                  {proyecto.trabajadores_ids?.length ? (
+                    <optgroup label="Otros integrantes de la empresa">
+                      {usuarios
+                        .filter((u) => !proyecto.trabajadores_ids?.includes(u.id))
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.nombre} ({roleLabel(u.rol)})
+                          </option>
+                        ))}
+                    </optgroup>
+                  ) : null}
                 </select>
               </div>
 
@@ -460,7 +502,7 @@ export default function ProyectoGanttPage() {
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-obra-orange" />
-                <span>Registrar avance Diaria</span>
+                <span>Registrar avance diario</span>
               </h3>
               <button onClick={() => setIsBitacoraModalOpen(false)} className="text-gray-400 hover:text-gray-700">
                 <X className="w-5 h-5" />
@@ -525,17 +567,30 @@ export default function ProyectoGanttPage() {
                 />
               </div>
 
-              <div>
+              <div className="space-y-2">
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  URL Fotografía de Evidencia (Opcional)
+                  Fotografía de Evidencia (Opcional)
                 </label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={fotoBitacora}
-                  onChange={(e) => setFotoBitacora(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
-                />
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-xl text-xs font-semibold transition-colors shrink-0">
+                    <Camera className="w-3.5 h-3.5 text-obra-orange" />
+                    <span>{isUploadingPhoto ? 'Subiendo…' : 'Subir foto / Cámara'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingPhoto}
+                      onChange={(e) => void handleUploadBitacoraPhoto(e.target.files?.[0], setFotoBitacora)}
+                      className="hidden"
+                    />
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="o pega URL https://..."
+                    value={fotoBitacora}
+                    onChange={(e) => setFotoBitacora(e.target.value)}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-kraft-200">
@@ -628,16 +683,29 @@ export default function ProyectoGanttPage() {
                 />
               </div>
 
-              <div>
+              <div className="space-y-2">
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  URL Fotografía
+                  Fotografía de Evidencia
                 </label>
-                <input
-                  type="url"
-                  value={editFotoBitacora}
-                  onChange={(e) => setEditFotoBitacora(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
-                />
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-xl text-xs font-semibold transition-colors shrink-0">
+                    <Camera className="w-3.5 h-3.5 text-obra-orange" />
+                    <span>{isUploadingPhoto ? 'Subiendo…' : 'Subir foto / Cámara'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingPhoto}
+                      onChange={(e) => void handleUploadBitacoraPhoto(e.target.files?.[0], setEditFotoBitacora)}
+                      className="hidden"
+                    />
+                  </label>
+                  <input
+                    type="url"
+                    value={editFotoBitacora}
+                    onChange={(e) => setEditFotoBitacora(e.target.value)}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-kraft-200">

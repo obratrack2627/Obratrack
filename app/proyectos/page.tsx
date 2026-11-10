@@ -654,7 +654,14 @@ export default function ProyectosPage() {
                             >
                               <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0 group-hover:scale-110 transition-transform" />
                               <span className="font-semibold truncate">
-                                {proj.direccion ? `${proj.direccion}, ${proj.comuna || 'Chile'}` : `📍 ${proj.comuna || 'Chile'}`}
+                                {proj.direccion
+                                  ? proj.comuna &&
+                                    !proj.direccion
+                                      .toLowerCase()
+                                      .includes(proj.comuna.toLowerCase())
+                                    ? `${proj.direccion}, ${proj.comuna}`
+                                    : proj.direccion
+                                  : `📍 ${proj.comuna || 'Chile'}`}
                               </span>
                             </button>
                           </div>
@@ -987,15 +994,41 @@ export default function ProyectosPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  Actividades Iniciales (para la Carta Gantt)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase">
+                    Actividades Iniciales (para la Carta Gantt)
+                  </label>
+                  <span className="text-[11px] font-mono font-bold text-obra-orange">
+                    {actividadesTexto.split('\n').filter((l) => l.trim().length > 0).length} partidas
+                  </span>
+                </div>
                 <textarea
                   rows={3}
                   value={actividadesTexto}
                   onChange={(e) => setActividadesTexto(e.target.value)}
                   className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-xs font-mono focus:outline-none focus:border-obra-orange"
                 />
+                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                  {[
+                    'Preparación de terreno (2)',
+                    'Obra gruesa / Estructura (5)',
+                    'Instalaciones (3)',
+                    'Terminaciones y entrega (3)',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() =>
+                        setActividadesTexto((prev) =>
+                          prev.trim() ? `${prev.trim()}\n${preset}` : preset,
+                        )
+                      }
+                      className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-kraft-100 hover:bg-kraft-200 text-navy-900 transition-colors"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
                 <span className="text-[11px] text-gray-400 font-mono mt-1 block">
                   Escribe una actividad por línea con su duración estimada en días entre paréntesis.
                 </span>

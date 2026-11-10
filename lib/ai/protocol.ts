@@ -157,9 +157,16 @@ export function validateAction(raw: any): AIAction {
       "monto_cotizado",
       "fecha_termino_estimada",
       "descripcion",
+      "nuevo_nombre",
     ].some((k) => a[k] !== undefined)
   )
     fail("Indica qué dato de la obra quieres actualizar.");
+  if (
+    a.tipo === "actualizar_proyecto" &&
+    a.nuevo_nombre !== undefined &&
+    !text(a.nuevo_nombre)
+  )
+    fail("Indica el nuevo nombre de la obra.");
   if (a.tipo === "actualizar_cliente" && !text(a.nombre) && !text(a.cliente_id))
     fail("Indica el cliente que quieres actualizar.");
   if (a.tipo === 'actualizar_trabajador' && !text(a.usuario_id) && !text(a.trabajador_nombre) && !text(a.nombre))
@@ -232,6 +239,16 @@ export function validateAction(raw: any): AIAction {
     required("mensaje");
     if (a.mensaje.length > 800)
       fail("El aviso al equipo admite hasta 800 caracteres.");
+    if (text(a.trabajador_nombre) && !a.trabajadores_nombres?.length) {
+      a.trabajadores_nombres = [a.trabajador_nombre.trim()];
+    }
+    if (
+      !a.roles_destino?.length &&
+      !a.trabajadores_nombres?.length &&
+      (text(a.proyecto_id) || text(a.proyecto_nombre))
+    ) {
+      a.roles_destino = ["terreno", "supervisor"];
+    }
     if (
       a.roles_destino !== undefined &&
       (!Array.isArray(a.roles_destino) ||

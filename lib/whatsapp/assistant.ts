@@ -332,6 +332,28 @@ export async function processPersonalMessage(
   let campaign: ReturnType<typeof prepareCampaign> | undefined;
   let response = result.respuesta;
   try {
+    if (activeProject && result.accion && typeof result.accion === 'object') {
+      const injectProjectScope = (act: any) => {
+        if (!act || typeof act !== 'object') return;
+        if (act.tipo === 'lote_acciones' && Array.isArray(act.acciones)) {
+          act.acciones.forEach(injectProjectScope);
+          return;
+        }
+        if (
+          (act.tipo === 'enviar_mensaje_equipo' || act.tipo === 'generar_mensaje_whatsapp') &&
+          !act.proyecto_id &&
+          !act.proyecto_nombre &&
+          !act.roles_destino?.length &&
+          !act.trabajadores_nombres?.length &&
+          !act.trabajador_nombre
+        ) {
+          act.proyecto_id = activeProject;
+          act.roles_destino = ['terreno', 'supervisor'];
+        }
+      };
+      if (Array.isArray(result.accion)) result.accion.forEach(injectProjectScope);
+      else injectProjectScope(result.accion);
+    }
     let actions = checkActionPermissions(user, result.accion, text);
     const create = actions.find((a) =>
       ["crear_proyecto", "crear_proyecto_completo"].includes(a.tipo),
@@ -407,6 +429,7 @@ export async function processPersonalMessage(
         broadcast,
         tables.usuarios,
         service.getProyectos(),
+        activeProject || undefined,
       );
     // Las URLs de evidencia provienen de Storage; el modelo no elige archivos.
     actions.forEach((a) => {

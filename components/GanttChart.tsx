@@ -23,14 +23,19 @@ import {
 interface GanttChartProps {
   actividades: Actividad[];
   usuarios: Usuario[];
+  assignedWorkerIds?: string[];
   onUpdateActivity: (id: string, updates: Partial<Actividad>) => void;
   onDeleteActivity?: (id: string) => void;
   onAddActivity: () => void;
 }
 
+const formatRoleLabel = (rol: Usuario['rol']) =>
+  rol === 'admin' ? 'Administrador' : rol === 'supervisor' ? 'Supervisor' : 'Terreno';
+
 export default function GanttChart({
   actividades,
   usuarios,
+  assignedWorkerIds,
   onUpdateActivity,
   onDeleteActivity,
   onAddActivity,
@@ -244,9 +249,15 @@ export default function GanttChart({
 
                       {/* Responsable */}
                       <div className="col-span-2 hidden sm:flex items-center gap-1.5 text-gray-600 dark:text-gray-300 truncate">
-                        <div className="w-6 h-6 rounded-full bg-navy-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                          {act.responsable?.nombre?.charAt(0) || 'T'}
-                        </div>
+                        {act.responsable?.nombre ? (
+                          <div className="w-6 h-6 rounded-full bg-navy-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                            {act.responsable.nombre.charAt(0).toUpperCase()}
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-kraft-100 dark:bg-gray-800 text-gray-400 flex items-center justify-center shrink-0">
+                            <User className="w-3.5 h-3.5" />
+                          </div>
+                        )}
                         <span className="truncate">{act.responsable?.nombre || 'Sin asignar'}</span>
                       </div>
 
@@ -522,11 +533,24 @@ export default function GanttChart({
                     className="w-full px-3 py-2 bg-kraft-50 dark:bg-[#1E2530] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs text-navy-900 dark:text-white"
                   >
                     <option value="">-- Sin asignar --</option>
-                    {usuarios.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.nombre} ({u.rol})
-                      </option>
-                    ))}
+                    {usuarios
+                      .filter((u) => !assignedWorkerIds?.length || assignedWorkerIds.includes(u.id))
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.nombre} ({formatRoleLabel(u.rol)})
+                        </option>
+                      ))}
+                    {assignedWorkerIds?.length ? (
+                      <optgroup label="Otros integrantes">
+                        {usuarios
+                          .filter((u) => !assignedWorkerIds.includes(u.id))
+                          .map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.nombre} ({formatRoleLabel(u.rol)})
+                            </option>
+                          ))}
+                      </optgroup>
+                    ) : null}
                   </select>
                 </div>
               </div>

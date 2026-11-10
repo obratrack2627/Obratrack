@@ -298,3 +298,36 @@ test('un contacto rechazado por el servidor queda pendiente sin afirmar que se g
   assert.ok(outcome.pendingId);
   assert.match(outcome.warning, /ficha cambió/);
 });
+
+test('actualizar_proyecto permite renombrar una obra con nuevo_nombre sin alterar el presupuesto', async () => {
+  await executeAI({ ...project, trabajadores_nombres: [] });
+  const p = dataService.getProyectos()[0];
+  const outcome = await executeAI({
+    tipo: 'actualizar_proyecto',
+    proyecto_id: p.id,
+    nuevo_nombre: 'Remodelación de cocina — Providencia',
+  });
+  assert.equal(outcome.pendingId, undefined);
+  assert.equal(dataService.getProyectos()[0].nombre, 'Remodelación de cocina — Providencia');
+  assert.equal(dataService.getProyectos()[0].monto_cotizado, p.monto_cotizado);
+  assert.match(outcome.result.resultado_texto, /Renombré la obra/);
+});
+
+test('evidenceActions asocia fotografía cuando el usuario menciona el nombre base de una obra con sufijo de comuna', () => {
+  const { evidenceActions } = require('../lib/whatsapp/evidence.ts');
+  const projects = [
+    { id: 'p-cocina', nombre: 'Remodelación de cocina — Las Condes' },
+    { id: 'p-tabique', nombre: 'Tabique divisorio en volcanita — Maipú' },
+  ];
+  const res = evidenceActions(
+    [],
+    { path: 'emp-1/foto.jpg', mime_type: 'image/jpeg', descripcion: 'Muro cocina' },
+    projects,
+    'Es de la remodelación de cocina.',
+  );
+  assert.equal(res.linked, true);
+  assert.equal(res.attachment.proyecto_id, 'p-cocina');
+  assert.equal(res.actions.length, 1);
+  assert.equal(res.actions[0].proyecto_id, 'p-cocina');
+});
+

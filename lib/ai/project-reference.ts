@@ -26,6 +26,14 @@ export function projectMentions<T extends ProjectReference>(projects: T[], messa
     if (hit.end > coveringEnd) { coveringStart = hit.start; coveringEnd = hit.end; found.add(hit.project.id); }
     else if (hit.start === coveringStart && hit.end === coveringEnd) found.add(hit.project.id);
   }
+  if (!found.size) {
+    const baseMatches = projects.filter(project => {
+      if (!/[—–]/.test(project.nombre)) return false;
+      const base = referenceText(project.nombre.split(/\s*[—–]\s*/)[0] || '');
+      return base.split(' ').filter(Boolean).length >= 2 && text.includes(` ${base} `);
+    });
+    if (baseMatches.length === 1) found.add(baseMatches[0].id);
+  }
   return projects.filter(project => found.has(project.id));
 }
 

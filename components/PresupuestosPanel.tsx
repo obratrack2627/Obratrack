@@ -11,6 +11,8 @@ import {
   type BudgetStatus,
 } from "@/lib/presupuestos";
 import { formatCLP, formatDate } from "@/lib/utils";
+import { canonicalPhone } from "@/lib/phone";
+import type { Cliente, Proyecto } from "@/types/database";
 import CotizacionPdfModal from "./CotizacionPdfModal";
 import { BudgetCreateDialog, BudgetAlternativeDialog, BudgetChoiceDialog, BudgetGroupCard, BudgetHistoryDialog } from './BudgetAlternatives';
 
@@ -22,6 +24,65 @@ const labels: Record<BudgetStatus, string> = {
   anulada: "Anulada",
   no_elegida: "No elegida",
 };
+
+const normText = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+function resolveCanonicalClient(
+  row: Presupuesto,
+  projects: Proyecto[],
+  clients: Cliente[],
+): Presupuesto {
+  if (!clients.length) return row;
+  const cot = row.cotizacion;
+  let matched: Cliente | undefined;
+
+  if (cot.cliente_id) {
+    matched = clients.find((c) => c.id === cot.cliente_id);
+  }
+  if (!matched && row.proyecto_id) {
+    const proj = projects.find((p) => p.id === row.proyecto_id);
+    if (proj?.cliente_id) {
+      matched = clients.find((c) => c.id === proj.cliente_id);
+    }
+  }
+  if (!matched && cot.cliente_email) {
+    const emailNorm = cot.cliente_email.trim().toLowerCase();
+    matched = clients.find((c) => c.email?.trim().toLowerCase() === emailNorm);
+  }
+  if (!matched && cot.cliente_telefono) {
+    const phoneNorm = canonicalPhone(cot.cliente_telefono);
+    if (phoneNorm) {
+      matched = clients.find((c) => canonicalPhone(c.telefono || "") === phoneNorm);
+    }
+  }
+  if (!matched && cot.cliente_nombre) {
+    const rawNorm = normText(cot.cliente_nombre);
+    matched = clients.find((c) => normText(c.nombre) === rawNorm);
+    if (!matched) {
+      const firstToken = rawNorm.split(/\s+/)[0] || "";
+      if (firstToken.length >= 4) {
+        const byFirst = clients.filter(
+          (c) => (normText(c.nombre).split(/\s+/)[0] || "") === firstToken,
+        );
+        if (byFirst.length === 1) matched = byFirst[0];
+      }
+    }
+  }
+  if (!matched || matched.nombre === cot.cliente_nombre) return row;
+  return {
+    ...row,
+    cotizacion: {
+      ...cot,
+      cliente_id: cot.cliente_id || matched.id,
+      cliente_nombre: matched.nombre,
+    },
+  };
+}
 
 export default function PresupuestosPanel({
   projectId,
@@ -46,9 +107,8 @@ export default function PresupuestosPanel({
   const [history, setHistory] = useState<Presupuesto | null>(null);
   const [groupFilter, setGroupFilter] = useState('');
   const [choice, setChoice] = useState<Presupuesto | null>(null);
-  const [projects, setProjects] = useState<{ id: string; nombre: string }[]>(
-    [],
-  );
+  const [projects, setProjects] = useState<Proyecto[]>([]);
+  const [clients, setClients] = useState<Cliente[]>([]);
 
   async function refresh() {
     setBusy(true);
@@ -62,8 +122,15 @@ export default function PresupuestosPanel({
       const body = await res.json();
       if (!res.ok)
         throw new Error(body.error || "No se pudo cargar el listado.");
-      setRows(body.presupuestos);
-      setProjects(dataService.getProyectos());
+      const loadedProjects = dataService.getProyectos();
+      const loadedClients = dataService.getClientes();
+      setProjects(loadedProjects);
+      setClients(loadedClients);
+      setRows(
+        (body.presupuestos as Presupuesto[]).map((r) =>
+          resolveCanonicalClient(r, loadedProjects, loadedClients),
+        ),
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {

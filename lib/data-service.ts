@@ -1557,18 +1557,30 @@ export class DataService {
       case 'actualizar_proyecto': {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre || accion.nombre);
         if (!proj) return null;
+        const previousName = proj.nombre;
         const updates: Partial<Proyecto> = {};
+        if (typeof accion.nuevo_nombre === 'string' && accion.nuevo_nombre.trim()) {
+          updates.nombre = accion.nuevo_nombre.trim();
+        }
         if (accion.estado) updates.estado = accion.estado;
         if (accion.monto != null || accion.monto_cotizado != null) updates.monto_cotizado = Number(accion.monto_cotizado ?? accion.monto);
         if (accion.fecha_termino_estimada) updates.fecha_termino_estimada = accion.fecha_termino_estimada;
         if (accion.descripcion) updates.descripcion = accion.descripcion;
         const updated = this.updateProyecto(proj.id, updates);
+        const finalName = updates.nombre || previousName;
         return {
           tipo: 'actualizar_proyecto',
-          titulo: `Obra Actualizada: ${proj.nombre}`,
+          titulo: `Obra Actualizada: ${finalName}`,
           detalles: updated || proj,
           resultado_texto: [
-            updates.estado ? `${proj.nombre} ${proj.estado === updates.estado ? 'ya figura' : 'quedó'} como ${projectStatusLabel(updates.estado).toLowerCase()}.` : `Actualicé ${proj.nombre}.`,
+            updates.nombre
+              ? `Renombré la obra "${previousName}" a "${updates.nombre}".`
+              : updates.estado
+                ? `${finalName} ${proj.estado === updates.estado ? 'ya figura' : 'quedó'} como ${projectStatusLabel(updates.estado).toLowerCase()}.`
+                : `Actualicé ${finalName}.`,
+            updates.nombre && updates.estado
+              ? `El estado quedó como ${projectStatusLabel(updates.estado).toLowerCase()}.`
+              : '',
             updates.monto_cotizado !== undefined ? `El presupuesto quedó en $${updates.monto_cotizado.toLocaleString('es-CL')}.` : '',
             updates.fecha_termino_estimada ? `La entrega quedó para el ${updates.fecha_termino_estimada.split('-').reverse().join('/')}.` : '',
             updates.descripcion ? 'Actualicé la descripción.' : '',

@@ -169,8 +169,13 @@ export default function ProjectTabsHeader({
                 <div className="flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-gray-400" />
                   <span>
-                    {proyecto.direccion ? `${proyecto.direccion}, ` : ''}
-                    {proyecto.comuna}
+                    {proyecto.direccion
+                      ? !proyecto.direccion
+                          .toLowerCase()
+                          .includes(proyecto.comuna.toLowerCase())
+                        ? `${proyecto.direccion}, ${proyecto.comuna}`
+                        : proyecto.direccion
+                      : proyecto.comuna}
                   </span>
                 </div>
               )}

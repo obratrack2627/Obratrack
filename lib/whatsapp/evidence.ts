@@ -67,7 +67,14 @@ export function evidenceActions(
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase();
   if (!project) {
-    const matches = projects.filter((p) => norm(text).includes(norm(p.nombre)));
+    const normText = norm(text);
+    let matches = projects.filter((p) => normText.includes(norm(p.nombre)));
+    if (matches.length === 0) {
+      matches = projects.filter((p) => {
+        const base = norm(p.nombre).split(/\s*[—–-]\s*/)[0]?.trim() || "";
+        return base.length >= 4 && normText.includes(base);
+      });
+    }
     if (matches.length === 1) project = matches[0];
   }
   if (!project && projects.length === 1) project = projects[0];

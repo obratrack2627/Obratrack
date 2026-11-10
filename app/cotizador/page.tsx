@@ -111,6 +111,12 @@ export default function CopilotoObreroPage() {
     if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
       setMensajesChat(savedChat.map(m=>m.id?.startsWith('m-init')?{...m,texto:INITIAL_CHAT_MESSAGE.texto,sugerencias:INITIAL_CHAT_MESSAGE.sugerencias}:m));
     }
+    try {
+      const intent = new URLSearchParams(window.location.search).get('intent');
+      if (intent === 'agendar') {
+        setInputChat('Agenda una visita técnica mañana a las 10:00 en ');
+      }
+    } catch {}
     return () => {
       window.removeEventListener('obratrack_plan_changed', planHandler);
       window.removeEventListener('obratrack_cloud_synced', syncHandler);

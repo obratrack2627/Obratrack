@@ -34,7 +34,15 @@ export function checkActionPermissions(
       const question = /^(?:esta|estan|sigue|siguen|cuando|como|por que|que obras|cuales obras|hay obras|en que estado|que estado|cual es el estado)\b/.test(current);
       if (negated || question || negatesFieldChange(current, /^estado$/)) throw new AIError('STATUS_NOT_REQUESTED', 'No cambié el estado de la obra. Para hacerlo, indica el estado que quieres asignarle.', 422);
     }
-    if (action.tipo === 'generar_mensaje_whatsapp' && /^(?:por favor )?(envia(?:le|les|me)?|manda(?:le|les|me)?|avisa(?:le|les)?|notifica(?:le|les)?)(?:\s|$)/.test(current)) action.tipo = 'enviar_mensaje_equipo';
+    if (action.tipo === 'generar_mensaje_whatsapp' && /^(?:por favor )?(envia(?:le|les|me)?|manda(?:le|les|me)?|avisa(?:le|les)?|notifica(?:le|les)?)(?:\s|$)/.test(current)) {
+      action.tipo = 'enviar_mensaje_equipo';
+      if (typeof action.trabajador_nombre === 'string' && action.trabajador_nombre.trim() && !action.trabajadores_nombres?.length) {
+        action.trabajadores_nombres = [action.trabajador_nombre.trim()];
+      }
+      if (!action.roles_destino?.length && !action.trabajadores_nombres?.length && (action.proyecto_id || action.proyecto_nombre)) {
+        action.roles_destino = ['terreno', 'supervisor'];
+      }
+    }
     if (action.tipo === 'actualizar_proyecto' && (!/\b(presupuestos?|montos?|cotizad[oa]s?|precios?|valor(?:es)?|costos?)\b/.test(current) || negatesFieldChange(current, /^(?:presupuesto|monto|valor|precio|costo)$/))) {
       delete action.monto;
       delete action.monto_cotizado;

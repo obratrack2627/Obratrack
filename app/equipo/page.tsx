@@ -27,6 +27,7 @@ import { registrationFields } from '@/lib/registrations';
 import { aiHeaders } from '@/lib/ai/client';
 import { dataService } from '@/lib/data-service';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
+import { canonicalPhone } from '@/lib/phone';
 import { isDeveloperEmail } from '@/lib/auth-utils';
 import { Usuario, Proyecto, UserRole } from '@/types/database';
 
@@ -111,7 +112,8 @@ export default function EquipoPage() {
     setEditNombre(user.nombre);
     setEditRut(user.rut || '');
     setEditEmail(user.email || '');
-    setEditTelefono(user.telefono_whatsapp || '+56 9 ');
+    const validPhone = canonicalPhone(user.telefono_whatsapp || '');
+    setEditTelefono(validPhone ? `+${validPhone}` : '+56 9 ');
     setEditRol(user.rol);
   };
 
@@ -128,11 +130,20 @@ export default function EquipoPage() {
       }
     }
 
+    const trimmedPhone = editTelefono.trim();
+    const isDefaultEmptyPhone =
+      !trimmedPhone || trimmedPhone === '+56 9' || trimmedPhone === '+569' || trimmedPhone === '569';
+    const validPhone = isDefaultEmptyPhone ? '' : canonicalPhone(trimmedPhone);
+    if (!isDefaultEmptyPhone && !validPhone) {
+      showToast('⚠️ Ingresa un número de WhatsApp chileno válido (+56 9 XXXX XXXX).');
+      return;
+    }
+
     dataService.updateUsuario(editingUser.id, {
       nombre: editNombre.trim(),
       rut: editRut.trim() || undefined,
       email: editEmail.trim(),
-      telefono_whatsapp: editTelefono.trim(),
+      telefono_whatsapp: validPhone ? `+${validPhone}` : '',
       rol: isDev ? 'admin' : editRol,
       is_dev: isDev ? true : editingUser.is_dev,
     });
@@ -366,7 +377,7 @@ export default function EquipoPage() {
                   ? 'bg-obra-orange-light text-obra-orange border border-obra-orange/20'
                   : 'bg-obra-green-light text-obra-green border border-obra-green/20';
 
-              const cleanPhone = (user.telefono_whatsapp || '').replace(/[^0-9]/g, '');
+              const cleanPhone = canonicalPhone(user.telefono_whatsapp || '');
 
               // Obras asignadas al trabajador
               const obrasAsignadas = proyectos.filter((p) =>
@@ -420,9 +431,13 @@ export default function EquipoPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 truncate">
                           <Phone className="w-3.5 h-3.5 text-obra-green shrink-0" />
-                          <a href={`tel:${user.telefono_whatsapp}`} className="hover:text-navy-900 truncate">
-                            {user.telefono_whatsapp}
-                          </a>
+                          {cleanPhone ? (
+                            <a href={`tel:+${cleanPhone}`} className="hover:text-navy-900 truncate">
+                              +{cleanPhone}
+                            </a>
+                          ) : (
+                            <span className="text-gray-400">Sin teléfono</span>
+                          )}
                         </div>
                         {cleanPhone && (
                           <a
@@ -562,7 +577,7 @@ export default function EquipoPage() {
                 <select id="worker-project" required={rol === 'terreno'} value={projectId} onChange={e => setProjectId(e.target.value)}
                   className="w-full px-3.5 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-gray-800 rounded-xl text-xs">
                   <option value="">Selecciona una obra</option>
-                  {proyectos.filter(p => p.estado !== 'terminado').map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                  {proyectos.filter(p => p.estado !== 'terminado' && p.estado !== 'cancelada').map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                 </select>
               </div>
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-kraft-200 dark:border-gray-800">

@@ -10,6 +10,7 @@ export default function CloudSync() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const retry = useRef(() => {});
+  const lastSyncRef = useRef<{ identity: string; at: number }>({ identity: "", at: 0 });
 
   useEffect(() => {
     let disposed = false;
@@ -19,7 +20,7 @@ export default function CloudSync() {
     const offlineMessage =
       "Sin conexión. Mostrando los últimos datos guardados.";
 
-    async function sync() {
+    async function sync(force = false) {
       if (disposed || document.visibilityState === "hidden") return;
       if (running) {
         requested = true;
@@ -31,6 +32,12 @@ export default function CloudSync() {
       }
       const active = dataService.getActiveUser();
       if (!active?.empresa_id) return;
+      const identity = `${active.id}:${active.empresa_id}`;
+      const dirtyRaw = localStorage.getItem(`obratrack_dirty_v1_${active.empresa_id}`);
+      const hasDirty = Boolean(dirtyRaw && dirtyRaw !== "{}" && Object.values(JSON.parse(dirtyRaw)).some((t: any) => t && Object.keys(t).length > 0));
+      if (!force && !hasDirty && lastSyncRef.current.identity === identity && Date.now() - lastSyncRef.current.at < 12000) {
+        return;
+      }
       running = true;
       requested = false;
       setBusy(true);
@@ -51,6 +58,9 @@ export default function CloudSync() {
           latest?.id === active.id &&
           latest?.empresa_id === active.empresa_id
         ) {
+          if (pulled.success && pushed.success) {
+            lastSyncRef.current = { identity, at: Date.now() };
+          }
           setError(
             !pulled.success
               ? pulled.message
@@ -68,41 +78,42 @@ export default function CloudSync() {
         running = false;
         if (!disposed) {
           setBusy(false);
-          if (requested) request();
+          if (requested) request(true);
         }
       }
     }
 
-    function request() {
+    function request(force = true) {
       clearTimeout(timer);
-      timer = setTimeout(() => void sync(), 150);
+      timer = setTimeout(() => void sync(force), 150);
     }
     const storageChanged = (event: StorageEvent) => {
       if (event.key === `obratrack_proyectos_v7_${dataService.getActiveUser()?.empresa_id}`) {
         window.dispatchEvent(new Event('obratrack_cloud_synced'));
-        request();
+        request(true);
       }
     };
     window.addEventListener('storage', storageChanged);
     const offline = () => setError(offlineMessage);
-    retry.current = request;
-    window.addEventListener("focus", request);
-    window.addEventListener("pageshow", request);
-    window.addEventListener("online", request);
+    const triggerRequest = () => request(true);
+    retry.current = triggerRequest;
+    window.addEventListener("focus", triggerRequest);
+    window.addEventListener("pageshow", triggerRequest);
+    window.addEventListener("online", triggerRequest);
     window.addEventListener("offline", offline);
-    document.addEventListener("visibilitychange", request);
-    const interval = setInterval(() => void sync(), 30000);
-    void sync();
+    document.addEventListener("visibilitychange", triggerRequest);
+    const interval = setInterval(() => void sync(true), 30000);
+    void sync(false);
     return () => {
       disposed = true;
       clearTimeout(timer);
       clearInterval(interval);
       window.removeEventListener("storage", storageChanged);
-      window.removeEventListener("focus", request);
-      window.removeEventListener("pageshow", request);
-      window.removeEventListener("online", request);
+      window.removeEventListener("focus", triggerRequest);
+      window.removeEventListener("pageshow", triggerRequest);
+      window.removeEventListener("online", triggerRequest);
       window.removeEventListener("offline", offline);
-      document.removeEventListener("visibilitychange", request);
+      document.removeEventListener("visibilitychange", triggerRequest);
     };
   }, [pathname]);
 

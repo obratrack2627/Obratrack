@@ -36,12 +36,14 @@ import {
 import { dataService } from '@/lib/data-service';
 import { Proyecto, EventoAgenda, ReporteWhatsApp, Usuario } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
+import { aiHeaders } from '@/lib/ai/client';
 
 export default function DashboardPage() {
   const router = useRouter();
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [eventos, setEventos] = useState<EventoAgenda[]>([]);
   const [reportes, setReportes] = useState<ReporteWhatsApp[]>([]);
+  const [whatsappPendingCount, setWhatsappPendingCount] = useState(0);
   const [activeUser, setActiveUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -62,26 +64,44 @@ export default function DashboardPage() {
     const reps = dataService.getReportes();
     setReportes(reps);
 
+    const loadWhatsAppPending = async () => {
+      try {
+        const res = await fetch('/api/whatsapp/mensajes', { headers: await aiHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        const msgs = Array.isArray(data?.mensajes) ? data.mensajes : [];
+        const pending = msgs.filter(
+          (m: any) => m?.adjunto?.analisis_pendiente || m?.categoria === 'datos_obra'
+        ).length;
+        setWhatsappPendingCount(pending);
+      } catch {
+        // Silent fallback if offline or unauthenticated
+      }
+    };
+    void loadWhatsAppPending();
+
     setLoading(false);
     const onSync = () => {
       setActiveUser(dataService.getActiveUser());
       setProyectos(dataService.getProyectos());
       setEventos(dataService.getEventosAgenda());
       setReportes(dataService.getReportes());
+      void loadWhatsAppPending();
     };
     window.addEventListener('obratrack_cloud_synced', onSync);
     return () => window.removeEventListener('obratrack_cloud_synced', onSync);
   }, [router]);
 
-  // Cálculos de KPIs Financieros y Operacionales
-  const obrasActivas = proyectos.filter((p) => p.estado === 'activo');
-  const obrasTerminadas = proyectos.filter((p) => p.estado === 'terminado');
+  // Cálculos de KPIs Financieros y Operacionales (excluyendo obras canceladas)
+  const proyectosVigentes = proyectos.filter((p) => p.estado !== 'cancelada');
+  const obrasActivas = proyectosVigentes.filter((p) => p.estado === 'activo');
+  const obrasTerminadas = proyectosVigentes.filter((p) => p.estado === 'terminado');
 
-  const totalCotizado = proyectos.reduce((acc, p) => acc + (p.monto_cotizado || 0), 0);
-  const totalCobrado = proyectos.reduce((acc, p) => acc + (p.total_pagado || 0), 0);
-  const totalImprevistos = proyectos.reduce((acc, p) => acc + (p.total_imprevistos || 0), 0);
-  const totalMateriales = proyectos.reduce((acc, p) => acc + (p.total_materiales || 0), 0);
-  const saldoPendiente = proyectos.reduce((sum, p) => sum + Math.max(0, p.monto_cotizado - (p.total_pagado || 0)), 0);
+  const totalCotizado = proyectosVigentes.reduce((acc, p) => acc + (p.monto_cotizado || 0), 0);
+  const totalCobrado = proyectosVigentes.reduce((acc, p) => acc + (p.total_pagado || 0), 0);
+  const totalImprevistos = proyectosVigentes.reduce((acc, p) => acc + (p.total_imprevistos || 0), 0);
+  const totalMateriales = proyectosVigentes.reduce((acc, p) => acc + (p.total_materiales || 0), 0);
+  const saldoPendiente = proyectosVigentes.reduce((sum, p) => sum + Math.max(0, (p.monto_cotizado || 0) - (p.total_pagado || 0)), 0);
 
   const avancePromedio =
     obrasActivas.length > 0
@@ -92,9 +112,11 @@ export default function DashboardPage() {
       : 0;
 
   const reportesPendientes = reportes.filter((r) => r.estado === 'pendiente');
+  const totalReportesPorValidar = reportesPendientes.length + whatsappPendingCount;
 
   // Alertas de obras críticas (con plazo próximo o atrasadas)
   const today = new Date();
+  const todayISO = today.toISOString().slice(0, 10);
   const alertas = obrasActivas
     .map((p) => {
       const fechaTermino = new Date(p.fecha_termino_estimada + 'T23:59:59');
@@ -127,13 +149,27 @@ export default function DashboardPage() {
     })
     .filter((a) => a.nivel !== 'ok');
 
-  // Datos para gráficos de flujo de caja
-  const chartDataFinanzas = proyectos.map((p) => ({
-    nombre: p.nombre.length > 15 ? p.nombre.slice(0, 15) + '...' : p.nombre,
-    Presupuestado: p.monto_cotizado || 0,
-    Cobrado: p.total_pagado || 0,
-    Pendiente: Math.max(0, (p.monto_cotizado || 0) - (p.total_pagado || 0)),
-  }));
+  // Datos para gráficos de flujo de caja (solo obras vigentes, activas primero)
+  const chartDataFinanzas = [...proyectosVigentes]
+    .sort((a, b) => {
+      const rank = (s: Proyecto['estado']) => (s === 'activo' ? 0 : s === 'pausado' ? 1 : 2);
+      return rank(a.estado) - rank(b.estado) || (b.monto_cotizado || 0) - (a.monto_cotizado || 0);
+    })
+    .map((p) => ({
+      nombre: p.nombre.length > 15 ? p.nombre.slice(0, 15) + '...' : p.nombre,
+      Presupuestado: p.monto_cotizado || 0,
+      Cobrado: p.total_pagado || 0,
+      Pendiente: Math.max(0, (p.monto_cotizado || 0) - (p.total_pagado || 0)),
+    }));
+
+  // Eventos de agenda ordenados: próximos/hoy primero por fecha asc, luego vencidos no completados más recientes
+  const eventosOrdenados = [...eventos].sort((a, b) => {
+    const aFuture = a.fecha >= todayISO ? 0 : 1;
+    const bFuture = b.fecha >= todayISO ? 0 : 1;
+    if (aFuture !== bFuture) return aFuture - bFuture;
+    const cmp = `${a.fecha} ${a.hora || '23:59'}`.localeCompare(`${b.fecha} ${b.hora || '23:59'}`);
+    return aFuture === 0 ? cmp : -cmp;
+  });
 
   const pieDataRentabilidad = [
     { name: 'Cobrado', value: totalCobrado, color: '#6B8F72' },
@@ -211,7 +247,7 @@ export default function DashboardPage() {
               {obrasActivas.length}
             </span>
             <span className="text-xs text-gray-500 font-mono">
-              / {proyectos.length} total ({obrasTerminadas.length} finalizadas)
+              / {proyectosVigentes.length} vigentes ({obrasTerminadas.length} finalizadas)
             </span>
           </div>
           <div className="mt-3 flex items-center gap-2">
@@ -280,7 +316,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-heading font-black text-navy-900 dark:text-white">
-              {reportesPendientes.length}
+              {totalReportesPorValidar}
             </span>
             <span className="text-xs text-gray-500 font-mono">
               pendientes de validar
@@ -434,30 +470,40 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-2.5">
-            {eventos.slice(0, 5).map((evt) => (
-              <div
-                key={evt.id}
-                className="p-3 rounded-xl bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] space-y-1"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-heading font-bold text-navy-900 dark:text-white">
-                    {evt.titulo}
-                  </span>
-                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#FF6A00]/15 text-[#FF6A00]">
-                    {evt.hora || 'Por confirmar'}
-                  </span>
+            {eventosOrdenados.slice(0, 5).map((evt) => {
+              const isPast = evt.fecha < todayISO && !evt.completado;
+              return (
+                <div
+                  key={evt.id}
+                  className="p-3 rounded-xl bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] space-y-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-heading font-bold text-navy-900 dark:text-white truncate">
+                      {evt.titulo}
+                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {isPast && (
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                          Vencido
+                        </span>
+                      )}
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#FF6A00]/15 text-[#FF6A00]">
+                        {evt.hora || 'Por confirmar'}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 line-clamp-1">{evt.descripcion}</p>
+                  <div className="flex items-center justify-between text-[10px] font-mono text-gray-400 pt-1">
+                    <span>{formatDate(evt.fecha)}</span>
+                    <span>{evt.comuna_lugar || 'En terreno'}</span>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 line-clamp-1">{evt.descripcion}</p>
-                <div className="flex items-center justify-between text-[10px] font-mono text-gray-400 pt-1">
-                  <span>{formatDate(evt.fecha)}</span>
-                  <span>{evt.comuna_lugar || 'En terreno'}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <Link
-            href="/cotizador"
+            href="/cotizador?intent=agendar"
             className="block text-center w-full py-2 rounded-xl bg-kraft-100 dark:bg-[#1E2530] text-xs font-heading font-bold text-navy-900 dark:text-gray-200 border border-kraft-200 dark:border-[#263040] hover:bg-kraft-200 transition-colors"
           >
             + Agendar con ObraBot

@@ -48,6 +48,30 @@ import { downloadProjectExcel } from '@/lib/excel-export';
 import MaterialCatalogQuickSearch from '@/components/MaterialCatalogQuickSearch';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 
+const MATERIAL_CATEGORY_LABELS: Record<string, string> = {
+  obra_gruesa: 'Obra gruesa',
+  ferreteria: 'Ferretería',
+  terminaciones: 'Terminaciones',
+  pintura: 'Pintura',
+  instalaciones: 'Instalaciones',
+  electricidad: 'Electricidad',
+  gasfiteria: 'Gasfitería',
+  estructura: 'Estructura',
+  herramientas: 'Herramientas',
+  otro: 'Otro',
+};
+
+function formatMaterialCategory(raw?: string): string {
+  if (!raw) return 'General';
+  const key = raw.trim().toLowerCase();
+  if (MATERIAL_CATEGORY_LABELS[key]) return MATERIAL_CATEGORY_LABELS[key];
+  if (raw.includes('_')) {
+    const cleaned = raw.replace(/_/g, ' ').trim();
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+  return raw;
+}
+
 export default function ProyectoFinanzasPage() {
   const params = useParams();
   const projectId = params?.id as string;
@@ -121,6 +145,24 @@ export default function ProyectoFinanzasPage() {
   const [cambios, setCambios] = useState<ReclamoCambioObra[]>([]);
   const [isEdpModalOpen, setIsEdpModalOpen] = useState(false);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  const handleUploadImprevistoPhoto = async (
+    file: File | undefined,
+    setter: (url: string) => void,
+  ) => {
+    if (!file || !projectId) return;
+    setIsUploadingPhoto(true);
+    try {
+      const res = await dataService.uploadArchivoObra(file, projectId, 'bitacora-fotos');
+      setter(res.publicUrl);
+      showToast('Fotografía de respaldo cargada.');
+    } catch {
+      showToast('No se pudo cargar la fotografía.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
 
   const loadData = () => {
     if (!projectId) return;
@@ -786,7 +828,7 @@ export default function ProyectoFinanzasPage() {
                         </button>
                       </td>
                       <td className="py-2.5 px-3 font-semibold text-navy-900">{m.nombre}</td>
-                      <td className="py-2.5 px-3 text-gray-500 text-[11px] font-mono">{m.categoria || 'General'}</td>
+                      <td className="py-2.5 px-3 text-gray-500 text-[11px] font-mono">{formatMaterialCategory(m.categoria)}</td>
                       <td className="py-2.5 px-3 text-center font-mono">
                         {m.cantidad} {m.unidad}
                       </td>
@@ -1104,17 +1146,30 @@ export default function ProyectoFinanzasPage() {
                 </div>
               </div>
 
-              <div>
+              <div className="space-y-2">
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  URL Fotografía Respaldo (Opcional)
+                  Fotografía Respaldo (Opcional)
                 </label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={fotoUrlImprevisto}
-                  onChange={(e) => setFotoUrlImprevisto(e.target.value)}
-                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
-                />
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-xl text-xs font-semibold transition-colors shrink-0">
+                    <ImageIcon className="w-3.5 h-3.5 text-obra-red" />
+                    <span>{isUploadingPhoto ? 'Subiendo…' : 'Subir foto / Boleta'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingPhoto}
+                      onChange={(e) => void handleUploadImprevistoPhoto(e.target.files?.[0], setFotoUrlImprevisto)}
+                      className="hidden"
+                    />
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="o pega URL https://..."
+                    value={fotoUrlImprevisto}
+                    onChange={(e) => setFotoUrlImprevisto(e.target.value)}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
@@ -1195,16 +1250,29 @@ export default function ProyectoFinanzasPage() {
                 </div>
               </div>
 
-              <div>
+              <div className="space-y-2">
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  URL Fotografía
+                  Fotografía Respaldo
                 </label>
-                <input
-                  type="url"
-                  value={editImpFoto}
-                  onChange={(e) => setEditImpFoto(e.target.value)}
-                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
-                />
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 rounded-xl text-xs font-semibold transition-colors shrink-0">
+                    <ImageIcon className="w-3.5 h-3.5 text-obra-red" />
+                    <span>{isUploadingPhoto ? 'Subiendo…' : 'Subir foto / Boleta'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingPhoto}
+                      onChange={(e) => void handleUploadImprevistoPhoto(e.target.files?.[0], setEditImpFoto)}
+                      className="hidden"
+                    />
+                  </label>
+                  <input
+                    type="url"
+                    value={editImpFoto}
+                    onChange={(e) => setEditImpFoto(e.target.value)}
+                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
