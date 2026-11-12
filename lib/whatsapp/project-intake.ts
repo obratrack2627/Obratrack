@@ -1,3 +1,5 @@
+import { projectLiterals } from './project-literals';
+import { isConversationalName } from '@/lib/ai/person-name';
 import { phonesInText } from '@/lib/phone';
 import { canonicalPhone } from "./meta";
 import { resolveEntity } from "@/lib/ai/actions";
@@ -27,6 +29,8 @@ export function projectIntake(
       "Tu perfil no puede crear obras.",
       403,
     );
+  const literals = projectLiterals(userText, previous || {});
+  proposal = {...(proposal || {}), ...literals};
   const draft: Record<string, any> = { ...(previous || {}) };
   const stringFields = [
     "nombre",
@@ -41,11 +45,11 @@ export function projectIntake(
     "fecha_inicio",
   ];
   for (const key of stringFields)
-    if (text(proposal?.[key])) draft[key] = proposal[key].trim();
+    if (text(proposal?.[key]) && (!['nombre','cliente_nombre'].includes(key) || !isConversationalName(proposal[key]))) draft[key] = proposal[key].trim();
   for (const key of ["monto_cotizado", "dias"])
     if (typeof proposal?.[key] === "number" && Number.isFinite(proposal[key]))
-      draft[key] = proposal[key];
-  if (typeof proposal?.monto === "number" && Number.isFinite(proposal.monto))
+      if (!(key === 'monto_cotizado' && proposal[key] <= 0 && previous?.monto_cotizado > 0 && literals.monto_cotizado === undefined)) draft[key] = proposal[key];
+  if (typeof proposal?.monto === "number" && Number.isFinite(proposal.monto) && literals.monto_cotizado === undefined && !(proposal.monto <= 0 && previous?.monto_cotizado > 0))
     draft.monto_cotizado = proposal.monto;
   if (Array.isArray(proposal?.partidas) && proposal.partidas.length)
     draft.partidas = proposal.partidas;
@@ -150,7 +154,6 @@ export function projectIntake(
         .slice(0, 150);
   }
   const literalPhones = phonesInText(userText);
-  if (literalPhones.length === 1 && (/\b(tel[eé]fono|celular|whatsapp)\b/i.test(userText) || (previous?.monto_cotizado > 0 && previous?.cliente_nombre && !previous?.cliente_telefono && /^[+\d ().-]+$/.test(userText.trim())))) draft.cliente_telefono = '+' + literalPhones[0];
   if (text(draft.cliente_telefono)) {
     const phone = canonicalPhone(draft.cliente_telefono);
     const known = [previous?.cliente_telefono, client?.telefono].some(

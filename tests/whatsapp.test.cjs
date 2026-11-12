@@ -1279,3 +1279,68 @@ test('una foto del trabajador se conserva como evidencia pero no acredita asiste
  const out=await processPersonalMessage(sb,{id:'attendance-photo',from:'56912345678',type:'image',image:{id:'123',caption:'Estoy en Quincho, márcame presente'}},{media:async()=>({mimeType:'image/jpeg',data:'aW1hZ2U='}),store:async()=>({path:'empresa1/jefe/'+ 'c'.repeat(64)+'.jpg',mime_type:'image/jpeg',proyecto_id:null}),chat:async()=>({respuesta:'Recibí tu foto.',accion:{tipo:'registrar_asistencia',proyecto_id:'own',trabajador_nombre:user.nombre,fecha:'2026-11-12',estado:'presente'},cotizacion:null})});
  assert.equal(out.persistido,true);assert.equal(captured.p_changed.asistencia_obreros?.length || 0,0);assert.equal(captured.p_changed.bitacora_entradas.length,1);assert.match(out.respuesta,/Foto guardada/);assert.match(out.respuesta,/supervisor o jefe/);
 });
+
+test('cancelar y retomar la cotización con lenguaje natural conserva el presupuesto y completa los seis datos por líneas sin modelo',async()=>{
+ const {normalizeQuote}=require('../lib/ai/protocol.ts');
+ const q=normalizeQuote({titulo_proyecto:'Cobertizo cotizado',modo_presupuesto:'precio_acordado',tratamiento_iva:'incluido',partidas_venta:[{nombre:'Cobertizo completo',unidad:'gl',cantidad:1,precio_unitario:561332}],materiales:[{nombre:'Pino impregnado',cantidad:4,unidad:'un',precio_unitario_estimado:5000}],mano_de_obra:[],duracion_dias_estimada:3,actividades_gantt:[{nombre:'Preparación',dias:1},{nombre:'Montaje',dias:2}]});
+ const sb=database();sb.db.presupuestos=[{id:'wa:cover',empresa_id:user.empresa_id,cotizacion:q,estado:'borrador',proyecto_id:null}];
+ sb.db.whatsapp_mensajes=[{message_id:'cover-source',empresa_id:user.empresa_id,actor_id:user.id,texto:'Cotiza el cobertizo',respuesta:'Cotización disponible.',cotizacion:q}];
+ let captured;const rpc=sb.rpc.bind(sb);sb.rpc=async(n,p)=>{captured=p;return rpc(n,p);};
+ const deps={chat:async()=>{throw Error('La creación por datos literales no debe depender del modelo');}};
+ const msg=(id,body)=>({id,from:'56912345678',type:'text',text:{body}});
+ await processPersonalMessage(sb,msg('cover-start','Sí'),deps);
+ const canceled=await processPersonalMessage(sb,msg('cover-cancel','Cancelar'),deps);assert.match(canceled.respuesta,/quedó cancelada/);assert.equal(sb.db.whatsapp_mensajes[0].borrador_obra,null);
+ const resumed=await processPersonalMessage(sb,msg('cover-resume','Usa esa cotización para crear una obra'),deps);
+ assert.match(resumed.respuesta,/Nombre del cliente/);assert.doesNotMatch(resumed.respuesta,/Presupuesto de la obra/);assert.equal(captured.p_borrador.presupuesto_cotizacion_id,q.id);
+ const data=['123456785','Pedro Morales','Cobertizo La Pintana','561.332','pedro@example.test','912345678'].join('\n');
+ const result=await processPersonalMessage(sb,msg('cover-fields',data),deps);
+ assert.match(result.respuesta,/Creé la obra Cobertizo La Pintana/);assert.equal(captured.p_borrador,null);
+ assert.equal(captured.p_changed.proyectos.length,1);assert.equal(captured.p_changed.proyectos[0].monto_cotizado,561332);
+ assert.equal(captured.p_changed.clientes[0].telefono,'+56912345678');assert.equal(captured.p_changed.clientes[0].rut,'12345678-5');assert.equal(captured.p_changed.clientes[0].nombre,'Pedro Morales');
+ assert.equal(captured.p_changed.actividades.length,2);assert.equal(captured.p_changed.materiales_proyecto[0].nombre,'Pino impregnado');assert.equal(captured.p_acciones.presupuesto_cotizacion_id,q.id);
+ const committed=sb.commits;await processPersonalMessage(sb,msg('cover-fields',data),deps);assert.equal(sb.commits,committed);
+});
+
+test('un borrador de la versión anterior recupera el presupuesto y teléfono del último mensaje al pedir continuar',async()=>{
+ const {normalizeQuote}=require('../lib/ai/protocol.ts');
+ const q=normalizeQuote({titulo_proyecto:'Cobertizo cotizado',modo_presupuesto:'precio_acordado',tratamiento_iva:'incluido',partidas_venta:[{nombre:'Cobertizo',unidad:'gl',cantidad:1,precio_unitario:561332}],materiales:[{nombre:'Pino',cantidad:4,unidad:'un',precio_unitario_estimado:5000}],mano_de_obra:[],duracion_dias_estimada:2,actividades_gantt:[{nombre:'Montaje',dias:2}]});
+ const sb=database();sb.db.presupuestos=[{id:'wa:legacy-cover',empresa_id:user.empresa_id,cotizacion:q,estado:'borrador'}];
+ const incomplete={nombre:'Cobertizo La Pintana',cliente_nombre:'Pedro Morales',cliente_rut:'12345678-5',cliente_email:'pedro@example.test'};
+ sb.db.whatsapp_mensajes=[
+  {message_id:'legacy-repeated',empresa_id:user.empresa_id,actor_id:user.id,texto:'Ya te di todos los datos',respuesta:'Faltan presupuesto y teléfono.',borrador_obra:incomplete},
+  {message_id:'legacy-fields',empresa_id:user.empresa_id,actor_id:user.id,texto:'123456785\nPedro Morales\nCobertizo La Pintana\n561.332\npedro@example.test\n912345678',respuesta:'Faltan presupuesto y teléfono.',borrador_obra:incomplete},
+  {message_id:'legacy-request',empresa_id:user.empresa_id,actor_id:user.id,texto:'Usa esa cotización para crear una obra',respuesta:'Faltan datos.',borrador_obra:{}},
+  {message_id:'legacy-cancel',empresa_id:user.empresa_id,actor_id:user.id,texto:'Cancelar',respuesta:'La creación quedó cancelada.',borrador_obra:null},
+  {message_id:'legacy-quote',empresa_id:user.empresa_id,actor_id:user.id,texto:'Cotiza un cobertizo',respuesta:'Cotización.',cotizacion:q},
+ ];
+ let captured;const rpc=sb.rpc.bind(sb);sb.rpc=async(n,p)=>{captured=p;return rpc(n,p);};
+ const result=await processPersonalMessage(sb,{id:'legacy-continue',from:'56912345678',type:'text',text:{body:'Continúa'}},{chat:async()=>{throw Error('No debe volver a preguntar datos ya proporcionados');}});
+ assert.match(result.respuesta,/Creé la obra/);assert.equal(captured.p_changed.proyectos[0].monto_cotizado,561332);assert.equal(captured.p_changed.clientes[0].telefono,'+56912345678');assert.equal(captured.p_changed.materiales_proyecto[0].nombre,'Pino');assert.equal(captured.p_acciones.presupuesto_cotizacion_id,q.id);
+});
+
+test('una aceptación vaga después de cancelar no revive la creación y una cotización de otra empresa no se convierte',async()=>{
+ const {normalizeQuote}=require('../lib/ai/protocol.ts');const q=normalizeQuote({titulo_proyecto:'Cobertizo',materiales:[],mano_de_obra:[],modo_presupuesto:'precio_acordado',tratamiento_iva:'incluido',partidas_venta:[{nombre:'Alcance',unidad:'gl',cantidad:1,precio_unitario:100000}]});
+ const sb=database();sb.db.presupuestos=[{id:'other-budget',empresa_id:'other-company',cotizacion:q,estado:'borrador'}];
+ sb.db.whatsapp_mensajes=[{message_id:'cancelled',empresa_id:user.empresa_id,actor_id:user.id,texto:'Cancelar',respuesta:'Cancelada.',borrador_obra:null},{message_id:'quote-before-cancel',empresa_id:user.empresa_id,actor_id:user.id,texto:'Cotiza',respuesta:'Cotización.',cotizacion:q}];
+ let captured;const rpc=sb.rpc.bind(sb);sb.rpc=async(n,p)=>{captured=p;return rpc(n,p);};
+ const request=(id,body)=>({id,from:'56912345678',type:'text',text:{body}});let calls=0;
+ await processPersonalMessage(sb,request('vague-yes','Sí'),{chat:async()=>{calls++;return {respuesta:'Indica qué necesitas.',accion:null,cotizacion:null};}});assert.equal(calls,1);assert.equal(captured.p_changed.proyectos.length,0);
+ const refused=await processPersonalMessage(sb,request('other-source','Usa esa cotización para crear una obra'),{chat:async()=>{throw Error('No se usa el modelo para recuperar un presupuesto ajeno');}});
+ assert.match(refused.respuesta,/No se pudo recuperar/);assert.equal(captured.p_changed.proyectos.length,0);
+});
+
+test('retomar una cotización al responder su mensaje usa esa fuente, aunque haya otra más reciente',async()=>{
+ const {normalizeQuote}=require('../lib/ai/protocol.ts');const make=name=>normalizeQuote({titulo_proyecto:name,materiales:[{nombre:name,cantidad:1,unidad:'un',precio_unitario_estimado:5000}],mano_de_obra:[]});
+ const [a,b]=[make('Cotización A'),make('Cotización B')];const sb=database();sb.db.presupuestos=[a,b].map(q=>({id:q.id,empresa_id:user.empresa_id,cotizacion:q,estado:'borrador'}));
+ sb.db.whatsapp_mensajes=[{message_id:'source-b',empresa_id:user.empresa_id,actor_id:user.id,texto:'Cotiza B',respuesta:'Cotización B',cotizacion:b},{message_id:'source-a',empresa_id:user.empresa_id,actor_id:user.id,texto:'Cotiza A',respuesta:'Cotización A',cotizacion:a}];
+ await processPersonalMessage(sb,{id:'reply-old-quote',from:'56912345678',type:'text',context:{id:'source-a'},text:{body:'Usa esa cotización para crear una obra'}},{chat:async()=>{throw Error('La fuente ya está identificada por la respuesta de WhatsApp');}});
+ assert.equal(sb.db.whatsapp_mensajes[0].borrador_obra.presupuesto_cotizacion_id,a.id);assert.equal(sb.db.whatsapp_mensajes[0].borrador_obra.nombre,'Cotización A');
+});
+
+test('recuperar un borrador no importa teléfono ni presupuesto de otra creación anterior',async()=>{
+ const sb=database();const current={nombre:'Cobertizo Nuevo',cliente_nombre:'Pedro Morales',cliente_rut:'12345678-5',cliente_email:'pedro@example.test'};
+ sb.db.whatsapp_mensajes=[{message_id:'new-draft',empresa_id:user.empresa_id,actor_id:user.id,texto:'Crea una obra llamada Cobertizo Nuevo',respuesta:'Faltan presupuesto y teléfono.',borrador_obra:current},{message_id:'old-draft-fields',empresa_id:user.empresa_id,actor_id:user.id,texto:'111111111\nJuan Soto\nOtra obra\n980.000\njuan@example.test\n987654321',respuesta:'Datos de la otra obra.',borrador_obra:{nombre:'Otra obra'}}];
+ let captured;const rpc=sb.rpc.bind(sb);sb.rpc=async(n,p)=>{captured=p;return rpc(n,p);};
+ const out=await processPersonalMessage(sb,{id:'continue-only-new',from:'56912345678',type:'text',text:{body:'Continúa'}},{chat:async()=>{throw Error('Solo debe pedir los datos del borrador vigente');}});
+ assert.match(out.respuesta,/Presupuesto de la obra/);assert.match(out.respuesta,/Teléfono del cliente/);assert.equal(captured.p_changed.proyectos.length,0);assert.equal(captured.p_borrador.cliente_nombre,'Pedro Morales');assert.equal(captured.p_borrador.cliente_telefono,undefined);
+});

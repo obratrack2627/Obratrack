@@ -132,3 +132,25 @@ Si una evidencia quedó pendiente y pasó la conversación, el administrador pue
 El botón ObraBot abre un panel de conversación sin cambiar de módulo. Usa la obra de la pantalla actual o una selección explícita, mantiene conversaciones separadas por obra y permite abrir el chat completo. Las acciones, cotizaciones y guardados pasan por los mismos servicios y permisos del copiloto.
 
 Solo `is_dev=true` confirmado en servidor muestra «Plan de desarrollo», accesible desde el menú lateral o el indicador de plan móvil. El cambio se confirma por RPC antes de actualizar la interfaz; un administrador normal no puede concederse ese permiso ni modificar el plan con el navegador. No interviene la pasarela de pago.
+
+### Retomar cotizaciones y completar datos
+
+«Usa esa cotización para crear una obra» recupera el presupuesto guardado de la
+misma empresa aunque el último mensaje sea una cancelación o una pregunta por
+contactos. Responder a un mensaje de cotización identifica esa fuente. Las
+alternativas ambiguas se siguen eligiendo explícitamente. «Sí» después de
+cancelar no autoriza por sí solo a revivir una creación.
+
+Una creación pendiente admite datos en líneas separadas, en el orden pedido:
+RUT, cliente, obra, presupuesto CLP, correo y teléfono. Reconoce montos con puntos
+de miles y teléfonos locales de ocho o nueve dígitos. Los datos se validan y se
+acumulan sin depender de la extracción del modelo. Un número ambiguo no se usa
+simultáneamente como RUT, presupuesto y teléfono. Se conservan materiales, Gantt
+sugerido y referencia al presupuesto de origen.
+
+Los borradores anteriores recuperan campos omitidos desde los mensajes del mismo
+trámite, tomando el literal más reciente y conservando correcciones ya guardadas.
+Cancelar u otra creación cortan la búsqueda; no se recorren otras personas ni
+empresas. «Continúa» retoma el trámite y solo pide lo que siga faltando. Las
+confirmaciones de creación siguen dependiendo del guardado atómico nativo y del
+identificador de mensaje, para impedir duplicados en reintentos de Meta.

@@ -1,3 +1,5 @@
+import { projectLiterals } from './project-literals';
+import { anotherTask } from '@/lib/ai/person-literals';
 import { isAttendanceManagementRequest, ATTENDANCE_MANAGEMENT_MESSAGE } from '@/lib/attendance-access';
 import { conversationPreferences } from '@/lib/ai/preferences';
 import { contactNameCommand, type ContactTurn } from '@/lib/ai/contact-name-command';
@@ -6,7 +8,7 @@ import { projectStatusCommand } from '@/lib/ai/project-status-command';
 import { actionReply } from '@/lib/ai/action-reply';
 import { projectDeadlineAnswer } from '@/lib/ai/project-deadlines';
 import { operationsContext } from '@/lib/ai/operations-context';
-import { acceptsQuotedProject, quotedProjectDraft } from "./quote-intake";
+import { acceptsQuotedProject, requestsQuotedProject, cancelsProjectDraft, resumesProjectDraft, startsProjectDraft, legacyQuotedProjectMessage, quotedProjectDraft } from "./quote-intake";
 import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib/presupuestos";
 import { budgetApplication } from '@/lib/quotes/application';
 import { chooseBudgetOption } from './budget-options';
@@ -227,7 +229,11 @@ export async function processPersonalMessage(
   let acceptCreation = false;
   let alreadyConverted = false;
   let confirmationResponse = '';
-  const lastQuoteMessage = history.find((m: any) => m.cotizacion);
+  const explicitQuoteCreation = requestsQuotedProject(text);
+  const replied = message.context?.id ? conversationRows.find(row => row.message_id === message.context.id) : null;
+  const legacyQuoteMessage = pendingProject && !pendingProject.presupuesto_cotizacion_id ? legacyQuotedProjectMessage(conversationRows) : null;
+  const lastQuoteMessage = legacyQuoteMessage || (replied?.cotizacion ? replied : explicitQuoteCreation && message.context?.id ? null : conversationRows.find((m: any) => m.cotizacion));
+  const previousDraft = pendingProject;
   let nativeBudget: Presupuesto | null = null;
   let candidates: Presupuesto[] = [];
   let chosenBudget: Presupuesto | null = null;
@@ -241,6 +247,27 @@ export async function processPersonalMessage(
         nativeBudget = candidates.find((r) => r.id === group?.seleccionado_id) || nativeBudget;
       }
     }
+  }
+  if (legacyQuoteMessage && nativeBudget && !nativeBudget.proyecto_id && !['rechazada','anulada'].includes(nativeBudget.estado)) {
+    pendingProject = {...quotedProjectDraft(nativeBudget.cotizacion), ...pendingProject};
+    nextDraft = pendingProject;
+  }
+  if (pendingProject && ['admin','supervisor'].includes(user.rol) && history[0]?.borrador_obra) {
+    pendingProject = {...pendingProject};
+    const recoverable = new Set(['nombre','cliente_nombre','cliente_rut','cliente_email','cliente_telefono','monto_cotizado'].filter(key => !previousDraft?.[key]));
+    const recovered = new Set<string>();
+    // Solo turnos del borrador vigente; conserva correcciones guardadas y toma el literal más reciente.
+    for (const row of conversationRows) {
+      if (!row.borrador_obra) break;
+      const boundary = startsProjectDraft(row.texto || '');
+      if (anotherTask(row.texto || '') && !boundary) continue;
+      const fields = projectLiterals(row.texto || '',pendingProject);
+      for (const [key,value] of Object.entries(fields)) if (recoverable.has(key) && !recovered.has(key)) {
+        pendingProject[key] = value; recovered.add(key);
+      }
+      if (boundary) break;
+    }
+    nextDraft = pendingProject;
   }
   const menuShown = !!history[0]?.respuesta?.includes('*ALTERNATIVAS*') || !!history[0]?.respuesta?.includes('Hay varias alternativas para esta obra.');
   // Conservar el orden mostrado, que puede diferir del orden de inserción de los registros.
@@ -259,8 +286,8 @@ export async function processPersonalMessage(
     confirmationResponse = '¿Qué deseas modificar de la cotización? Indica el material, cantidad, precio o margen que quieres cambiar. No se creará una obra con esta opción.';
   if (menuChoice === 3)
     confirmationResponse = '¿Qué material quieres comparar? Indica presentación y cantidad si las conoces.\n\nPor ejemplo: «Busca el mejor precio de 20 sacos de cemento de 25 kg en Maipú». La búsqueda no compra ni agrega materiales a la obra.';
-  if (!pendingProject && (chosenBudget || (history[0]?.cotizacion && !confirmationResponse && (menuChoice === 1 || acceptsQuotedProject(text))))) {
-    const budget = chosenBudget || nativeBudget || await findBudget(sb, user.empresa_id, history[0].cotizacion.id);
+  if (!pendingProject && (chosenBudget || (lastQuoteMessage?.cotizacion && !confirmationResponse && ((history[0]?.cotizacion && (menuChoice === 1 || acceptsQuotedProject(text))) || explicitQuoteCreation)))) {
+    const budget = chosenBudget || nativeBudget || await findBudget(sb, user.empresa_id, lastQuoteMessage.cotizacion.id);
     if (!budget) confirmationResponse = 'No se pudo recuperar el presupuesto guardado. Ábrelo en ObraTrack para revisarlo.';
     else if (['rechazada', 'anulada'].includes(budget.estado)) confirmationResponse = 'El presupuesto está rechazado o anulado. Revisa su estado en ObraTrack antes de crear la obra.';
     else if (budget.proyecto_id && budget.grupo_id) {
@@ -273,7 +300,10 @@ export async function processPersonalMessage(
     else if (budget.proyecto_id) { alreadyConverted = true; confirmationResponse = 'Esta cotización ya tiene una obra creada. Puedes abrir su Carta Gantt en ObraTrack.'; }
     else { acceptCreation = true; pendingProject = quotedProjectDraft(budget.cotizacion); nextDraft = pendingProject; }
   }
+  if (explicitQuoteCreation && !pendingProject && !lastQuoteMessage && !confirmationResponse) confirmationResponse = '¿Qué cotización quieres usar? Responde al mensaje de esa cotización o indícala en ObraTrack; no crearé una obra con un presupuesto distinto.';
   if (!confirmationResponse && !pendingProject && !chosenBudget && nativeBudget?.grupo_id && !candidates.length) confirmationResponse = 'No se pudieron recuperar las alternativas. Revisa el presupuesto en ObraTrack.';
+  const cancelCreation = !!pendingProject && cancelsProjectDraft(text);
+  const continueCreation = !!pendingProject && !attachment && !anotherTask(text) && (resumesProjectDraft(text) || Object.keys(projectLiterals(text,pendingProject)).length > 0);
   const contactHistory: ContactTurn[] = conversationRows.slice().reverse().flatMap((row:any)=>[
     {rol:'user' as const,texto:row.texto || ''},
     {rol:'model' as const,texto:row.respuesta || '',action:row.acciones,preferencias_conversacion:row.acciones?.preferencias_conversacion,...(Object.hasOwn(row.acciones || {},'edicion_nombre_pendiente')?{pendingNameEdit:row.acciones.edicion_nombre_pendiente}:{})},
@@ -291,7 +321,7 @@ export async function processPersonalMessage(
     const statusCommand = !attachment ? projectStatusCommand(text, tables.proyectos, activeProject, conversationRows.slice().reverse().flatMap((row: any) => [{ rol: 'user' as const, texto: row.texto || '' }, { rol: 'model' as const, texto: row.respuesta || '' }])) : null;
     localRegistration = !attachment && user.rol !== 'terreno' ? personIntake([], null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios) : null;
     registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
-    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || await deps.chat(
+    result = acceptCreation || confirmationResponse || cancelCreation || continueCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || await deps.chat(
       conversationRows
         .slice()
         .reverse()
@@ -399,11 +429,7 @@ export async function processPersonalMessage(
     );
     const continuing =
       pendingProject && !hasOtherActions && result.obra_propuesta;
-    const cancelDraft =
-      pendingProject &&
-      /^\s*(?:cancela(?:r)?|olvida(?:r)?)(?:\s+(?:la\s+|el\s+)?(?:creacion|obra|proyecto|eso|borrador)(?:\s+pendiente)?)?[.!]?\s*$/.test(
-        normalized,
-      );
+    const cancelDraft = cancelCreation;
     if (cancelDraft || (!alreadyConverted && !confirmationResponse && (wantsProject || create || continuing))) {
       if (cancelDraft) {
         actions = [];
