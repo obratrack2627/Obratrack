@@ -248,9 +248,14 @@ export async function processPersonalMessage(
       }
     }
   }
-  if (legacyQuoteMessage && nativeBudget && !nativeBudget.proyecto_id && !['rechazada','anulada'].includes(nativeBudget.estado)) {
-    pendingProject = {...quotedProjectDraft(nativeBudget.cotizacion), ...pendingProject};
-    nextDraft = pendingProject;
+  if (legacyQuoteMessage) {
+    if (!nativeBudget) confirmationResponse = 'No se pudo recuperar el presupuesto guardado. Ábrelo en ObraTrack para revisarlo.';
+    else if (['rechazada','anulada'].includes(nativeBudget.estado)) confirmationResponse = 'El presupuesto está rechazado o anulado. Revisa su estado antes de crear la obra.';
+    else if (nativeBudget.proyecto_id) { alreadyConverted = true; confirmationResponse = 'Esta cotización ya tiene una obra creada. Puedes abrir su Carta Gantt en ObraTrack.'; }
+    else {
+      pendingProject = {...quotedProjectDraft(nativeBudget.cotizacion), ...pendingProject};
+      nextDraft = pendingProject;
+    }
   }
   if (pendingProject && ['admin','supervisor'].includes(user.rol) && history[0]?.borrador_obra) {
     pendingProject = {...pendingProject};

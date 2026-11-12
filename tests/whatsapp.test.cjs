@@ -1344,3 +1344,15 @@ test('recuperar un borrador no importa teléfono ni presupuesto de otra creació
  const out=await processPersonalMessage(sb,{id:'continue-only-new',from:'56912345678',type:'text',text:{body:'Continúa'}},{chat:async()=>{throw Error('Solo debe pedir los datos del borrador vigente');}});
  assert.match(out.respuesta,/Presupuesto de la obra/);assert.match(out.respuesta,/Teléfono del cliente/);assert.equal(captured.p_changed.proyectos.length,0);assert.equal(captured.p_borrador.cliente_nombre,'Pedro Morales');assert.equal(captured.p_borrador.cliente_telefono,undefined);
 });
+
+test('un borrador antiguo no duplica una obra si su cotización ya fue convertida ni usa una anulada',async()=>{
+ const {normalizeQuote}=require('../lib/ai/protocol.ts');const q=normalizeQuote({titulo_proyecto:'Cobertizo',materiales:[{nombre:'Pino',cantidad:1,precio_unitario_estimado:5000}],mano_de_obra:[]});
+ for(const state of [{estado:'aprobada',proyecto_id:'existing'},{estado:'anulada',proyecto_id:null}]){
+  const sb=database();sb.db.presupuestos=[{id:'source-budget',empresa_id:user.empresa_id,cotizacion:q,...state}];
+  const draft={nombre:'Cobertizo',cliente_nombre:'Pedro Morales',cliente_rut:'12345678-5',cliente_email:'pedro@example.test',cliente_telefono:'+56912345678',monto_cotizado:561332};
+  sb.db.whatsapp_mensajes=[{message_id:'legacy-pending-source',empresa_id:user.empresa_id,actor_id:user.id,texto:'Usa esa cotización para crear una obra',respuesta:'Datos pendientes.',borrador_obra:draft},{message_id:'legacy-source-status',empresa_id:user.empresa_id,actor_id:user.id,texto:'Cotiza',respuesta:'Cotización.',cotizacion:q}];
+  let captured;const rpc=sb.rpc.bind(sb);sb.rpc=async(n,p)=>{captured=p;return rpc(n,p);};
+  const out=await processPersonalMessage(sb,{id:'resume-status-'+state.estado,from:'56912345678',type:'text',text:{body:'Continúa'}},{chat:async()=>{throw Error('Debe usar el estado real del presupuesto');}});
+  assert.match(out.respuesta,state.proyecto_id?/ya tiene una obra/:/anulado/);assert.equal(captured.p_changed.proyectos.length,0);
+ }
+});
