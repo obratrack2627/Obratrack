@@ -50,7 +50,7 @@ export default function ControlAsistenciaGlobalPage() {
 
   const handleMarcarObraCompleta = (proyectoId: string) => {
     try {
-      const regs = dataService.marcarCuadrillaPresente(proyectoId, fechaFiltro, '08:00', '18:00');
+      const regs = dataService.marcarCuadrillaPresente(proyectoId, fechaFiltro, '', '');
       loadData();
       showToast(`✅ ${regs.length} obreros marcados presentes en la obra seleccionada.`);
     } catch(error){showToast(error instanceof Error?error.message:'No se pudo registrar la asistencia.');}

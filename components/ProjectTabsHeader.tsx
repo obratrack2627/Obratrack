@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { ProjectStatusSelect } from '@/components/ProjectStatus';
 import { Proyecto, Cliente } from '@/types/database';
+import { assignedCrew, crewAttendance } from '@/lib/crew';
+import { chileToday } from '@/lib/ai/project-deadlines';
 import { formatCLP, formatDate } from '@/lib/utils';
 import { dataService } from '@/lib/data-service';
 
@@ -54,11 +56,11 @@ export default function ProjectTabsHeader({
       const docs = dataService.getDocumentosObra(proyecto.id);
       setDocsCount(docs.length);
 
-      const hoy = new Date().toISOString().split('T')[0];
-      const asistHoy = dataService
-        .getAsistencias(proyecto.id, hoy)
-        .filter((a) => a.estado === 'presente' || a.estado === 'atraso');
-      setPresentesHoy(asistHoy.length);
+      const hoy = chileToday();
+      const asistHoy = dataService.getAsistencias(proyecto.id, hoy);
+      const users = dataService.getUsuarios();
+      const current = dataService.getProyectoById(proyecto.id) || proyecto;
+      setPresentesHoy(assignedCrew(current, users).filter(user => ['presente', 'atraso'].includes(crewAttendance(user, asistHoy, users)?.estado || '')).length);
     };
 
     refreshCounts();
@@ -101,7 +103,7 @@ export default function ProjectTabsHeader({
     },
     {
       id: 'asistencia',
-      label: 'Asistencia',
+      label: 'Cuadrilla',
       href: `/proyectos/${proyecto.id}/asistencia`,
       icon: ClipboardCheck,
       badge: presentesHoy > 0 ? `${presentesHoy} hoy` : undefined,

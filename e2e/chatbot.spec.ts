@@ -1763,7 +1763,7 @@ test('la asistencia de cuadrilla respeta licencias existentes y usa el horario e
   const db = await setup(page, {}, true);
   db.usuarios.push(...['uno', 'dos'].map((id, index) => ({ id, empresa_id: company, nombre: `Maestro ${index + 1}`, rol: 'terreno' })));
   db.proyectos[0].trabajadores_ids = ['uno', 'dos'];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
   db.asistencia_obreros = [{ id: 'leave', empresa_id: company, proyecto_id: 'p-existing', usuario_id: 'uno', trabajador_nombre: 'Maestro 1', fecha: today, estado: 'licencia', origen: 'web' }];
   let saved: any[] = [];
   await page.route('**/api/supabase/sync*', async route => {
@@ -1772,7 +1772,8 @@ test('la asistencia de cuadrilla respeta licencias existentes y usa el horario e
     await route.fulfill({ json: { success: true } });
   });
   await page.goto('/proyectos/p-existing/asistencia');
-  await expect(page.getByLabel('Estado de Maestro 1', { exact: true })).toHaveValue('licencia');
+  await page.getByRole('tab', { name: 'Asistencia diaria', exact: true }).click();
+  await expect(page.locator('[data-crew-member="uno"]')).toContainText('Licencia');
   await page.getByRole('button', { name: 'Marcar cuadrilla', exact: true }).click();
   await page.getByLabel('Entrada de cuadrilla', { exact: true }).fill('09:00');
   await page.getByLabel('Salida de cuadrilla', { exact: true }).fill('17:00');
@@ -1780,7 +1781,7 @@ test('la asistencia de cuadrilla respeta licencias existentes y usa el horario e
   await expect(page.getByText('Asistencia guardada para 1 persona.', { exact: true })).toBeVisible();
   expect(saved).toHaveLength(1);
   expect(saved[0]).toMatchObject({ usuario_id: 'dos', hora_entrada: '09:00', hora_salida: '17:00', estado: 'presente' });
-  await expect(page.getByLabel('Estado de Maestro 1', { exact: true })).toHaveValue('licencia');
+  await expect(page.locator('[data-crew-member="uno"]')).toContainText('Licencia');
 });
 
 test('ObraBot flotante cancela la obra recién consultada y confirma el estado guardado sin cambiar su presupuesto', async ({ page }) => {
@@ -2437,4 +2438,104 @@ for (const width of [390,1280]) test(`Equipo permite especialidades múltiples o
  await expect(card.getByText('Pintura',{exact:true})).toBeVisible();
  expect(db.usuarios.find(u=>u.id==='skills-worker')?.rol).toBe('supervisor');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('Cuadrilla asigna solo integrantes elegidos, persiste y conserva historial al retirar', async ({ page }) => {
+  const db = await setup(page, {}, true);
+  db.usuarios.push(
+    { id:'welder', empresa_id:company, nombre:'Felipe Melo', rol:'terreno', especialidades:['Soldadura'] },
+    { id:'painter', empresa_id:company, nombre:'Ana Pérez', rol:'terreno', especialidades:['Pintura'] },
+  );
+  db.proyectos[0].trabajadores_ids=[];
+  db.actividades=[{id:'metal',proyecto_id:'p-existing',nombre:'Montaje de estructura metálica',estado:'pendiente',porcentaje_avance:0,fecha_inicio:'2026-11-15',fecha_termino:'2026-11-20',orden:1}];
+  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago'}).format(new Date());
+  db.asistencia_obreros=[{id:'old',empresa_id:company,proyecto_id:'p-existing',usuario_id:'welder',trabajador_nombre:'Felipe Melo',fecha:today,estado:'presente',hora_entrada:'09:00',hora_salida:'17:00',horas_trabajadas:7,origen:'web'}];
+  let failing=true;
+  const requests: string[]=[];
+  await page.route('**/api/proyectos/p-existing/cuadrilla', async route => {
+    expect(route.request().headers().authorization).toMatch(/^Bearer /);
+    requests.push(route.request().method());
+    if(failing)return route.fulfill({status:503,json:{error:'No se pudo confirmar la asignación.'}});
+    const id=route.request().postDataJSON().usuario_id;
+    db.proyectos[0].trabajadores_ids=route.request().method()==='DELETE' ? db.proyectos[0].trabajadores_ids.filter((value:string)=>value!==id) : Array.from(new Set([...db.proyectos[0].trabajadores_ids,id]));
+    await route.fulfill({json:{proyecto_id:'p-existing',trabajadores_ids:db.proyectos[0].trabajadores_ids}});
+  });
+  await page.goto('/proyectos/p-existing/asistencia');
+  await expect(page.getByRole('heading',{name:'Cuadrilla de la obra'})).toBeVisible();
+  await expect(page.getByRole('link',{name:'Cuadrilla',exact:true})).toBeVisible();
+  await expect(page.getByText('Esta obra todavía no tiene cuadrilla',{exact:true})).toBeVisible();
+  await expect(page.locator('[data-crew-member]')).toHaveCount(0);
+  await expect(page.getByText('Coincide con «Montaje de estructura metálica».',{exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Ana Pérez',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Revisar asignación',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'Asignar trabajadores',exact:true});
+  await expect(dialog.getByRole('checkbox',{name:/Felipe Melo/})).toBeChecked();
+  await dialog.getByRole('button',{name:'Asignar seleccionados (1)',exact:true}).click();
+  await expect(dialog.getByRole('alert')).toContainText('No se pudo confirmar');
+  await expect(page.locator('[data-crew-member]')).toHaveCount(0);
+  failing=false;
+  await dialog.getByRole('button',{name:'Asignar seleccionados (1)',exact:true}).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator('[data-crew-member="welder"]')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('[data-crew-member]')).toHaveCount(1);
+  await page.getByLabel('Buscar trabajador o especialidad',{exact:true}).fill('soldadura');
+  await expect(page.locator('[data-crew-member="welder"]')).toBeVisible();
+  await page.screenshot({path:'/tmp/obratrack-crew-desktop.png',fullPage:true});
+  await page.getByRole('button',{name:'Retirar a Felipe Melo',exact:true}).click();
+  await page.getByRole('button',{name:'Confirmar retiro',exact:true}).click();
+  await expect(page.locator('[data-crew-member]')).toHaveCount(0);
+  await page.getByRole('tab',{name:'Asistencia diaria',exact:true}).click();
+  await expect(page.locator('[data-crew-member]')).toHaveCount(0);
+  await page.getByRole('tab',{name:'Historial',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Felipe Melo',exact:true})).toBeVisible();
+  await expect(page.getByText('Fuera de la cuadrilla actual',{exact:true})).toBeVisible();
+  expect(db.asistencia_obreros).toHaveLength(1);
+  expect(requests).toEqual(['POST','POST','DELETE']);
+});
+
+test('Cuadrilla móvil registra sin inventar horarios y permite reintentar un guardado fallido', async ({ page }) => {
+  await page.setViewportSize({width:320,height:780});
+  const db=await setup(page,{},true);
+  db.usuarios.push({id:'worker',empresa_id:company,nombre:'Ramón Escobar',rol:'terreno',especialidades:['Carpintería','Techumbre']});
+  db.proyectos[0].trabajadores_ids=['worker'];
+  let failing=true;let saved:any[]=[];
+  await page.route('**/api/supabase/sync*',async route=>{
+    if(route.request().method()!=='POST')return route.fallback();
+    if(failing)return route.fulfill({status:503,json:{error:'Sin conexión'}});
+    saved=route.request().postDataJSON().cambios.asistencias || [];
+    db.asistencia_obreros=saved;
+    return route.fulfill({json:{success:true}});
+  });
+  await page.goto('/proyectos/p-existing/asistencia');
+  await page.getByRole('tab',{name:'Asistencia diaria',exact:true}).click();
+  await expectMobileWidth(page);
+  await page.screenshot({path:'/tmp/obratrack-crew-mobile.png',fullPage:true});
+  await page.getByRole('button',{name:'Registrar asistencia',exact:true}).click();
+  let dialog=page.getByRole('dialog',{name:'Registrar asistencia',exact:true});
+  await expect(dialog.getByLabel('Entrada',{exact:true})).toHaveValue('');
+  await expect(dialog.getByLabel('Salida',{exact:true})).toHaveValue('');
+  await dialog.getByRole('button',{name:'Guardar asistencia',exact:true}).click();
+  await expect(dialog.getByRole('alert')).toContainText('pendiente de sincronización');
+  failing=false;
+  await dialog.getByRole('button',{name:'Guardar asistencia',exact:true}).click();
+  await expect(dialog).toHaveCount(0);
+  expect(saved).toHaveLength(1);
+  expect(saved[0]).toMatchObject({usuario_id:'worker',estado:'presente',hora_entrada:'',hora_salida:'',horas_trabajadas:0});
+  await expect(page.getByText('Horas pendientes de confirmar',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Editar asistencia',exact:true}).click();
+  dialog=page.getByRole('dialog',{name:'Registrar asistencia',exact:true});
+  await dialog.getByLabel('Entrada',{exact:true}).fill('09:00');
+  await dialog.getByLabel('Salida',{exact:true}).fill('17:00');
+  await dialog.getByLabel('Colación (minutos)',{exact:true}).fill('60');
+  const box=await dialog.locator('form').boundingBox();
+  expect(box!.width).toBeLessThanOrEqual(320);
+  await page.screenshot({path:'/tmp/obratrack-crew-mobile-editor.png',fullPage:true});
+  await dialog.getByRole('button',{name:'Guardar asistencia',exact:true}).click();
+  await expect(dialog).toHaveCount(0);
+  expect(saved).toHaveLength(1);
+  expect(saved[0]).toMatchObject({hora_entrada:'09:00',hora_salida:'17:00',horas_trabajadas:7});
+  await expect(page.getByText('7 h registradas',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Editar asistencia',exact:true}).click();
+  await expect(page.getByLabel('Colación (minutos)',{exact:true})).toHaveValue('60');
 });

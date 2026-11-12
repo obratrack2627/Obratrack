@@ -1,3 +1,4 @@
+import { assignedCrew, crewAttendance } from '@/lib/crew';
 import { assertAttendanceManager } from '@/lib/attendance-access';
 
 import { normalizeSpecialties } from '@/lib/team-specialties';
@@ -619,6 +620,32 @@ export class DataService {
     window.dispatchEvent(new Event('obratrack_cloud_synced'));
   }
 
+  async cambiarAsignacionProyecto(projectId: string, userId: string, adding: boolean): Promise<void> {
+    const actor = this.getActiveUser();
+    assertAttendanceManager(actor);
+    const sameSession = () => this.getActiveUser()?.id === actor!.id && this.getActiveUser()?.empresa_id === actor!.empresa_id;
+    const pushed = await this.pushToCloudServer();
+    if (!pushed.success || !sameSession()) throw new Error('Sincroniza los cambios pendientes antes de cambiar la cuadrilla.');
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session?.access_token) throw new Error('Renueva tu sesión para gestionar la cuadrilla.');
+    const response = await fetch(`/api/proyectos/${encodeURIComponent(projectId)}/cuadrilla`, {
+      method: adding ? 'POST' : 'DELETE',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}` },
+      body: JSON.stringify({ usuario_id: userId }),
+      signal: AbortSignal.timeout(20000),
+    });
+    const saved = await response.json().catch(() => null);
+    if (!response.ok || !saved) throw new Error(saved?.error || 'No se pudo confirmar la asignación.');
+    if (saved.proyecto_id !== projectId || !Array.isArray(saved.trabajadores_ids) || saved.trabajadores_ids.some((id: unknown) => typeof id !== 'string') || saved.trabajadores_ids.includes(userId) !== adding)
+      throw new Error('No se pudo verificar la cuadrilla guardada. Reintenta.');
+    // Una lectura anterior al cambio no puede reemplazar la asignación confirmada.
+    if (this.cloudPull) await this.cloudPull.promise;
+    if (!sameSession()) throw new Error('La sesión cambió. Vuelve a abrir la obra.');
+    const key = this.getTenantKey(KEYS.PROYECTOS);
+    this.setItem(key, this.getItem<Proyecto[]>(key, []).map(project => project.id === projectId ? { ...project, trabajadores_ids: saved.trabajadores_ids } : project), false);
+    window.dispatchEvent(new Event('obratrack_cloud_synced'));
+  }
+
   updateProyecto(id: string, data: Partial<Proyecto>): Proyecto | null {
     const defaultProjs = this.isDemoTenant() ? INITIAL_PROYECTOS : [];
     const proyectos = this.getItem<Proyecto[]>(this.getTenantKey(KEYS.PROYECTOS), defaultProjs);
@@ -1142,7 +1169,7 @@ export class DataService {
     const horas =
       data.estado === 'presente' || data.estado === 'atraso'
         ? data.horas_trabajadas ??
-          this.calcularHorasTrabajadas(data.hora_entrada || '08:00', data.hora_salida || '18:00')
+          this.calcularHorasTrabajadas(data.hora_entrada, data.hora_salida)
         : 0;
 
     const existingIdx = list.findIndex(
@@ -1150,8 +1177,7 @@ export class DataService {
         (data.id && a.id === data.id) ||
         (a.proyecto_id === data.proyecto_id &&
           a.fecha === data.fecha &&
-          ((data.usuario_id && a.usuario_id === data.usuario_id) ||
-            a.trabajador_nombre.toLowerCase().trim() === data.trabajador_nombre.toLowerCase().trim()))
+          (data.usuario_id ? a.usuario_id === data.usuario_id : !a.usuario_id && a.trabajador_nombre.toLowerCase().trim() === data.trabajador_nombre.toLowerCase().trim()))
     );
 
     if (existingIdx !== -1) {
@@ -1184,17 +1210,19 @@ export class DataService {
   marcarCuadrillaPresente(
     proyectoId: string,
     fecha: string,
-    horaEntrada = '08:00',
-    horaSalida = '18:00'
+    horaEntrada = '',
+    horaSalida = ''
   ): AsistenciaObrero[] {
     assertAttendanceManager(this.getActiveUser());
     const proj = this.getProyectoById(proyectoId);
     const todosUsuarios = this.getUsuarios();
-    const cuadrilla = todosUsuarios.filter((u) => proj?.trabajadores_ids?.includes(u.id));
+    const cuadrilla = proj ? assignedCrew(proj, todosUsuarios) : [];
     if(cuadrilla.length===0)throw new Error('La obra no tiene cuadrilla asignada. Asigna los trabajadores antes de registrar su asistencia en grupo.');
 
     const resultados: AsistenciaObrero[] = [];
+    const existing = this.getAsistencias(proyectoId, fecha);
     cuadrilla.forEach((trabajador) => {
+      if (crewAttendance(trabajador, existing, todosUsuarios)) return;
       const reg = this.upsertAsistenciaObrero({
         proyecto_id: proyectoId,
         usuario_id: trabajador.id,
@@ -2074,8 +2102,8 @@ export class DataService {
           const regs = this.marcarCuadrillaPresente(
             proj.id,
             fecha,
-            accion.hora_entrada || '08:00',
-            accion.hora_salida || '18:00'
+            accion.hora_entrada || '',
+            accion.hora_salida || ''
           );
           return {
             tipo: 'registrar_asistencia',
@@ -2086,7 +2114,10 @@ export class DataService {
             link_texto: 'Ver Asistencia ➔',
           };
         }
+        const previous = this.getAsistencias(proj.id, fecha).find(row => row.trabajador_nombre.toLowerCase() === String(accion.trabajador_nombre || accion.nombre || '').toLowerCase());
         const reg = this.upsertAsistenciaObrero({
+          id: previous?.id,
+          usuario_id: previous?.usuario_id,
           proyecto_id: proj.id,
           trabajador_nombre: accion.trabajador_nombre || accion.nombre || 'Trabajador de Obra',
           trabajador_rol: accion.rol || 'terreno',
@@ -2094,9 +2125,9 @@ export class DataService {
           estado: (['presente', 'atraso', 'ausente', 'licencia', 'permiso'].includes(accion.estado || '')
             ? accion.estado
             : 'presente') as EstadoAsistencia,
-          hora_entrada: accion.hora_entrada || '08:00',
-          hora_salida: accion.hora_salida || '18:00',
-          observacion: accion.observacion || '',
+          hora_entrada: accion.hora_entrada ?? previous?.hora_entrada ?? '',
+          hora_salida: accion.hora_salida ?? previous?.hora_salida ?? '',
+          observacion: accion.observacion ?? previous?.observacion ?? '',
           origen: 'web',
         });
         return {
