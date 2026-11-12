@@ -70,3 +70,10 @@ test('una preferencia negada o una acción combinada no queda aprendida ni se om
   const out=conversationPreferences([],user,undefined,message);assert.equal(out.respuesta,null,message);assert.deepEqual(out.state.valores,{},message);
  }
 });
+
+
+test('olvida mis preferencias funciona sin exigir la palabra todas y una tienda se olvida de forma específica',()=>{
+ const state={version:1,...{usuario_id:user.id,empresa_id:user.empresa_id},proyecto_id:null,valores:{detalle:'breve',tiendas:['Sodimac']}};
+ const all=conversationPreferences([turn(state)],user,undefined,'Olvida mis preferencias');assert.deepEqual(all.state.valores,{});assert.ok(all.respuesta);
+ const stores=conversationPreferences([turn(state)],user,undefined,'Olvida mis preferencias de tiendas');assert.deepEqual(stores.state.valores,{detalle:'breve'});
+});

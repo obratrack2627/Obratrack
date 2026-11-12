@@ -26,10 +26,10 @@ export function conversationPreferences(history: unknown, user: { id: string; em
   if (memoryWords && /\b(?:registr\w*|asign\w*|crea\w*|paga\w*|envia\w*|cotiz\w*|agrega\w*|modific\w*|actualiz\w*|compra\w*|manda\w*|avisa\w*|notifica\w*|anade\w*)\b/.test(text)) return {state,respuesta:null};
   const forget = /^(?:por favor[, ]+)?(?:olvida|borra|elimina|no recuerdes)\b/.test(text);
   if (forget) {
-    if (/\b(?:todas?|todo)\b/.test(text) && /\b(?:preferencias|recuerdas|memoria)\b/.test(text)) state.valores = {};
-    else if (/\b(?:tiendas?|ferreterias?)\b/.test(text)) delete state.valores.tiendas;
+    if (/\b(?:tiendas?|ferreterias?)\b/.test(text)) delete state.valores.tiendas;
     else if (/\bcomuna\b/.test(text)) delete state.valores.comuna_habitual;
     else if (/\b(?:detalle|respuestas?|formato)\b/.test(text)) delete state.valores.detalle;
+    else if (/\b(?:preferencias|memoria)\b/.test(text) || (/\b(?:todas?|todo)\b/.test(text) && /\brecuerdas\b/.test(text))) state.valores = {};
     else return { state, respuesta: null };
     return { state, respuesta: 'Dejaré de usar esa preferencia en esta conversación. Los registros de tus obras se conservan.' };
   }
