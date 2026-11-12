@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
+import { parseSpecialties } from '@/lib/team-specialties';
 import { registrationFields } from '@/lib/registrations';
 import { aiHeaders } from '@/lib/ai/client';
 import { dataService } from '@/lib/data-service';
@@ -54,6 +55,7 @@ export default function EquipoPage() {
   const [email, setEmail] = useState('');
   const [telefono, setTelefono] = useState('+56 9 ');
   const [rol, setRol] = useState<UserRole>('terreno');
+  const [especialidades, setEspecialidades] = useState('');
 
   // Formulario editar trabajador
   const [editNombre, setEditNombre] = useState('');
@@ -61,6 +63,7 @@ export default function EquipoPage() {
   const [editEmail, setEditEmail] = useState('');
   const [editTelefono, setEditTelefono] = useState('');
   const [editRol, setEditRol] = useState<UserRole>('terreno');
+  const [editEspecialidades, setEditEspecialidades] = useState('');
 
   const loadData = () => {
     const active = dataService.getActiveUser();
@@ -89,10 +92,10 @@ export default function EquipoPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    const checked = registrationFields({ tipo: 'trabajador', nombre, rut, email, telefono, rol, proyecto_id: projectId });
-    if (checked.missing.length) { showToast('Completa: ' + checked.missing.join(', ')); return; }
-    setSaving(true);
     try {
+      const checked = registrationFields({ tipo: 'trabajador', nombre, rut, email, telefono, rol, proyecto_id: projectId, especialidades: parseSpecialties(especialidades) });
+      if (checked.missing.length) { showToast('Completa: ' + checked.missing.join(', ')); return; }
+      setSaving(true);
       const response = await fetch('/api/equipo/crear-usuario', {
         method: 'POST', headers: await aiHeaders(), body: JSON.stringify(checked.draft),
       });
@@ -100,7 +103,7 @@ export default function EquipoPage() {
       if (!response.ok) throw new Error(result.error || 'No se pudo registrar el trabajador.');
       const synced = await dataService.pullFromCloudServer();
       setIsCreateModalOpen(false);
-      setNombre(''); setRut(''); setEmail(''); setTelefono('+56 9 '); setRol('terreno'); setProjectId('');
+      setNombre(''); setRut(''); setEmail(''); setTelefono('+56 9 '); setRol('terreno'); setProjectId(''); setEspecialidades('');
       loadData();
       showToast(synced.success ? 'Trabajador registrado y vinculado a WhatsApp.' : 'Trabajador registrado. Reintenta la sincronización para actualizar el listado.');
     } catch (error) { showToast((error as Error).message); }
@@ -115,6 +118,7 @@ export default function EquipoPage() {
     const validPhone = canonicalPhone(user.telefono_whatsapp || '');
     setEditTelefono(validPhone ? `+${validPhone}` : '+56 9 ');
     setEditRol(user.rol);
+    setEditEspecialidades((user.especialidades || []).join(", "));
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -139,7 +143,11 @@ export default function EquipoPage() {
       return;
     }
 
+    let specialties: string[];
+    try { specialties = parseSpecialties(editEspecialidades); }
+    catch (error) { showToast((error as Error).message); return; }
     dataService.updateUsuario(editingUser.id, {
+      especialidades: specialties,
       nombre: editNombre.trim(),
       rut: editRut.trim() || undefined,
       email: editEmail.trim(),
@@ -165,9 +173,11 @@ export default function EquipoPage() {
   const filteredUsers = useMemo(() => {
     return usuarios.filter((u) => {
       const matchRole = roleFilter === 'todos' || u.rol === roleFilter;
-      const term = searchTerm.toLowerCase();
+      const normalize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const term = normalize(searchTerm);
       const matchSearch =
-        u.nombre.toLowerCase().includes(term) ||
+        normalize(u.nombre).includes(term) ||
+        (u.especialidades || []).some(value => normalize(value).includes(term)) ||
         (u.email && u.email.toLowerCase().includes(term)) ||
         (u.telefono_whatsapp && u.telefono_whatsapp.toLowerCase().includes(term));
       return matchRole && matchSearch;
@@ -271,7 +281,7 @@ export default function EquipoPage() {
               <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Buscar por nombre, cargo, teléfono o correo..."
+                placeholder="Buscar nombre, especialidad, teléfono o correo..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full h-10 pl-10 pr-8 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-xl text-xs text-navy-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-obra-orange focus:bg-white dark:focus:bg-[#141A23] transition-colors font-sans"
@@ -438,6 +448,7 @@ export default function EquipoPage() {
               return (
                 <div
                   key={user.id}
+                  data-team-member={user.id}
                   className="bg-white border border-kraft-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
                 >
                   <div>
@@ -478,6 +489,9 @@ export default function EquipoPage() {
                       </div>
                     </div>
 
+                    {!!user.especialidades?.length && <div className="mb-3 flex flex-wrap gap-1.5" aria-label={`Especialidades de ${user.nombre}`}>
+                      {user.especialidades.map(name => <span key={name} className="max-w-full break-words rounded-md border border-obra-orange/15 bg-obra-orange/5 px-2 py-1 text-[11px] text-gray-700 dark:text-gray-200">{name}</span>)}
+                    </div>}
                     <div className="space-y-2 text-xs text-gray-600 font-mono pt-3 border-t border-kraft-200/80">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 truncate">
@@ -560,6 +574,11 @@ export default function EquipoPage() {
                   onChange={(e) => setNombre(e.target.value)}
                   className="w-full px-3.5 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-gray-800 rounded-xl text-xs text-navy-900 dark:text-white focus:outline-none focus:border-obra-orange font-sans"
                 />
+              </div>
+              <div>
+                <label htmlFor="equipo-especialidades" className="block text-xs font-semibold mb-1">Especialidades <span className="font-normal text-gray-500">(opcional)</span></label>
+                <input id="equipo-especialidades" value={especialidades} onChange={e => setEspecialidades(e.target.value)} maxLength={800} placeholder="Carpintería, gasfitería, pintura" aria-describedby="equipo-especialidades-help" className="w-full min-w-0 px-3.5 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-gray-800 rounded-xl text-xs focus:outline-none focus:border-obra-orange" />
+                <p id="equipo-especialidades-help" className="mt-1 text-[11px] text-gray-500">Separa cada especialidad con una coma.</p>
               </div>
 
               <div>
@@ -678,6 +697,11 @@ export default function EquipoPage() {
                   onChange={(e) => setEditNombre(e.target.value)}
                   className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-sans font-semibold"
                 />
+              </div>
+              <div>
+                <label htmlFor="equipo-editEspecialidades" className="block text-xs font-semibold mb-1">Especialidades <span className="font-normal text-gray-500">(opcional)</span></label>
+                <input id="equipo-editEspecialidades" value={editEspecialidades} onChange={e => setEditEspecialidades(e.target.value)} maxLength={800} placeholder="Carpintería, gasfitería, pintura" aria-describedby="equipo-editEspecialidades-help" className="w-full min-w-0 px-3.5 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-gray-800 rounded-xl text-xs focus:outline-none focus:border-obra-orange" />
+                <p id="equipo-editEspecialidades-help" className="mt-1 text-[11px] text-gray-500">Separa con comas. Déjalo vacío para quitarlas.</p>
               </div>
 
               <div>

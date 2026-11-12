@@ -479,3 +479,13 @@ test('no muestra cuerpos HTML ni mensajes desconocidos recibidos de un proxy', (
   assert.match(syncWriteFailure({code:'23503',message:'PRIVATE SQL VALUES'},'el pago').message,/asociado ya no está disponible/);
   assert.doesNotMatch(syncWriteFailure({code:'23503',message:'PRIVATE SQL VALUES'},'el pago').message,/PRIVATE/);
 });
+
+test('sincroniza especialidades opcionales sin modificar roles ni credenciales y permite quitarlas', async()=>{
+ for(const names of [['Carpintería','Pintura'],[]]){
+  const response=await POST(request({cambios:{usuarios:[{id:user.id,especialidades:names}]}}));
+  assert.equal(response.status,200);
+  assert.deepEqual(fixture.tables.get('usuarios')[0].especialidades,names);
+  assert.equal(fixture.tables.get('usuarios')[0].auth_user_id,user.auth_user_id);
+ }
+ assert.equal((await POST(request({cambios:{usuarios:[{id:user.id,especialidades:'Pintura'}]}}))).status,422);
+});

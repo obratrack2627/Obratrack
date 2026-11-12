@@ -24,6 +24,7 @@ export function snapshot(service: DataService, empresa_id: string): Snapshot {
       rut: x.rut || null,
       email: x.email || null,
       telefono_whatsapp: x.telefono_whatsapp || null,
+      ...(x.especialidades !== undefined ? {especialidades: x.especialidades} : {}),
     })),
     proyectos: service.getProyectos().map((x) => ({
       ...pick(

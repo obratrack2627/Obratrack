@@ -3,6 +3,7 @@ import type { AIAction } from "./protocol";
 // El proveedor comparte un esquema para las operaciones. Un cero o una lista
 // vacía de otra operación no debe convertirse en un requisito para esta acción.
 const scoped: Record<string, string[]> = {
+  especialidades: ["agregar_trabajador", "agregar_trabajadores", "actualizar_trabajador"],
   dias: [
     "crear_proyecto",
     "crear_proyecto_completo",

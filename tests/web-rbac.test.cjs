@@ -75,3 +75,11 @@ test('los cambios de plan requieren Developer confirmado en servidor, incluso co
  assert.equal((await plans.PATCH(req('/api/dev/plan',{plan:'pro'}))).status,200);
  assert.equal((await plans.PATCH(req('/api/dev/plan',{plan:'inventado'}))).status,422);
 });
+
+test('el alta transmite especialidades opcionales normalizadas y rechaza una lista inválida',async()=>{
+ const calls=mockAuth({rol:'admin',is_dev:false});
+ const input={nombre:'Pedro Morales',rut:'12.345.678-5',email:'pedro@empresa.cl',telefono:'912345678',rol:'terreno',proyecto_id:'project-a',especialidades:['Carpintería','CARPINTERIA','Pintura']};
+ assert.equal((await team.POST(req('/api/equipo/crear-usuario',input))).status,200);
+ assert.deepEqual(JSON.parse(calls.find(c=>c.path.endsWith('/rpc/crear_integrante_equipo')).init.body).p_datos.especialidades,['Carpintería','Pintura']);
+ assert.equal((await team.POST(req('/api/equipo/crear-usuario',{...input,especialidades:'Pintura'}))).status,422);
+});

@@ -1,3 +1,4 @@
+import { literalSpecialties } from '@/lib/team-specialties';
 import { isConversationalName, isPersonName, explicitPersonName } from './person-name';
 import type { PersonDraft } from "@/lib/registrations";
 import { phonesInText } from "@/lib/phone";
@@ -55,6 +56,8 @@ export function personLiterals(
       : "trabajador"
     : previous!.tipo;
   const draft: Partial<PersonDraft> = { tipo };
+  const specialties = tipo === "trabajador" ? literalSpecialties(message) : undefined;
+  if (specialties !== undefined) draft.especialidades = specialties;
   const email = message.match(/[^\s,;<>]+@[^\s,;<>]+\.[a-zA-Z]{2,}/)?.[0];
   if (email) draft.email = email.replace(/[.!?]+$/, "").toLowerCase();
   const rut =

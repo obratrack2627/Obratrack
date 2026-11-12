@@ -104,6 +104,7 @@ export class SupabaseService {
         email_acceso: r.email_acceso,
         rol: r.rol,
         telefono_whatsapp: r.telefono_whatsapp,
+        especialidades: r.especialidades || [],
         is_dev: Boolean(r.is_dev),
         created_at: r.created_at,
       }));
@@ -134,6 +135,7 @@ export class SupabaseService {
         email_acceso: data.email_acceso,
         rol: data.rol,
         telefono_whatsapp: data.telefono_whatsapp,
+        especialidades: data.especialidades || [],
         is_dev: Boolean(data.is_dev),
         created_at: data.created_at,
       };
@@ -169,6 +171,7 @@ export class SupabaseService {
         email_acceso: matched.email_acceso,
         rol: matched.rol,
         telefono_whatsapp: matched.telefono_whatsapp,
+        especialidades: matched.especialidades || [],
         is_dev: Boolean(matched.is_dev),
         created_at: matched.created_at,
       };
@@ -199,6 +202,7 @@ export class SupabaseService {
         email_acceso: data.email_acceso,
         rol: data.rol,
         telefono_whatsapp: data.telefono_whatsapp,
+        especialidades: data.especialidades || [],
         is_dev: Boolean(data.is_dev),
         created_at: data.created_at,
       };

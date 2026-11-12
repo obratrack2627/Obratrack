@@ -1,3 +1,4 @@
+import { normalizeSpecialties } from '@/lib/team-specialties';
 import { isConversationalName, isPersonName } from '@/lib/ai/person-name';
 import { registrationFields, type PersonDraft } from "@/lib/registrations";
 import { canonicalPhone, phonesInText } from "@/lib/phone";
@@ -179,6 +180,10 @@ export function personIntake(
       index = items.length - 1;
     }
     const current = items[index];
+    if (current.tipo === "trabajador" && input.especialidades !== undefined) {
+      const names = normalizeSpecialties(input.especialidades);
+      if (names.length && names.every(name => norm(message).includes(norm(name)))) current.especialidades = names;
+    }
     const literal = norm(
       message
         .split(/\s+/)

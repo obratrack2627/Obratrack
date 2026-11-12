@@ -207,3 +207,17 @@ cambia únicamente el nombre solicitado. La ficha recién registrada puede
 identificarse por su resultado guardado; homónimos o referencias desconocidas
 requieren aclaración. La web y WhatsApp conservan esta edición pendiente en sus
 historiales existentes, sin migraciones ni cambios de rol, teléfono o asignaciones.
+
+## Especialidades del equipo
+
+Cada integrante puede tener una lista opcional de especialidades, independiente
+de su rol y sus permisos. Equipo permite agregarlas al registrar, editarlas o
+quitarlas y buscar personas por especialidad. ObraBot recibe la lista en su
+contexto y utiliza `especialidades` en `registro_propuesto` o en
+`actualizar_trabajador`; una edición envía la lista final y conserva las demás
+especialidades salvo petición expresa. El alta nunca exige este campo.
+
+Aplicar `supabase/especialidades_equipo.sql` después de `flujo_terreno_rbac.sql`
+antes de publicar esta versión. La migración conserva los contactos y admite
+clientes anteriores que todavía no envíen especialidades. Se valida con
+`tests/sql/especialidades_equipo.sql`; sus fixtures se revierten.

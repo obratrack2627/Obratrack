@@ -1,18 +1,19 @@
+import { normalizeSpecialties } from '@/lib/team-specialties';
 import { isConversationalName, isPersonName } from './person-name';
 import { canonicalPhone } from '@/lib/phone';
 import { validarRutChileno } from '@/lib/utils';
 import { isDeveloperEmail } from '@/lib/auth-utils';
 import { AIError } from './errors';
 
-export const teamContactFields = ['nombre', 'email', 'telefono_whatsapp', 'rut'] as const;
+export const teamContactFields = ['nombre', 'email', 'telefono_whatsapp', 'rut', 'especialidades'] as const;
 export function contactVersion(user: Record<string, any>) {
-  return Object.fromEntries(teamContactFields.map(key => [key, user[key] || null]));
+  return Object.fromEntries(teamContactFields.map(key => [key, key === 'especialidades' ? user[key] || [] : user[key] || null]));
 }
 
 export function validateContactAction(action: Record<string, any>) {
   const fields = action.tipo === 'actualizar_cliente'
     ? ['nuevo_nombre', 'email', 'telefono', 'rut', 'direccion', 'comuna']
-    : ['nuevo_nombre', 'email', 'telefono', 'rut'];
+    : ['nuevo_nombre', 'email', 'telefono', 'rut', 'especialidades'];
   if (!fields.some(key => action[key] !== undefined))
     throw new AIError('CONTACT_INVALID', 'Indica qué dato quieres actualizar.', 422);
   // Las ediciones de contacto nunca cambian credenciales, roles ni empresa.
@@ -21,6 +22,7 @@ export function validateContactAction(action: Record<string, any>) {
       throw new AIError('CONTACT_FORBIDDEN', 'La edición de contactos no cambia roles ni credenciales de acceso.', 403);
   for (const key of fields) {
     if (action[key] === undefined) continue;
+    if (key === 'especialidades') { action[key] = normalizeSpecialties(action[key]); continue; }
     if (typeof action[key] !== 'string')
       throw new AIError('CONTACT_INVALID', 'Los datos de contacto deben ser texto.', 422);
     action[key] = action[key].trim();
