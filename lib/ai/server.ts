@@ -1,3 +1,4 @@
+import { conversationPreferences, withPreferences } from './preferences';
 import { contactNameCommand, contactTurns, withNameEditContext } from './contact-name-command';
 import { personIntake } from '@/lib/whatsapp/person-intake';
 import { pendingPerson, withPersonContext } from './person-context';
@@ -137,6 +138,7 @@ export function createChatHandler(
       let registrationDraft = pendingPerson(body.historial_original, body.historial, tables.proyectos, projectId);
       const nameCommand = !registrationDraft ? contactNameCommand(body.mensaje, tables.usuarios, contactTurns(body.historial_original), user.id) : null;
       const pendingNameEdit = nameCommand?.pending || null;
+      const preferences = conversationPreferences(body.historial_original, user, projectId, body.mensaje);
       const finish = async (result: any, currentId?: string, prepared?: ReturnType<typeof personIntake>) => {
         const registration = prepared || personIntake(flattenActions(result.accion), result.registro_propuesto, registrationDraft, body.mensaje, tables.proyectos, projectId, tables.usuarios);
         if ((registration.prepared || (registration.question && registration.draft)) && company.plan_id !== 'pro_ia') throw new AIError('PLAN_REQUIRED', 'Los registros y cambios por ObraBot requieren Pro IA.', 403);
@@ -146,6 +148,7 @@ export function createChatHandler(
         result.accion = scoped.length === 1 ? scoped[0] : scoped.length ? {tipo:'lote_acciones',acciones:scoped} : null;
         if (registration.question) result.respuesta = registration.question;
         Object.assign(result, withNameEditContext(withPersonContext(result, registrationDraft), pendingNameEdit, !!nameCommand?.handled || !!(nameCommand && 'clear' in nameCommand && nameCommand.clear)));
+        Object.assign(result, withPreferences(result, preferences.state));
         const actions = checkActionPermissions(
           user,
           result.accion,
@@ -187,13 +190,13 @@ export function createChatHandler(
           `web:${user.id}:${requestId}`,
           "plataforma",
         );
-        return NextResponse.json(withNameEditContext(withPersonContext({
+        return NextResponse.json(withPreferences(withNameEditContext(withPersonContext({
           ...result,
           respuesta: action.resultado_texto,
           accion: null,
           cotizacion: null,
           accion_ejecutada: action,
-        }, registrationDraft), pendingNameEdit));
+        }, registrationDraft), pendingNameEdit), preferences.state));
       };
       if (!["admin", "supervisor", "terreno"].includes(user.rol))
         throw new AIError(
@@ -202,6 +205,7 @@ export function createChatHandler(
           403,
         );
       if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
+      if (preferences.respuesta) return NextResponse.json(withPreferences(withNameEditContext(withPersonContext({respuesta:preferences.respuesta,accion:null,cotizacion:null,sugerencias:[]},registrationDraft),pendingNameEdit),preferences.state));
       if(nameCommand?.handled) {
         const result={respuesta:nameCommand.question || 'Voy a corregir el nombre de la ficha.',accion:nameCommand.action || null,cotizacion:null,sugerencias:[]};
         await finish(result,projectId);
@@ -216,7 +220,7 @@ export function createChatHandler(
       if (isProjectDeadlineQuestion(body.mensaje)) {
         if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
         const verified = projectDeadlineAnswer(body.mensaje, tables.proyectos, projectId);
-        if (verified) return NextResponse.json(withNameEditContext(withPersonContext(verified, registrationDraft), pendingNameEdit));
+        if (verified) return NextResponse.json(withPreferences(withNameEditContext(withPersonContext(verified, registrationDraft), pendingNameEdit), preferences.state));
       }
       if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
       const referencedId = conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId);
@@ -240,7 +244,7 @@ export function createChatHandler(
         canonicalBudget = data;
         return data?.cotizacion || null;
       };
-      const capability = { registro_persona: registrationDraft, acciones_habilitadas: company.plan_id === "pro_ia" };
+      const capability = { preferencias_conversacion: preferences.state.valores, registro_persona: registrationDraft, acciones_habilitadas: company.plan_id === "pro_ia" };
       if (projectId) {
         if (!/^[a-zA-Z0-9_-]+$/.test(projectId))
           throw new AIError("PROJECT_INVALID", "La obra no es válida.", 400);

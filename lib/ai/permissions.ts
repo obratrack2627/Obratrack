@@ -1,3 +1,4 @@
+import { checkChileanAmounts } from './chilean-context';
 import { AIError } from "./errors";
 import { flattenActions, validateAction } from "./protocol";
 
@@ -21,6 +22,7 @@ export function checkActionPermissions(
   message: string,
 ) {
   const actions = flattenActions(input);
+  checkChileanAmounts(actions, message);
   if (!['admin', 'supervisor', 'terreno'].includes(user.rol))
     throw new AIError('ACTION_FORBIDDEN', 'Tu cuenta no tiene permisos para gestionar obras.', 403);
   const current = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/^[¿?¡!]+/, '');

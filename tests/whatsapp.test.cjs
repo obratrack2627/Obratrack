@@ -1229,3 +1229,21 @@ test('WhatsApp conserva el cambio a Felipe cuando pide identificar la ficha y no
  assert.equal(saved.rut,worker.rut);assert.equal(saved.telefono_whatsapp,worker.telefono_whatsapp);assert.equal(saved.rol,worker.rol);
  assert.equal(captured.p_acciones.edicion_nombre_pendiente,null);
 });
+
+test('WhatsApp conserva preferencias más allá de 80 mensajes, permite corregirlas y olvidarlas sin aprender de otros actores',async()=>{
+ const sb=database();let calls=0;
+ const message=(id,body)=>({id,from:'56912345678',type:'text',text:{body}});
+ const chat=async(history,text,context)=>{calls++;assert.equal(context.preferencias_conversacion.detalle,'breve');return {respuesta:'Puedes registrar novedades de terreno.',accion:null,cotizacion:null};};
+ const first=await processPersonalMessage(sb,message('pref-first','Recuerda que prefiero respuestas cortas'),{chat});assert.equal(first.persistido,true);assert.equal(calls,0);
+ for(let i=0;i<82;i++)await processPersonalMessage(sb,message('pref-follow-'+i,'¿Qué puedo registrar?'),{chat});
+ assert.equal(calls,82);
+ sb.db.whatsapp_mensajes.unshift({message_id:'foreign',empresa_id:user.empresa_id,actor_id:'otro',texto:'Recuerda respuestas detalladas',respuesta:'Listo',acciones:{preferencias_conversacion:{version:1,usuario_id:'otro',empresa_id:user.empresa_id,proyecto_id:null,valores:{detalle:'detallado'}}}});
+ const list=await processPersonalMessage(sb,message('pref-list','¿Qué recuerdas de mis preferencias?'),{chat});assert.match(list.respuesta,/breves/);
+ await processPersonalMessage(sb,message('pref-delete','Olvida todas mis preferencias'),{chat});
+ const cleared=await processPersonalMessage(sb,message('pref-list-cleared','¿Qué recuerdas de mis preferencias?'),{chat});assert.match(cleared.respuesta,/No tengo preferencias/);assert.equal(calls,82);
+});
+
+test('WhatsApp no confirma una preferencia si falla la persistencia del mensaje',async()=>{
+ const sb=database();sb.rpc=async()=>({error:{message:'Storage unavailable'}});
+ await assert.rejects(processPersonalMessage(sb,{id:'pref-fail',from:'56912345678',type:'text',text:{body:'Recuerda que prefiero respuestas cortas'}},{chat:async()=>{throw Error('No necesita modelo');}}),error=>error.code==='WHATSAPP_DATABASE_SAVE');
+});

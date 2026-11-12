@@ -2368,3 +2368,25 @@ test('ObraBot móvil mantiene el cambio de nombre mientras identifica por RUT y 
  expect(worker.id).toBe('bad-name-worker');expect(worker.rut).toBe('12345678-5');expect(worker.telefono_whatsapp).toBe('+56967345678');
  expect(db.proyectos[0].trabajadores_ids).toEqual([worker.id]);
 });
+
+test('ObraBot móvil conserva y permite olvidar preferencias al recargar sin mostrar un registro de obra falso',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await setup(page,{respuesta:'Consulta',accion:null});
+ const {conversationPreferences,withPreferences}=await import('../lib/ai/preferences');
+ let queries=0;
+ await page.route('**/api/cotizador/chat',async route=>{
+  const body=route.request().postDataJSON();const memory=conversationPreferences(body.historial,owner,undefined,body.mensaje);
+  if(!memory.respuesta){queries++;expect(memory.state.valores.detalle).toBe('breve');}
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(withPreferences({respuesta:memory.respuesta || 'Puedo ayudarte con partidas y novedades.',accion:null,cotizacion:null,sugerencias:[]},memory.state))});
+ });
+ await page.goto('/cotizador');
+ await send(page,'Recuerda que prefiero respuestas cortas');
+ await expect(page.getByText('Lo tendré en cuenta como preferencia en esta conversación. Puedes pedirme que la cambie o la olvide.',{exact:true})).toBeVisible();
+ await page.reload();await send(page,'¿Qué puedo gestionar en terreno?');
+ await expect(page.getByText('Puedo ayudarte con partidas y novedades.',{exact:true})).toBeVisible();expect(queries).toBe(1);
+ await send(page,'Olvida todas mis preferencias');
+ await expect(page.getByText('Dejaré de usar esa preferencia en esta conversación. Los registros de tus obras se conservan.',{exact:true})).toBeVisible();
+ await page.reload();await send(page,'¿Qué recuerdas de mis preferencias?');
+ await expect(page.getByText('No tengo preferencias guardadas en esta conversación.',{exact:true})).toBeVisible();
+ await expect(page.getByText('Preferencias de conversación',{exact:true})).toHaveCount(0);
+});

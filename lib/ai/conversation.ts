@@ -1,7 +1,7 @@
 import { actionContacts } from './contact-name-command';
 export interface ConversationTurn { rol: 'user' | 'model'; texto: string }
 const normal = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const facts = /\b(obras?|proyectos?|radier|terraza|marca|modelo|prefiero|usar|medidas?|ancho|largo|alto|altura|espesor|cliente|correo|telefono|nombre|rut|trabajador|supervisor|direccion|comuna|presupuesto|margen|iva|material(?:es)?|cemento|cubierta|terminacion|anticipo|pago|plazo|precio|acordado|corrijo|correccion)\b/;
+const facts = /\b(obras?|proyectos?|radier|terraza|moldaje|enfierradura|vulcanita|gasfiteria|planchas?|sacos?|marca|modelo|prefiero|usar|medidas?|ancho|largo|alto|altura|espesor|cliente|correo|telefono|nombre|rut|trabajador|supervisor|direccion|comuna|presupuesto|margen|iva|material(?:es)?|cemento|cubierta|terminacion|anticipo|pago|plazo|precio|acordado|corrijo|correccion)\b/;
 const words = (value: string) => new Set(normal(value).split(/[^a-z0-9]+/).filter((word) => word.length >= 4));
 
 // Recupera antecedentes literales, sin inventar un resumen ni convertir el historial
@@ -54,6 +54,7 @@ export function conversationRequest(input: unknown, query: string) {
       if(!source?.accion_ejecutada)continue;
       const details=source.accion_ejecutada.detalles || {};
       Object.assign(model,{registro_pendiente:details.borrador_registro || null,referencias_contacto:actionContacts(source.accion_ejecutada)});
+      if(Object.hasOwn(details,'preferencias_conversacion'))Object.assign(model,{preferencias_conversacion:details.preferencias_conversacion});
       if(Object.hasOwn(details,'edicion_nombre_pendiente'))Object.assign(model,{edicion_nombre_pendiente:details.edicion_nombre_pendiente});
     }
   }

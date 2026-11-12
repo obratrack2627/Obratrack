@@ -84,7 +84,8 @@ export async function applyAIResponse(data: any, projectId?: string) {
   const executed = action?.result || data.accion_ejecutada;
   const draft = data.accion_ejecutada?.detalles?.borrador_registro;
   if (executed && draft) executed.detalles = {...(executed.detalles || {}), borrador_registro:draft};
-  if (executed && Object.hasOwn(data.accion_ejecutada?.detalles || {}, 'edicion_nombre_pendiente')) executed.detalles={...(executed.detalles || {}),edicion_nombre_pendiente:data.accion_ejecutada.detalles.edicion_nombre_pendiente};
+  for (const key of ['edicion_nombre_pendiente','preferencias_conversacion'])
+    if (executed && Object.hasOwn(data.accion_ejecutada?.detalles || {}, key)) executed.detalles={...(executed.detalles || {}),[key]:data.accion_ejecutada.detalles[key]};
   return {
     texto: action?.warning || (action?.result ? actionReply(action.result) : data.respuesta),
     accion_ejecutada: executed,

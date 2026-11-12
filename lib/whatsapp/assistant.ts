@@ -1,3 +1,4 @@
+import { conversationPreferences } from '@/lib/ai/preferences';
 import { contactNameCommand, type ContactTurn } from '@/lib/ai/contact-name-command';
 import { scopeProjectActions } from '@/lib/ai/actions';
 import { projectStatusCommand } from '@/lib/ai/project-status-command';
@@ -274,8 +275,10 @@ export async function processPersonalMessage(
   if (!confirmationResponse && !pendingProject && !chosenBudget && nativeBudget?.grupo_id && !candidates.length) confirmationResponse = 'No se pudieron recuperar las alternativas. Revisa el presupuesto en ObraTrack.';
   const contactHistory: ContactTurn[] = conversationRows.slice().reverse().flatMap((row:any)=>[
     {rol:'user' as const,texto:row.texto || ''},
-    {rol:'model' as const,texto:row.respuesta || '',action:row.acciones,...(Object.hasOwn(row.acciones || {},'edicion_nombre_pendiente')?{pendingNameEdit:row.acciones.edicion_nombre_pendiente}:{})},
+    {rol:'model' as const,texto:row.respuesta || '',action:row.acciones,preferencias_conversacion:row.acciones?.preferencias_conversacion,...(Object.hasOwn(row.acciones || {},'edicion_nombre_pendiente')?{pendingNameEdit:row.acciones.edicion_nombre_pendiente}:{})},
   ]);
+  const preferences = conversationPreferences(contactHistory, user, activeProject || undefined, attachment ? '' : text);
+  const preferenceReply = !attachment && preferences.respuesta ? {respuesta:preferences.respuesta,accion:null,cotizacion:null,sugerencias:[]} : null;
   const nameCommand = !attachment && !pendingPerson && ['admin','supervisor'].includes(user.rol) ? contactNameCommand(text,tables.usuarios,contactHistory,user.id) : null;
   const nameReply = nameCommand?.handled ? {respuesta:nameCommand.question || 'Voy a corregir el nombre de la ficha.',accion:nameCommand.action || null,cotizacion:null,sugerencias:[]} : null;
   let analysisFailed = false;
@@ -286,7 +289,7 @@ export async function processPersonalMessage(
     const statusCommand = !attachment ? projectStatusCommand(text, tables.proyectos, activeProject, conversationRows.slice().reverse().flatMap((row: any) => [{ rol: 'user' as const, texto: row.texto || '' }, { rol: 'model' as const, texto: row.respuesta || '' }])) : null;
     localRegistration = !attachment && user.rol !== 'terreno' ? personIntake([], null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios) : null;
     registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
-    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : statusCommand || verifiedDeadlines || nameReply || registrationReply || await deps.chat(
+    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || await deps.chat(
       conversationRows
         .slice()
         .reverse()
@@ -296,6 +299,7 @@ export async function processPersonalMessage(
         ]),
       text,
       {
+        preferencias_conversacion: preferences.state.valores,
         operacion_obra: operationsContext(tables, undefined, user.rol, text),
         proyectos: projectContextForRole(service.getProyectos(), user.rol),
         proyecto_actual: projectContextForRole(service.getProyectos(), user.rol).find(p => p.id === activeProject) || null,
@@ -427,7 +431,7 @@ export async function processPersonalMessage(
         if (intake.question) response = intake.question;
       }
     }
-    const person = result === registrationReply && localRegistration ? localRegistration : personIntake(actions, 'registro_propuesto' in result ? result.registro_propuesto : null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios);
+    const person = result === preferenceReply ? {actions:[],draft:pendingPerson,prepared:undefined,question:null,result:null} : result === registrationReply && localRegistration ? localRegistration : personIntake(actions, 'registro_propuesto' in result ? result.registro_propuesto : null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios);
     if (user.rol === 'terreno' && (person.draft || person.result || person.actions.some(a => ['crear_cliente','agregar_trabajador','agregar_trabajadores'].includes(a.tipo))))
       throw new Error('Solo administradores y supervisores pueden registrar personas.');
     actions = scopeProjectActions(person.actions, activeProject, service.getProyectos());
@@ -544,7 +548,7 @@ export async function processPersonalMessage(
     p_texto: text,
     p_respuesta: response,
     p_cotizacion: result.cotizacion,
-    p_acciones: { ...(plan.result || {}), borrador_registro: nextPerson, edicion_nombre_pendiente:nameCommand?.pending || null, rol_actor: user.rol, proyecto_contexto_id: attachment?.proyecto_id || (newProjects.length === 1 ? newProjects[0].id : activeProject) || null },
+    p_acciones: { ...(plan.result || {}), preferencias_conversacion:preferences.state, borrador_registro: nextPerson, edicion_nombre_pendiente:nameCommand?.pending || null, rol_actor: user.rol, proyecto_contexto_id: attachment?.proyecto_id || (newProjects.length === 1 ? newProjects[0].id : activeProject) || null },
     p_changed: plan.changed,
     p_deleted: plan.deleted,
     p_adjunto: attachment,
@@ -578,7 +582,7 @@ export async function processPersonalMessage(
         reason += '\n\nLa evidencia quedó guardada en la obra; la otra solicitud sigue pendiente.';
       }
     }
-    const fallbackActions = mediaPlan.result || candidatePerson || nameCommand?.action ? { ...(mediaPlan.result || {}), borrador_registro:candidatePerson || null, edicion_nombre_pendiente:nameCommand?.action ? {nuevo_nombre:nameCommand.action.nuevo_nombre,usuario_id:nameCommand.action.usuario_id} : nameCommand?.pending || null, rol_actor:user.rol, proyecto_contexto_id:mediaAttachment?.proyecto_id || null } : null;
+    const fallbackActions = mediaPlan.result || candidatePerson || nameCommand?.action || preferences.respuesta || Object.keys(preferences.state.valores).length ? { ...(mediaPlan.result || {}), borrador_registro:candidatePerson || null, preferencias_conversacion:preferences.state, edicion_nombre_pendiente:nameCommand?.action ? {nuevo_nombre:nameCommand.action.nuevo_nombre,usuario_id:nameCommand.action.usuario_id} : nameCommand?.pending || null, rol_actor:user.rol, proyecto_contexto_id:mediaAttachment?.proyecto_id || activeProject || null } : null;
     const fallback = await sb.rpc('aplicar_lote_copiloto', { ...params, p_respuesta: whatsappCard(contactError || registrationError ? 'Registro pendiente' : 'Presupuesto pendiente', reason), p_cotizacion: null, p_acciones:fallbackActions, p_changed:mediaPlan.changed, p_deleted:mediaPlan.deleted, p_adjunto:mediaAttachment, p_borrador: pendingProject || null, p_aviso: null });
     data = fallback.data; error = fallback.error;
   }

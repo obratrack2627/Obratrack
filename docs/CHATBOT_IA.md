@@ -207,3 +207,35 @@ cambia únicamente el nombre solicitado. La ficha recién registrada puede
 identificarse por su resultado guardado; homónimos o referencias desconocidas
 requieren aclaración. La web y WhatsApp conservan esta edición pendiente en sus
 historiales existentes, sin migraciones ni cambios de rol, teléfono o asignaciones.
+
+## Lenguaje chileno y preferencias explícitas
+
+La web y WhatsApp usan reglas compartidas para lenguaje de terreno chileno,
+CLP, IVA 19 %, fechas de Chile, vocabulario técnico y distinción entre evidencia
+y autorización. `chilean-context.ts` interpreta expresiones monetarias acotadas
+como «treinta lucas» o «un palo y medio». Antes de aceptar un pago o gasto se
+rechaza una conversión que contradiga un único monto coloquial inequívoco. Las
+expresiones ambiguas requieren aclaración; no se interpreta madera como dinero.
+
+`preferences.ts` conserva solo preferencias explícitas de detalle, tiendas y
+comuna habitual. No extrae recuerdos de respuestas del modelo ni aprende roles,
+identidades, precios, permisos o autorizaciones. Una comuna habitual no confirma
+la ubicación de una obra. Las tiendas preferidas no aseguran cobertura ni precio.
+
+Ejemplos: «Recuerda que prefiero respuestas cortas», «Para materiales recuerda
+que prefiero comparar Sodimac y Construmart», «Recuerda que mi comuna habitual
+es La Florida», «¿Qué recuerdas de mis preferencias?» y «Olvida todas mis
+preferencias». Las correcciones reemplazan lo anterior y olvidar deja una lista
+vacía explícita para no recuperar recuerdos viejos.
+
+Se reutilizan los historiales existentes, sin migraciones: en WhatsApp la copia
+se guarda junto al mensaje confirmado y se transmite al siguiente, aunque los
+mensajes originales salgan de la ventana de 80. En la web viaja en los metadatos
+del historial y se conserva donde se guarda esa conversación (local en consulta
+general; historial de obra cuando corresponde). Borrar ese historial también
+elimina su memoria. Las preferencias se separan por usuario, empresa y contexto
+de obra; no se sincronizan como un perfil global entre dispositivos o canales.
+Esto es memoria de conversación, no entrenamiento ni ajuste automático del modelo.
+
+Validación: `tests/chilean-context.test.cjs`, rutas web y WhatsApp, y prueba móvil
+de persistencia al recargar/olvidar en `e2e/chatbot.spec.ts`.

@@ -565,3 +565,18 @@ test('la edición web conserva el nombre solicitado y usa el RUT siguiente solo 
  assert.deepEqual(reply.accion,{tipo:'actualizar_trabajador',usuario_id:'bad-name',nuevo_nombre:'Felipe melo'});
  assert.equal(reply.accion_ejecutada.detalles.edicion_nombre_pendiente,null);
 });
+
+test('la web recuerda preferencias explícitas sin llamar al modelo y las recupera para la siguiente solicitud',async()=>{
+ const {conversationRequest}=require('../lib/ai/conversation.ts');let calls=0;
+ const handler=createChatHandler({authorize:authorized,global:async(history,message,context)=>{calls++;assert.equal(context.preferencias_conversacion.detalle,'breve');return {...response,accion:null};},project:async()=>{throw Error('No es chat de obra');}});
+ const first=await handler(makeRequest({mensaje:'Recuerda que prefiero respuestas cortas'}));const saved=await first.json();assert.equal(first.status,200);assert.equal(calls,0);assert.equal(saved.accion,null);
+ const history=conversationRequest([{rol:'model',texto:saved.respuesta,accion_ejecutada:saved.accion_ejecutada}],'¿Qué puedo gestionar?');
+ const next=await handler(makeRequest({mensaje:'¿Qué puedo gestionar?',historial:history}));assert.equal(next.status,200);assert.equal(calls,1);
+ assert.equal((await next.json()).accion_ejecutada.detalles.preferencias_conversacion.valores.detalle,'breve');
+});
+
+test('la web no guarda un pago cuando el modelo convierte mal un palo y medio',async()=>{
+ fixture.tables.set('proyectos',[{id:'p-chile',empresa_id:'company-a',nombre:'Quincho',estado:'activo',monto_cotizado:3000000}]);
+ const handler=createChatHandler({authorize:authorized,global:async()=>({respuesta:'Voy a registrar el pago.',accion:{tipo:'registrar_pago',proyecto_id:'p-chile',monto:1500,fecha:'2026-11-12',metodo:'transferencia'},cotizacion:null}),project:async()=>response});
+ const out=await handler(makeRequest({mensaje:'Registra un abono de un palo y medio en Quincho'}));assert.equal(out.status,422);assert.equal((await out.json()).code,'AMOUNT_MISMATCH');assert.ok(!fixture.calls.some(call=>call.mode==='upsert'));
+});
