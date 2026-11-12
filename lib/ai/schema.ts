@@ -30,6 +30,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
         {
           tipo: { type: "string", enum: [...ACTION_TYPES] },
           nuevo_nombre: string,
+          especialidades: array(string),
           usuario_id: string,
           cliente_rut: string,
           ...strings(
@@ -48,7 +49,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
             enum: ["admin", "supervisor", "terreno"],
           }),
           trabajadores: array(
-            object(strings("nombre,rol,telefono,email,rut"), ["nombre"]),
+            object({...strings("nombre,rol,telefono,email,rut"), especialidades: array(string)}, ["nombre"]),
           ),
         },
         ["tipo"],
@@ -56,7 +57,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
     ),
     sugerencias: array(string),
     registro_propuesto: {
-      ...object({ tipo: { type: 'string', enum: ['trabajador', 'cliente'] }, ...strings('nombre,rut,telefono,email,rol,proyecto_id,proyecto_nombre,direccion,comuna') }, ['tipo']),
+      ...object({ tipo: { type: 'string', enum: ['trabajador', 'cliente'] }, ...strings('nombre,rut,telefono,email,rol,proyecto_id,proyecto_nombre,direccion,comuna'), especialidades: array(string) }, ['tipo']),
       type: ['object', 'null'],
     },
     busqueda_materiales: {

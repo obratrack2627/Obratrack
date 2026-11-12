@@ -109,7 +109,7 @@ export function contactNameCommand(
       if (
         turn.rol !== "user" ||
         !renameRequested(turn.texto) ||
-        /\b(?:telefono|correo|email)\b/.test(norm(turn.texto))
+        /\b(?:telefono|correo|email|especialidad|especialidades)\b/.test(norm(turn.texto))
       )
         continue;
       const name = explicitPersonName(turn.texto);
@@ -170,7 +170,7 @@ export function contactNameCommand(
     };
   if (!pending) return { handled: false, pending: null };
   // Una solicitud que cambia varios campos conserva el flujo general del agente.
-  if (nowRequested && /\b(?:telefono|correo|email)\b/.test(norm(message)))
+  if (nowRequested && /\b(?:telefono|correo|email|especialidad|especialidades)\b/.test(norm(message)))
     return { handled: false, pending: null, clear: true };
   let matches: any[] = [];
   if (rut)

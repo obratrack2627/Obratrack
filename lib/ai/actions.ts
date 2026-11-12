@@ -122,6 +122,7 @@ export function prepareActionPlan(
       for (const key of ['email', 'rut']) if (a[key] !== undefined) worker[key] = a[key];
       if (a.nuevo_nombre !== undefined) worker.nombre = a.nuevo_nombre;
       if (a.telefono !== undefined) worker.telefono_whatsapp = a.telefono;
+      if (a.especialidades !== undefined) worker.especialidades = a.especialidades;
     }
     if (PROJECT_ACTIONS.has(a.tipo)) {
       const p = resolveEntity(

@@ -1,3 +1,4 @@
+import { normalizeSpecialties } from '@/lib/team-specialties';
 import type { PersonIntakeDraft } from "@/lib/whatsapp/person-intake";
 import { personIntake } from "@/lib/whatsapp/person-intake";
 import type { ConversationTurn } from "./conversation";
@@ -21,8 +22,9 @@ export function pendingPerson(
       .filter(
         (item: any) => item && ["cliente", "trabajador"].includes(item.tipo),
       )
-      .map((item: any) =>
-        Object.fromEntries(
+      .map((item: any) => ({
+        ...(item.tipo === 'trabajador' && item.especialidades !== undefined ? {especialidades:normalizeSpecialties(item.especialidades)} : {}),
+        ...Object.fromEntries(
           [
             "tipo",
             "nombre",
@@ -40,7 +42,7 @@ export function pendingPerson(
             )
             .map((key) => [key, item[key]]),
         ),
-      );
+      }));
     return items.length ? ({ items } as PersonIntakeDraft) : null;
   }
   // Recuperar conversaciones anteriores al borrador web sin repetir un alta ya confirmada.

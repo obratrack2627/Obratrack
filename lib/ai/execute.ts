@@ -80,7 +80,7 @@ async function persist(job: Pending) {
       if (table === 'usuarios' && _contacto_anterior) {
         const { data, error } = await supabase.rpc('actualizar_contacto_equipo', {
           p_usuario: row.id,
-          p_datos: Object.fromEntries(teamContactFields.map(key => [key, row[key] ?? null])),
+          p_datos: Object.fromEntries(teamContactFields.map(key => [key, (key === 'especialidades' ? row[key] || [] : row[key] ?? null)])),
           p_anterior: _contacto_anterior,
         });
         if (error) throw new Error(contactDatabaseMessage(error) || 'No se pudo confirmar la edición del contacto.');
@@ -90,7 +90,7 @@ async function persist(job: Pending) {
       if (table === 'usuarios') {
         const project = job.changed.proyectos?.find(project => project.trabajadores_ids?.includes(row.id));
         const { data, error } = await supabase.rpc('crear_integrante_equipo', {
-          p_datos: Object.fromEntries(['id','nombre','rut','email','telefono_whatsapp','rol'].map(key => [key,row[key] ?? null])),
+          p_datos: Object.fromEntries(['id','nombre','rut','email','telefono_whatsapp','rol',...(row.especialidades !== undefined ? ['especialidades'] : [])].map(key => [key,row[key] ?? null])),
           p_proyecto: project?.id || null,
         });
         if (error) throw new Error(contactDatabaseMessage(error) || 'No se pudo confirmar el alta del integrante con sus datos y obra.');

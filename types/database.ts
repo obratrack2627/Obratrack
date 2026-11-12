@@ -50,6 +50,7 @@ export interface Usuario {
   email_acceso?: string;
   rol: UserRole;
   telefono_whatsapp: string;
+  especialidades?: string[];
   rut?: string;
   empresa_nombre?: string;
   is_dev?: boolean;

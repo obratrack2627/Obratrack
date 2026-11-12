@@ -2390,3 +2390,51 @@ test('ObraBot móvil conserva y permite olvidar preferencias al recargar sin mos
  await expect(page.getByText('No tengo preferencias guardadas en esta conversación.',{exact:true})).toBeVisible();
  await expect(page.getByText('Preferencias de conversación',{exact:true})).toHaveCount(0);
 });
+
+for (const width of [390,1280]) test(`Equipo permite especialidades múltiples opcionales y las conserva al recargar (${width}px)`, async ({page})=>{
+ test.setTimeout(120000);
+ await page.setViewportSize({width,height:900});
+ const db=await setup(page,{respuesta:'Consulta',accion:null},true);
+ await page.route('**/api/supabase/sync*',async route=>{
+  if(route.request().method()==='POST'){
+   const payload=route.request().postDataJSON();
+   for(const row of payload.cambios?.usuarios || []){
+    const target=db.usuarios.find(u=>u.id===row.id); if(target) Object.assign(target,row);
+   }
+   await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true})});return;
+  }
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({empresaId:company,plan_id:'pro_ia',usuarios:db.usuarios,proyectos:db.proyectos,clientes:[],actividades:[],pagos:[],materiales:[],bitacora:[],imprevistos:[],asistencias:[],documentos:[],agenda:[],reportes_whatsapp:[]})});
+ });
+ await page.route('**/api/equipo/crear-usuario',async route=>{
+  const input=route.request().postDataJSON();
+  expect(input.especialidades).toEqual(['Carpintería','Gasfitería']);
+  const user={...input,id:'skills-worker',empresa_id:company,telefono_whatsapp:input.telefono};db.usuarios.push(user);
+  await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,user})});
+ });
+ await page.goto('/equipo');
+ await page.getByRole('button',{name:'Agregar Trabajador',exact:true}).click();
+ const specialties=page.locator('#equipo-especialidades');
+ await expect(specialties).not.toHaveAttribute('required');
+ await page.locator('#equipo-nombre').fill('Pedro Morales');
+ await specialties.fill('Carpintería, Gasfitería, CARPINTERIA');
+ await page.locator('#equipo-rut').fill('123456785');
+ await page.locator('#worker-email').fill('pedro@example.test');
+ await page.locator('#equipo-telefono').fill('912345678');
+ await page.locator('#equipo-rol').selectOption('supervisor');
+ await page.getByRole('button',{name:'Registrar trabajador',exact:true}).click();
+ const card=page.locator('[data-team-member="skills-worker"]');
+ await expect(card.getByText('Gasfitería',{exact:true})).toBeVisible();
+ await page.reload();
+ await expect(card.getByText('Carpintería',{exact:true})).toBeVisible();
+ await page.getByPlaceholder('Buscar nombre, especialidad, teléfono o correo...').fill('gasfiteria');
+ await expect(card).toBeVisible();
+ await expect(page.locator('[data-team-member]')).toHaveCount(1);
+ await card.getByTitle('Editar datos',{exact:true}).click();
+ await page.locator('#equipo-editEspecialidades').fill('Pintura');
+ const saved=page.waitForResponse(r=>r.url().includes('/api/supabase/sync')&&r.request().method()==='POST'&&r.status()===200);
+ await page.getByRole('button',{name:'Guardar Cambios',exact:true}).click();await saved;
+ await page.reload();
+ await expect(card.getByText('Pintura',{exact:true})).toBeVisible();
+ expect(db.usuarios.find(u=>u.id==='skills-worker')?.rol).toBe('supervisor');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});

@@ -1,4 +1,6 @@
 import { assertAttendanceManager } from '@/lib/attendance-access';
+
+import { normalizeSpecialties } from '@/lib/team-specialties';
 import { syncFailureMessage } from '@/lib/sync/failure';
 import { projectStatusLabel } from '@/lib/project-status';
 import {
@@ -1492,6 +1494,7 @@ export class DataService {
     rol?: UserRole;
     telefono?: string;
     telefono_whatsapp?: string;
+    especialidades?: string[];
     email?: string;
     rut?: string;
   }): Usuario {
@@ -1501,6 +1504,7 @@ export class DataService {
       email: datos.email || '',
       telefono_whatsapp: datos.telefono || datos.telefono_whatsapp || '',
       rut: datos.rut || undefined,
+      ...(datos.especialidades !== undefined ? {especialidades: normalizeSpecialties(datos.especialidades)} : {}),
       empresa_id: this.getActiveUser()?.empresa_id || DEMO_EMPRESA_ID,
     });
   }
@@ -1528,6 +1532,7 @@ export class DataService {
     const labels: Record<string, string> = { nuevo_nombre: 'Nombre', telefono: 'Teléfono', email: 'Correo de contacto', rut: 'RUT', direccion: 'Dirección', comuna: 'Comuna' };
     return Object.entries(labels).filter(([key]) => action[key] !== undefined)
       .map(([key, label]) => `• ${label}: ${action[key] || 'sin registrar'}`).join('\n')
+      + (action.especialidades !== undefined ? `\nEspecialidades: ${action.especialidades.join(', ') || 'sin registrar'}` : '')
       + (action.tipo === 'actualizar_trabajador' && action.email !== undefined ? '\nEl correo de inicio de sesión se conserva; este cambio actualiza la ficha de contacto.' : '');
   }
 
@@ -1662,6 +1667,7 @@ export class DataService {
         if (accion.telefono !== undefined) updated.telefono_whatsapp = accion.telefono;
         if (accion.email !== undefined) updated.email = accion.email;
         if (accion.rut !== undefined) updated.rut = accion.rut;
+        if (accion.especialidades !== undefined) updated.especialidades = accion.especialidades;
         // Mantener los permisos y la identidad de acceso: no inferir privilegios del nuevo correo.
         this.setItem(this.getTenantKey(KEYS.USUARIOS), users.map(u => u.id === target.id ? updated : u));
         if (active.id === target.id) this.setItem(KEYS.ACTIVE_USER, updated);
@@ -1688,6 +1694,7 @@ export class DataService {
                 telefono: accion.telefono || accion.telefono_whatsapp,
                 email: accion.email,
                 rut: accion.rut,
+                especialidades: accion.especialidades,
               },
             ];
 
@@ -1700,6 +1707,7 @@ export class DataService {
             telefono: t.telefono || t.telefono_whatsapp,
             email: t.email,
             rut: t.rut,
+            especialidades: t.especialidades,
           });
           creados.push(u);
         });

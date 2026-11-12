@@ -1,4 +1,6 @@
 import { assertAttendanceManager } from '@/lib/attendance-access';
+
+import { normalizeSpecialties } from "@/lib/team-specialties";
 import { syncWriteFailure } from "@/lib/sync/failure";
 import { projectStatuses } from "@/lib/project-status";
 import { NextRequest, NextResponse } from "next/server";
@@ -250,6 +252,7 @@ export async function POST(request: NextRequest) {
             .filter((key) => Object.hasOwn(u, key))
             .map((key) => [key, key === "nombre" ? u[key] : u[key] || null]),
         );
+        if (Object.hasOwn(u, "especialidades")) fields.especialidades = normalizeSpecialties(u.especialidades);
         if (existing) {
           if (Object.hasOwn(u, "rol") && u.rol !== existing.rol)
             fields.rol = u.rol;

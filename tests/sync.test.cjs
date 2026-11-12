@@ -488,3 +488,13 @@ test('la sincronización impide asistencia de terreno y guarda al administrador 
  const allowed=await POST(request({cambios:{asistencias:[{id:'a-authorized',proyecto_id:'p1',usuario_id:user.id,trabajador_nombre:user.nombre,fecha:'2026-11-12',estado:'presente',registrado_por:'Responsable inventado'}]}}));
  assert.equal(allowed.status,200);assert.equal(fixture.tables.get('asistencia_obreros')[0].registrado_por,user.nombre);
 });
+
+test('sincroniza especialidades opcionales sin modificar roles ni credenciales y permite quitarlas', async()=>{
+ for(const names of [['Carpintería','Pintura'],[]]){
+  const response=await POST(request({cambios:{usuarios:[{id:user.id,especialidades:names}]}}));
+  assert.equal(response.status,200);
+  assert.deepEqual(fixture.tables.get('usuarios')[0].especialidades,names);
+  assert.equal(fixture.tables.get('usuarios')[0].auth_user_id,user.auth_user_id);
+ }
+ assert.equal((await POST(request({cambios:{usuarios:[{id:user.id,especialidades:'Pintura'}]}}))).status,422);
+});
