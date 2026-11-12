@@ -1923,10 +1923,12 @@ test('la app instalada desde Chrome no impone colores a las barras del sistema',
   // Representa los metadatos de una instalación anterior a la actualización.
   document.addEventListener('DOMContentLoaded',()=>{const meta=document.createElement('meta');meta.name='theme-color';meta.content='#FF6A00';document.head.appendChild(meta);},{once:true});
  });
- await page.goto('/proyectos');
+ await page.goto('/dashboard');
  await expect(page.locator('meta[name="theme-color"]')).toHaveCount(0);
  const manifest=await(await page.request.get('/manifest.webmanifest')).json();
- expect(manifest.theme_color).toBeUndefined();expect(manifest.background_color).toBeUndefined();expect(manifest.id).toBe('/proyectos');expect(manifest.scope).toBe('/');
+ expect(manifest.theme_color).toBeUndefined();expect(manifest.background_color).toBeUndefined();expect(manifest.id).toBe('/proyectos');expect(manifest.scope).toBe('/');expect(manifest.start_url).toBe('/dashboard');
+ await page.getByRole('button',{name:'Abrir menú',exact:true}).click();
+ await page.locator('aside').getByRole('link',{name:'Obras y proyectos',exact:true}).click();
  await page.getByRole('link',{name:'Terraza',exact:true}).click();
  await expect(page).toHaveURL(/\/proyectos\/p-existing\/gantt/);
  await expect(page.locator('meta[name="theme-color"]')).toHaveCount(0);
@@ -2538,4 +2540,87 @@ test('Cuadrilla móvil registra sin inventar horarios y permite reintentar un gu
   await expect(page.getByText('7 h registradas',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Editar asistencia',exact:true}).click();
   await expect(page.getByLabel('Colación (minutos)',{exact:true})).toHaveValue('60');
+});
+
+async function installedMode(page: Page) {
+  await page.addInitScript(() => {
+    const original=window.matchMedia.bind(window);
+    window.matchMedia=(query:string)=>{
+      const media=original(query);
+      if(query==='(display-mode: standalone)')Object.defineProperty(media,'matches',{value:true});
+      return media;
+    };
+  });
+}
+
+async function expectPageAtStart(page: Page) {
+  await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(0);
+  await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+  expect(await page.evaluate(()=>window.scrollY)).toBe(0);
+}
+
+test('la app instalada inicia en Centro de Mando y los módulos móviles abren al principio', async ({page}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({width:390,height:844});
+  const db=await setup(page,{},true);
+  db.proyectos.push(...Array.from({length:12},(_,index)=>({...db.proyectos[0],id:`p-${index}`,nombre:`Obra ${index+1}`})));
+  await installedMode(page);
+  const manifest=await(await page.request.get('/manifest.webmanifest')).json();
+  expect(manifest.start_url).toBe('/dashboard');
+  expect(manifest.id).toBe('/proyectos');
+  await page.goto(manifest.start_url);
+  await expect(page.getByRole('heading',{name:'Centro de Mando',exact:true})).toBeVisible();
+  await expectPageAtStart(page);
+  await page.evaluate(()=>scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'}));
+  expect(await page.evaluate(()=>scrollY)).toBeGreaterThan(300);
+  for(const [label,path] of [['Obras y proyectos','/proyectos'],['WhatsApp','/reportes'],['Equipo','/equipo'],['Clientes','/clientes'],['Asistencia','/asistencia'],['Centro de Mando','/dashboard']]) {
+    await page.getByRole('button',{name:'Abrir menú',exact:true}).click();
+    await page.locator('aside').getByRole('link',{name:label,exact:true}).click();
+    await expect(page).toHaveURL(new RegExp(path+'$'));
+    await expectPageAtStart(page);
+    await page.evaluate(()=>scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'}));
+  }
+  await page.goBack();
+  await expect(page).toHaveURL(/\/asistencia$/);
+  await expectPageAtStart(page);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expectPageAtStart(page);
+  await page.getByRole('button',{name:'Abrir menú',exact:true}).click();
+  await page.locator('aside').getByRole('link',{name:'Obras y proyectos',exact:true}).click();
+  await page.getByRole('link',{name:'Terraza',exact:true}).click();
+  await expect(page).toHaveURL(/\/proyectos\/p-existing\/gantt$/);
+  await expectPageAtStart(page);
+  await page.evaluate(()=>scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'}));
+  await page.getByRole('link',{name:/Finanzas y materiales/}).click();
+  await expect(page).toHaveURL(/\/proyectos\/p-existing\/finanzas$/);
+  await expectPageAtStart(page);
+  await page.screenshot({path:'/tmp/obratrack-installed-navigation-mobile.png'});
+});
+
+test('instalaciones antiguas abren Centro de Mando sin impedir entrar luego a Obras', async ({page}) => {
+  await page.setViewportSize({width:390,height:844});
+  await setup(page,{},true);
+  await installedMode(page);
+  await page.goto('/proyectos');
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole('heading',{name:'Centro de Mando',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Abrir menú',exact:true}).click();
+  await page.locator('aside').getByRole('link',{name:'Obras y proyectos',exact:true}).click();
+  await expect(page).toHaveURL(/\/proyectos$/);
+  await expect(page.getByRole('link',{name:'Terraza',exact:true})).toBeVisible();
+  await page.reload();
+  await expect(page).toHaveURL(/\/proyectos$/);
+});
+
+test('la app instalada respeta accesos directos explícitos y obras enlazadas', async ({page}) => {
+  await setup(page,{},true);
+  await installedMode(page);
+  const manifest=await(await page.request.get('/manifest.webmanifest')).json();
+  await page.goto(manifest.shortcuts.find((item:any)=>item.short_name==='Obras').url);
+  await expect(page).toHaveURL(/\/proyectos\?entrada=acceso-directo$/);
+  await expect(page.getByRole('heading',{name:'Obras y proyectos',exact:true})).toBeVisible();
+  await page.goto('/proyectos/p-existing/gantt');
+  await expect(page.getByRole('heading',{name:'Terraza',exact:true}).first()).toBeVisible();
+  await expect(page).toHaveURL(/\/proyectos\/p-existing\/gantt$/);
 });

@@ -364,6 +364,7 @@ test('endpoint /api/materiales/comparar rechaza rol terreno y manifest PWA expon
 
   const manifest = manifestFn();
   assert.equal(manifest.display, 'standalone');
-  assert.equal(manifest.start_url, '/proyectos');
+  assert.equal(manifest.start_url, '/dashboard');
+  assert.equal(manifest.id, '/proyectos');
   assert.ok(Array.isArray(manifest.icons) && manifest.icons.length >= 2);
 });

@@ -6,9 +6,10 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'ObraTrack',
     description:
       'Plataforma SaaS de control de obras, presupuestos con IA, Carta Gantt, estados de pago y reportes de terreno para constructoras en Chile.',
+    // Identidad estable: cambiar el inicio no debe crear otra instalación.
     id: '/proyectos',
     scope: '/',
-    start_url: '/proyectos',
+    start_url: '/dashboard',
     display: 'standalone',
     orientation: 'portrait',
     lang: 'es-CL',
@@ -38,7 +39,7 @@ export default function manifest(): MetadataRoute.Manifest {
         name: 'Mis Obras',
         short_name: 'Obras',
         description: 'Acceder directamente a las obras en curso en terreno',
-        url: '/proyectos',
+        url: '/proyectos?entrada=acceso-directo',
       },
       {
         name: 'Copiloto y Cotizador IA',
