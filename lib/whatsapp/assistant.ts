@@ -1,3 +1,4 @@
+import { isAttendanceManagementRequest, ATTENDANCE_MANAGEMENT_MESSAGE } from '@/lib/attendance-access';
 import { conversationPreferences } from '@/lib/ai/preferences';
 import { contactNameCommand, type ContactTurn } from '@/lib/ai/contact-name-command';
 import { scopeProjectActions } from '@/lib/ai/actions';
@@ -280,6 +281,7 @@ export async function processPersonalMessage(
   const preferences = conversationPreferences(contactHistory, user, activeProject || undefined, attachment ? '' : text);
   const preferenceReply = !attachment && preferences.respuesta ? {respuesta:preferences.respuesta,accion:null,cotizacion:null,sugerencias:[]} : null;
   const nameCommand = !attachment && !pendingPerson && ['admin','supervisor'].includes(user.rol) ? contactNameCommand(text,tables.usuarios,contactHistory,user.id) : null;
+  const attendanceRefusal = user.rol === 'terreno' && !attachment && isAttendanceManagementRequest(text) ? {respuesta:ATTENDANCE_MANAGEMENT_MESSAGE,accion:null,cotizacion:null,sugerencias:[]} : null;
   const nameReply = nameCommand?.handled ? {respuesta:nameCommand.question || 'Voy a corregir el nombre de la ficha.',accion:nameCommand.action || null,cotizacion:null,sugerencias:[]} : null;
   let analysisFailed = false;
   let localRegistration: ReturnType<typeof personIntake> | null = null;
@@ -289,7 +291,7 @@ export async function processPersonalMessage(
     const statusCommand = !attachment ? projectStatusCommand(text, tables.proyectos, activeProject, conversationRows.slice().reverse().flatMap((row: any) => [{ rol: 'user' as const, texto: row.texto || '' }, { rol: 'model' as const, texto: row.respuesta || '' }])) : null;
     localRegistration = !attachment && user.rol !== 'terreno' ? personIntake([], null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios) : null;
     registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
-    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || await deps.chat(
+    result = acceptCreation || confirmationResponse ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || await deps.chat(
       conversationRows
         .slice()
         .reverse()

@@ -239,3 +239,29 @@ Esto es memoria de conversación, no entrenamiento ni ajuste automático del mod
 
 Validación: `tests/chilean-context.test.cjs`, rutas web y WhatsApp, y prueba móvil
 de persistencia al recargar/olvidar en `e2e/chatbot.spec.ts`.
+
+
+## Asistencia bajo control de jefatura
+
+Solo `admin` y `supervisor` pueden crear, corregir y eliminar asistencia.
+Terreno no puede marcarse, marcar cuadrillas ni alterar una ausencia previa.
+Los pedidos directos de automarcación se responden sin llamar al modelo; las
+acciones de asistencia propuestas por el modelo también pasan por el permiso
+compartido. Las mutaciones de DataService y la sincronización verifican el mismo
+permiso. El responsable del registro/corrección se toma del actor autenticado,
+no de un nombre enviado por el navegador o generado por el modelo.
+
+`supabase/asistencia_solo_jefatura.sql`, después de `flujo_terreno_rbac.sql`,
+refuerza las escrituras directas con políticas RLS restrictivas y valida el actor
+real del lote nativo de WhatsApp, incluido un intento de borrar asistencia.
+No cambia registros históricos. La migración no se aplica automáticamente al
+publicar en Vercel. Prueba nativa: `tests/sql/asistencia_solo_jefatura.sql`;
+usa fixtures reversibles. El bloqueo web de supervisores sin Developer sigue
+vigente: gestionan asistencia por WhatsApp; administradores también desde la web.
+
+El `SUPABASE_ACCESS_TOKEN` es un token personal de Management API para tareas
+administrativas como migraciones, no una clave pública ni la clave de servidor
+de la plataforma. Se genera en https://supabase.com/dashboard/account/tokens.
+Elegir sin vencimiento evita su caducidad por fecha, pero no su revocación ni un
+valor distinto en el entorno. Se valida con una petición de lectura a Management
+API antes de aplicar migraciones. Un 401 no demuestra por sí solo expiración.

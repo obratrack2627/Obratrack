@@ -31,3 +31,5 @@
 - Migraciones finales en orden: `contactos_whatsapp.sql`, luego `flujo_terreno_rbac.sql`. Las pruebas nativas en `tests/sql` revierten sus fixtures.
 
 - WhatsApp: conversación natural sin cabecera de marca, emojis automáticos ni contadores de acciones. Los documentos conservan su desglose. No modificar presupuesto al cambiar un estado; no confirmar envíos entregados cuando solo están en cola.
+
+- Asistencia: solo administradores y supervisores pueden crear, corregir o eliminar registros. Terreno no marca ni siquiera su propia entrada/salida por texto, audio, imagen o ubicación. Aplicar `asistencia_solo_jefatura.sql` después de `flujo_terreno_rbac.sql`.

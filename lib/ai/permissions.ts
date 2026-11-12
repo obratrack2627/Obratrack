@@ -1,3 +1,4 @@
+import { assertAttendanceManager } from '@/lib/attendance-access';
 import { checkChileanAmounts } from './chilean-context';
 import { AIError } from "./errors";
 import { flattenActions, validateAction } from "./protocol";
@@ -5,7 +6,6 @@ import { flattenActions, validateAction } from "./protocol";
 const workerActions = new Set([
   "actualizar_avance",
   "crear_bitacora",
-  "registrar_asistencia",
   "crear_solicitud_cambio",
   "registrar_documento",
   "generar_reporte",
@@ -23,6 +23,7 @@ export function checkActionPermissions(
 ) {
   const actions = flattenActions(input);
   checkChileanAmounts(actions, message);
+  if (actions.some(action => action.tipo === "registrar_asistencia")) assertAttendanceManager(user);
   if (!['admin', 'supervisor', 'terreno'].includes(user.rol))
     throw new AIError('ACTION_FORBIDDEN', 'Tu cuenta no tiene permisos para gestionar obras.', 403);
   const current = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/^[¿?¡!]+/, '');
@@ -88,21 +89,7 @@ export function checkActionPermissions(
   if (user.rol === "terreno" && actions.some((a) => !workerActions.has(a.tipo)))
     throw new AIError(
       "ACTION_FORBIDDEN",
-      "Tu perfil de terreno puede registrar avances, bitácora, asistencia y solicitudes de cambio en sus obras asignadas.",
-      403,
-    );
-  if (
-    user.rol === "terreno" &&
-    actions.some(
-      (a) =>
-        a.tipo === "registrar_asistencia" &&
-        (a.todos_presentes ||
-          ![user.id, user.nombre].includes(a.trabajador_nombre)),
-    )
-  )
-    throw new AIError(
-      "ACTION_FORBIDDEN",
-      "Solo puedes registrar tu propia asistencia.",
+      "Tu perfil de terreno puede registrar avances, bitácora y solicitudes de cambio en sus obras asignadas.",
       403,
     );
   return actions;

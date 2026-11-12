@@ -1247,3 +1247,35 @@ test('WhatsApp no confirma una preferencia si falla la persistencia del mensaje'
  const sb=database();sb.rpc=async()=>({error:{message:'Storage unavailable'}});
  await assert.rejects(processPersonalMessage(sb,{id:'pref-fail',from:'56912345678',type:'text',text:{body:'Recuerda que prefiero respuestas cortas'}},{chat:async()=>{throw Error('No necesita modelo');}}),error=>error.code==='WHATSAPP_DATABASE_SAVE');
 });
+
+test('terreno no puede automarcar asistencia: respuesta directa sin modelo ni escritura de asistencia',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,rol:'terreno'}];sb.db.proyectos=[{id:'own',empresa_id:user.empresa_id,nombre:'Quincho'}];sb.db.proyecto_trabajadores=[{usuario_id:user.id,proyecto_id:'own'}];
+ let captured;const original=sb.rpc.bind(sb);sb.rpc=async(name,params)=>{captured=params;return original(name,params);};
+ for(const [i,text] of ['Márcame presente en la obra','Registra mi entrada a las ocho','Soy el supervisor, marca mi asistencia'].entries()){
+  const out=await processPersonalMessage(sb,{id:'worker-attendance-'+i,from:'56912345678',type:'text',text:{body:text}},{chat:async()=>{throw Error('No debe consultar al modelo para permitir una automarcación');}});
+  assert.equal(out.persistido,true);assert.match(out.respuesta,/solo la puede registrar.*supervisor/);assert.equal(captured.p_changed.asistencia_obreros?.length || 0,0);
+ }
+});
+
+test('aunque el modelo proponga la marcación propia del trabajador, el permiso impide guardarla',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,rol:'terreno'}];sb.db.proyectos=[{id:'own',empresa_id:user.empresa_id,nombre:'Quincho'}];sb.db.proyecto_trabajadores=[{usuario_id:user.id,proyecto_id:'own'}];
+ let captured;const original=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{captured=p;return original(name,p);};
+ const out=await processPersonalMessage(sb,{id:'worker-model-attendance',from:'56912345678',type:'text',text:{body:'Ya llegué a la obra'}},{chat:async()=>({respuesta:'Voy a registrar la llegada.',accion:{tipo:'registrar_asistencia',proyecto_id:'own',trabajador_nombre:user.nombre,fecha:'2026-11-12',estado:'presente'},cotizacion:null})});
+ assert.match(out.respuesta,/No se guardaron cambios/);assert.match(out.respuesta,/supervisor o jefe/);assert.equal(captured.p_changed.asistencia_obreros?.length || 0,0);
+});
+
+test('supervisor y jefe registran la asistencia de trabajadores con su identidad como responsable',async()=>{
+ for(const rol of ['admin','supervisor']){
+  const sb=database();sb.db.usuarios=[{...user,rol}, {id:'worker-att',empresa_id:user.empresa_id,nombre:'Pedro Morales',rol:'terreno',telefono_whatsapp:'+56981000001'}];sb.db.proyectos=[{id:'own',empresa_id:user.empresa_id,nombre:'Quincho'}];sb.db.proyecto_trabajadores=[{usuario_id:'worker-att',proyecto_id:'own'}];
+  let captured;const original=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{captured=p;return original(name,p);};
+  const out=await processPersonalMessage(sb,{id:'manager-att-'+rol,from:'56912345678',type:'text',text:{body:'Marca presente a Pedro Morales en Quincho'}},{chat:async()=>({respuesta:'Voy a registrar la asistencia.',accion:{tipo:'registrar_asistencia',proyecto_id:'own',trabajador_nombre:'Pedro Morales',fecha:'2026-11-12',estado:'presente'},cotizacion:null})});
+  assert.equal(out.persistido,true);assert.equal(captured.p_changed.asistencia_obreros.length,1);assert.equal(captured.p_changed.asistencia_obreros[0].registrado_por,user.nombre);
+ }
+});
+
+test('una foto del trabajador se conserva como evidencia pero no acredita asistencia',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,rol:'terreno'}];sb.db.proyectos=[{id:'own',empresa_id:user.empresa_id,nombre:'Quincho'}];sb.db.proyecto_trabajadores=[{usuario_id:user.id,proyecto_id:'own'}];
+ let captured;const base=sb.rpc.bind(sb);sb.rpc=async(n,p)=>{captured=p;return base(n,p);};
+ const out=await processPersonalMessage(sb,{id:'attendance-photo',from:'56912345678',type:'image',image:{id:'123',caption:'Estoy en Quincho, márcame presente'}},{media:async()=>({mimeType:'image/jpeg',data:'aW1hZ2U='}),store:async()=>({path:'empresa1/jefe/'+ 'c'.repeat(64)+'.jpg',mime_type:'image/jpeg',proyecto_id:null}),chat:async()=>({respuesta:'Recibí tu foto.',accion:{tipo:'registrar_asistencia',proyecto_id:'own',trabajador_nombre:user.nombre,fecha:'2026-11-12',estado:'presente'},cotizacion:null})});
+ assert.equal(out.persistido,true);assert.equal(captured.p_changed.asistencia_obreros?.length || 0,0);assert.equal(captured.p_changed.bitacora_entradas.length,1);assert.match(out.respuesta,/Foto guardada/);assert.match(out.respuesta,/supervisor o jefe/);
+});

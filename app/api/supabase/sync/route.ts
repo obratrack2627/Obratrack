@@ -1,3 +1,4 @@
+import { assertAttendanceManager } from '@/lib/attendance-access';
 import { syncWriteFailure } from "@/lib/sync/failure";
 import { projectStatuses } from "@/lib/project-status";
 import { NextRequest, NextResponse } from "next/server";
@@ -41,6 +42,7 @@ async function validateSync(client: any, user: any, body: any) {
   const projects = new Set(all("proyectos", "proyectos").map((p) => p.id));
   const users = new Set(all("usuarios", "usuarios").map((u) => u.id));
   const clients = new Set(all("clientes", "clientes").map((c) => c.id));
+  if (body.asistencias?.length) assertAttendanceManager(user);
   for (const [key, rows] of Object.entries(body) as [string, any[]][])
     for (const row of rows) {
       if (
@@ -51,7 +53,7 @@ async function validateSync(client: any, user: any, body: any) {
         throw new AIError("SYNC_FORBIDDEN", "Registro de otra cuenta.", 403);
       if (
         user.rol === "terreno" &&
-        (!["bitacora", "asistencias", "reportes_whatsapp"].includes(key) ||
+        (!["bitacora", "reportes_whatsapp"].includes(key) ||
           (row.usuario_id && row.usuario_id !== user.id) ||
           (row.registrado_por && row.registrado_por !== user.id))
       )
@@ -551,7 +553,7 @@ export async function POST(request: NextRequest) {
               horas_trabajadas: Number(asis.horas_trabajadas) || 0,
               observacion: asis.observacion || null,
               origen: asis.origen || "web",
-              registrado_por: asis.registrado_por || null,
+              registrado_por: user.nombre,
             },
             { onConflict: "id" },
           ),

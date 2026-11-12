@@ -479,3 +479,12 @@ test('no muestra cuerpos HTML ni mensajes desconocidos recibidos de un proxy', (
   assert.match(syncWriteFailure({code:'23503',message:'PRIVATE SQL VALUES'},'el pago').message,/asociado ya no está disponible/);
   assert.doesNotMatch(syncWriteFailure({code:'23503',message:'PRIVATE SQL VALUES'},'el pago').message,/PRIVATE/);
 });
+
+test('la sincronización impide asistencia de terreno y guarda al administrador real como responsable',async()=>{
+ user={...user,rol:'terreno'};
+ const denied=await POST(request({cambios:{asistencias:[{id:'a-denied',proyecto_id:'p1',usuario_id:user.id,trabajador_nombre:user.nombre,fecha:'2026-11-12',estado:'presente'}]}}));
+ assert.equal(denied.status,403);assert.equal((await denied.json()).code,'ATTENDANCE_FORBIDDEN');assert.equal(fixture.tables.get('asistencia_obreros')?.length || 0,0);
+ user={...user,rol:'admin'};
+ const allowed=await POST(request({cambios:{asistencias:[{id:'a-authorized',proyecto_id:'p1',usuario_id:user.id,trabajador_nombre:user.nombre,fecha:'2026-11-12',estado:'presente',registrado_por:'Responsable inventado'}]}}));
+ assert.equal(allowed.status,200);assert.equal(fixture.tables.get('asistencia_obreros')[0].registrado_por,user.nombre);
+});

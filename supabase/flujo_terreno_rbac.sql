@@ -143,6 +143,14 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended(p_empresa,0));
  SELECT * INTO actor FROM public.usuarios WHERE id=p_actor AND empresa_id=p_empresa;
  IF NOT FOUND OR actor.rol NOT IN ('admin','supervisor','terreno') THEN RAISE EXCEPTION 'CHANNEL_FORBIDDEN'; END IF;
+ IF actor.rol NOT IN ('admin','supervisor') AND (
+  jsonb_array_length(coalesce(p_changed->'asistencia_obreros','[]'::jsonb))>0
+  OR jsonb_array_length(coalesce(p_deleted->'asistencia_obreros','[]'::jsonb))>0
+ ) THEN RAISE EXCEPTION 'ATTENDANCE_FORBIDDEN'; END IF;
+ IF jsonb_array_length(coalesce(p_changed->'asistencia_obreros','[]'::jsonb))>0 THEN
+  SELECT jsonb_set(p_changed,'{asistencia_obreros}',jsonb_agg(item||jsonb_build_object('registrado_por',actor.nombre))) INTO p_changed
+   FROM jsonb_array_elements(p_changed->'asistencia_obreros') item;
+ END IF;
  SELECT * INTO cached FROM public.whatsapp_mensajes WHERE message_id=p_id;
  IF FOUND THEN
   IF cached.actor_id<>p_actor OR cached.empresa_id<>p_empresa THEN RAISE EXCEPTION 'CHANNEL_FORBIDDEN'; END IF;
@@ -155,10 +163,9 @@ BEGIN
   IF EXISTS(SELECT 1 FROM jsonb_each(p_deleted) e WHERE jsonb_array_length(e.value)>0) THEN RAISE EXCEPTION 'WORKER_SCOPE_FORBIDDEN'; END IF;
   FOR t IN SELECT key FROM jsonb_each(p_changed) LOOP
    IF jsonb_array_length(p_changed->t)=0 THEN CONTINUE; END IF;
-   IF t NOT IN ('actividades','bitacora_entradas','asistencia_obreros','reclamos_cambios_obra','documentos_obra','reportes_whatsapp') THEN RAISE EXCEPTION 'WORKER_SCOPE_FORBIDDEN'; END IF;
+   IF t NOT IN ('actividades','bitacora_entradas','reclamos_cambios_obra','documentos_obra','reportes_whatsapp') THEN RAISE EXCEPTION 'WORKER_SCOPE_FORBIDDEN'; END IF;
    FOR r IN SELECT value FROM jsonb_array_elements(p_changed->t) LOOP
     IF NOT EXISTS(SELECT 1 FROM public.proyecto_trabajadores pt JOIN public.proyectos p ON p.id=pt.proyecto_id WHERE p.id=r->>'proyecto_id' AND p.empresa_id=p_empresa AND pt.usuario_id=p_actor) THEN RAISE EXCEPTION 'WORKER_SCOPE_FORBIDDEN'; END IF;
-    IF t='asistencia_obreros' AND r->>'usuario_id' IS DISTINCT FROM p_actor THEN RAISE EXCEPTION 'WORKER_SCOPE_FORBIDDEN'; END IF;
    END LOOP;
   END LOOP;
   IF p_adjunto->>'proyecto_id' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.proyecto_trabajadores WHERE proyecto_id=p_adjunto->>'proyecto_id' AND usuario_id=p_actor) THEN RAISE EXCEPTION 'WORKER_SCOPE_FORBIDDEN'; END IF;

@@ -1,3 +1,4 @@
+import { assertAttendanceManager } from '@/lib/attendance-access';
 import { syncFailureMessage } from '@/lib/sync/failure';
 import { projectStatusLabel } from '@/lib/project-status';
 import {
@@ -1133,6 +1134,7 @@ export class DataService {
     data: Omit<AsistenciaObrero, 'id' | 'created_at'> & { id?: string }
   ): AsistenciaObrero {
     const active = this.getActiveUser();
+    assertAttendanceManager(active);
     const list = this.getAsistencias();
 
     const horas =
@@ -1155,6 +1157,7 @@ export class DataService {
         ...list[existingIdx],
         ...data,
         horas_trabajadas: horas,
+        registrado_por: active!.nombre,
       };
       this.setItem(this.getTenantKey(KEYS.ASISTENCIAS_OBRA), list);
       this.scheduleCloudSync();
@@ -1166,7 +1169,7 @@ export class DataService {
       id: data.id || 'asis-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
       empresa_id: data.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
       horas_trabajadas: horas,
-      registrado_por: data.registrado_por || active?.nombre || 'Supervisor',
+      registrado_por: active!.nombre,
       created_at: new Date().toISOString(),
     };
 
@@ -1182,6 +1185,7 @@ export class DataService {
     horaEntrada = '08:00',
     horaSalida = '18:00'
   ): AsistenciaObrero[] {
+    assertAttendanceManager(this.getActiveUser());
     const proj = this.getProyectoById(proyectoId);
     const todosUsuarios = this.getUsuarios();
     const cuadrilla = todosUsuarios.filter((u) => proj?.trabajadores_ids?.includes(u.id));
@@ -1207,6 +1211,7 @@ export class DataService {
   }
 
   deleteAsistencia(id: string): boolean {
+    assertAttendanceManager(this.getActiveUser());
     const list = this.getAsistencias();
     const filtered = list.filter((a) => a.id !== id);
     this.setItem(this.getTenantKey(KEYS.ASISTENCIAS_OBRA), filtered);
