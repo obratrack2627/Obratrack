@@ -55,3 +55,26 @@ test('recepciones renuevan fotos privadas al leer el acta y descartan referencia
  const [signed]=await signRows([original],['archivo_url'],'company',new Set(['project']),client);
  assert.deepEqual(signed.recepcion_resumen.fotos,['https://signed.example.test/company/project/acta-photo.jpg']);assert.equal(original.recepcion_resumen.fotos.length,2);assert.match(original.recepcion_resumen.fotos[0],/expired/);
 });
+
+test('si un archivo privado falla al firmarse no bloquea la sincronización de las demás filas', async () => {
+  const { signRows } = require('../lib/supabase/private-files.ts');
+  const badHash = 'a'.repeat(64);
+  const okHash = 'b'.repeat(64);
+  const rows = [
+    { id: 'b1', proyecto_id: 'project', foto_url: `whatsapp-evidencias:company/worker/${badHash}.jpg` },
+    { id: 'b2', proyecto_id: 'project', foto_url: `whatsapp-evidencias:company/worker/${okHash}.jpg` },
+  ];
+  const client = {
+    storage: {
+      from: () => ({
+        createSignedUrl: async (path) =>
+          path.includes(badHash)
+            ? { data: null, error: { message: 'Object not found' } }
+            : { data: { signedUrl: 'https://signed.example.test/' + path }, error: null },
+      }),
+    },
+  };
+  const signed = await signRows(rows, ['foto_url'], 'company', new Set(['project']), client);
+  assert.equal(signed[0].foto_url, null);
+  assert.equal(signed[1].foto_url, `https://signed.example.test/company/worker/${okHash}.jpg`);
+});
