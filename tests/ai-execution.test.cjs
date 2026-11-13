@@ -331,3 +331,104 @@ test('evidenceActions asocia fotografía cuando el usuario menciona el nombre ba
   assert.equal(res.actions[0].proyecto_id, 'p-cocina');
 });
 
+
+test('actualizar_material actualiza compra, pago, proveedor y recalcula montos sin duplicar el material', async () => {
+  await executeAI({ ...project, trabajadores_nombres: [], materiales: [] });
+  const p = dataService.getProyectos()[0];
+  await executeAI({
+    tipo: 'agregar_material',
+    proyecto_id: p.id,
+    nombre: 'Madera de pino',
+    cantidad: 40,
+    unidad: 'unidad',
+    precio_unitario: 1500,
+  });
+  const outcome = await executeAI({
+    tipo: 'actualizar_material',
+    proyecto_id: p.id,
+    nombre: 'Madera de pino',
+    proveedor: 'Easy',
+    comprado: true,
+    pagado: true,
+    monto: 50000,
+  });
+  assert.equal(outcome.pendingId, undefined);
+  assert.equal(outcome.result.tipo, 'actualizar_material');
+  const mats = dataService.getMaterialesProyecto(p.id);
+  assert.equal(mats.length, 1);
+  assert.equal(mats[0].proveedor, 'Easy');
+  assert.equal(mats[0].comprado, true);
+  assert.equal(mats[0].pagado, true);
+  assert.equal(mats[0].subtotal, 50000);
+  assert.equal(mats[0].precio_unitario, 1250);
+  assert.equal(
+    fixture.tables.get('materiales_proyecto').find((r) => r.id === mats[0].id).subtotal,
+    50000,
+  );
+});
+
+test('actualizar_material reparte un monto total entre varios materiales sin desfasar el total y crear_bitacora deriva titulo', async () => {
+  await executeAI({ ...project, trabajadores_nombres: [], materiales: [] });
+  const p = dataService.getProyectos()[0];
+  await executeAI({
+    tipo: 'agregar_materiales',
+    proyecto_id: p.id,
+    materiales: [
+      { nombre: 'Pino 2x4', cantidad: 10, unidad: 'unidad', precio_unitario: 3000 },
+      { nombre: 'Tornillos', cantidad: 1, unidad: 'caja', precio_unitario: 10000 },
+    ],
+  });
+  const outcome = await executeAI({
+    tipo: 'actualizar_material',
+    proyecto_id: p.id,
+    proveedor: 'Easy',
+    comprado: true,
+    pagado: true,
+    monto: 32000,
+    materiales: [{ nombre: 'Pino 2x4' }, { nombre: 'Tornillos' }],
+  });
+  assert.equal(outcome.pendingId, undefined);
+  const mats = dataService.getMaterialesProyecto(p.id);
+  assert.equal(mats.reduce((s, m) => s + m.subtotal, 0), 32000);
+
+  const bitacora = await executeAI({
+    tipo: 'crear_bitacora',
+    proyecto_id: p.id,
+    nota: 'Se detectó humedad en radier norte antes de sellar',
+    tipo_bitacora: 'incidente',
+  });
+  assert.equal(bitacora.pendingId, undefined);
+  const logs = dataService.getBitacora(p.id);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0].titulo, /humedad en radier norte/i);
+});
+
+test('applyAIResponse conserva respuesta_consulta y respuesta_adicional junto con el resultado real de la acción', async () => {
+  const { applyAIResponse } = require('../lib/ai/client.ts');
+  await executeAI({ ...project, trabajadores_nombres: [], materiales: [] });
+  const p = dataService.getProyectos()[0];
+  const originalPull = dataService.pullFromCloudServer.bind(dataService);
+  dataService.pullFromCloudServer = async () => ({ success: true });
+  try {
+    const applied = await applyAIResponse(
+      {
+        respuesta: 'Voy a registrar tu bitácora.',
+        respuesta_consulta: 'El saldo por cobrar de Terraza es $250.000.',
+        respuesta_adicional: 'Aviso al equipo puesto en cola para 2 destinatarios.',
+        accion: {
+          tipo: 'crear_bitacora',
+          proyecto_id: p.id,
+          nota: 'Control de calidad aprobado en radier',
+          tipo_bitacora: 'avance',
+        },
+      },
+      p.id,
+    );
+    assert.match(applied.texto, /\$250\.000/);
+    assert.match(applied.texto, /Guardé el registro en la bitácora/);
+    assert.match(applied.texto, /puesto en cola/);
+    assert.equal(applied.accion_ejecutada.tipo, 'crear_bitacora');
+  } finally {
+    dataService.pullFromCloudServer = originalPull;
+  }
+});

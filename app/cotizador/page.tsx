@@ -56,7 +56,7 @@ const INITIAL_CHAT_MESSAGE: MensajeChatCotizador = {
   remitente: 'agente',
   texto:
     'Hola, soy ObraBot. Puedo preparar presupuestos y ayudarte a gestionar obras, materiales, pagos y cuadrillas. ¿Qué necesitas?',
-  timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+  timestamp: '',
   sugerencias: [
     'Quiero cotizar un trabajo',
     'Quiero buscar el precio de un material',

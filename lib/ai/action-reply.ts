@@ -59,6 +59,7 @@ export function actionReply(result: any): string {
     actualizar_avance: "Registré el avance",
     agregar_material: "Añadí el material a la obra",
     agregar_materiales: "Añadí los materiales a la obra",
+    actualizar_material: "Actualicé el material en la obra",
     registrar_imprevisto: "Registré el imprevisto",
     registrar_pago: "Registré el pago",
     crear_bitacora: "Guardé el registro en la bitácora",

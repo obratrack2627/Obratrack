@@ -42,10 +42,18 @@ export function checkActionPermissions(
       const question = /^(?:esta|estan|sigue|siguen|cuando|como|por que|que obras|cuales obras|hay obras|en que estado|que estado|cual es el estado)\b/.test(current);
       if (negated || question || negatesFieldChange(current, /^estado$/)) throw new AIError('STATUS_NOT_REQUESTED', 'No cambié el estado de la obra. Para hacerlo, indica el estado que quieres asignarle.', 422);
     }
-    if (action.tipo === 'generar_mensaje_whatsapp' && /^(?:por favor )?(envia(?:le|les|me)?|manda(?:le|les|me)?|avisa(?:le|les)?|notifica(?:le|les)?)(?:\s|$)/.test(current)) {
+    const explicitBroadcast =
+      /(?:^|(?:,|;|\by\b|\bluego\b|\bademas\b|\btambien\b)\s*)(?:por favor\s+)?(?:envi(?:a|ar|ales|ale|en|emos)?|manda(?:r|les|le|n|mos)?|avisa(?:r|les|le|n)?|notifica(?:r|les|le|n)?)\b/.test(current) &&
+      !/\b(?:prepara|redacta|escribe|borrador|sin enviar|no envies|no mandar)\b/.test(current);
+    if (action.tipo === 'generar_mensaje_whatsapp' && explicitBroadcast) {
       action.tipo = 'enviar_mensaje_equipo';
       if (typeof action.trabajador_nombre === 'string' && action.trabajador_nombre.trim() && !action.trabajadores_nombres?.length) {
-        action.trabajadores_nombres = [action.trabajador_nombre.trim()];
+        const target = action.trabajador_nombre.trim();
+        if (/^(?:equipo|cuadrilla|todos|trabajadores)$/i.test(target)) {
+          if (!action.roles_destino?.length) action.roles_destino = ['terreno', 'supervisor'];
+        } else {
+          action.trabajadores_nombres = [target];
+        }
       }
       if (!action.roles_destino?.length && !action.trabajadores_nombres?.length && (action.proyecto_id || action.proyecto_nombre)) {
         action.roles_destino = ['terreno', 'supervisor'];
@@ -58,12 +66,6 @@ export function checkActionPermissions(
     }
   }
   if (actions.some((a) => a.tipo === "enviar_mensaje_equipo")) {
-    if (actions.length !== 1)
-      throw new AIError(
-        "BROADCAST_SEPARATE",
-        "Solicita el envío del aviso en un mensaje separado de los cambios de la obra.",
-        422,
-      );
     const command = message
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")

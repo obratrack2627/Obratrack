@@ -63,6 +63,7 @@ const PROJECT_ACTIONS = new Set([
   'actualizar_avance',
   'agregar_material',
   'agregar_materiales',
+  'actualizar_material',
   'registrar_imprevisto',
   'registrar_pago',
   'crear_bitacora',

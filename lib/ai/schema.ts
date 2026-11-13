@@ -20,11 +20,27 @@ const material = object(
   ["nombre", "cantidad", "precio_unitario"],
 );
 
+const materialQuery = {
+  ...object(
+    {
+      ...strings(
+        "producto,marca,modelo,presentacion,ubicacion,unidad_cantidad",
+      ),
+      cantidad: number,
+      unidad_cantidad: { type: ["string", "null"] },
+      tiendas: array(string),
+    },
+    ["producto", "unidad_cantidad"],
+  ),
+  type: ["object", "null"],
+};
+
 // Enum y campos explícitos evitan que Gemini invente operaciones o descarte sus parámetros.
 // La validación del servidor y la prevalidación del lote siguen siendo obligatorias.
 export const CHAT_RESPONSE_SCHEMA = object(
   {
     respuesta: string,
+    respuesta_consulta: string,
     acciones: array(
       object(
         {
@@ -59,6 +75,7 @@ export const CHAT_RESPONSE_SCHEMA = object(
           ),
           unidad: string,
           todos_presentes: { type: "boolean" },
+          comprado: { type: "boolean" },
           partidas: array(activity),
           materiales: array(material),
           trabajadores_nombres: array(string),
@@ -237,20 +254,7 @@ WHATSAPP_RESPONSE_SCHEMA.properties.acciones.items.properties.tipo.enum =
 export const MATERIAL_QUERY_SCHEMA = object(
   {
     respuesta: string,
-    busqueda_materiales: {
-      ...object(
-        {
-          ...strings(
-            "producto,marca,modelo,presentacion,ubicacion,unidad_cantidad",
-          ),
-          cantidad: number,
-          unidad_cantidad: { type: ["string", "null"] },
-          tiendas: array(string),
-        },
-        ["producto", "unidad_cantidad"],
-      ),
-      type: ["object", "null"],
-    },
+    busqueda_materiales: materialQuery,
   },
   ["respuesta", "busqueda_materiales"],
 );

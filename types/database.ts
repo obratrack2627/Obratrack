@@ -516,6 +516,7 @@ export type TipoAccionIA =
   | 'registrar_imprevisto'
   | 'agregar_material'
   | 'agregar_materiales'
+  | 'actualizar_material'
   | 'crear_bitacora'
   | 'crear_solicitud_cambio'
   | 'registrar_asistencia'

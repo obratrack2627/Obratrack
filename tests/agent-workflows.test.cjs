@@ -266,6 +266,13 @@ test("todas las operaciones del catálogo aceptan sus campos propios sin exigir 
     agregar_materiales: {
       materiales: [{ nombre: "Cemento", cantidad: 3, precio_unitario: 5990 }],
     },
+    actualizar_material: {
+      nombre: "Madera de pino",
+      proveedor: "Easy",
+      comprado: true,
+      pagado: true,
+      monto: 50000,
+    },
     registrar_imprevisto: { descripcion: "Reparación", monto: 15000 },
     registrar_pago: { monto: 10000 },
     crear_bitacora: { titulo: "Avance", nota: "Estructura instalada" },

@@ -9,6 +9,39 @@ const pick = (row: any, fields: string[]) =>
       ]),
   );
 
+export function summarizeBudgets(rows: any[] = [], projectId?: string, limit = 8) {
+  return rows
+    .filter((row) => !projectId || row.proyecto_id === projectId)
+    .slice()
+    .sort((a, b) =>
+      String(b.updated_at || b.created_at || "").localeCompare(
+        String(a.updated_at || a.created_at || ""),
+      ),
+    )
+    .slice(0, limit)
+    .map((b) => ({
+      id: b.id,
+      proyecto_id: b.proyecto_id ?? null,
+      estado: b.estado,
+      nombre_alternativa: b.nombre_alternativa || b.cotizacion?.nombre_alternativa || null,
+      titulo: b.cotizacion?.titulo_proyecto || null,
+      tipo_obra: b.cotizacion?.tipo_obra || null,
+      metros_cuadrados: b.cotizacion?.metros_cuadrados ?? null,
+      duracion_dias_estimada: b.cotizacion?.duracion_dias_estimada ?? null,
+      precio_sugerido_neto: b.cotizacion?.estructura_financiera?.precio_sugerido_neto ?? null,
+      precio_total_con_iva: b.cotizacion?.estructura_financiera?.precio_total_con_iva ?? null,
+      materiales: Array.isArray(b.cotizacion?.materiales)
+        ? b.cotizacion.materiales.slice(0, 10).map((m: any) => ({
+            nombre: m.nombre,
+            cantidad: m.cantidad,
+            unidad: m.unidad,
+            precio_unitario_estimado: m.precio_unitario_estimado,
+          }))
+        : [],
+      fecha: b.updated_at || b.created_at || null,
+    }));
+}
+
 // Registros filtrados previamente por empresa/asignación; nunca usa el inventario
 // del navegador. Los límites son explícitos para no presentar un recorte como vacío.
 export function operationsContext(
@@ -161,6 +194,10 @@ export function operationsContext(
             ),
     plazos: projectDeadlines(tables.proyectos || [], projectId),
     proyecto_id: projectId || null,
+    presupuestos_guardados:
+      role === "terreno"
+        ? []
+        : summarizeBudgets(tables.presupuestos || [], projectId, 6),
     registros: Object.fromEntries(
       specs.map(([table, limit, fields]) => {
         const rows = (tables[table] || [])

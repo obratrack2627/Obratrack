@@ -1971,6 +1971,138 @@ export class DataService {
         };
       }
 
+      case 'actualizar_material': {
+        const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
+        if (!proj) return null;
+        const existentes = this.getMaterialesProyecto(proj.id);
+        const lista = Array.isArray(accion.materiales)
+          ? accion.materiales
+          : [
+              {
+                material_id: accion.material_id,
+                nombre: accion.nombre,
+                cantidad: accion.cantidad,
+                precio_unitario: accion.precio_unitario,
+                monto: accion.monto,
+                proveedor: accion.proveedor,
+                comprado: accion.comprado,
+                pagado: accion.pagado,
+              },
+            ];
+
+        const targets: { item: any; target: MaterialProyecto }[] = lista.map((item: any) => {
+          const byId = item.material_id ? existentes.find((e: MaterialProyecto) => e.id === item.material_id) : undefined;
+          const needle = String(item.nombre || '').trim().toLowerCase();
+          const byExact = !byId && needle
+            ? existentes.find((e: MaterialProyecto) => e.nombre.trim().toLowerCase() === needle)
+            : undefined;
+          let resolved: MaterialProyecto | null | undefined = byId || byExact;
+          if (!resolved && needle) {
+            try {
+              resolved = resolveEntity(existentes, item.nombre);
+            } catch {
+              resolved = undefined;
+            }
+          }
+          if (!resolved) {
+            throw new Error(`No encontré el material "${item.nombre || item.material_id || ''}" en "${proj.nombre}".`);
+          }
+          return { item, target: resolved };
+        });
+
+        const totalBatchAmount =
+          typeof accion.monto === 'number' && accion.monto > 0 && Array.isArray(accion.materiales) && lista.length > 1
+            ? accion.monto
+            : null;
+        const baseWeights: number[] = targets.map(({ item, target }) => {
+          const cant = Number(item.cantidad) || target.cantidad || 1;
+          const prev = target.subtotal > 0 ? target.subtotal : roundLine(cant, Number(target.precio_unitario) || 0);
+          return prev > 0 ? prev : 1;
+        });
+        const totalWeight = baseWeights.reduce((sum: number, w: number) => sum + w, 0) || targets.length;
+        let allocated = 0;
+
+        const actualizados: MaterialProyecto[] = [];
+        let totalMonto = 0;
+        targets.forEach(({ item, target }, index: number) => {
+          const cant = Number(item.cantidad) || target.cantidad || 1;
+          const itemMonto =
+            typeof item.monto === 'number' && item.monto > 0
+              ? item.monto
+              : totalBatchAmount !== null
+                ? index === targets.length - 1
+                  ? Math.max(0, totalBatchAmount - allocated)
+                  : Math.round((totalBatchAmount * baseWeights[index]) / totalWeight)
+                : undefined;
+          if (totalBatchAmount !== null && typeof itemMonto === 'number') allocated += itemMonto;
+          const hasExplicitPU = typeof item.precio_unitario === 'number' && item.precio_unitario >= 0;
+          const pu = hasExplicitPU
+            ? Number(item.precio_unitario)
+            : typeof itemMonto === 'number'
+              ? Math.round(itemMonto / cant)
+              : target.precio_unitario;
+          const subtotal =
+            hasExplicitPU || item.cantidad !== undefined
+              ? roundLine(cant, pu)
+              : typeof itemMonto === 'number'
+                ? itemMonto
+                : target.subtotal;
+          const pagado =
+            typeof item.pagado === 'boolean'
+              ? item.pagado
+              : typeof accion.pagado === 'boolean'
+                ? accion.pagado
+                : target.pagado;
+          const comprado =
+            typeof item.comprado === 'boolean'
+              ? item.comprado
+              : typeof accion.comprado === 'boolean'
+                ? accion.comprado
+                : pagado === true
+                  ? true
+                  : target.comprado;
+          const proveedor =
+            (typeof item.proveedor === 'string' && item.proveedor.trim()) ||
+            (typeof accion.proveedor === 'string' && accion.proveedor.trim()) ||
+            target.proveedor;
+
+          const updated = this.updateMaterialProyecto(target.id, {
+            cantidad: cant,
+            precio_unitario: pu,
+            subtotal,
+            ...(proveedor ? { proveedor } : {}),
+            ...(typeof comprado === 'boolean' ? { comprado } : {}),
+            ...(typeof pagado === 'boolean' ? { pagado } : {}),
+          });
+          if (updated) {
+            actualizados.push(updated);
+            totalMonto += updated.subtotal;
+          }
+        });
+
+        const resumen = actualizados
+          .map((m) => {
+            const flags = [
+              m.comprado ? 'comprado' : 'pendiente',
+              m.pagado === true ? 'pagado' : m.pagado === false ? 'por pagar' : '',
+              m.proveedor ? `en ${m.proveedor}` : '',
+            ]
+              .filter(Boolean)
+              .join(', ');
+            return `${m.nombre} ($${m.subtotal.toLocaleString('es-CL')} CLP${flags ? ` • ${flags}` : ''})`;
+          })
+          .join(', ');
+
+        return {
+          tipo: 'actualizar_material',
+          titulo: `${actualizados.length} Material(es) Actualizado(s)`,
+          detalles: { materiales: actualizados, total: totalMonto },
+          resultado_texto: `${resumen} en "${proj.nombre}".`,
+          link_destino: `/proyectos/${proj.id}/finanzas`,
+          link_texto: 'Ver Finanzas y materiales ➔',
+        };
+      }
+
       case 'registrar_imprevisto': {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;

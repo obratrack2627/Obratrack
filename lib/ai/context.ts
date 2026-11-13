@@ -1,5 +1,6 @@
 import { AIError } from "./errors";
 import { isolatedState } from "@/lib/whatsapp/state";
+import { summarizeBudgets } from "./operations-context";
 
 export const projectTables = [
   "actividades",
@@ -23,13 +24,26 @@ export function checkedRows(result: any): any[] {
 }
 
 // El servidor usa datos actuales y permisos de la sesión, nunca el inventario enviado por el navegador.
-export async function loadAIContext(client: any, user: any, options: { projectsOnly?: boolean } = {}) {
-  const [companyResult, projectResult] = await Promise.all([
+export async function loadAIContext(
+  client: any,
+  user: any,
+  options: { projectsOnly?: boolean; includeBudgets?: boolean } = {},
+) {
+  const [companyResult, projectResult, budgetResult] = await Promise.all([
     client.from('empresas').select('id,plan_id').eq('id', user.empresa_id),
     client.from('proyectos').select('*').eq('empresa_id', user.empresa_id),
+    options.includeBudgets && !options.projectsOnly && user.rol !== "terreno"
+      ? client.from("presupuestos").select("*").eq("empresa_id", user.empresa_id)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   const company = checkedRows(companyResult)[0];
-  const tables: Record<string, any[]> = { usuarios: [], clientes: [], agenda_eventos: [], proyectos: checkedRows(projectResult) };
+  const tables: Record<string, any[]> = {
+    usuarios: [],
+    clientes: [],
+    agenda_eventos: [],
+    presupuestos: checkedRows(budgetResult),
+    proyectos: checkedRows(projectResult),
+  };
   const ids = tables.proyectos.map((p) => p.id);
   const names = options.projectsOnly ? (user.rol === "terreno" ? ["proyecto_trabajadores"] : []) : ["usuarios", "clientes", "agenda_eventos", ...projectTables];
   const results = await Promise.all(
@@ -73,6 +87,8 @@ export async function loadAIContext(client: any, user: any, options: { projectsO
       usuario_actual: { id: user.id, nombre: user.nombre, rol: user.rol },
       clientes: tables.clientes,
       agenda: tables.agenda_eventos,
+      presupuestos_guardados:
+        user.rol === "terreno" ? [] : summarizeBudgets(tables.presupuestos, undefined, 8),
       rol: user.rol,
     },
   };

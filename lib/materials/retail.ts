@@ -8,7 +8,20 @@ export function sodimacProducts(html: string) {
     const price = p.prices?.find((v: any) => !v.crossed && v.type === 'internetPrice') || p.prices?.find((v: any) => !v.crossed && v.type === 'normalPrice');
     const raw = price?.price?.length === 1 ? String(price.price[0]) : '';
     const amount = /^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(raw) ? Number(raw.replace(/\./g, '')) : 0;
-    return { productName: p.displayName, brand: p.brand, link: p.url, items: [{ itemId: p.skuId, nameComplete: p.displayName, measurementUnit: 'un', unitMultiplier: 1, sellers: [{ sellerDefault: true, sellerName: 'Sodimac', commertialOffer: { Price: amount, ...(p.isSoldOut === true ? { AvailableQuantity: 0 } : {}) } }] }] };
+    const link = (() => {
+      const raw = typeof p.url === 'string' ? p.url.trim() : '';
+      const falabella = /^https?:\/\/(?:www\.)?falabella\.com\/falabella-cl\/product\/([^?#]+)/i.exec(raw);
+      if (falabella) {
+        const parts = falabella[1].replace(/^\/+|\/+$/g, '').split('/');
+        const slug = parts.length >= 2 && /^\d+$/.test(parts[parts.length - 1]) && parts.length > 2 ? parts.slice(0, 2).join('/') : parts.join('/');
+        return `https://www.sodimac.cl/sodimac-cl/articulo/${slug}`;
+      }
+      return raw.startsWith('/') ? `https://www.sodimac.cl${raw}` : raw;
+    })();
+    const name = /^\s*(?:\d|saco\b|bolsa\b|caja\b|pack\b)/i.test(String(p.displayName || '')) && p.brand && !String(p.displayName).toLowerCase().includes(String(p.brand).toLowerCase())
+      ? `${String(p.brand).trim()} ${String(p.displayName).trim()}`
+      : p.displayName;
+    return { productName: name, brand: p.brand, link, items: [{ itemId: p.skuId, nameComplete: name, measurementUnit: 'un', unitMultiplier: 1, sellers: [{ sellerDefault: true, sellerName: 'Sodimac', commertialOffer: { Price: amount, ...(p.isSoldOut === true ? { AvailableQuantity: 0 } : {}) } }] }] };
   });
 }
 export function construmartProducts(body: string) {

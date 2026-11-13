@@ -14,6 +14,7 @@ import {
   isMaterialPriceRequest,
   materialSearchPrompt,
   isAlternativeRequest,
+  hasNonSearchTask,
 } from "@/lib/ai/prompt";
 import {
   CHAT_RESPONSE_SCHEMA,
@@ -85,17 +86,18 @@ export async function chatAsesorObrasGemini(
             m.rol === "model" &&
             m.texto.includes("Precios publicados en CLP; confirma"),
         ));
+  const pureSearchOnly = priceSearch && !hasNonSearchTask(mensajeUsuario);
   const prompt = (
-    priceSearch ? materialSearchPrompt : quote ? quotePrompt : chatPrompt
+    pureSearchOnly ? materialSearchPrompt : quote ? quotePrompt : chatPrompt
   )(historial, mensajeUsuario, contextoDB);
-  const schema = priceSearch
+  const schema = pureSearchOnly
     ? MATERIAL_QUERY_SCHEMA
     : quote ? QUOTE_RESPONSE_SCHEMA
     : contextoDB.creacion_obra_whatsapp
       ? WHATSAPP_RESPONSE_SCHEMA
       : CHAT_RESPONSE_SCHEMA;
   const result = parseChatResponse(
-    await generateAI(priceSearch||quote?prompt:prompt+"\n"+CONSTRUCTION_WORKFLOW_RULES, {
+    await generateAI(pureSearchOnly || quote ? prompt : prompt + "\n" + CONSTRUCTION_WORKFLOW_RULES, {
       ...options,
       json: true,
       schema,
@@ -107,19 +109,32 @@ export async function chatAsesorObrasGemini(
     const comparison = await compareMaterialPrices(
       completePurchaseQuantity(result.busqueda_materiales, mensajeUsuario),
     );
+    const comparisonText = formatMaterialComparison(comparison);
+    if (pureSearchOnly && !result.accion && !result.cotizacion) {
+      return {
+        ...result,
+        respuesta: comparisonText,
+        accion: null,
+        cotizacion: null,
+        comparacion_materiales: comparison,
+        sugerencias: [
+          "Compara el precio del mismo modelo en ambas tiendas",
+          "Prepara una lista de compra para mi obra",
+        ],
+      };
+    }
+    const consultText = (result.respuesta_consulta || (!result.accion ? result.respuesta : "") || "").trim();
+    const quoteText = result.cotizacion ? quoteSummaryText(result.cotizacion) : "";
+    const extraText = [comparisonText, quoteText].filter(Boolean).join("\n\n");
     return {
       ...result,
-      respuesta: formatMaterialComparison(comparison),
-      accion: null,
-      cotizacion: null,
+      ...(consultText ? { respuesta_consulta: consultText } : {}),
+      respuesta: [consultText, extraText].filter(Boolean).join("\n\n") || comparisonText,
+      ...(extraText ? { respuesta_adicional: extraText } : {}),
       comparacion_materiales: comparison,
-      sugerencias: [
-        "Compara el precio del mismo modelo en ambas tiendas",
-        "Prepara una lista de compra para mi obra",
-      ],
     };
   }
-  if (priceSearch)
+  if (pureSearchOnly)
     return {
       ...result,
       accion: null,
@@ -129,8 +144,16 @@ export async function chatAsesorObrasGemini(
           ? result.respuesta
           : "¿Qué material o herramienta quieres comparar? Indica marca o modelo, presentación y cantidad si los conoces.",
     };
-  if (result.cotizacion)
-    return { ...result, respuesta: quoteSummaryText(result.cotizacion) };
+  if (result.cotizacion) {
+    const quoteText = quoteSummaryText(result.cotizacion);
+    const consultText = (result.respuesta_consulta || "").trim();
+    return {
+      ...result,
+      ...(consultText ? { respuesta_consulta: consultText } : {}),
+      respuesta: [consultText, quoteText].filter(Boolean).join("\n\n"),
+      ...(result.accion ? { respuesta_adicional: quoteText } : {}),
+    };
+  }
   return result;
 }
 

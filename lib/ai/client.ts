@@ -86,8 +86,18 @@ export async function applyAIResponse(data: any, projectId?: string) {
   if (executed && draft) executed.detalles = {...(executed.detalles || {}), borrador_registro:draft};
   for (const key of ['edicion_nombre_pendiente','preferencias_conversacion'])
     if (executed && Object.hasOwn(data.accion_ejecutada?.detalles || {}, key)) executed.detalles={...(executed.detalles || {}),[key]:data.accion_ejecutada.detalles[key]};
+  const actionText = action?.result
+    ? [
+        typeof data.respuesta_consulta === 'string' ? data.respuesta_consulta.trim() : '',
+        actionReply(action.result),
+        typeof data.respuesta_adicional === 'string' ? data.respuesta_adicional.trim() : '',
+      ]
+        .filter(Boolean)
+        .filter((part, index, list) => list.indexOf(part) === index)
+        .join('\n\n')
+    : '';
   return {
-    texto: action?.warning || (action?.result ? actionReply(action.result) : data.respuesta),
+    texto: action?.warning || actionText || data.respuesta,
     accion_ejecutada: executed,
     cotizacion_generada: cotizacion,
     comparacion_materiales: isMaterialComparison(data.comparacion_materiales)

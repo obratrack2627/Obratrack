@@ -26,6 +26,7 @@ export const ACTION_TYPES = [
   "actualizar_avance",
   "agregar_material",
   "agregar_materiales",
+  "actualizar_material",
   "registrar_imprevisto",
   "registrar_pago",
   "crear_bitacora",
@@ -93,10 +94,31 @@ export function flattenActions(input: any, depth = 0): AIAction[] {
   if (actions.length > 30) fail("Solicita hasta 30 acciones por mensaje.");
   return actions.map(validateAction);
 }
+function deriveLogTitle(rawNote: unknown) {
+  const clean = typeof rawNote === "string" ? rawNote.trim().replace(/\s+/g, " ") : "";
+  if (!clean) return "";
+  const firstClause = clean.split(/[\n.;]/)[0]?.trim() || clean;
+  return firstClause.length > 70 ? `${firstClause.slice(0, 67).trimEnd()}...` : firstClause;
+}
+
 export function validateAction(raw: any): AIAction {
   if (!raw || typeof raw !== "object" || !ACTION_TYPES.includes(raw.tipo))
     fail("La IA propuso una acción que la plataforma no admite.");
-  const a: AIAction = relevantActionFields(JSON.parse(JSON.stringify(raw)));
+  const normalizedRaw =
+    raw.tipo === "crear_bitacora"
+      ? {
+          ...raw,
+          titulo: text(raw.titulo)
+            ? raw.titulo
+            : text(raw.nombre)
+              ? raw.nombre
+              : deriveLogTitle(raw.nota || raw.descripcion || raw.observacion || raw.resumen || raw.mensaje),
+          nota: text(raw.nota)
+            ? raw.nota
+            : raw.descripcion || raw.observacion || raw.resumen || raw.mensaje || raw.titulo || raw.nombre,
+        }
+      : raw;
+  const a: AIAction = relevantActionFields(JSON.parse(JSON.stringify(normalizedRaw)));
   if (
     a.tipo === "registrar_documento" &&
     ["cierre_diario", "acta_recepcion"].includes(a.categoria) &&
@@ -115,7 +137,7 @@ export function validateAction(raw: any): AIAction {
     };
     a.estado = aliases[a.estado.toLowerCase()] || a.estado;
   }
-  if (a.material_id) amount(a.cantidad_recibida, "la cantidad recibida", true);
+  if (a.tipo === "crear_bitacora" && a.material_id) amount(a.cantidad_recibida, "la cantidad recibida", true);
   if (
     a.categoria_gasto &&
     !["imprevisto", "mano_obra", "gasto_general"].includes(a.categoria_gasto)
@@ -123,6 +145,8 @@ export function validateAction(raw: any): AIAction {
     fail("Categoría de gasto no válida.");
   if (a.pagado !== undefined && typeof a.pagado !== "boolean")
     fail("Revisa si el pago está confirmado.");
+  if (a.comprado !== undefined && typeof a.comprado !== "boolean")
+    fail("Revisa si el material está comprado.");
   const required = (field: string) => {
     if (!text(a[field]))
       fail(
@@ -248,7 +272,7 @@ export function validateAction(raw: any): AIAction {
       fail("Indica la actividad que quieres actualizar.");
     amount(a.porcentaje_avance, "el avance");
   }
-  if (a.materiales !== undefined) {
+  if (a.materiales !== undefined && a.tipo !== "actualizar_material") {
     if (!Array.isArray(a.materiales) || a.materiales.length > 150)
       fail("Lista de materiales inválida.");
     a.materiales.forEach(material);
@@ -257,6 +281,37 @@ export function validateAction(raw: any): AIAction {
     if (a.materiales) {
       if (!a.materiales.length) fail("Faltan los materiales.");
     } else material(a);
+  }
+  if (a.tipo === "actualizar_material") {
+    if (a.cantidad !== undefined) amount(a.cantidad, "la cantidad de material", true);
+    if (a.materiales !== undefined) {
+      if (!Array.isArray(a.materiales) || !a.materiales.length || a.materiales.length > 150)
+        fail("Lista de materiales inválida.");
+      a.materiales.forEach((m: any) => {
+        if (!m || (!text(m.nombre) && !text(m.material_id)))
+          fail("Falta identificar el material a actualizar.");
+        if (m.cantidad !== undefined) amount(m.cantidad, "la cantidad de material", true);
+        if (m.precio_unitario !== undefined) amount(m.precio_unitario, "el precio unitario");
+        if (m.comprado !== undefined && typeof m.comprado !== "boolean")
+          fail("Revisa si el material está comprado.");
+        if (m.pagado !== undefined && typeof m.pagado !== "boolean")
+          fail("Revisa si el pago está confirmado.");
+      });
+    } else {
+      if (!text(a.nombre) && !text(a.material_id))
+        fail("Falta identificar el material a actualizar.");
+      if (
+        ![
+          a.comprado !== undefined,
+          a.pagado !== undefined,
+          text(a.proveedor),
+          a.precio_unitario !== undefined,
+          a.monto !== undefined,
+          a.cantidad !== undefined,
+        ].some(Boolean)
+      )
+        fail("Indica qué dato del material quieres actualizar.");
+    }
   }
   if (a.tipo === "registrar_pago") {
     amount(a.monto, "el pago", true);
@@ -588,6 +643,9 @@ export function parseChatResponse(raw: string) {
   }
   return {
     respuesta: parsed.respuesta.trim(),
+    ...(typeof parsed.respuesta_consulta === "string" && parsed.respuesta_consulta.trim()
+      ? { respuesta_consulta: parsed.respuesta_consulta.trim() }
+      : {}),
     ...(parsed.registro_propuesto &&
     typeof parsed.registro_propuesto === "object" &&
     !Array.isArray(parsed.registro_propuesto)

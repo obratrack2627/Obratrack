@@ -17,7 +17,11 @@ import { loadAIContext } from "./context";
 import { saveBudget, findBudget, type Presupuesto } from "@/lib/presupuestos";
 import { conversationHistory } from './conversation';
 import { operationsContext } from './operations-context';
-import { isAlternativeRequest } from './prompt';
+import {
+  isAlternativeRequest,
+  hasOtherWorkBeyondDeadline,
+  hasOtherWorkBeyondStatus,
+} from './prompt';
 import { checkActionPermissions } from "./permissions";
 import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
 import { randomUUID } from "node:crypto";
@@ -107,6 +111,13 @@ export async function readAIRequest(request: NextRequest) {
 }
 
 // Dependencias explícitas permiten probar la ruta sin una clave ni una base de producción.
+function needsSavedBudgets(message: string, history: { texto: string }[], projectId?: string) {
+  if (projectId) return true;
+  if (history.some((m) => /cotiz|presupuest|alternativ|opci/i.test(m.texto || ""))) return true;
+  const text = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return /\b(?:presupuest\w*|cotizac\w*|cotiz(?:a(?:mos|ste|ron)|ad[oa])|alternativ\w*|opci(?:on|ones)|anterior\w*|previ\w*|pasad\w*|ultim\w*|recuerd\w*|acuerd\w*|memoria|guardad\w*|ayer|sesion|repite|repetir|igual|parecid\w*|similar|basad\w*|retoma|continua)\b/.test(text);
+}
+
 export function createChatHandler(
   deps = {
     authorize: authorizeAI,
@@ -118,10 +129,16 @@ export function createChatHandler(
     try {
       const { client, user } = await deps.authorize(request);
       const body = await readAIRequest(request);
+      const deadlineOnly =
+        isProjectDeadlineQuestion(body.mensaje) &&
+        !hasOtherWorkBeyondDeadline(body.mensaje);
       const { company, context, service, tables } = await loadAIContext(
         client,
         user,
-        { projectsOnly: isProjectDeadlineQuestion(body.mensaje) },
+        {
+          projectsOnly: deadlineOnly,
+          includeBudgets: needsSavedBudgets(body.mensaje, body.historial, projectId),
+        },
       );
       if (!company)
         throw new AIError(
@@ -161,41 +178,86 @@ export function createChatHandler(
             403,
           );
         result.accion = actions.length === 1 ? actions[0] : actions.length ? { tipo: 'lote_acciones', acciones: actions } : null;
-        const broadcast = actions.find(
+        const broadcasts = actions.filter(
           (a) => a.tipo === "enviar_mensaje_equipo",
         );
-        if (!broadcast) return null;
+        if (!broadcasts.length) return null;
         if (service.getActivePlan() !== "pro_ia")
           throw new AIError(
             "PLAN_REQUIRED",
             "Los avisos al equipo requieren el plan Pro IA.",
             403,
           );
-        const plan = prepareCampaign(
-          user,
-          broadcast,
-          tables.usuarios,
-          service.getProyectos(),
-          currentId,
-        );
         const requestId =
           typeof body.request_id === "string" &&
           /^[a-f0-9-]{36}$/.test(body.request_id)
             ? body.request_id
             : randomUUID();
-        const action = await enqueueCampaign(
-          client,
-          user,
-          plan,
-          `web:${user.id}:${requestId}`,
-          "plataforma",
+        const broadcastActions = [];
+        for (let index = 0; index < broadcasts.length; index++) {
+          const broadcast = broadcasts[index];
+          const plan = prepareCampaign(
+            user,
+            broadcast,
+            tables.usuarios,
+            service.getProyectos(),
+            currentId,
+          );
+          const enqueued = await enqueueCampaign(
+            client,
+            user,
+            plan,
+            `web:${user.id}:${requestId}${index ? `:${index}` : ""}`,
+            "plataforma",
+          );
+          broadcastActions.push(enqueued);
+        }
+        const broadcastText = broadcastActions
+          .map((item) => item.resultado_texto)
+          .filter(Boolean)
+          .join("\n\n");
+        const remaining = actions.filter(
+          (a) => a.tipo !== "enviar_mensaje_equipo",
         );
+        if (remaining.length) {
+          result.accion =
+            remaining.length === 1
+              ? remaining[0]
+              : { tipo: "lote_acciones", acciones: remaining };
+          result.aviso_equipo = broadcastActions[0];
+          result.respuesta_adicional = [
+            typeof result.respuesta_adicional === "string"
+              ? result.respuesta_adicional
+              : "",
+            broadcastText,
+          ]
+            .filter(Boolean)
+            .join("\n\n");
+          result.respuesta = [
+            typeof result.respuesta_consulta === "string"
+              ? result.respuesta_consulta
+              : "",
+            result.respuesta,
+            broadcastText,
+          ]
+            .filter(Boolean)
+            .filter((part, idx, list) => list.indexOf(part) === idx)
+            .join("\n\n");
+          return null;
+        }
         return NextResponse.json(withPreferences(withNameEditContext(withPersonContext({
           ...result,
-          respuesta: action.resultado_texto,
+          respuesta: [
+            typeof result.respuesta_consulta === "string"
+              ? result.respuesta_consulta
+              : "",
+            broadcastText,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
           accion: null,
           cotizacion: null,
-          accion_ejecutada: action,
+          accion_ejecutada: broadcastActions[0],
         }, registrationDraft), pendingNameEdit), preferences.state));
       };
       if (!["admin", "supervisor", "terreno"].includes(user.rol))
@@ -217,14 +279,16 @@ export function createChatHandler(
         await finish(result, projectId, localRegistration);
         return NextResponse.json(result);
       }
-      if (isProjectDeadlineQuestion(body.mensaje)) {
+      if (deadlineOnly) {
         if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
         const verified = projectDeadlineAnswer(body.mensaje, tables.proyectos, projectId);
         if (verified) return NextResponse.json(withPreferences(withNameEditContext(withPersonContext(verified, registrationDraft), pendingNameEdit), preferences.state));
       }
       if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
       const referencedId = conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId);
-      const statusCommand = projectStatusCommand(body.mensaje, tables.proyectos, referencedId, body.historial);
+      const statusCommand = !hasOtherWorkBeyondStatus(body.mensaje)
+        ? projectStatusCommand(body.mensaje, tables.proyectos, referencedId, body.historial)
+        : null;
       if (statusCommand) {
         if (projectId && statusCommand.accion && statusCommand.accion.proyecto_id !== projectId) throw new AIError('PROJECT_CONTEXT', 'Estás en el chat de otra obra. Abre la obra indicada o usa la consulta general para cambiar su estado.', 422);
         await finish(statusCommand, projectId);

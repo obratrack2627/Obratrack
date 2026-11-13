@@ -126,17 +126,37 @@ function barcode(value: unknown) {
   return (10 - (sum % 10)) % 10 === check ? value.padStart(14, "0") : undefined;
 }
 
+const SPEC_STOP_WORDS = new Set([
+  "saco", "sacos", "bolsa", "bolsas", "caja", "cajas",
+  "tarro", "tarros", "lata", "latas", "botella", "botellas",
+  "paquete", "paquetes", "pack", "unidad", "unidades", "un", "und",
+  "de", "del", "la", "el", "los", "las", "para", "con", "en", "por",
+]);
+
+function splitJoinedUnits(text: string) {
+  return text.replace(/(\d)(kg|g|mm|cm|m|ml|l|lt|lts|w|kw|v|ah)\b/g, "$1 $2");
+}
+
+function significantSpecTokens(value: string) {
+  return splitJoinedUnits(normalize(value))
+    .split(" ")
+    .filter((word) => word && !SPEC_STOP_WORDS.has(word));
+}
+
 function matchesSpecification(value: string, full: string) {
-  const wanted = normalize(value);
-  const words = new Set(full.split(" "));
-  if (!wanted.split(" ").every((word) => words.has(word))) return false;
+  const expandedFull = splitJoinedUnits(full);
+  const wantedWords = significantSpecTokens(value);
+  if (!wantedWords.length) return true;
+  const words = new Set(expandedFull.split(" "));
+  if (!wantedWords.every((word) => words.has(word))) return false;
   // Una medida debe pertenecer a su unidad, aunque modelo y tamaño lleguen
   // juntos y la tienda los publique en otro orden (HP1630K 13mm / 13mm HP1630K).
+  const wanted = wantedWords.join(" ");
   const measures = wanted.matchAll(
     /\b\d+(?:\.\d+)?\s+(?:kg|g|mm|cm|m|ml|l|w|kw|v|ah)\b/g,
   );
   return Array.from(measures).every(([measure]) =>
-    ` ${full} `.includes(` ${measure} `),
+    ` ${expandedFull} `.includes(` ${measure} `),
   );
 }
 
@@ -174,10 +194,13 @@ export function parseCatalogProducts(
         `${product.productName} ${name} ${product.brand || ""}`,
       );
       if (tokens.length === 1 && ['cemento','yeso','arena','grava','taladro','martillo','clavo','tornillo','pintura','mortero','ladrillo','bloque','sierra'].includes(tokens[0])) {
-        const nameWords = normalize(name).split(' ');
-        const at = nameWords.findIndex((word) => word === tokens[0] || word === tokens[0] + 's' || word === tokens[0] + 'es');
         const prefixes = new Set(['de','del','el','la','saco','sacos','bolsa','bolsas','caja','cajas','pack','paquete', ...normalize(product.brand || '').split(' ')]);
-        if (at < 0 || !nameWords.slice(0, at).every((word) => prefixes.has(word))) continue;
+        const validLead = (rawTitle: string) => {
+          const words = normalize(rawTitle).split(' ');
+          const idx = words.findIndex((word) => word === tokens[0] || word === tokens[0] + 's' || word === tokens[0] + 'es');
+          return idx >= 0 && words.slice(0, idx).every((word) => prefixes.has(word));
+        };
+        if (!validLead(name) && !validLead(product.productName)) continue;
       }
       if (
         !tokens.every((t) =>
@@ -290,14 +313,12 @@ export function parseCatalogProducts(
   return result;
 }
 
-async function readCatalog(
+async function fetchCatalogTerm(
   provider: (typeof catalogProviders)[number],
   query: ConsultaMaterial,
+  term: string,
   fetcher: typeof fetch,
 ) {
-  const term = [query.producto, query.marca, query.modelo, query.presentacion]
-    .filter(Boolean)
-    .join(" ");
   // Estos catálogos rechazan espacios codificados como +; usar la codificación de la búsqueda pública.
   const params = `ft=${encodeURIComponent(term)}&_from=0&_to=19`;
   const graph = '{products(search:'+JSON.stringify(term)+',pageSize:20){items{name sku url_key stock_status price_range{minimum_price{final_price{value currency}}}}}}';
@@ -314,7 +335,7 @@ async function readCatalog(
     {
       cache: "no-store",
       headers: {
-        Accept: "application/json",
+        Accept: provider.tipo === 'sodimac' ? "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8" : "application/json",
         "User-Agent": "ObraTrack/1.0 (https://obratrack-5zwn.vercel.app)",
       },
       signal: AbortSignal.timeout(9000),
@@ -344,6 +365,20 @@ async function readCatalog(
     provider,
     query,
   );
+}
+
+async function readCatalog(
+  provider: (typeof catalogProviders)[number],
+  query: ConsultaMaterial,
+  fetcher: typeof fetch,
+) {
+  const cleanSpec = query.presentacion ? significantSpecTokens(query.presentacion).join(" ") : "";
+  const term = [query.producto, query.marca, query.modelo, cleanSpec].filter(Boolean).join(" ");
+  const offers = await fetchCatalogTerm(provider, query, term, fetcher);
+  if (offers.length > 0 || !cleanSpec) return offers;
+  const broadTerm = [query.producto, query.marca, query.modelo].filter(Boolean).join(" ");
+  if (!broadTerm || broadTerm === term) return offers;
+  return fetchCatalogTerm(provider, query, broadTerm, fetcher).catch(() => offers);
 }
 
 export async function compareMaterialPrices(

@@ -19,10 +19,10 @@ export function anotherTask(message: string, pendingName?: string) {
   const text = norm(message);
   if (message.split(/[;\n]|\by\b/i).some(personStart)) return false;
   if (
-    /^(?:(?:quiero|necesito|puedes)\s+)?(?:crea|crear|registra|registrar|agrega|agregar|agenda|agendar|cotiza|cotizar|envia|enviar)\b/.test(
+    /^(?:(?:quiero|necesito|puedes|por favor)\s+)?(?:crea|crear|registra|registrar|agrega|agregar|actualiza|actualizar|marca|marcar|agenda|agendar|asigna|asignar|cotiza|cotizar|busca|buscar|compara|comparar|cambia|cambiar|envia|enviar|manda|mandar|avisa|avisar|notifica|notificar|dime|muestra|cual|cuanto)\b/.test(
       text,
     ) &&
-    /\b(?:obra|proyecto|pago|abono|material|partida|actividad|bitacora|asistencia|documento|evento|visita|reporte|cotizacion|presupuesto|imprevisto|reclamo|mensaje)\b/.test(
+    /\b(?:obra|proyecto|pago|abono|saldo|material|madera|pino|cemento|fierro|ladrillo|volcanita|plancha|osb|arena|grava|herramienta|compra|comprad[oa]|pagad[oa]|proveedor|easy|sodimac|dimaco|partida|actividad|avance|estado|bitacora|asistencia|documento|evento|visita|reporte|cotizacion|presupuesto|imprevisto|reclamo|solicitud|mensaje|whatsapp|aviso|precio|cuadrilla|equipo|plazo|fecha)\b/.test(
       text,
     )
   )
