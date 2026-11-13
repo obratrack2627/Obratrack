@@ -1,7 +1,6 @@
 'use client';
 import { chileToday } from '@/lib/ai/project-deadlines';
 
-import ProjectReceptionPanel from '@/components/ProjectReceptionPanel';
 import ProjectPlanningReview from '@/components/ProjectPlanningReview';
 import DailyClosePanel from '@/components/DailyClosePanel';
 import ModalOverlay from '@/components/ModalOverlay';
@@ -293,7 +292,7 @@ export default function ProyectoGanttPage() {
           onAddActivity={() => { setActivityError(''); setIsAddModalOpen(true); }}
         />
 
-        <div className="px-4 sm:px-6 space-y-4"><ProjectPlanningReview project={proyecto} onChanged={loadData}/><ProjectReceptionPanel project={proyecto} onChanged={loadData}/></div>
+        <div className="px-4 sm:px-6 space-y-4"><ProjectPlanningReview project={proyecto} onChanged={loadData}/></div>
         {/* Sección Bitácora Diaria de Obra y Registro Fotográfico */}
         <div className="min-w-0 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200">

@@ -41,3 +41,4 @@
 - Compra, recepción parcial y pago de materiales son independientes. Pago desconocido no equivale a pagado ni a deuda confirmada. Incidentes internos nunca incrementan contrato. Adicionales modifican contrato/plazo solo por revisión explícita con respaldo del mandante.
 - Jornales desde asistencia y actas de recepción usan RPCs con actor verificado, recálculo nativo e idempotencia. No crear pagos al recibir materiales, adjuntar boletas, cerrar jornada o calcular jornales. Terreno no puede realizar operaciones de jefatura.
 - Registro de cuenta: RUT personal y nombre comercial opcionales; nunca exigir RUT de empresa. Si se informa RUT debe ser válido. Correo y sesión siguen verificados por Auth.
+- Entrega y recepción del mandante retirada de la interfaz y de ObraBot. No reintroducir el panel ni el registro de actas; los datos históricos se conservan sin mostrarse en Documentos. La recepción de materiales y los plazos de obra siguen vigentes.

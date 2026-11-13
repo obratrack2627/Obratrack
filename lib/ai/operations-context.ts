@@ -187,7 +187,6 @@ export function operationsContext(
                 "id",
                 "nombre",
                 "estado",
-                "recepcion_estado",
                 "dias_laborales",
                 "fechas_no_laborales",
               ]),

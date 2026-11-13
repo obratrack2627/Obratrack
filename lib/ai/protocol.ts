@@ -119,6 +119,8 @@ export function validateAction(raw: any): AIAction {
         }
       : raw;
   const a: AIAction = relevantActionFields(JSON.parse(JSON.stringify(normalizedRaw)));
+  if (a.tipo === 'registrar_documento' && a.categoria === 'acta_recepcion')
+    fail('La sección de entrega y recepción del mandante ya no está disponible.');
   if (
     a.tipo === "registrar_documento" &&
     ["cierre_diario", "acta_recepcion"].includes(a.categoria) &&

@@ -1,7 +1,6 @@
 'use client';
 import { chileToday } from '@/lib/ai/project-deadlines';
 
-import {ReceptionSummary} from '@/components/ProjectReceptionPanel';
 import {DailyCloseSummary, downloadDailyClose} from '@/components/DailyClosePanel';
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
@@ -82,7 +81,7 @@ export default function ProyectoDocumentosPage() {
     if (proj?.cliente_id) {
       setCliente(dataService.getClienteById(proj.cliente_id) || null);
     }
-    setDocumentos(dataService.getDocumentosObra(projectId));
+    setDocumentos(dataService.getDocumentosObra(projectId).filter(doc => doc.categoria !== 'acta_recepcion'));
   };
 
   useEffect(() => {
@@ -178,7 +177,6 @@ export default function ProyectoDocumentosPage() {
 
   const getCategoriaMeta = (cat: CategoriaDocumentoObra) => {
     switch (cat) {
-      case 'acta_recepcion': return {label:'Recepción',icon:CheckCircle2,color:'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'};
       case 'cierre_diario': return {label:'Cierre diario',icon:CheckCircle2,color:'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'};
       case 'contrato':
         return {
@@ -610,10 +608,9 @@ export default function ProyectoDocumentosPage() {
 
                     <button
                       type="button"
-                      disabled={doc.categoria==='acta_recepcion'}
                       onClick={() => handleEliminar(doc.id)}
                       className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
-                      title={doc.categoria==='acta_recepcion'?'El historial de recepciones se conserva':'Eliminar'}
+                      title="Eliminar"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -866,7 +863,6 @@ export default function ProyectoDocumentosPage() {
               <p className="text-xs text-gray-700 dark:text-gray-300">{docPreview.descripcion}</p>
             )}
 
-            {docPreview.recepcion_resumen && <ReceptionSummary summary={docPreview.recepcion_resumen}/>}
             {docPreview.cierre_resumen && <><DailyCloseSummary summary={docPreview.cierre_resumen}/><button type="button" className="rounded-xl bg-[#FF6A00] px-4 py-2 text-sm font-bold text-white" onClick={()=>void downloadDailyClose(docPreview.cierre_resumen!).catch(()=>showToast('No se pudo descargar el cierre.'))}>Descargar cierre PDF</button></>}
             {docPreview.categoria === 'correo' && (
               <div className="bg-[#FAF8F5] dark:bg-[#1A222D] p-4 rounded-xl border border-kraft-200 dark:border-[#263040] space-y-2 text-xs">

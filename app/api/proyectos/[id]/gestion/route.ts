@@ -34,11 +34,7 @@ export async function POST(
       );
     let result;
     if (body.operacion === "recepcion")
-      result = await client.rpc("registrar_recepcion_obra", {
-        p_id: body.id,
-        p_proyecto: params.id,
-        p_datos: body.datos,
-      });
+      throw new AIError('FEATURE_REMOVED', 'La sección de entrega y recepción del mandante ya no está disponible.', 410);
     else if (body.operacion === "jornal") {
       const attendance = await client
         .from("asistencia_obreros")

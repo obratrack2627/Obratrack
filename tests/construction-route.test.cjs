@@ -37,26 +37,11 @@ test("gestión niega obra ajena, asistencia ajena y operaciones desconocidas ant
     assert.equal((await POST(request(body), context)).status, status);
   assert.equal(fixture.rpcCalls.length, 0);
 });
-test("gestión envía solo parámetros permitidos sin aceptar actor ni empresa propuestos", async () => {
-  fixture.handleRPC("registrar_recepcion_obra", () => ({
-    data: { id: "op" },
-    error: null,
-  }));
-  const response = await POST(
-    request({
-      id: "op",
-      operacion: "recepcion",
-      datos: { estado: "conforme" },
-      p_actor: "foreign",
-      empresa_id: "other",
-    }),
-    params,
-  );
-  assert.equal(response.status, 200);
-  assert.deepEqual(fixture.rpcCalls.at(-1), {
-    name: "registrar_recepcion_obra",
-    params: { p_id: "op", p_proyecto: "p", p_datos: { estado: "conforme" } },
-  });
+test("recepción retirada no ejecuta RPC ni crea documentos", async () => {
+  const response = await POST(request({ id: "op", operacion: "recepcion", datos: { estado: "conforme" } }), params);
+  assert.equal(response.status, 410);
+  assert.equal((await response.json()).code, "FEATURE_REMOVED");
+  assert.equal(fixture.rpcCalls.length, 0);
 });
 test("propuesta desactualizada no anuncia guardado y conserva un error útil", async () => {
   fixture.handleRPC("reprogramar_faenas", () => ({

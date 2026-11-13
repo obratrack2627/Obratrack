@@ -58,62 +58,16 @@ test("Gantt móvil: terminar y corregir avance actualiza el estado sin tocar el 
   await noOverflow(page);
 });
 
-test("recepción conforme registra acta y mantiene cuentas pendientes", async ({
-  page,
-}) => {
+test("obra terminada no muestra entrega y recepción", async ({ page }) => {
   const db = await setup(page, {}, true);
-  db.proyectos[0] = {
-    ...db.proyectos[0],
-    estado: "terminado",
-    finalizada_automaticamente: true,
-  };
+  db.proyectos[0].estado = "terminado";
   db.actividades = [task(100)];
-  await page.route("**/api/proyectos/p-existing/gestion", async (route) => {
-    const body = route.request().postDataJSON();
-    expect(body.operacion).toBe("recepcion");
-    expect(body.datos.recibido_por).toBe("Juan Pérez");
-    const doc = {
-      id: body.id,
-      proyecto_id: "p-existing",
-      categoria: "acta_recepcion",
-      nombre: "Recepción · Terraza",
-      fecha_documento: body.datos.fecha,
-      recepcion_resumen: {
-        ...body.datos,
-        registrado_por: "Jefe",
-        registrado_en: new Date().toISOString(),
-      },
-    };
-    db.documentos_obra = [doc];
-    db.proyectos[0].recepcion_estado = "conforme";
-    await route.fulfill({ json: { registro: doc } });
-  });
   await page.goto("/proyectos/p-existing/gantt");
-  await page
-    .getByRole("button", { name: "Registrar recepción", exact: true })
-    .click();
-  await page
-    .getByRole("combobox", { name: "Resultado", exact: true })
-    .selectOption("conforme");
-  await page
-    .getByLabel("Nombre del mandante o representante")
-    .fill("Juan Pérez");
-  await page
-    .getByRole("button", { name: "Confirmar recepción registrada" })
-    .click();
-  await expect(
-    page.getByText("Recibida conforme", { exact: true }).first(),
-  ).toBeVisible();
-  await page.getByText("Saldos de la obra", { exact: true }).click();
-  await expect(
-    page.getByText("Por cobrar al cliente", { exact: true }),
-  ).toBeVisible();
-  expect(db.proyectos[0].monto_cotizado).toBe(3000000);
-  expect(db.pagos || []).toHaveLength(0);
-  await page.getByText("Historial de recepciones (1)").click();
-  await expect(
-    page.getByText("Mandante o representante: Juan Pérez"),
-  ).toBeVisible();
+  await expect(page.getByText("Cargando Carta Gantt...", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Bitácora", exact: true })).toBeVisible();
+  await expect(page.getByText("Entrega y recepción", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Registrar recepción", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Saldos de la obra", { exact: true })).toHaveCount(0);
 });
 
 test("jornal desde asistencia propone medio día y extras y queda por pagar", async ({
@@ -253,38 +207,16 @@ test("reprogramación muestra propuesta y pide motivo, conserva entrega si no se
   });
 });
 
-test("un rechazo del servidor conserva recepción sin anunciar guardado", async ({
-  page,
-}) => {
+test("Documentos oculta actas de recepción anteriores y conserva los demás archivos", async ({ page }) => {
   const db = await setup(page, {}, true);
-  db.proyectos[0].estado = "terminado";
-  db.actividades = [task(100)];
-  await page.route("**/api/proyectos/p-existing/gestion", (route) =>
-    route.fulfill({
-      status: 409,
-      json: { error: "La obra cambió; revisa las partidas." },
-    }),
-  );
-  await page.goto("/proyectos/p-existing/gantt");
-  await page
-    .getByRole("button", { name: "Registrar recepción", exact: true })
-    .click();
-  await page
-    .getByLabel("Nombre del mandante o representante")
-    .fill("Juan Pérez");
-  await page
-    .getByLabel("Observaciones", { exact: true })
-    .fill("Falta rematar la puerta");
-  await page
-    .getByRole("button", { name: "Confirmar recepción registrada" })
-    .click();
-  await expect(
-    page.getByText("La obra cambió; revisa las partidas.", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("textbox", { name: "Observaciones", exact: true }),
-  ).toHaveValue("Falta rematar la puerta");
-  expect(db.documentos_obra || []).toHaveLength(0);
+  db.documentos_obra = [
+    { id: "legacy-reception", proyecto_id: "p-existing", empresa_id: company, categoria: "acta_recepcion", nombre: "Acta histórica del mandante", fecha_documento: "2026-11-13" },
+    { id: "contract", proyecto_id: "p-existing", empresa_id: company, categoria: "contrato", nombre: "Contrato vigente", fecha_documento: "2026-11-13" },
+  ];
+  await page.goto("/proyectos/p-existing/documentos");
+  await expect(page.getByText("Contrato vigente", { exact: true })).toBeVisible();
+  await expect(page.getByText("Acta histórica del mandante", { exact: true })).toHaveCount(0);
+  expect(db.documentos_obra).toHaveLength(2);
 });
 
 test("registro de persona natural permite omitir RUT y nombre comercial", async ({

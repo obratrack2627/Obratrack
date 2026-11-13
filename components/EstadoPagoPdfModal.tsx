@@ -502,7 +502,7 @@ export default function EstadoPagoPdfModal({
               </div>
               <div className="border-t border-gray-400 pt-2">
                 <p className="font-bold text-gray-900">
-                  {cliente?.nombre || 'Mandante / Recepción Conforme'}
+                  {cliente?.nombre || 'Mandante'}
                 </p>
                 <p>Aprobación Estado de Pago {resumen.folio}</p>
               </div>

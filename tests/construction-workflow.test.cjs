@@ -108,7 +108,7 @@ test("recepción exige faenas completas, resultado y mandante, y observaciones c
     input,
   );
 });
-test("ObraBot prepara un acta sin simular pagos ni cambiar contrato y terreno no puede recibir la obra", () => {
+test("ObraBot rechaza actas de recepción retiradas sin modificar documentos, pagos ni contrato", () => {
   const service = isolatedState(
     user,
     { usuarios: [user], proyectos: [project], actividades: [task("a", 100)] },
@@ -122,14 +122,10 @@ test("ObraBot prepara un acta sin simular pagos ni cambiar contrato y terreno no
     recibido_por: "Juan Pérez",
     fecha_documento: "2026-11-13",
   };
-  const plan = planWhatsAppActions(service, action);
-  assert.equal(plan.changed.documentos_obra.length, 1);
-  assert.equal(
-    plan.changed.documentos_obra[0].recepcion_resumen.recibido_por,
-    "Juan Pérez",
-  );
-  assert.equal(plan.changed.pagos.length, 0);
-  assert.equal(plan.changed.proyectos.length, 0);
+  assert.throws(() => planWhatsAppActions(service, action), /ya no está disponible/);
+  assert.equal(service.getDocumentosObra("p").length, 0);
+  assert.equal(service.getPagos("p").length, 0);
+  assert.equal(service.getProyectoById("p").monto_cotizado, project.monto_cotizado);
   assert.throws(() =>
     checkActionPermissions(
       { id: "w", rol: "terreno" },
@@ -355,7 +351,7 @@ test("validación de lucas compara tarifa diaria, no el total derivado de medio 
   );
 });
 
-test("foto de recepción en WhatsApp se adjunta al acta como una operación y conserva el contexto de obra", () => {
+test("una foto no habilita actas de recepción retiradas en WhatsApp", () => {
   const { evidenceActions } = require("../lib/whatsapp/evidence.ts");
   const action = {
     tipo: "registrar_documento",
@@ -375,7 +371,8 @@ test("foto de recepción en WhatsApp se adjunta al acta como una operación y co
     "whatsapp-evidencias:co/boss/photo.jpg",
   ]);
   assert.equal(result.attachment.proyecto_id, "p");
-  assert.doesNotThrow(() =>
+  assert.throws(() =>
     checkActionPermissions(user, result.actions, "Recibió conforme"),
+    /ya no está disponible/,
   );
 });
