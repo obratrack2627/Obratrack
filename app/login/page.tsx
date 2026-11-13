@@ -399,7 +399,7 @@ function SignUpView(props: SignUpViewProps) {
                 htmlFor="signup-rut"
                 className="text-[13px] font-medium text-[#3A3835] dark:text-gray-300"
               >
-                RUT personal
+                RUT personal (opcional)
               </label>
               {props.rut && !isRutValid && (
                 <span className="text-[11px] text-red-600 dark:text-red-400">Inválido</span>
@@ -410,7 +410,6 @@ function SignUpView(props: SignUpViewProps) {
               name="rut"
               type="text"
               maxLength={12}
-              required
               placeholder="12.345.678-5"
               value={props.rut}
               onChange={(e) => props.onRutChange(formatRUT(e.target.value))}

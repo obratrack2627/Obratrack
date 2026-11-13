@@ -41,10 +41,7 @@ export function validateSignUpFields(args: SignUpValidationInput): string | null
     return 'Ingresa tu nombre completo.';
   }
   const cleanRut = args.rut.trim();
-  if (!cleanRut) {
-    return 'Ingresa tu RUT personal.';
-  }
-  if (!validarRutChileno(cleanRut)) {
+  if (cleanRut && !validarRutChileno(cleanRut)) {
     return 'El RUT ingresado no es válido. Revisa el dígito verificador (ej: 12.345.678-5).';
   }
   const cleanEmail = sanitizeEmail(args.email);

@@ -22,7 +22,10 @@ interface ValidarRegistroBody {
 export async function POST(request: NextRequest) {
   try {
     const origin = request.headers.get('origin');
-    if (origin && origin !== request.nextUrl.origin) {
+    // Next puede construir nextUrl con el host interno (0.0.0.0) al servir detrás de un proxy.
+    const host = request.headers.get('host');
+    const publicOrigin = host ? `${request.nextUrl.protocol}//${host}` : request.nextUrl.origin;
+    if (origin && origin !== publicOrigin) {
       return NextResponse.json(
         { ok: false, error: 'El origen de la solicitud no está permitido.' },
         { status: 403 },

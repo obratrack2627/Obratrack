@@ -76,7 +76,8 @@ test('mapSupabaseAuthError y validateSignUpFields traducen errores de base de da
   assert.match(mapSupabaseAuthError('CONTACT_DUPLICATE'),/RUT, número de teléfono o correo/);
   assert.match(mapSupabaseAuthError('CONTACT_INVALID_PHONE'),/teléfono ingresado no es válido/);
   assert.match(mapSupabaseAuthError('REGISTRATION_DETAILS_REQUIRED'),/Completa tu nombre completo y RUT personal/);
-  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),/Ingresa tu RUT personal/);
+  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),null);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-9',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),/RUT ingresado no es válido/);
   assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 ',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),/número de teléfono válido/);
   assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),null);
   assert.match(mapContactDatabaseError({code:'23505',message:'duplicate key value violates unique constraint "usuarios_rut_key"'}),/RUT ya está registrado/);
