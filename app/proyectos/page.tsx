@@ -49,6 +49,8 @@ import {
 import Navbar from '@/components/Navbar';
 import PresupuestosPanel from '@/components/PresupuestosPanel';
 import { dataService } from '@/lib/data-service';
+import { canonicalPhone } from '@/lib/phone';
+import { isValidEmail, sanitizeEmail } from '@/lib/auth/registration-validation';
 import { Proyecto, Cliente, Usuario, SubscriptionPlanId, ProjectStatus } from '@/types/database';
 import { formatDate, formatThousands, parseThousands } from '@/lib/utils';
 import { getCoordenadasComuna } from '@/lib/chile-locations';
@@ -88,6 +90,10 @@ export default function ProyectosPage() {
   // Formulario nuevo proyecto
   const [nombre, setNombre] = useState('');
   const [clienteId, setClienteId] = useState('');
+  const [nuevoCliente, setNuevoCliente] = useState(false);
+  const [clienteNombre, setClienteNombre] = useState('');
+  const [clienteTelefono, setClienteTelefono] = useState('');
+  const [clienteEmail, setClienteEmail] = useState('');
   const [montoCotizado, setMontoCotizado] = useState('');
   const [fechaInicio, setFechaInicio] = useState(chileToday());
   const [fechaTermino, setFechaTermino] = useState(
@@ -139,9 +145,6 @@ export default function ProyectosPage() {
     setClientes(cls);
     setUsuarios(usrs);
     setActivePlan(plan);
-    if (cls.length > 0 && !clienteId) {
-      setClienteId(cls[0].id);
-    }
   };
 
   useEffect(() => {
@@ -180,10 +183,31 @@ export default function ProyectosPage() {
 
     try {
       setCreateError(null);
+      if (!activeUser?.empresa_id) throw new Error('Inicia sesión antes de crear una obra.');
+      let assignedClientId = clienteId;
+      if (nuevoCliente) {
+        const phone = canonicalPhone(clienteTelefono);
+        const email = sanitizeEmail(clienteEmail).toLowerCase();
+        if (!clienteNombre.trim() || !phone || !isValidEmail(email)) {
+          throw new Error('Completa el nombre, un teléfono válido y el correo del nuevo cliente.');
+        }
+        const existing = dataService.getClientes().find(c =>
+          canonicalPhone(c.telefono || '') === phone || (c.email || '').toLowerCase() === email);
+        if (existing) throw new Error(`El teléfono o correo ya pertenece a ${existing.nombre}. Selecciona ese cliente existente.`);
+        if (dataService.getActivePlan() === 'gratis' && dataService.getProyectos().some(p => p.estado === 'activo')) {
+          throw new Error('El Plan Gratis permite una obra activa. Actualiza tu plan para crear otra.');
+        }
+        assignedClientId = dataService.createCliente({
+          empresa_id: activeUser.empresa_id, nombre: clienteNombre.trim(), telefono: `+${phone}`, email,
+        }).id;
+        // Conservar la ficha si un paso posterior falla: el reintento usa el mismo cliente.
+        setClienteId(assignedClientId);
+        setNuevoCliente(false);
+      }
       dataService.createProyecto(
         {
-          empresa_id: activeUser?.empresa_id || 'e1111111-1111-4111-a111-111111111111',
-          cliente_id: clienteId || undefined,
+          empresa_id: activeUser.empresa_id,
+          cliente_id: assignedClientId || undefined,
           nombre: nombre.trim(),
           descripcion: descripcion.trim(),
           direccion: direccion.trim(),
@@ -205,6 +229,10 @@ export default function ProyectosPage() {
 
       setIsModalOpen(false);
       setNombre('');
+      setClienteId('');
+      setClienteNombre('');
+      setClienteTelefono('');
+      setClienteEmail('');
       setDescripcion('');
       setDireccion('');
       setLugarReferencia('');
@@ -983,17 +1011,32 @@ export default function ProyectosPage() {
                     Cliente
                   </label>
                   <select
-                    value={clienteId}
-                    onChange={(e) => setClienteId(e.target.value)}
+                    aria-label="Cliente de la nueva obra"
+                    value={nuevoCliente ? '__nuevo__' : clienteId}
+                    onChange={(e) => { setNuevoCliente(e.target.value === '__nuevo__'); setClienteId(e.target.value === '__nuevo__' ? '' : e.target.value); }}
                     className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-lg text-sm focus:outline-none focus:border-obra-orange"
                   >
                     <option value="">Cliente Particular / Sin registrar</option>
+                    <option value="__nuevo__">+ Crear nuevo cliente</option>
                     {clientes.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.nombre}
                       </option>
                     ))}
                   </select>
+                  {nuevoCliente && (
+                    <div className="mt-3 space-y-3 rounded-xl border border-kraft-200 dark:border-[#263040] p-3">
+                      <label className="block text-xs">Nombre del cliente *
+                        <input required value={clienteNombre} onChange={e => setClienteNombre(e.target.value)} className="mt-1 w-full rounded-lg border border-kraft-200 bg-kraft-50 dark:bg-[#0F141C] px-3 py-2" />
+                      </label>
+                      <label className="block text-xs">Teléfono del cliente *
+                        <input required type="tel" placeholder="+56 9 1234 5678" value={clienteTelefono} onChange={e => setClienteTelefono(e.target.value)} className="mt-1 w-full rounded-lg border border-kraft-200 bg-kraft-50 dark:bg-[#0F141C] px-3 py-2" />
+                      </label>
+                      <label className="block text-xs">Correo del cliente *
+                        <input required type="email" value={clienteEmail} onChange={e => setClienteEmail(e.target.value)} className="mt-1 w-full rounded-lg border border-kraft-200 bg-kraft-50 dark:bg-[#0F141C] px-3 py-2" />
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <div>

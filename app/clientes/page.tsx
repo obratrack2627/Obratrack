@@ -2,6 +2,7 @@
 import MoneyAmount from "@/components/MoneyAmount";
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
+import ClientProjectAssignments from '@/components/ClientProjectAssignments';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
@@ -71,6 +72,7 @@ export default function ClientesPage() {
   const [email, setEmail] = useState('');
   const [rut, setRut] = useState('');
   const [direccion, setDireccion] = useState('');
+  const [obrasSeleccionadas, setObrasSeleccionadas] = useState<string[]>([]);
 
   // Formulario editar cliente
   const [editNombre, setEditNombre] = useState('');
@@ -78,6 +80,23 @@ export default function ClientesPage() {
   const [editEmail, setEditEmail] = useState('');
   const [editRut, setEditRut] = useState('');
   const [editDireccion, setEditDireccion] = useState('');
+  const [editObras, setEditObras] = useState<string[]>([]);
+  const [originalEditObras, setOriginalEditObras] = useState<string[]>([]);
+
+  const assignProjects = (clientId: string, selected: string[], originallyAssigned: string[] = []) => {
+    for (const obra of dataService.getProyectos()) {
+      if (selected.includes(obra.id) && obra.cliente_id !== clientId) {
+        dataService.updateProyecto(obra.id, { cliente_id: clientId });
+      } else if (!selected.includes(obra.id) && originallyAssigned.includes(obra.id) && obra.cliente_id === clientId) {
+        dataService.updateProyecto(obra.id, { cliente_id: '' });
+      }
+    }
+  };
+
+  const confirmClientChanges = async (message: string) => {
+    try { await dataService.confirmarCambios(); showToast(message); }
+    catch (error) { showToast(error instanceof Error ? error.message : 'Cambios pendientes de sincronización.'); }
+  };
 
   const loadData = () => {
     const cls = dataService.getClientes();
@@ -171,7 +190,7 @@ export default function ClientesPage() {
 
     const activeUser = dataService.getActiveUser();
 
-    dataService.createCliente({
+    const created = dataService.createCliente({
       empresa_id: activeUser?.empresa_id || 'e1111111-1111-4111-a111-111111111111',
       nombre: nombre.trim(),
       telefono: checked.phoneValue,
@@ -179,6 +198,7 @@ export default function ClientesPage() {
       rut: rut.trim(),
       direccion: direccion.trim(),
     });
+    assignProjects(created.id, obrasSeleccionadas);
 
     setIsCreateModalOpen(false);
     setNombre('');
@@ -186,8 +206,9 @@ export default function ClientesPage() {
     setEmail('');
     setRut('');
     setDireccion('');
+    setObrasSeleccionadas([]);
     loadData();
-    showToast(`Cliente "${nombre.trim()}" registrado con éxito.`);
+    void confirmClientChanges(`Cliente "${nombre.trim()}" y obras asociadas guardados.`);
   };
 
   const handleOpenEdit = (cliente: Cliente) => {
@@ -198,6 +219,9 @@ export default function ClientesPage() {
     setEditEmail(cliente.email || '');
     setEditRut(cliente.rut || '');
     setEditDireccion(cliente.direccion || '');
+    const assigned = dataService.getProyectos().filter(p => p.cliente_id === cliente.id).map(p => p.id);
+    setEditObras(assigned);
+    setOriginalEditObras(assigned);
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -222,10 +246,11 @@ export default function ClientesPage() {
       rut: editRut.trim(),
       direccion: editDireccion.trim(),
     });
+    assignProjects(editingCliente.id, editObras, originalEditObras);
 
     setEditingCliente(null);
     loadData();
-    showToast(`Datos del cliente "${editNombre.trim()}" actualizados.`);
+    void confirmClientChanges(`Cliente "${editNombre.trim()}" y obras asociadas guardados.`);
   };
 
   const handleConfirmDelete = async () => {
@@ -939,6 +964,8 @@ export default function ClientesPage() {
                 />
               </div>
 
+              <ClientProjectAssignments proyectos={proyectos} clientes={clientes} selected={obrasSeleccionadas} onChange={setObrasSeleccionadas} />
+
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-kraft-200">
                 <button
                   type="button"
@@ -1044,6 +1071,8 @@ export default function ClientesPage() {
                   className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-sans"
                 />
               </div>
+
+              <ClientProjectAssignments proyectos={proyectos} clientes={clientes} selected={editObras} onChange={setEditObras} />
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-kraft-200">
                 <button
