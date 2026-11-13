@@ -345,7 +345,7 @@ function SignUpView(props: SignUpViewProps) {
   const hasTypedEmail = sanitizeEmail(props.signupEmail).length > 0;
   const isEmailValid = !hasTypedEmail || isValidEmail(props.signupEmail);
   const emailStateClass = isEmailValid ? '' : 'border-red-400 focus:border-red-500';
-  const hasTypedPhone = props.telefono.replace(/\D/g, '').length > 2;
+  const hasTypedPhone = props.telefono.replace(/\D/g, '').length > 3;
   const isPhoneValid = !hasTypedPhone || Boolean(canonicalPhone(props.telefono));
   const phoneStateClass = isPhoneValid ? '' : 'border-red-400 focus:border-red-500';
 

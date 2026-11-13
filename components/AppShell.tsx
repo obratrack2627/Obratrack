@@ -13,13 +13,15 @@ import WebSession from '@/components/WebSession';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  // Raíz (/), /login y /actualizar-password son vistas de autenticación sin Sidebar
+  // Raíz (/), /login, /precios y /actualizar-password son vistas públicas o de autenticación sin Sidebar
   const isAuthPage =
     !pathname ||
     pathname === '/' ||
     pathname === '/login' ||
     pathname.startsWith('/auth/') ||
     pathname.startsWith('/login') ||
+    pathname === '/precios' ||
+    pathname.startsWith('/precios') ||
     pathname === '/actualizar-password' ||
     pathname.startsWith('/actualizar-password');
 

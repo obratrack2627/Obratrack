@@ -7,11 +7,19 @@ export default function WebSession() {
   useEffect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
-    const refresh = (token: string) => {
+    const refresh = (token: string, allowRenew = true) => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         void establishWebSession(token).catch(async error => {
           if (disposed || ![401,403].includes(error.status)) return;
+          if (error.status === 401 && allowRenew) {
+            const { data } = await supabase.auth.refreshSession();
+            if (!disposed && data.session?.access_token && data.session.access_token !== token) {
+              refresh(data.session.access_token, false);
+              return;
+            }
+          }
+          if (disposed) return;
           dataService.clearActiveUser();
           await clearWebSession();
           window.location.replace('/login');

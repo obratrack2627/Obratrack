@@ -111,6 +111,13 @@ export default function CopilotoObreroPage() {
     const savedChat = dataService.getChatSessionHistory();
     if (savedChat && Array.isArray(savedChat) && savedChat.length > 0) {
       setMensajesChat(savedChat.map(m=>m.id?.startsWith('m-init')?{...m,texto:INITIAL_CHAT_MESSAGE.texto,sugerencias:INITIAL_CHAT_MESSAGE.sugerencias}:m));
+    } else {
+      setMensajesChat([
+        {
+          ...INITIAL_CHAT_MESSAGE,
+          timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
     }
     try {
       const intent = new URLSearchParams(window.location.search).get('intent');
