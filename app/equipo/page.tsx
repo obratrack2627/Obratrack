@@ -20,6 +20,8 @@ import {
   MessageSquare,
   BadgeCheck,
   Terminal,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
@@ -45,9 +47,10 @@ export default function EquipoPage() {
   const [projectId, setProjectId] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Filtros
+  // Filtros y Vista
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'todos' | UserRole>('todos');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   // Formulario nuevo trabajador / maestro
   const [nombre, setNombre] = useState('');
@@ -276,7 +279,7 @@ export default function EquipoPage() {
 
         {/* Barra de Filtros y Búsqueda */}
         <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3 min-w-0">
-          {/* Fila Superior: Buscador */}
+          {/* Fila Superior: Buscador + Selector de Vista */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 min-w-0">
             <div className="relative flex-1 min-w-0">
               <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -297,6 +300,37 @@ export default function EquipoPage() {
                   ✕
                 </button>
               )}
+            </div>
+
+            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+              <div className="flex items-center gap-1 bg-kraft-50 dark:bg-[#0F141C] p-1 rounded-xl border border-kraft-200 dark:border-[#263040] h-10">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={`px-2.5 h-full rounded-lg text-xs font-heading font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-navy-900 text-white dark:bg-white dark:text-navy-900 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
+                  }`}
+                  title="Vista en Lista"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Lista</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  className={`px-2.5 h-full rounded-lg text-xs font-heading font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-navy-900 text-white dark:bg-white dark:text-navy-900 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
+                  }`}
+                  title="Vista en Tarjetas"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Tarjetas</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -391,19 +425,19 @@ export default function EquipoPage() {
           </div>
         </div>
 
-        {/* Grid de Trabajadores */}
+        {/* Listado de Trabajadores */}
         {filteredUsers.length === 0 ? (
-          <div className="bg-white border-2 border-dashed border-[#E5DFC9] rounded-3xl p-10 text-center max-w-xl mx-auto space-y-4">
-            <div className="w-16 h-16 rounded-3xl bg-[#FAF8F5] border border-[#E5DFC9] flex items-center justify-center mx-auto text-[#FF6A00]">
+          <div className="bg-white dark:bg-[#141A23] border-2 border-dashed border-[#E5DFC9] dark:border-[#263040] rounded-3xl p-10 text-center max-w-xl mx-auto space-y-4">
+            <div className="w-16 h-16 rounded-3xl bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] flex items-center justify-center mx-auto text-[#FF6A00]">
               <HardHat className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="font-heading font-black text-xl text-[#1E1E1E]">
+              <h3 className="font-heading font-black text-xl text-[#1E1E1E] dark:text-white">
                 {searchTerm || roleFilter !== 'todos'
                   ? 'No se encontraron miembros'
                   : 'No tienes trabajadores registrados'}
               </h3>
-              <p className="text-xs text-gray-500 font-sans mt-1.5 max-w-md mx-auto leading-relaxed">
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-sans mt-1.5 max-w-md mx-auto leading-relaxed">
                 {searchTerm || roleFilter !== 'todos'
                   ? 'Prueba modificando tus filtros o el término de búsqueda.'
                   : 'Agrega a tus maestros, capataces y supervisores para vincularlos a sus obras.'}
@@ -415,7 +449,7 @@ export default function EquipoPage() {
                   setSearchTerm('');
                   setRoleFilter('todos');
                 }}
-                className="px-4 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 text-xs font-bold rounded-xl transition-all font-heading"
+                className="px-4 py-2 bg-kraft-100 hover:bg-kraft-200 dark:bg-[#1E2530] dark:hover:bg-[#263040] text-navy-900 dark:text-white text-xs font-bold rounded-xl transition-all font-heading"
               >
                 Limpiar filtros
               </button>
@@ -429,15 +463,212 @@ export default function EquipoPage() {
               </button>
             )}
           </div>
+        ) : viewMode === 'list' ? (
+          /* Vista Moderna en Lista Compacta */
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl overflow-hidden shadow-sm">
+            <div className="hidden lg:grid lg:grid-cols-12 gap-4 px-5 py-3 bg-[#FAF8F5] dark:bg-[#1A222D] border-b border-kraft-200 dark:border-[#263040] text-[11px] font-mono font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <div className="col-span-4">Integrante y Rol</div>
+              <div className="col-span-3">Contacto / WhatsApp</div>
+              <div className="col-span-3">Obras Asignadas</div>
+              <div className="col-span-1 text-center">Canal</div>
+              <div className="col-span-1 text-right">Acciones</div>
+            </div>
+
+            <div className="divide-y divide-kraft-100 dark:divide-[#1E2530]">
+              {filteredUsers.map((user) => {
+                const roleBadge =
+                  user.rol === 'admin'
+                    ? 'bg-navy-800 text-white'
+                    : user.rol === 'supervisor'
+                    ? 'bg-obra-orange-light dark:bg-obra-orange/15 text-obra-orange border border-obra-orange/20'
+                    : 'bg-obra-green-light dark:bg-obra-green/15 text-obra-green border border-obra-green/20';
+
+                const cleanPhone = canonicalPhone(user.telefono_whatsapp || '');
+                const obrasAsignadas = proyectos.filter((p) =>
+                  (p.trabajadores_ids || []).includes(user.id)
+                );
+
+                return (
+                  <div
+                    key={user.id}
+                    data-team-member={user.id}
+                    className="px-4 py-3.5 sm:px-5 grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 items-start lg:items-center hover:bg-kraft-50/70 dark:hover:bg-[#1A222D]/60 transition-colors"
+                  >
+                    {/* Integrante y Rol */}
+                    <div className="lg:col-span-4 flex items-center justify-between gap-3 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-kraft-100 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] flex items-center justify-center font-bold text-navy-900 dark:text-white font-heading text-sm shrink-0">
+                          {user.nombre.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-heading font-bold text-sm text-navy-900 dark:text-white truncate">
+                              {user.nombre}
+                            </h3>
+                            <span
+                              className={`inline-block text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md shrink-0 ${roleBadge}`}
+                            >
+                              {user.rol === 'admin'
+                                ? 'Administrador'
+                                : user.rol === 'supervisor'
+                                ? 'Supervisor'
+                                : 'Terreno'}
+                            </span>
+                          </div>
+                          {user.rut && (
+                            <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                              RUT {formatRUT(user.rut)}
+                            </p>
+                          )}
+                          {!!user.especialidades?.length && (
+                            <div className="mt-1.5 flex flex-wrap gap-1" aria-label={`Especialidades de ${user.nombre}`}>
+                              {user.especialidades.map((name) => (
+                                <span
+                                  key={name}
+                                  className="max-w-full break-words rounded-md border border-obra-orange/20 bg-obra-orange/10 px-1.5 py-0.5 text-[10px] font-sans text-gray-700 dark:text-gray-200"
+                                >
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Canal visible rápido en móvil */}
+                      <span className="lg:hidden inline-flex items-center gap-1 text-[10px] font-mono text-gray-500 dark:text-gray-400 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] px-2 py-0.5 rounded-md shrink-0">
+                        <HardHat className="w-3 h-3 text-obra-orange" />
+                        <span>{user.rol === 'admin' || user.is_dev ? 'Panel web' : 'WhatsApp'}</span>
+                      </span>
+                    </div>
+
+                    {/* Contacto / WhatsApp */}
+                    <div className="lg:col-span-3 space-y-1 text-xs font-mono text-gray-600 dark:text-gray-300 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        {cleanPhone ? (
+                          <>
+                            <a
+                              href={`tel:+${cleanPhone}`}
+                              className="inline-flex items-center gap-1.5 text-obra-green hover:underline truncate"
+                            >
+                              <Phone className="w-3.5 h-3.5 shrink-0" />
+                              <span>+{cleanPhone}</span>
+                            </a>
+                            <a
+                              href={`https://wa.me/${cleanPhone}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 rounded text-[10px] font-bold inline-flex items-center gap-1 shrink-0 transition-colors"
+                              title="Abrir chat de WhatsApp"
+                            >
+                              <MessageSquare className="w-3 h-3" />
+                              <span>WhatsApp</span>
+                            </a>
+                          </>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 text-gray-400">
+                            <Phone className="w-3.5 h-3.5 shrink-0" />
+                            <span>Sin teléfono</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {user.email && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 min-w-0">
+                          <Mail className="w-3 h-3 text-gray-400 shrink-0" />
+                          <span className="truncate">{user.email}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Obras Asignadas */}
+                    <div
+                      className="lg:col-span-3 flex flex-wrap items-center gap-1.5 min-w-0"
+                      aria-label={`Obras de ${user.nombre}`}
+                    >
+                      <span className="text-[10px] font-mono font-bold bg-kraft-100 dark:bg-[#0F141C] border border-kraft-200/80 dark:border-[#263040] text-navy-900 dark:text-gray-200 px-2 py-0.5 rounded-md shrink-0">
+                        {obrasAsignadas.length} {obrasAsignadas.length === 1 ? 'obra' : 'obras'}
+                      </span>
+                      {obrasAsignadas.length > 0 ? (
+                        <>
+                          {obrasAsignadas.slice(0, 2).map((p) => (
+                            <Link
+                              key={p.id}
+                              href={`/proyectos/${p.id}/gantt`}
+                              className="max-w-[160px] truncate rounded-md bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] px-2 py-0.5 text-[11px] font-mono text-gray-600 dark:text-gray-300 hover:text-obra-orange transition-colors"
+                              title={p.nombre}
+                            >
+                              {p.nombre}
+                            </Link>
+                          ))}
+                          {obrasAsignadas.length > 2 && (
+                            <details className="text-[11px] text-gray-500 dark:text-gray-400">
+                              <summary className="cursor-pointer font-mono hover:text-obra-orange">
+                                +{obrasAsignadas.length - 2} más
+                              </summary>
+                              <div className="mt-1 space-y-0.5">
+                                {obrasAsignadas.slice(2).map((p) => (
+                                  <Link
+                                    className="block py-0.5 hover:text-obra-orange font-mono"
+                                    key={p.id}
+                                    href={`/proyectos/${p.id}/gantt`}
+                                  >
+                                    {p.nombre}
+                                  </Link>
+                                ))}
+                              </div>
+                            </details>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[11px] text-gray-400">Sin obra asignada</span>
+                      )}
+                    </div>
+
+                    {/* Canal (desktop) */}
+                    <div className="hidden lg:flex lg:col-span-1 items-center justify-center">
+                      <span className="inline-flex items-center gap-1 font-mono text-[11px] text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                        <HardHat className="w-3.5 h-3.5 text-obra-orange shrink-0" />
+                        <span>{user.rol === 'admin' || user.is_dev ? 'Web' : 'WhatsApp'}</span>
+                      </span>
+                    </div>
+
+                    {/* Acciones */}
+                    <div className="lg:col-span-1 flex items-center justify-end gap-1 pt-1 lg:pt-0 border-t border-kraft-100 dark:border-[#1E2530] lg:border-t-0">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(user)}
+                        className="p-1.5 text-gray-400 hover:text-[#FF6A00] hover:bg-[#FF6A00]/10 rounded-lg transition-colors"
+                        title="Editar datos"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      {user.rol !== 'admin' && (
+                        <button
+                          type="button"
+                          onClick={() => setUserToDelete(user)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
+                          title="Eliminar trabajador"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         ) : (
+          /* Vista en Tarjetas */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredUsers.map((user) => {
               const roleBadge =
                 user.rol === 'admin'
                   ? 'bg-navy-800 text-white'
                   : user.rol === 'supervisor'
-                  ? 'bg-obra-orange-light text-obra-orange border border-obra-orange/20'
-                  : 'bg-obra-green-light text-obra-green border border-obra-green/20';
+                  ? 'bg-obra-orange-light dark:bg-obra-orange/15 text-obra-orange border border-obra-orange/20'
+                  : 'bg-obra-green-light dark:bg-obra-green/15 text-obra-green border border-obra-green/20';
 
               const cleanPhone = canonicalPhone(user.telefono_whatsapp || '');
 
@@ -450,16 +681,16 @@ export default function EquipoPage() {
                 <div
                   key={user.id}
                   data-team-member={user.id}
-                  className="bg-white border border-kraft-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                  className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="w-11 h-11 rounded-2xl bg-kraft-100 border border-kraft-200 flex items-center justify-center font-bold text-navy-900 font-heading text-base shrink-0">
+                        <div className="w-11 h-11 rounded-2xl bg-kraft-100 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] flex items-center justify-center font-bold text-navy-900 dark:text-white font-heading text-base shrink-0">
                           {user.nombre.charAt(0)}
                         </div>
                         <div className="overflow-hidden">
-                          <h3 className="font-heading font-bold text-sm text-navy-900 truncate">
+                          <h3 className="font-heading font-bold text-sm text-navy-900 dark:text-white truncate">
                             {user.nombre}
                           </h3>
                           <span className={`inline-block text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md mt-0.5 ${roleBadge}`}>
@@ -481,7 +712,7 @@ export default function EquipoPage() {
                           <button
                             type="button"
                             onClick={() => setUserToDelete(user)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
                             title="Eliminar trabajador"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -493,12 +724,12 @@ export default function EquipoPage() {
                     {!!user.especialidades?.length && <div className="mb-3 flex flex-wrap gap-1.5" aria-label={`Especialidades de ${user.nombre}`}>
                       {user.especialidades.map(name => <span key={name} className="max-w-full break-words rounded-md border border-obra-orange/15 bg-obra-orange/5 px-2 py-1 text-[11px] text-gray-700 dark:text-gray-200">{name}</span>)}
                     </div>}
-                    <div className="space-y-2 text-xs text-gray-600 font-mono pt-3 border-t border-kraft-200/80">
+                    <div className="space-y-2 text-xs text-gray-600 dark:text-gray-300 font-mono pt-3 border-t border-kraft-200/80 dark:border-[#263040]">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 truncate">
                           <Phone className="w-3.5 h-3.5 text-obra-green shrink-0" />
                           {cleanPhone ? (
-                            <a href={`tel:+${cleanPhone}`} className="hover:text-navy-900 truncate">
+                            <a href={`tel:+${cleanPhone}`} className="hover:text-navy-900 dark:hover:text-white truncate">
                               +{cleanPhone}
                             </a>
                           ) : (
@@ -519,7 +750,7 @@ export default function EquipoPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 text-gray-500">
+                      <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                         <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                         <span className="truncate">{user.email}</span>
                       </div>
@@ -527,16 +758,16 @@ export default function EquipoPage() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`Obras de ${user.nombre}`}>
-                    {obrasAsignadas.length ? obrasAsignadas.slice(0,2).map(p => <Link key={p.id} href={`/proyectos/${p.id}/gantt`} className="max-w-full truncate rounded-md bg-kraft-50 px-2 py-1 text-[11px] text-gray-600 hover:text-obra-orange" title={p.nombre}>{p.nombre}</Link>)
+                    {obrasAsignadas.length ? obrasAsignadas.slice(0,2).map(p => <Link key={p.id} href={`/proyectos/${p.id}/gantt`} className="max-w-full truncate rounded-md bg-kraft-50 dark:bg-[#0F141C] px-2 py-1 text-[11px] text-gray-600 dark:text-gray-300 hover:text-obra-orange" title={p.nombre}>{p.nombre}</Link>)
                       : <span className="text-[11px] text-gray-400">Sin obra asignada</span>}
-                    {obrasAsignadas.length > 2 && <details className="text-[11px] text-gray-500"><summary className="cursor-pointer">+{obrasAsignadas.length-2} obras</summary>{obrasAsignadas.slice(2).map(p => <Link className="block py-1 hover:text-obra-orange" key={p.id} href={`/proyectos/${p.id}/gantt`}>{p.nombre}</Link>)}</details>}
+                    {obrasAsignadas.length > 2 && <details className="text-[11px] text-gray-500 dark:text-gray-400"><summary className="cursor-pointer">+{obrasAsignadas.length-2} obras</summary>{obrasAsignadas.slice(2).map(p => <Link className="block py-1 hover:text-obra-orange" key={p.id} href={`/proyectos/${p.id}/gantt`}>{p.nombre}</Link>)}</details>}
                   </div>
-                  <div className="pt-4 mt-4 border-t border-kraft-200/80 flex items-center justify-between text-xs text-gray-500">
+                  <div className="pt-4 mt-4 border-t border-kraft-200/80 dark:border-[#263040] flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span className="flex items-center gap-1 font-mono text-[11px]">
                       <HardHat className="w-3.5 h-3.5 text-obra-orange" />
                       <span>{user.rol === 'admin' || user.is_dev ? 'Panel web' : 'WhatsApp'}</span>
                     </span>
-                    <span className="text-[10px] font-mono bg-kraft-100 text-navy-900 px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-mono bg-kraft-100 dark:bg-[#0F141C] text-navy-900 dark:text-white px-2 py-0.5 rounded">
                       {obrasAsignadas.length} {obrasAsignadas.length === 1 ? 'obra' : 'obras'}
                     </span>
                   </div>

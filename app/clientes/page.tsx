@@ -56,7 +56,7 @@ export default function ClientesPage() {
   // Filtros y Vista
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todos' | 'activos' | 'con_obras' | 'sin_obras'>('todos');
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   // Formulario nuevo cliente
   const [nombre, setNombre] = useState('');
@@ -320,6 +320,19 @@ export default function ClientesPage() {
               <div className="flex items-center gap-1 bg-kraft-50 dark:bg-[#0F141C] p-1 rounded-xl border border-kraft-200 dark:border-[#263040] h-10">
                 <button
                   type="button"
+                  onClick={() => setViewMode('list')}
+                  className={`px-2.5 h-full rounded-lg text-xs font-heading font-semibold inline-flex items-center gap-1.5 transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-navy-900 text-white dark:bg-white dark:text-navy-900 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
+                  }`}
+                  title="Vista en Lista"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Lista</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setViewMode('grid')}
                   className={`px-2.5 h-full rounded-lg text-xs font-heading font-semibold inline-flex items-center gap-1.5 transition-colors ${
                     viewMode === 'grid'
@@ -330,19 +343,6 @@ export default function ClientesPage() {
                 >
                   <LayoutGrid className="w-3.5 h-3.5" />
                   <span className="hidden md:inline">Tarjetas</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('table')}
-                  className={`px-2.5 h-full rounded-lg text-xs font-heading font-semibold inline-flex items-center gap-1.5 transition-colors ${
-                    viewMode === 'table'
-                      ? 'bg-navy-900 text-white dark:bg-white dark:text-navy-900 shadow-sm'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-kraft-100 dark:hover:bg-[#1E2530]'
-                  }`}
-                  title="Vista en Tabla"
-                >
-                  <List className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Tabla</span>
                 </button>
               </div>
             </div>
@@ -441,15 +441,15 @@ export default function ClientesPage() {
 
         {/* Listado de Clientes */}
         {filteredClientes.length === 0 ? (
-          <div className="bg-white border-2 border-dashed border-[#E5DFC9] rounded-3xl p-10 text-center max-w-xl mx-auto space-y-4">
-            <div className="w-16 h-16 rounded-3xl bg-[#FAF8F5] border border-[#E5DFC9] flex items-center justify-center mx-auto text-[#FF6A00]">
+          <div className="bg-white dark:bg-[#141A23] border-2 border-dashed border-[#E5DFC9] dark:border-[#263040] rounded-3xl p-10 text-center max-w-xl mx-auto space-y-4">
+            <div className="w-16 h-16 rounded-3xl bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] flex items-center justify-center mx-auto text-[#FF6A00]">
               <Building className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="font-heading font-black text-xl text-[#1E1E1E]">
+              <h3 className="font-heading font-black text-xl text-[#1E1E1E] dark:text-white">
                 {searchTerm ? 'No se encontraron clientes' : 'No tienes clientes registrados aún'}
               </h3>
-              <p className="text-xs text-gray-500 font-sans mt-1.5 max-w-md mx-auto leading-relaxed">
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-sans mt-1.5 max-w-md mx-auto leading-relaxed">
                 {searchTerm
                   ? `No hay coincidencias para "${searchTerm}". Prueba con otro término.`
                   : 'Agrega mandantes o personas particulares para asociarlos a tus cotizaciones y obras.'}
@@ -458,7 +458,7 @@ export default function ClientesPage() {
             {searchTerm ? (
               <button
                 onClick={() => setSearchTerm('')}
-                className="px-4 py-2 bg-kraft-100 hover:bg-kraft-200 text-navy-900 text-xs font-bold rounded-xl transition-all font-heading"
+                className="px-4 py-2 bg-kraft-100 hover:bg-kraft-200 dark:bg-[#1E2530] dark:hover:bg-[#263040] text-navy-900 dark:text-white text-xs font-bold rounded-xl transition-all font-heading"
               >
                 Limpiar búsqueda
               </button>
@@ -472,7 +472,178 @@ export default function ClientesPage() {
               </button>
             )}
           </div>
-        ) : viewMode === 'grid' ? (
+        ) : viewMode === 'list' ? (
+          /* Vista Moderna en Lista Compacta */
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl overflow-hidden shadow-sm">
+            <div className="hidden lg:grid lg:grid-cols-12 gap-4 px-5 py-3 bg-[#FAF8F5] dark:bg-[#1A222D] border-b border-kraft-200 dark:border-[#263040] text-[11px] font-mono font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <div className="col-span-4">Cliente / Mandante</div>
+              <div className="col-span-3">Contacto y Dirección</div>
+              <div className="col-span-2">Obras Asociadas</div>
+              <div className="col-span-2 text-right">Total Contratado</div>
+              <div className="col-span-1 text-right">Acciones</div>
+            </div>
+
+            <div className="divide-y divide-kraft-100 dark:divide-[#1E2530]">
+              {filteredClientes.map((c) => {
+                const obrasCliente = proyectosVigentes.filter((p) => p.cliente_id === c.id);
+                const totalCotizadoCliente = obrasCliente.reduce(
+                  (sum, p) => sum + (Number(p.monto_cotizado) || 0),
+                  0
+                );
+                const totalPagadoCliente = obrasCliente.reduce(
+                  (sum, p) => sum + (Number(p.total_pagado) || 0),
+                  0
+                );
+                const validPhone = canonicalPhone(c.telefono || '');
+                const hasActiveWork = clientesIdsActivos.has(c.id);
+
+                return (
+                  <div
+                    key={c.id}
+                    className="px-4 py-3.5 sm:px-5 grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 items-start lg:items-center hover:bg-kraft-50/70 dark:hover:bg-[#1A222D]/60 transition-colors"
+                  >
+                    {/* Identidad */}
+                    <div className="lg:col-span-4 flex items-center justify-between gap-3 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-obra-orange/10 dark:bg-obra-orange/15 border border-obra-orange/20 text-obra-orange flex items-center justify-center font-heading font-bold text-sm shrink-0">
+                          {c.nombre.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <h3 className="font-heading font-bold text-sm text-navy-900 dark:text-white truncate">
+                              {c.nombre}
+                            </h3>
+                            {hasActiveWork && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-obra-green/15 text-obra-green text-[10px] font-mono font-bold shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-obra-green" />
+                                En obra
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                            {c.rut ? `RUT ${formatRUT(c.rut)}` : 'Sin RUT registrado'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Monto visible en móvil junto al nombre */}
+                      <div className="lg:hidden text-right shrink-0">
+                        <span className="font-mono font-bold text-xs text-navy-900 dark:text-white block">
+                          {formatCLP(totalCotizadoCliente)}
+                        </span>
+                        <span className="text-[10px] font-mono text-gray-400">
+                          {obrasCliente.length} {obrasCliente.length === 1 ? 'obra' : 'obras'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Contacto y Dirección */}
+                    <div className="lg:col-span-3 space-y-1 text-xs text-gray-600 dark:text-gray-300 min-w-0">
+                      <div className="flex flex-wrap lg:flex-col gap-x-4 gap-y-1 min-w-0">
+                        {validPhone ? (
+                          <a
+                            href={`tel:+${validPhone}`}
+                            className="inline-flex items-center gap-1.5 font-mono text-obra-green hover:underline truncate max-w-full"
+                          >
+                            <Phone className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">+{validPhone}</span>
+                          </a>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 font-mono text-gray-400">
+                            <Phone className="w-3.5 h-3.5 shrink-0" />
+                            <span>Sin teléfono</span>
+                          </span>
+                        )}
+
+                        {c.email ? (
+                          <span className="inline-flex items-center gap-1.5 font-mono text-gray-600 dark:text-gray-300 truncate max-w-full">
+                            <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="truncate">{c.email}</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 font-mono text-gray-400">
+                            <Mail className="w-3.5 h-3.5 shrink-0" />
+                            <span>Sin email</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {c.direccion && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 min-w-0">
+                          <MapPin className="w-3 h-3 text-gray-400 shrink-0" />
+                          <span className="truncate">{c.direccion}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Obras Asociadas */}
+                    <div className="lg:col-span-2 flex flex-wrap items-center gap-1.5 min-w-0">
+                      <span className="hidden lg:inline-flex items-center gap-1 text-[11px] font-mono font-bold text-navy-900 dark:text-gray-200 bg-kraft-100 dark:bg-[#0F141C] border border-kraft-200/80 dark:border-[#263040] px-2 py-0.5 rounded-md shrink-0">
+                        <FolderOpen className="w-3 h-3 text-obra-orange" />
+                        <span>{obrasCliente.length}</span>
+                      </span>
+                      {obrasCliente.length > 0 ? (
+                        <>
+                          {obrasCliente.slice(0, 2).map((p) => (
+                            <Link
+                              key={p.id}
+                              href={`/proyectos/${p.id}/finanzas`}
+                              className="text-[11px] font-mono bg-kraft-50 dark:bg-[#0F141C] hover:bg-kraft-100 dark:hover:bg-[#1E2530] border border-kraft-200 dark:border-[#263040] text-navy-900 dark:text-gray-200 hover:text-obra-orange px-2 py-0.5 rounded-md inline-flex items-center gap-1 max-w-[160px] truncate transition-colors"
+                              title={p.nombre}
+                            >
+                              <span className="truncate">{p.nombre}</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-gray-400 shrink-0" />
+                            </Link>
+                          ))}
+                          {obrasCliente.length > 2 && (
+                            <span className="text-[10px] font-mono text-gray-400">
+                              +{obrasCliente.length - 2} más
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-[11px] text-gray-400 font-sans">Sin obras asociadas</span>
+                      )}
+                    </div>
+
+                    {/* Total Contratado (desktop) */}
+                    <div className="hidden lg:flex lg:col-span-2 flex-col items-end justify-center text-right">
+                      <span className="font-mono font-bold text-sm text-navy-900 dark:text-white">
+                        {formatCLP(totalCotizadoCliente)}
+                      </span>
+                      {totalPagadoCliente > 0 && (
+                        <span className="text-[10px] font-mono text-obra-green">
+                          Pagado: {formatCLP(totalPagadoCliente)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Acciones */}
+                    <div className="lg:col-span-1 flex items-center justify-end gap-1 pt-1 lg:pt-0 border-t border-kraft-100 dark:border-[#1E2530] lg:border-t-0">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(c)}
+                        className="p-1.5 text-gray-400 hover:text-[#FF6A00] hover:bg-[#FF6A00]/10 rounded-lg transition-colors"
+                        title="Editar cliente"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClienteToDelete(c)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
+                        title="Eliminar cliente"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* Vista en Tarjetas */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredClientes.map((c) => {
               const obrasCliente = proyectosVigentes.filter((p) => p.cliente_id === c.id);
@@ -480,25 +651,21 @@ export default function ClientesPage() {
                 (sum, p) => sum + (Number(p.monto_cotizado) || 0),
                 0
               );
-              const totalPagadoCliente = obrasCliente.reduce(
-                (sum, p) => sum + (Number(p.total_pagado) || 0),
-                0
-              );
               const validPhone = canonicalPhone(c.telefono || '');
 
               return (
                 <div
                   key={c.id}
-                  className="bg-white border border-kraft-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                  className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div className="overflow-hidden">
-                        <h3 className="font-heading font-bold text-base text-navy-900 truncate">
+                        <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white truncate">
                           {c.nombre}
                         </h3>
                         {c.rut ? (
-                          <span className="text-[11px] font-mono text-gray-500">
+                          <span className="text-[11px] font-mono text-gray-500 dark:text-gray-400">
                             RUT: {formatRUT(c.rut)}
                           </span>
                         ) : (
@@ -520,7 +687,7 @@ export default function ClientesPage() {
                         <button
                           type="button"
                           onClick={() => setClienteToDelete(c)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
                           title="Eliminar cliente"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -528,11 +695,11 @@ export default function ClientesPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2 text-xs text-gray-600 font-sans border-t border-kraft-200/80 pt-3">
+                    <div className="space-y-2 text-xs text-gray-600 dark:text-gray-300 font-sans border-t border-kraft-200/80 dark:border-[#263040] pt-3">
                       {validPhone ? (
                         <div className="flex items-center gap-2 font-mono">
                           <Phone className="w-3.5 h-3.5 text-obra-green shrink-0" />
-                          <a href={`tel:+${validPhone}`} className="hover:text-navy-900 truncate">
+                          <a href={`tel:+${validPhone}`} className="hover:text-navy-900 dark:hover:text-white truncate">
                             +{validPhone}
                           </a>
                         </div>
@@ -569,31 +736,31 @@ export default function ClientesPage() {
                     </div>
                   </div>
 
-                  <div className="pt-4 mt-4 border-t border-kraft-200/80 space-y-2">
+                  <div className="pt-4 mt-4 border-t border-kraft-200/80 dark:border-[#263040] space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-500 font-mono flex items-center gap-1">
+                      <span className="text-gray-500 dark:text-gray-400 font-mono flex items-center gap-1">
                         <FolderOpen className="w-3.5 h-3.5 text-obra-orange" />
                         <span>Obras asociadas:</span>
                       </span>
-                      <span className="font-bold font-mono text-navy-900 bg-kraft-100 px-2 py-0.5 rounded">
+                      <span className="font-bold font-mono text-navy-900 dark:text-white bg-kraft-100 dark:bg-[#0F141C] px-2 py-0.5 rounded">
                         {obrasCliente.length}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-500 font-mono">Total Contratado:</span>
-                      <span className="font-bold font-mono text-navy-900">
+                      <span className="text-gray-500 dark:text-gray-400 font-mono">Total Contratado:</span>
+                      <span className="font-bold font-mono text-navy-900 dark:text-white">
                         {formatCLP(totalCotizadoCliente)}
                       </span>
                     </div>
 
                     {obrasCliente.length > 0 && (
-                      <div className="pt-2 border-t border-kraft-100 flex flex-wrap gap-1">
+                      <div className="pt-2 border-t border-kraft-100 dark:border-[#263040] flex flex-wrap gap-1">
                         {obrasCliente.slice(0, 2).map((p) => (
                           <Link
                             key={p.id}
                             href={`/proyectos/${p.id}/finanzas`}
-                            className="text-[10px] font-mono bg-kraft-50 hover:bg-kraft-100 border border-kraft-200 text-navy-900 px-2 py-0.5 rounded-md flex items-center gap-1 truncate max-w-full"
+                            className="text-[10px] font-mono bg-kraft-50 dark:bg-[#0F141C] hover:bg-kraft-100 dark:hover:bg-[#1E2530] border border-kraft-200 dark:border-[#263040] text-navy-900 dark:text-gray-200 px-2 py-0.5 rounded-md flex items-center gap-1 truncate max-w-full"
                           >
                             <span>{p.nombre}</span>
                             <ExternalLink className="w-2.5 h-2.5 text-gray-400" />
@@ -610,84 +777,6 @@ export default function ClientesPage() {
                 </div>
               );
             })}
-          </div>
-        ) : (
-          /* Vista en Tabla */
-          <div className="bg-white border border-kraft-200 rounded-2xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-kraft-100 text-navy-900 font-heading font-bold border-b border-kraft-200 text-[11px] uppercase tracking-wider">
-                    <th className="py-3 px-4">Cliente / Mandante</th>
-                    <th className="py-3 px-4">RUT</th>
-                    <th className="py-3 px-4">Teléfono</th>
-                    <th className="py-3 px-4">Email</th>
-                    <th className="py-3 px-4">Dirección</th>
-                    <th className="py-3 px-4 text-center">Obras</th>
-                    <th className="py-3 px-4 text-right">Total Contratado</th>
-                    <th className="py-3 px-4 text-center">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-kraft-200/80 font-sans">
-                  {filteredClientes.map((c) => {
-                    const obrasCliente = proyectosVigentes.filter((p) => p.cliente_id === c.id);
-                    const totalCotizadoCliente = obrasCliente.reduce(
-                      (sum, p) => sum + (Number(p.monto_cotizado) || 0),
-                      0
-                    );
-                    const validPhone = canonicalPhone(c.telefono || '');
-
-                    return (
-                      <tr key={c.id} className="hover:bg-kraft-50/60 transition-colors">
-                        <td className="py-3 px-4 font-bold text-navy-900">{c.nombre}</td>
-                        <td className="py-3 px-4 font-mono text-gray-600">
-                          {c.rut ? formatRUT(c.rut) : '-'}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-gray-600">
-                          {validPhone ? (
-                            <a href={`tel:+${validPhone}`} className="text-obra-green hover:underline">
-                              +{validPhone}
-                            </a>
-                          ) : (
-                            '-'
-                          )}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-gray-600">{c.email || '-'}</td>
-                        <td className="py-3 px-4 text-gray-600 max-w-xs truncate">{c.direccion || '-'}</td>
-                        <td className="py-3 px-4 text-center font-mono font-bold">
-                          <span className="bg-kraft-100 text-navy-900 px-2 py-0.5 rounded">
-                            {obrasCliente.length}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-bold text-navy-900">
-                          {formatCLP(totalCotizadoCliente)}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEdit(c)}
-                              className="p-1 text-gray-400 hover:text-[#FF6A00] rounded"
-                              title="Editar"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setClienteToDelete(c)}
-                              className="p-1 text-gray-400 hover:text-red-600 rounded"
-                              title="Eliminar"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
           </div>
         )}
 
