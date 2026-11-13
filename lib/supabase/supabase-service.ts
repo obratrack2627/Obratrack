@@ -1,6 +1,7 @@
 import { chileToday } from '@/lib/ai/project-deadlines';
 import {isMaterialComparison} from '@/lib/materials/types';
 import { supabase } from './client';
+import { persistentFile } from './private-files';
 import {
   Proyecto,
   Actividad,
@@ -489,7 +490,7 @@ export class SupabaseService {
       estado: pago.estado || 'completado',
       fecha: pago.fecha || chileToday(),
       notas: pago.notas || null,
-      comprobante_url: pago.comprobante_url || null,
+      comprobante_url: persistentFile(pago.comprobante_url) || null,
     };
     const { error } = await this.client.from('pagos').upsert(payload, { onConflict: 'id' });
     if (error) console.error('Error guardando pago en Supabase:', error);
@@ -587,7 +588,7 @@ export class SupabaseService {
       autor_nombre: bit.autor_nombre,
       titulo: bit.titulo,
       nota: bit.nota,
-      foto_url: bit.foto_url || null,
+      foto_url: persistentFile(bit.foto_url) || null,
       fecha: bit.fecha || new Date().toISOString(),
       tipo: bit.tipo || 'avance',
     };

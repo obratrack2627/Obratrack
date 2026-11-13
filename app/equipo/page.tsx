@@ -182,14 +182,15 @@ export default function EquipoPage() {
     let specialties: string[];
     try { specialties = parseSpecialties(editEspecialidades); }
     catch (error) { showToast((error as Error).message); return; }
+    const canEditRole = editingUser.rol !== 'admin' && !editingUser.auth_user_id && !editingUser.is_dev;
     dataService.updateUsuario(editingUser.id, {
       especialidades: specialties,
       nombre: editNombre.trim(),
       rut: cleanRut || undefined,
       email: cleanEmail,
       telefono_whatsapp: validPhone ? `+${validPhone}` : '',
-      rol: isDev ? 'admin' : editRol,
-      is_dev: isDev ? true : editingUser.is_dev,
+      rol: canEditRole ? (editRol === 'supervisor' ? 'supervisor' : 'terreno') : editingUser.rol,
+      is_dev: editingUser.is_dev,
     });
 
     setEditingUser(null);
@@ -1020,16 +1021,24 @@ export default function EquipoPage() {
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1" htmlFor="equipo-editRol">
                   Rol en la Constructora *
                 </label>
-                <select
- id="equipo-editRol"                  value={editRol}
-                  onChange={(e) => setEditRol(e.target.value as UserRole)}
-                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-mono"
-                >
-
-                  <option value="admin">Administrador / Contratista General</option>
-                  <option value="supervisor">Supervisor · WhatsApp</option>
-                  <option value="terreno">Terreno · WhatsApp</option>
-                </select>
+                {(() => {
+                  const canEditRole = editingUser.rol !== 'admin' && !editingUser.auth_user_id && !editingUser.is_dev;
+                  return (
+                    <select
+                      id="equipo-editRol"
+                      disabled={!canEditRole}
+                      value={canEditRole ? editRol : editingUser.rol}
+                      onChange={(e) => setEditRol(e.target.value as UserRole)}
+                      className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-mono disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {editingUser.rol === 'admin' && (
+                        <option value="admin">Administrador / Contratista General</option>
+                      )}
+                      <option value="supervisor">Supervisor · WhatsApp</option>
+                      <option value="terreno">Terreno · WhatsApp</option>
+                    </select>
+                  );
+                })()}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-kraft-200">

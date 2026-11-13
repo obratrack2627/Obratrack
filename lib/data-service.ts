@@ -233,8 +233,17 @@ export class DataService {
     const usuarios = this.getUsuarios();
     const index = usuarios.findIndex((u) => u.id === id);
     if (index === -1) return null;
-    usuarios[index] = { ...usuarios[index], ...data };
-    if (isDeveloperEmail(usuarios[index].email)) {
+    const current = usuarios[index];
+    const nextData: Partial<Usuario> = { ...data };
+    if (Object.hasOwn(nextData, 'rol')) {
+      const canEditRole = current.rol !== 'admin' && !current.auth_user_id && !current.is_dev;
+      nextData.rol =
+        canEditRole && (nextData.rol === 'supervisor' || nextData.rol === 'terreno')
+          ? nextData.rol
+          : current.rol;
+    }
+    usuarios[index] = { ...current, ...nextData };
+    if (usuarios[index].rol === 'admin' && isDeveloperEmail(usuarios[index].email)) {
       usuarios[index].is_dev = true;
     }
     this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
