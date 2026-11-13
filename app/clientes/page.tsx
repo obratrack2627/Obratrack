@@ -29,8 +29,15 @@ import {
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
 import { Cliente, Proyecto } from '@/types/database';
-import { formatCLP, formatRUT } from '@/lib/utils';
+import { formatCLP, formatRUT, validarRutChileno } from '@/lib/utils';
 import { canonicalPhone } from '@/lib/phone';
+import {
+  formatRegistrationConflictMessage,
+  isValidEmail,
+  normalizePhoneKeyDigits,
+  normalizeRutKey,
+  type RegistrationConflictField,
+} from '@/lib/auth/registration-validation';
 
 function normalizeOptionalPhone(raw: string): { value: string; valid: boolean } {
   const trimmed = raw.trim();
@@ -98,13 +105,67 @@ export default function ClientesPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const validateClienteForm = (args: {
+    nombreVal: string;
+    telefonoVal: string;
+    emailVal: string;
+    rutVal: string;
+    excludeId?: string;
+  }): { phoneValue: string; error: string | null } => {
+    if (!args.nombreVal.trim()) {
+      return { phoneValue: '', error: '⚠️ Ingresa el nombre o razón social del cliente.' };
+    }
+    const phoneResult = normalizeOptionalPhone(args.telefonoVal);
+    if (!phoneResult.valid) {
+      return {
+        phoneValue: '',
+        error: '⚠️ Ingresa un número de teléfono válido (ej: +56 9 1234 5678) o déjalo en blanco.',
+      };
+    }
+    const cleanRut = args.rutVal.trim();
+    if (cleanRut && !validarRutChileno(cleanRut)) {
+      return {
+        phoneValue: '',
+        error: '⚠️ El RUT ingresado no es válido. Revisa el dígito verificador.',
+      };
+    }
+    const cleanEmail = args.emailVal.trim();
+    if (cleanEmail && !isValidEmail(cleanEmail)) {
+      return { phoneValue: '', error: '⚠️ El correo electrónico ingresado no es válido.' };
+    }
+    const others = clientes.filter((c) => c.id !== args.excludeId);
+    const targetRut = normalizeRutKey(cleanRut);
+    const targetPhone = normalizePhoneKeyDigits(phoneResult.value);
+    const targetEmail = cleanEmail.toLowerCase();
+    const conflicts: RegistrationConflictField[] = [];
+    if (targetRut && others.some((c) => normalizeRutKey(c.rut) === targetRut)) {
+      conflicts.push('rut');
+    }
+    if (targetPhone && others.some((c) => normalizePhoneKeyDigits(c.telefono) === targetPhone)) {
+      conflicts.push('telefono');
+    }
+    if (targetEmail && others.some((c) => (c.email || '').trim().toLowerCase() === targetEmail)) {
+      conflicts.push('email');
+    }
+    if (conflicts.length > 0) {
+      return {
+        phoneValue: '',
+        error: `⚠️ ${formatRegistrationConflictMessage(conflicts)}`,
+      };
+    }
+    return { phoneValue: phoneResult.value, error: null };
+  };
+
   const handleCreateCliente = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nombre.trim()) return;
-
-    const phoneResult = normalizeOptionalPhone(telefono);
-    if (!phoneResult.valid) {
-      showToast('Ingresa un teléfono chileno válido (+569XXXXXXXX) o déjalo en blanco.');
+    const checked = validateClienteForm({
+      nombreVal: nombre,
+      telefonoVal: telefono,
+      emailVal: email,
+      rutVal: rut,
+    });
+    if (checked.error) {
+      showToast(checked.error);
       return;
     }
 
@@ -113,7 +174,7 @@ export default function ClientesPage() {
     dataService.createCliente({
       empresa_id: activeUser?.empresa_id || 'e1111111-1111-4111-a111-111111111111',
       nombre: nombre.trim(),
-      telefono: phoneResult.value,
+      telefono: checked.phoneValue,
       email: email.trim(),
       rut: rut.trim(),
       direccion: direccion.trim(),
@@ -141,17 +202,22 @@ export default function ClientesPage() {
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingCliente || !editNombre.trim()) return;
-
-    const phoneResult = normalizeOptionalPhone(editTelefono);
-    if (!phoneResult.valid) {
-      showToast('Ingresa un teléfono chileno válido (+569XXXXXXXX) o déjalo en blanco.');
+    if (!editingCliente) return;
+    const checked = validateClienteForm({
+      nombreVal: editNombre,
+      telefonoVal: editTelefono,
+      emailVal: editEmail,
+      rutVal: editRut,
+      excludeId: editingCliente.id,
+    });
+    if (checked.error) {
+      showToast(checked.error);
       return;
     }
 
     dataService.updateCliente(editingCliente.id, {
       nombre: editNombre.trim(),
-      telefono: phoneResult.value,
+      telefono: checked.phoneValue,
       email: editEmail.trim(),
       rut: editRut.trim(),
       direccion: editDireccion.trim(),
@@ -826,15 +892,23 @@ export default function ClientesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                    RUT (Opcional)
-                  </label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-mono font-semibold text-gray-700 uppercase">
+                      RUT (Opcional)
+                    </label>
+                    {rut.trim().length > 0 && (
+                      <span className={`text-[10px] font-bold ${validarRutChileno(rut) ? 'text-green-600' : 'text-red-500'}`}>
+                        {validarRutChileno(rut) ? '✓ Válido' : '✗ Inválido'}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
+                    maxLength={12}
                     placeholder="76.123.456-K"
                     value={rut}
-                    onChange={(e) => setRut(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"
+                    onChange={(e) => setRut(formatRUT(e.target.value))}
+                    className={`w-full px-3 py-2 bg-kraft-50 border rounded-xl text-xs font-mono focus:outline-none ${rut.trim() && !validarRutChileno(rut) ? 'border-red-400 focus:border-red-500' : 'border-kraft-200 focus:border-obra-orange'}`}
                   />
                 </div>
               </div>
@@ -927,14 +1001,22 @@ export default function ClientesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                    RUT
-                  </label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-mono font-semibold text-gray-700 uppercase">
+                      RUT
+                    </label>
+                    {editRut.trim().length > 0 && (
+                      <span className={`text-[10px] font-bold ${validarRutChileno(editRut) ? 'text-green-600' : 'text-red-500'}`}>
+                        {validarRutChileno(editRut) ? '✓ Válido' : '✗ Inválido'}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
+                    maxLength={12}
                     value={editRut}
-                    onChange={(e) => setEditRut(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"
+                    onChange={(e) => setEditRut(formatRUT(e.target.value))}
+                    className={`w-full px-3 py-2 bg-kraft-50 border rounded-xl text-xs font-mono focus:outline-none ${editRut.trim() && !validarRutChileno(editRut) ? 'border-red-400 focus:border-red-500' : 'border-kraft-200 focus:border-obra-orange'}`}
                   />
                 </div>
               </div>

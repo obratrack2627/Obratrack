@@ -5,13 +5,23 @@ const fixture = require('./helpers/supabase.cjs');
 require.cache[require.resolve('../lib/supabase/client.ts')] = { id: require.resolve('../lib/supabase/client.ts'), loaded: true, exports: fixture };
 const { supabaseService } = require('../lib/supabase/supabase-service.ts');
 const { dataService } = require('../lib/data-service.ts');
-const { signUpWithSupabase, signInWithSupabase } = require('../lib/supabase/auth.ts');
+const { signUpWithSupabase, signInWithSupabase, mapSupabaseAuthError } = require('../lib/supabase/auth.ts');
+const {
+  validateSignUpFields,
+  formatRegistrationConflictMessage,
+  mapContactDatabaseError,
+} = require('../lib/auth/registration-validation.ts');
 const uid='00000000-0000-0000-0000-000000000001';
 let activated, calls;
 const originalFetch=global.fetch;
 beforeEach(() => {
   calls=0; activated=null;
-  global.fetch=async (url, init)=>{assert.equal(url,'/api/auth/session');assert.equal(init.headers.Authorization,'Bearer fixture');return new Response(JSON.stringify({user:{id:uid,rol:'admin'}}),{status:200})};
+  global.fetch=async (url, init)=>{
+    if(url==='/api/auth/validar-registro'){
+      return new Response(JSON.stringify({ok:true,conflicts:[]}),{status:200});
+    }
+    assert.equal(url,'/api/auth/session');assert.equal(init.headers.Authorization,'Bearer fixture');return new Response(JSON.stringify({user:{id:uid,rol:'admin'}}),{status:200});
+  };
   global.window={location:{origin:'http://localhost:3000'}};global.document={cookie:''};
   supabaseService.saveEmpresa=async()=>{throw Error('El navegador no debe elegir la empresa ni el plan')};
   supabaseService.saveUsuario=async()=>{throw Error('El navegador no debe asignarse un perfil')};
@@ -39,4 +49,33 @@ test('ingresar por RUT usa el correo de Auth aunque WhatsApp haya corregido el d
   };
   const result=await signInWithSupabase('12.345.678-5','Contraseña123');
   assert.equal(result.success,true);
+});
+test('signUpWithSupabase detiene el registro con mensaje específico cuando RUT y teléfono ya existen',async()=>{
+  let signUpCalled=false;
+  fixture.supabase.auth.signUp=async()=>{signUpCalled=true;return{data:null,error:null};};
+  global.fetch=async(url)=>{
+    assert.equal(url,'/api/auth/validar-registro');
+    return new Response(
+      JSON.stringify({
+        ok:false,
+        conflicts:['rut','telefono'],
+        error:formatRegistrationConflictMessage(['rut','telefono']),
+      }),
+      {status:409}
+    );
+  };
+  const result=await signUpWithSupabase('nuevo@example.test','Contraseña123','Jorge Castro','12.345.678-5','BjSolutions','+56 9 48743041');
+  assert.equal(result.success,false);
+  assert.equal(signUpCalled,false);
+  assert.match(result.error,/RUT y número de teléfono ya están registrados/);
+});
+test('mapSupabaseAuthError y validateSignUpFields traducen errores de base de datos y campos inválidos',()=>{
+  assert.match(mapSupabaseAuthError('Database error saving new user'),/RUT, número de teléfono y correo/);
+  assert.match(mapSupabaseAuthError('CONTACT_DUPLICATE'),/RUT, número de teléfono o correo/);
+  assert.match(mapSupabaseAuthError('CONTACT_INVALID_PHONE'),/teléfono ingresado no es válido/);
+  assert.match(mapSupabaseAuthError('REGISTRATION_DETAILS_REQUIRED'),/Completa tu nombre completo y RUT personal/);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),/Ingresa tu RUT personal/);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 ',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),/número de teléfono válido/);
+  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),null);
+  assert.match(mapContactDatabaseError({code:'23505',message:'duplicate key value violates unique constraint "usuarios_rut_key"'}),/RUT ya está registrado/);
 });

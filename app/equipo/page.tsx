@@ -32,6 +32,13 @@ import { dataService } from '@/lib/data-service';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
 import { canonicalPhone } from '@/lib/phone';
 import { isDeveloperEmail } from '@/lib/auth-utils';
+import {
+  formatRegistrationConflictMessage,
+  isValidEmail,
+  normalizePhoneKeyDigits,
+  normalizeRutKey,
+  type RegistrationConflictField,
+} from '@/lib/auth/registration-validation';
 import { Usuario, Proyecto, UserRole } from '@/types/database';
 
 export default function EquipoPage() {
@@ -126,15 +133,23 @@ export default function EquipoPage() {
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser || !editNombre.trim()) return;
+    if (!editingUser) return;
+    if (!editNombre.trim()) {
+      showToast('⚠️ Ingresa el nombre completo del trabajador.');
+      return;
+    }
 
     const isDev = isDeveloperEmail(editingUser.email) || editingUser.is_dev;
+    const cleanRut = editRut.trim();
+    if (cleanRut && !validarRutChileno(cleanRut) && !isDev) {
+      showToast('⚠️ El RUT ingresado no es válido según el formato chileno.');
+      return;
+    }
 
-    if (editRut && editRut.trim()) {
-      if (!validarRutChileno(editRut) && !isDev) {
-        showToast('⚠️ El RUT ingresado no es válido según el formato chileno.');
-        return;
-      }
+    const cleanEmail = editEmail.trim();
+    if (cleanEmail && !isValidEmail(cleanEmail)) {
+      showToast('⚠️ El correo electrónico ingresado no es válido.');
+      return;
     }
 
     const trimmedPhone = editTelefono.trim();
@@ -142,7 +157,25 @@ export default function EquipoPage() {
       !trimmedPhone || trimmedPhone === '+56 9' || trimmedPhone === '+569' || trimmedPhone === '569';
     const validPhone = isDefaultEmptyPhone ? '' : canonicalPhone(trimmedPhone);
     if (!isDefaultEmptyPhone && !validPhone) {
-      showToast('⚠️ Ingresa un número de WhatsApp chileno válido (+56 9 XXXX XXXX).');
+      showToast('⚠️ Ingresa un número de teléfono válido (ej: +56 9 1234 5678).');
+      return;
+    }
+
+    const otherUsers = usuarios.filter((u) => u.id !== editingUser.id);
+    const targetRut = normalizeRutKey(cleanRut);
+    const targetEmail = cleanEmail.toLowerCase();
+    const conflicts: RegistrationConflictField[] = [];
+    if (targetRut && otherUsers.some((u) => normalizeRutKey(u.rut) === targetRut)) {
+      conflicts.push('rut');
+    }
+    if (validPhone && otherUsers.some((u) => normalizePhoneKeyDigits(u.telefono_whatsapp) === validPhone)) {
+      conflicts.push('telefono');
+    }
+    if (targetEmail && otherUsers.some((u) => (u.email || '').trim().toLowerCase() === targetEmail)) {
+      conflicts.push('email');
+    }
+    if (conflicts.length > 0) {
+      showToast(`⚠️ ${formatRegistrationConflictMessage(conflicts)}`);
       return;
     }
 
@@ -152,8 +185,8 @@ export default function EquipoPage() {
     dataService.updateUsuario(editingUser.id, {
       especialidades: specialties,
       nombre: editNombre.trim(),
-      rut: editRut.trim() || undefined,
-      email: editEmail.trim(),
+      rut: cleanRut || undefined,
+      email: cleanEmail,
       telefono_whatsapp: validPhone ? `+${validPhone}` : '',
       rol: isDev ? 'admin' : editRol,
       is_dev: isDev ? true : editingUser.is_dev,
@@ -937,15 +970,24 @@ export default function EquipoPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1" htmlFor="equipo-editRut">
-                  RUT Chileno (ej: 19.123.456-3)
-                </label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase" htmlFor="equipo-editRut">
+                    RUT Chileno (ej: 19.123.456-3)
+                  </label>
+                  {editRut.trim().length > 0 && (
+                    <span className={`text-[10px] font-bold ${validarRutChileno(editRut) ? 'text-green-600' : 'text-red-500'}`}>
+                      {validarRutChileno(editRut) ? '✓ Válido' : '✗ Inválido'}
+                    </span>
+                  )}
+                </div>
                 <input
- id="equipo-editRut"                  type="text"
+                  id="equipo-editRut"
+                  type="text"
+                  maxLength={12}
                   value={editRut}
                   onChange={(e) => setEditRut(formatRUT(e.target.value))}
                   placeholder="19.123.456-3"
-                  className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"
+                  className={`w-full px-3.5 py-2 bg-kraft-50 border rounded-xl text-xs font-mono focus:outline-none ${editRut.trim() && !validarRutChileno(editRut) ? 'border-red-400 focus:border-red-500' : 'border-kraft-200 focus:border-obra-orange'}`}
                 />
               </div>
 

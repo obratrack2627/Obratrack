@@ -1,17 +1,19 @@
 import { AIError } from "@/lib/ai/errors";
+import { mapContactDatabaseError } from "@/lib/auth/registration-validation";
 
 /** Traducir rechazos de escritura sin exponer SQL, valores ni detalles de la base. */
 export function syncWriteFailure(
   error: { code?: string; message?: string },
   record: string,
 ) {
-  let reason = "El servidor no pudo guardarlo. Inténtalo nuevamente.";
-  if (error.code === "23503")
+  const contactReason = mapContactDatabaseError(error);
+  let reason =
+    contactReason || "El servidor no pudo guardarlo. Inténtalo nuevamente.";
+  if (contactReason) {
+    // Ya traducido con mensaje específico para contacto/registro duplicado o inválido
+  } else if (error.code === "23503")
     reason =
       "Una obra, cliente o trabajador asociado ya no está disponible. Revisa su asignación.";
-  else if (error.code === "23505")
-    reason =
-      "Uno de sus datos ya está registrado. Revisa los datos duplicados.";
   else if (
     ["23502", "23514", "22P02", "22007", "22008"].includes(error.code || "")
   )

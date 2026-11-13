@@ -22,8 +22,8 @@ export function getRedirectBaseUrl(): string {
 }
 
 // Mapeo exhaustivo de errores de Supabase Auth en español
-function mapSupabaseAuthError(message: string): string {
-  const lower = message.toLowerCase();
+export function mapSupabaseAuthError(message: string): string {
+  const lower = (message || '').toLowerCase();
   if (lower.includes('invalid login credentials') || lower.includes('invalid credentials')) {
     return 'Correo o contraseña incorrectos. Verifica tus credenciales.';
   }
@@ -33,11 +33,38 @@ function mapSupabaseAuthError(message: string): string {
   if (lower.includes('user already registered') || lower.includes('already exists')) {
     return 'Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu clave.';
   }
+  if (lower.includes('database error saving new user')) {
+    return 'No se pudo crear la cuenta. Verifica que tu RUT, número de teléfono y correo no estén ya registrados e inténtalo nuevamente.';
+  }
+  if (lower.includes('contact_duplicate') || lower.includes('duplicate key')) {
+    return 'Ese RUT, número de teléfono o correo electrónico ya está registrado.';
+  }
+  if (lower.includes('contact_invalid_phone')) {
+    return 'El número de teléfono ingresado no es válido (ej: +56 9 1234 5678).';
+  }
+  if (lower.includes('contact_invalid_rut')) {
+    return 'El RUT ingresado no es válido. Revisa el dígito verificador.';
+  }
+  if (lower.includes('registration_details_required')) {
+    return 'Completa tu nombre completo y RUT personal para crear la cuenta.';
+  }
   if (lower.includes('email not confirmed')) {
     return 'Tu correo aún no ha sido confirmado. Revisa tu bandeja de entrada o solicita un nuevo correo de activación.';
   }
   if (lower.includes('password should be at least')) {
     return 'La contraseña debe tener al menos 6 caracteres.';
+  }
+  if (lower.includes('same_password') || lower.includes('new password should be different')) {
+    return 'La nueva contraseña debe ser diferente a la contraseña actual.';
+  }
+  if (lower.includes('weak_password') || lower.includes('weak password')) {
+    return 'La contraseña es muy débil. Usa al menos 6 caracteres combinando letras y números.';
+  }
+  if (lower.includes('email address not authorized') || lower.includes('email_address_invalid')) {
+    return 'El correo electrónico ingresado no es válido o no está autorizado.';
+  }
+  if (lower.includes('signup is disabled')) {
+    return 'El registro de nuevas cuentas está deshabilitado temporalmente.';
   }
   if (lower.includes('rate limit') || lower.includes('too many requests')) {
     return 'Demasiados intentos seguidos. Por favor espera un momento e intenta nuevamente.';
@@ -86,6 +113,32 @@ export async function resumeSupabaseSession(): Promise<AuthResult | null> {
  * Registro de un nuevo Dueño / Contratista con aislamiento Multi-Tenant en Supabase PostgreSQL
  * y envío automático de correo de confirmación de cuenta
  */
+async function precheckRegistration(payload: {
+  nombre: string;
+  rut: string;
+  email: string;
+  telefono: string;
+  empresaNombre: string;
+}): Promise<string | null> {
+  if (typeof fetch !== 'function') return null;
+  try {
+    const response = await fetch('/api/auth/validar-registro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (response.status >= 400 && response.status < 500 && response.status !== 404) {
+      const data = await response.json().catch(() => null);
+      if (data?.error && typeof data.error === 'string') {
+        return data.error;
+      }
+    }
+  } catch {
+    // Si la prevalidación no responde por red, Supabase Auth aplica las restricciones en servidor.
+  }
+  return null;
+}
+
 export async function signUpWithSupabase(
   email: string,
   pass: string,
@@ -98,6 +151,20 @@ export async function signUpWithSupabase(
   const baseUrl = getRedirectBaseUrl();
 
   try {
+    const precheckError = await precheckRegistration({
+      nombre: nombre.trim(),
+      rut: rut.trim(),
+      email: cleanEmail,
+      telefono: telefono.trim(),
+      empresaNombre: empresaNombre.trim(),
+    });
+    if (precheckError) {
+      return {
+        success: false,
+        error: precheckError,
+      };
+    }
+
     // 1. Registro en Supabase Auth con callback para confirmación de correo
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: cleanEmail,

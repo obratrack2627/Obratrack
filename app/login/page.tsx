@@ -7,6 +7,11 @@ import { Eye, EyeOff, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import Logo from '@/components/Logo';
 import LegalTermsModal from '@/components/LegalTermsModal';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
+import { canonicalPhone } from '@/lib/phone';
+import {
+  isValidEmail,
+  validateSignUpFields,
+} from '@/lib/auth/registration-validation';
 import {
   signInWithSupabase,
   signUpWithSupabase,
@@ -40,33 +45,6 @@ function resolveSafeRedirect(isTerreno: boolean): string {
   return isValidInternalRedirect(redirectParam) ? redirectParam : defaultTarget;
 }
 
-interface SignUpValidationArgs {
-  acceptTerms: boolean;
-  rut: string;
-  empresaNombre: string;
-  signupPassword: string;
-  signupConfirmPassword: string;
-}
-
-function validateSignUpFields(args: SignUpValidationArgs): string | null {
-  if (!args.acceptTerms) {
-    return 'Debes aceptar los Términos y la Política de Privacidad.';
-  }
-  if (args.rut.trim() && !validarRutChileno(args.rut)) {
-    return 'El RUT ingresado no es válido.';
-  }
-  if (args.empresaNombre.trim() && args.empresaNombre.trim().length < 3) {
-    return 'Ingresa el nombre de tu empresa o contratista.';
-  }
-  if (args.signupPassword !== args.signupConfirmPassword) {
-    return 'Las contraseñas no coinciden.';
-  }
-  if (args.signupPassword.length < 6) {
-    return 'La contraseña debe tener al menos 6 caracteres.';
-  }
-  return null;
-}
-
 function resolveUrlAuthNotice(
   cuentaConfirmada: string | null,
   errorParam: string | null
@@ -91,8 +69,21 @@ async function executeSignInRequest(
   email: string,
   password: string
 ): Promise<{ ok: true; redirectTo: string } | { ok: false; errorMsg: string }> {
+  const cleanIdent = email.trim();
+  if (!cleanIdent) {
+    return { ok: false, errorMsg: 'Ingresa tu correo electrónico o RUT.' };
+  }
+  if (cleanIdent.includes('@') && !isValidEmail(cleanIdent)) {
+    return { ok: false, errorMsg: 'El correo electrónico ingresado no es válido.' };
+  }
+  if (!cleanIdent.includes('@') && !validarRutChileno(cleanIdent)) {
+    return { ok: false, errorMsg: 'El RUT ingresado no es válido.' };
+  }
+  if (!password) {
+    return { ok: false, errorMsg: 'Ingresa tu contraseña.' };
+  }
   try {
-    const result = await signInWithSupabase(email, password);
+    const result = await signInWithSupabase(cleanIdent, password);
     if (!result.success) {
       return {
         ok: false,
@@ -414,6 +405,9 @@ interface SignUpViewProps {
 function SignUpView(props: SignUpViewProps) {
   const isRutValid = props.rut ? validarRutChileno(props.rut) : true;
   const rutStateClass = isRutValid ? '' : 'border-red-400 focus:border-red-500';
+  const hasTypedPhone = props.telefono.replace(/\D/g, '').length > 2;
+  const isPhoneValid = !hasTypedPhone || Boolean(canonicalPhone(props.telefono));
+  const phoneStateClass = isPhoneValid ? '' : 'border-red-400 focus:border-red-500';
 
   return (
     <>
@@ -424,7 +418,7 @@ function SignUpView(props: SignUpViewProps) {
         </h1>
       </div>
 
-      <form onSubmit={props.onSubmit} className="space-y-3.5">
+      <form onSubmit={props.onSubmit} noValidate className="space-y-3.5">
         <div>
           <label htmlFor="signup-nombre" className={LABEL_CLASS}>
             Nombre completo
@@ -465,7 +459,7 @@ function SignUpView(props: SignUpViewProps) {
                 htmlFor="signup-rut"
                 className="text-[13px] font-medium text-[#3A3835] dark:text-gray-300"
               >
-                RUT personal (opcional)
+                RUT personal
               </label>
               {props.rut && !isRutValid && (
                 <span className="text-[11px] text-red-600 dark:text-red-400">Inválido</span>
@@ -476,6 +470,7 @@ function SignUpView(props: SignUpViewProps) {
               name="rut"
               type="text"
               maxLength={12}
+              required
               placeholder="12.345.678-5"
               value={props.rut}
               onChange={(e) => props.onRutChange(formatRUT(e.target.value))}
@@ -503,9 +498,17 @@ function SignUpView(props: SignUpViewProps) {
           </div>
 
           <div>
-            <label htmlFor="signup-telefono" className={LABEL_CLASS}>
-              Teléfono
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label
+                htmlFor="signup-telefono"
+                className="text-[13px] font-medium text-[#3A3835] dark:text-gray-300"
+              >
+                Teléfono
+              </label>
+              {hasTypedPhone && !isPhoneValid && (
+                <span className="text-[11px] text-red-600 dark:text-red-400">Inválido</span>
+              )}
+            </div>
             <input
               id="signup-telefono"
               name="tel"
@@ -515,7 +518,7 @@ function SignUpView(props: SignUpViewProps) {
               placeholder="+56 9 1234 5678"
               value={props.telefono}
               onChange={(e) => props.onTelefonoChange(e.target.value)}
-              className={`${INPUT_CLASS} font-mono`}
+              className={`${INPUT_CLASS} font-mono ${phoneStateClass}`}
             />
           </div>
         </div>
@@ -599,7 +602,7 @@ function SignUpView(props: SignUpViewProps) {
         <div className="pt-1">
           <button
             type="submit"
-            disabled={props.isLoading || !props.acceptTerms || !isRutValid}
+            disabled={props.isLoading}
             className={PRIMARY_BTN_CLASS}
           >
             {props.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear cuenta'}
@@ -819,11 +822,14 @@ function LoginForm() {
     setSuccessMsg(null);
 
     const validationError = validateSignUpFields({
-      acceptTerms,
+      nombre,
       rut,
+      email: signupEmail,
+      telefono,
       empresaNombre,
       signupPassword,
       signupConfirmPassword,
+      acceptTerms,
     });
     if (validationError) {
       setErrorMsg(validationError);
@@ -855,9 +861,12 @@ function LoginForm() {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotEmail) return;
     setErrorMsg(null);
     setSuccessMsg(null);
+    if (!isValidEmail(forgotEmail)) {
+      setErrorMsg('Ingresa un correo electrónico válido para recuperar tu contraseña.');
+      return;
+    }
     setIsLoading(true);
     const outcome = await executeForgotPasswordRequest(forgotEmail);
     setIsLoading(false);

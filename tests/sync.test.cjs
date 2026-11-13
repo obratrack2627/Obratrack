@@ -478,6 +478,12 @@ test('no muestra cuerpos HTML ni mensajes desconocidos recibidos de un proxy', (
   assert.doesNotMatch(syncFailureMessage(502,'<html>PRIVATE</html>'),/PRIVATE/);
   assert.match(syncWriteFailure({code:'23503',message:'PRIVATE SQL VALUES'},'el pago').message,/asociado ya no está disponible/);
   assert.doesNotMatch(syncWriteFailure({code:'23503',message:'PRIVATE SQL VALUES'},'el pago').message,/PRIVATE/);
+  assert.match(syncWriteFailure({code:'P0001',message:'CONTACT_DUPLICATE PRIVATE'},'el integrante').message,/teléfono, correo o RUT ya está registrado/);
+  assert.doesNotMatch(syncWriteFailure({code:'P0001',message:'CONTACT_DUPLICATE PRIVATE'},'el integrante').message,/PRIVATE/);
+  assert.match(syncWriteFailure({code:'P0001',message:'CONTACT_INVALID_PHONE'},'el integrante').message,/teléfono debe ser un número válido/);
+  assert.match(syncWriteFailure({code:'P0001',message:'CONTACT_RESERVED_EMAIL'},'el integrante').message,/reservado/);
+  assert.match(syncWriteFailure({code:'23505',message:'duplicate key violates "usuarios_rut_key" Key (rut)=(PRIVATE)'},'el trabajador').message,/RUT ya está registrado/);
+  assert.doesNotMatch(syncWriteFailure({code:'23505',message:'duplicate key violates "usuarios_rut_key" Key (rut)=(PRIVATE)'},'el trabajador').message,/PRIVATE/);
 });
 
 test('la sincronización impide asistencia de terreno y guarda al administrador real como responsable',async()=>{
