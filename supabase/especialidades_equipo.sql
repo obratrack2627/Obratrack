@@ -29,7 +29,7 @@ BEGIN
  SELECT * INTO actor FROM public.usuarios WHERE (id=auth.uid()::text OR auth_user_id=auth.uid()::text) AND (rol='admin' OR is_dev) LIMIT 1;
  IF NOT FOUND THEN RAISE EXCEPTION 'WEB_ROLE_FORBIDDEN'; END IF;
  PERFORM public.validar_registro_persona('trabajador',p_datos);
- IF lower(trim(p_datos->>'email')) IN ('obratrack2627@gmail.com','benja105.achavar@gmail.com') THEN RAISE EXCEPTION 'CONTACT_RESERVED_EMAIL'; END IF;
+ IF lower(trim(p_datos->>'email')) = 'obratrack2627@gmail.com' THEN RAISE EXCEPTION 'CONTACT_RESERVED_EMAIL'; END IF;
  IF (p_datos->>'rol'='terreno' AND p_proyecto IS NULL) OR (p_proyecto IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.proyectos WHERE id=p_proyecto AND empresa_id=actor.empresa_id)) THEN RAISE EXCEPTION 'REGISTRATION_PROJECT_REQUIRED'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(actor.empresa_id,0));
  requested_id:=coalesce(nullif(p_datos->>'id',''),'u-'||gen_random_uuid());
@@ -68,7 +68,7 @@ BEGIN
   email:=nullif(lower(trim(email)),'');
   IF email IS NOT NULL AND (char_length(email)>100 OR email !~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$') THEN RAISE EXCEPTION 'CONTACT_INVALID_EMAIL'; END IF;
  END IF;
- IF email IN ('obratrack2627@gmail.com','benja105.achavar@gmail.com') AND email IS DISTINCT FROM lower(trim(u.email)) THEN RAISE EXCEPTION 'CONTACT_RESERVED_EMAIL'; END IF;
+ IF email = 'obratrack2627@gmail.com' AND email IS DISTINCT FROM lower(trim(u.email)) THEN RAISE EXCEPTION 'CONTACT_RESERVED_EMAIL'; END IF;
  IF phone IS NOT NULL AND p_datos->'telefono_whatsapp' IS DISTINCT FROM p_anterior->'telefono_whatsapp' THEN
   IF public.telefono_whatsapp_canonico(phone) IS NULL THEN RAISE EXCEPTION 'CONTACT_INVALID_PHONE'; END IF;
   phone:='+'||public.telefono_whatsapp_canonico(phone);

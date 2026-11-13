@@ -65,7 +65,7 @@ BEGIN
   email:=nullif(lower(trim(email)),'');
   IF email IS NOT NULL AND (char_length(email)>100 OR email !~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$') THEN RAISE EXCEPTION 'CONTACT_INVALID_EMAIL'; END IF;
  END IF;
- IF email IN ('obratrack2627@gmail.com','benja105.achavar@gmail.com') AND email IS DISTINCT FROM lower(trim(u.email)) THEN RAISE EXCEPTION 'CONTACT_RESERVED_EMAIL'; END IF;
+ IF email = 'obratrack2627@gmail.com' AND email IS DISTINCT FROM lower(trim(u.email)) THEN RAISE EXCEPTION 'CONTACT_RESERVED_EMAIL'; END IF;
  IF phone IS NOT NULL AND p_datos->'telefono_whatsapp' IS DISTINCT FROM p_anterior->'telefono_whatsapp' THEN
   IF public.telefono_whatsapp_canonico(phone) IS NULL THEN RAISE EXCEPTION 'CONTACT_INVALID_PHONE'; END IF;
   phone:='+'||public.telefono_whatsapp_canonico(phone);

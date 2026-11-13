@@ -38,7 +38,7 @@ LANGUAGE plpgsql SET search_path=public,pg_temp AS $$
 BEGIN
  IF current_user IN ('postgres','supabase_admin','service_role') OR auth.role()='service_role' THEN RETURN NEW; END IF;
  IF (TG_OP='INSERT' AND NEW.is_dev) OR (TG_OP='UPDATE' AND NEW.is_dev IS DISTINCT FROM OLD.is_dev) THEN RAISE EXCEPTION 'DEV_PRIVILEGES_FORBIDDEN'; END IF;
- IF lower(trim(NEW.email)) IN ('obratrack2627@gmail.com','benja105.achavar@gmail.com') AND (TG_OP='INSERT' OR lower(trim(NEW.email)) IS DISTINCT FROM lower(trim(OLD.email))) THEN RAISE EXCEPTION 'CONTACT_RESERVED_EMAIL'; END IF;
+ IF lower(trim(NEW.email)) = 'obratrack2627@gmail.com' AND (TG_OP='INSERT' OR lower(trim(NEW.email)) IS DISTINCT FROM lower(trim(OLD.email))) THEN RAISE EXCEPTION 'CONTACT_RESERVED_EMAIL'; END IF;
  RETURN NEW;
 END $$;
 DROP TRIGGER IF EXISTS proteger_privilegios_dev ON public.usuarios;
@@ -90,7 +90,7 @@ BEGIN
  SELECT * INTO actor FROM public.usuarios WHERE (id=auth.uid()::text OR auth_user_id=auth.uid()::text) AND (rol='admin' OR is_dev) LIMIT 1;
  IF NOT FOUND THEN RAISE EXCEPTION 'WEB_ROLE_FORBIDDEN'; END IF;
  PERFORM public.validar_registro_persona('trabajador',p_datos);
- IF lower(trim(p_datos->>'email')) IN ('obratrack2627@gmail.com','benja105.achavar@gmail.com') THEN RAISE EXCEPTION 'CONTACT_RESERVED_EMAIL'; END IF;
+ IF lower(trim(p_datos->>'email')) = 'obratrack2627@gmail.com' THEN RAISE EXCEPTION 'CONTACT_RESERVED_EMAIL'; END IF;
  IF (p_datos->>'rol'='terreno' AND p_proyecto IS NULL) OR (p_proyecto IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.proyectos WHERE id=p_proyecto AND empresa_id=actor.empresa_id)) THEN RAISE EXCEPTION 'REGISTRATION_PROJECT_REQUIRED'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(actor.empresa_id,0));
  requested_id:=coalesce(nullif(p_datos->>'id',''),'u-'||gen_random_uuid());

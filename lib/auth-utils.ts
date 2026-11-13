@@ -6,7 +6,6 @@ import { Usuario } from '@/types/database';
  */
 export const DEVELOPER_EMAILS: readonly string[] = [
   'obratrack2627@gmail.com',
-  'benja105.achavar@gmail.com',
 ];
 
 /**
