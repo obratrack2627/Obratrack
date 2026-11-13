@@ -16,7 +16,7 @@ import {
   Search,
   Mail,
   Receipt,
-  Map,
+  Map as MapIcon,
   ShieldCheck,
   Paperclip,
   Download,
@@ -189,7 +189,7 @@ export default function ProyectoDocumentosPage() {
       case 'plano':
         return {
           label: 'Plano / EETT',
-          icon: Map,
+          icon: MapIcon,
           color: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/30',
         };
       case 'factura_boleta':
@@ -308,7 +308,7 @@ export default function ProyectoDocumentosPage() {
             <div className="flex items-center justify-between gap-2 mb-2">
               <p className="text-xs font-mono font-semibold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Contratos y Planos</p>
               <div className="w-8 h-8 rounded-lg bg-cyan-500/15 text-cyan-500 flex items-center justify-center shrink-0">
-                <Map className="w-4 h-4" />
+                <MapIcon className="w-4 h-4" />
               </div>
             </div>
             <h3 className="text-xl sm:text-2xl font-heading font-bold text-navy-900 dark:text-white">

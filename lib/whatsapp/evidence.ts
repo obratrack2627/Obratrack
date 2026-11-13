@@ -79,7 +79,7 @@ export function evidenceActions(
       matches = projects.filter((p) => {
         const base =
           norm(p.nombre)
-            .split(/\s*[—–-]\s*/)[0]
+            .split(/[—–-]/)[0]
             ?.trim() || "";
         return base.length >= 4 && normText.includes(base);
       });

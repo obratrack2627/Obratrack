@@ -165,7 +165,7 @@ export function rescheduleSuggestion(
     excluded.includes(base)
   )
     base = addWorkingDays(base, 1, weekdays, excluded);
-  const first = overdue.map((row) => row.fecha_termino).sort()[0];
+  const first = overdue.map((row) => row.fecha_termino).sort((a,b)=>a.localeCompare(b))[0];
   const delta = Math.max(1, calendarDays(first, base));
   const working = (date: string) =>
     weekdays.includes(new Date(civilDay(date)).getUTCDay()) &&

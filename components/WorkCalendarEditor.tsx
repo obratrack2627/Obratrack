@@ -29,7 +29,7 @@ export default function WorkCalendarEditor({
                   checked={days.includes(index)}
                   onChange={(event) => {
                     const next = event.target.checked
-                      ? [...days, index].sort()
+                      ? [...days, index].sort((a,b)=>a-b)
                       : days.filter((day) => day !== index);
                     if (next.length) onChange(next, excluded);
                   }}
@@ -55,7 +55,7 @@ export default function WorkCalendarEditor({
           disabled={!date}
           className="text-xs font-semibold text-[#FF6A00] disabled:opacity-50"
           onClick={() => {
-            onChange(days, Array.from(new Set([...excluded, date])).sort());
+            onChange(days, Array.from(new Set([...excluded, date])).sort((a,b)=>a.localeCompare(b)));
             setDate("");
           }}
         >

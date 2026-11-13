@@ -521,12 +521,10 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
 export function parseChatResponse(raw: string) {
   let parsed: any;
   try {
-    parsed = JSON.parse(
-      raw
-        .trim()
-        .replace(/^```(?:json)?\s*/i, "")
-        .replace(/\s*```$/, ""),
-    );
+    let json=raw.trim();
+    if(json.startsWith('```'))json=json.slice(3).replace(/^json\b/i,'').trimStart();
+    if(json.endsWith('```'))json=json.slice(0,-3).trimEnd();
+    parsed=JSON.parse(json);
   } catch {
     throw new AIError(
       "AI_INVALID_RESPONSE",
