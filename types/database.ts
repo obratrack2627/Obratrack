@@ -34,7 +34,7 @@ export interface PlanSuscripcion {
 export interface Empresa {
   id: string;
   nombre: string;
-  rut: string;
+  rut: string | null;
   plan_id?: SubscriptionPlanId;
   created_at?: string;
   updated_at?: string;
@@ -88,6 +88,11 @@ export interface Proyecto {
   fecha_termino_estimada: string;
   estado: ProjectStatus;
   monto_cotizado: number;
+  recepcion_estado?: 'pendiente' | 'observaciones' | 'conforme';
+  finalizada_automaticamente?: boolean;
+  estado_anterior_cierre?: ProjectStatus | null;
+  dias_laborales?: number[];
+  fechas_no_laborales?: string[];
   trabajadores_ids?: string[];
   created_at?: string;
 
@@ -110,6 +115,7 @@ export interface Proyecto {
 }
 
 export interface MaterialProyecto {
+  actividad_id?: string | null;
   id: string;
   proyecto_id: string;
   nombre: string;
@@ -120,6 +126,7 @@ export interface MaterialProyecto {
   subtotal: number;
   proveedor?: string;
   comprado: boolean;
+  pagado?: boolean | null;
   created_at?: string;
 }
 
@@ -133,6 +140,8 @@ export interface BitacoraEntrada {
   foto_url?: string;
   fecha: string;
   tipo: 'avance' | 'incidente' | 'clima' | 'entrega_material';
+  material_id?: string;
+  cantidad_recibida?: number;
   created_at?: string;
 }
 
@@ -144,6 +153,7 @@ export interface Actividad {
   fecha_inicio: string;
   fecha_termino: string;
   porcentaje_avance: number;
+  monto_contratado?: number | null;
   estado: ActivityStatus;
   orden: number;
   created_at?: string;
@@ -167,6 +177,8 @@ export interface Pago {
 }
 
 export interface Imprevisto {
+  asistencia_id?: string;
+  jornal_resumen?: {valor_diario:number;jornada:number;horas_extra:number;valor_hora_extra:number;asistencia_estado:string;asistencia_horas:number};
   id: string;
   proyecto_id: string;
   actividad_id?: string;
@@ -174,6 +186,9 @@ export interface Imprevisto {
   descripcion: string;
   monto: number;
   monto_adicional?: number;
+  categoria_gasto?: 'imprevisto' | 'mano_obra' | 'gasto_general';
+  usuario_id?: string;
+  pagado?: boolean | null;
   estado?: 'pendiente' | 'aprobado' | 'rechazado';
   foto_url?: string;
   fecha: string;
@@ -266,6 +281,8 @@ export interface ReclamoCambioObra {
   impacto_dias: number;
   materiales_requeridos: MaterialRequeridoCambio[];
   materiales_inyectados: boolean;
+  ajuste_presupuesto_aplicado?: boolean | null;
+  ajuste_plazo_aplicado?: boolean | null;
   foto_url?: string;
   origen: 'web' | 'whatsapp_ia' | 'cliente';
   resolucion_notas?: string;
@@ -281,7 +298,9 @@ export type CategoriaDocumentoObra =
   | 'factura_boleta'
   | 'correo'
   | 'permiso_normativa'
-  | 'otro';
+  | 'otro'
+  | 'cierre_diario'
+  | 'acta_recepcion';
 
 export interface DocumentoObra {
   id: string;
@@ -303,6 +322,8 @@ export interface DocumentoObra {
   correo_destinatario?: string;
   correo_asunto?: string;
   correo_cuerpo?: string;
+  recepcion_resumen?: import('@/lib/construction-workflow').Reception;
+  cierre_resumen?: import('@/lib/daily-close').DailyClose;
   fecha_documento: string;
   created_at?: string;
 }

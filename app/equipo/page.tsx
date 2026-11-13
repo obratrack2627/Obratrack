@@ -161,10 +161,11 @@ export default function EquipoPage() {
     showToast(`Datos de "${editNombre.trim()}" actualizados con éxito.`);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!userToDelete) return;
     dataService.deleteUsuario(userToDelete.id);
-    showToast(`Trabajador "${userToDelete.nombre}" eliminado del equipo.`);
+    try { await dataService.confirmarCambios(); showToast('Eliminación guardada.'); }
+    catch(error) { showToast(error instanceof Error ? error.message : 'Eliminación pendiente de sincronización.'); }
     setUserToDelete(null);
     loadData();
   };

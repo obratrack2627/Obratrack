@@ -1,4 +1,8 @@
 'use client';
+import { chileToday } from '@/lib/ai/project-deadlines';
+
+import {ReceptionSummary} from '@/components/ProjectReceptionPanel';
+import {DailyCloseSummary, downloadDailyClose} from '@/components/DailyClosePanel';
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
@@ -31,7 +35,7 @@ import {
   DocumentoObra,
   CategoriaDocumentoObra,
 } from '@/types/database';
-import { formatCLP, formatDate } from '@/lib/utils';
+import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 
 export default function ProyectoDocumentosPage() {
   const params = useParams();
@@ -51,7 +55,7 @@ export default function ProyectoDocumentosPage() {
   const [categoria, setCategoria] = useState<CategoriaDocumentoObra>('contrato');
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
-  const [fechaDocumento, setFechaDocumento] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaDocumento, setFechaDocumento] = useState(chileToday());
   const [numeroDocumento, setNumeroDocumento] = useState('');
   const [proveedorEntidad, setProveedorEntidad] = useState('');
   const [montoDocumento, setMontoDocumento] = useState('');
@@ -92,7 +96,7 @@ export default function ProyectoDocumentosPage() {
     setCategoria(cat);
     setNombre('');
     setDescripcion('');
-    setFechaDocumento(new Date().toISOString().split('T')[0]);
+    setFechaDocumento(chileToday());
     setNumeroDocumento('');
     setProveedorEntidad('');
     setMontoDocumento('');
@@ -120,7 +124,7 @@ export default function ProyectoDocumentosPage() {
       if (!nombre.trim()) {
         setNombre(res.fileName.replace(/\.[^/.]+$/, ''));
       }
-      showToast('📁 Archivo guardado en la obra.');
+      showToast('Archivo adjuntado. Guarda el documento para archivarlo en la obra.');
     } catch (err: any) {
       showToast(err.message || 'Error al subir el documento.');
     } finally {
@@ -145,7 +149,7 @@ export default function ProyectoDocumentosPage() {
       mime_type: mimeType || undefined,
       numero_documento: numeroDocumento.trim() || undefined,
       proveedor_entidad: proveedorEntidad.trim() || undefined,
-      monto_documento: montoDocumento ? Number(montoDocumento) : undefined,
+      monto_documento: montoDocumento ? parseThousands(montoDocumento) : undefined,
       correo_remitente: correoRemitente.trim() || undefined,
       correo_destinatario: correoDestinatario.trim() || undefined,
       correo_asunto: correoAsunto.trim() || undefined,
@@ -158,10 +162,11 @@ export default function ProyectoDocumentosPage() {
     showToast('✅ Documento archivado en el repositorio de la obra.');
   };
 
-  const handleEliminar = (id: string) => {
+  const handleEliminar = async (id: string) => {
     dataService.deleteDocumentoObra(id);
     loadData();
-    showToast('Documento eliminado del repositorio.');
+    try { await dataService.confirmarCambios(); showToast('Eliminación guardada.'); }
+    catch(error) { showToast(error instanceof Error ? error.message : 'Eliminación pendiente de sincronización.'); }
   };
 
   const formatBytes = (bytes?: number) => {
@@ -173,6 +178,8 @@ export default function ProyectoDocumentosPage() {
 
   const getCategoriaMeta = (cat: CategoriaDocumentoObra) => {
     switch (cat) {
+      case 'acta_recepcion': return {label:'Recepción',icon:CheckCircle2,color:'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'};
+      case 'cierre_diario': return {label:'Cierre diario',icon:CheckCircle2,color:'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'};
       case 'contrato':
         return {
           label: 'Contrato / Anexo',
@@ -603,9 +610,10 @@ export default function ProyectoDocumentosPage() {
 
                     <button
                       type="button"
+                      disabled={doc.categoria==='acta_recepcion'}
                       onClick={() => handleEliminar(doc.id)}
                       className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
-                      title="Eliminar"
+                      title={doc.categoria==='acta_recepcion'?'El historial de recepciones se conserva':'Eliminar'}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -679,7 +687,7 @@ export default function ProyectoDocumentosPage() {
                       : 'Haz clic para seleccionar archivo (PDF, Plano, Imagen, Excel, Word)'}
                   </span>
                   <span className="text-[11px] text-gray-500">
-                    Bucket seguro en la nube: documentos-obra (máx. 25 MB)
+                    PDF, imágenes, Word o Excel. Máximo 10 MB.
                   </span>
                   <input type="file" onChange={handleFileUpload} className="hidden" />
                 </label>
@@ -734,7 +742,7 @@ export default function ProyectoDocumentosPage() {
                       type="number"
                       min="0"
                       value={montoDocumento}
-                      onChange={(e) => setMontoDocumento(e.target.value)}
+                      onChange={(e) => setMontoDocumento(formatThousands(e.target.value))}
                       placeholder="Ej: 345900"
                       className="w-full px-2.5 py-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] text-xs text-navy-900 dark:text-white"
                     />
@@ -858,6 +866,8 @@ export default function ProyectoDocumentosPage() {
               <p className="text-xs text-gray-700 dark:text-gray-300">{docPreview.descripcion}</p>
             )}
 
+            {docPreview.recepcion_resumen && <ReceptionSummary summary={docPreview.recepcion_resumen}/>}
+            {docPreview.cierre_resumen && <><DailyCloseSummary summary={docPreview.cierre_resumen}/><button type="button" className="rounded-xl bg-[#FF6A00] px-4 py-2 text-sm font-bold text-white" onClick={()=>void downloadDailyClose(docPreview.cierre_resumen!).catch(()=>showToast('No se pudo descargar el cierre.'))}>Descargar cierre PDF</button></>}
             {docPreview.categoria === 'correo' && (
               <div className="bg-[#FAF8F5] dark:bg-[#1A222D] p-4 rounded-xl border border-kraft-200 dark:border-[#263040] space-y-2 text-xs">
                 <p>

@@ -1,3 +1,4 @@
+import { chileToday } from '@/lib/ai/project-deadlines';
 import { assertAttendanceManager } from '@/lib/attendance-access';
 
 import { normalizeSpecialties } from "@/lib/team-specialties";
@@ -30,7 +31,7 @@ async function checked(query: any, record = "el registro") {
 async function validateSync(client: any, user: any, body: any) {
   const { tables } = await loadAIContext(client, user);
   for (const [key, rows] of Object.entries(body)) {
-    if (!mapping[key] || !Array.isArray(rows) || rows.length > 1000)
+    if (!Object.hasOwn(mapping,key) || !Array.isArray(rows) || rows.length > 1000)
       throw new AIError(
         "SYNC_INVALID",
         "El formato de sincronización no es válido.",
@@ -96,6 +97,10 @@ async function validateSync(client: any, user: any, body: any) {
             "El trabajador no pertenece a tu empresa.",
             403,
           );
+      if(key==='materiales' && (!Number.isFinite(Number(row.cantidad)) || Number(row.cantidad)<=0)) throw new AIError('SYNC_INVALID','La cantidad de material debe ser mayor que cero.',422);
+      if(key==='bitacora' && row.material_id && (!Number.isFinite(Number(row.cantidad_recibida)) || Number(row.cantidad_recibida)<=0)) throw new AIError('SYNC_INVALID','Revisa la cantidad recibida.',422);
+      if(key==='imprevistos' && row.categoria_gasto && !['imprevisto','mano_obra','gasto_general'].includes(row.categoria_gasto)) throw new AIError('SYNC_INVALID','Revisa la categoría del gasto.',422);
+      if(key==='proyectos' && row.dias_laborales && (!Array.isArray(row.dias_laborales)||!row.dias_laborales.length||row.dias_laborales.some((day:any)=>!Number.isInteger(day)||day<0||day>6))) throw new AIError('SYNC_INVALID','Selecciona días válidos para trabajar.',422);
       if (key === "usuarios") {
         const existing = tables.usuarios.find((u) => u.id === row.id);
         const editableTeamRole =
@@ -220,6 +225,17 @@ export async function POST(request: NextRequest) {
     const empresaId = user.empresa_id;
     const body = input.cambios;
     const tables = await validateSync(sb, user, body);
+    if(body.documentos?.some((row:any)=>['cierre_diario','acta_recepcion'].includes(row.categoria)))throw new AIError('DOCUMENT_RPC','Confirma el cierre o la recepción desde el formulario correspondiente.',422);
+    if(body.materiales?.some((row:any)=>row.actividad_id&&!tables.actividades.some((activity:any)=>activity.id===row.actividad_id&&activity.proyecto_id===row.proyecto_id)))throw new AIError('MATERIAL_ACTIVITY','La partida no pertenece a esta obra.',422);
+
+    const removed = input.eliminados || {};
+    if(typeof removed!=='object' || Array.isArray(removed)) throw new AIError('SYNC_INVALID','El formato de las eliminaciones no es válido.',400);
+    for(const [key,ids] of Object.entries(removed)) {
+      if(!Object.hasOwn(mapping,key) || !Array.isArray(ids) || ids.length>1000 || ids.some(id=>typeof id!=='string'||!id||id.length>150)) throw new AIError('SYNC_INVALID','La eliminación no es válida.',400);
+      if(key==='asistencias')assertAttendanceManager(user);
+      if(key==='usuarios' && ids.some(id=>tables.usuarios.some((u:any)=>u.id===id && (u.auth_user_id || u.is_dev || u.id===user.id)))) throw new AIError('SYNC_FORBIDDEN','No puedes eliminar una cuenta con acceso mediante esta acción.',403);
+    }
+
 
     // 2. Sincronizar Clientes
     if (Array.isArray(body.clientes) && body.clientes.length > 0) {
@@ -304,7 +320,7 @@ export async function POST(request: NextRequest) {
               longitud: p.longitud ?? null,
               lugar_referencia: p.lugar_referencia || null,
               fecha_inicio:
-                p.fecha_inicio || new Date().toISOString().split("T")[0],
+                p.fecha_inicio || chileToday(),
               fecha_termino_estimada:
                 p.fecha_termino_estimada ||
                 new Date(Date.now() + 86400000 * 30)
@@ -312,6 +328,8 @@ export async function POST(request: NextRequest) {
                   .split("T")[0],
               estado: p.estado,
               monto_cotizado: Number(p.monto_cotizado) || 0,
+              dias_laborales: p.dias_laborales ?? tables.proyectos.find((row:any)=>row.id===p.id)?.dias_laborales ?? [1,2,3,4,5],
+              fechas_no_laborales: p.fechas_no_laborales ?? tables.proyectos.find((row:any)=>row.id===p.id)?.fechas_no_laborales ?? [],
             },
             { onConflict: "id" },
           ),
@@ -348,6 +366,7 @@ export async function POST(request: NextRequest) {
               fecha_inicio: a.fecha_inicio,
               fecha_termino: a.fecha_termino,
               porcentaje_avance: Number(a.porcentaje_avance) || 0,
+              monto_contratado: a.monto_contratado ?? tables.actividades.find((row:any)=>row.id===a.id)?.monto_contratado ?? null,
               estado: ["pendiente", "en_curso", "terminada"].includes(a.estado)
                 ? a.estado
                 : "pendiente",
@@ -378,7 +397,9 @@ export async function POST(request: NextRequest) {
                   m.subtotal ?? Number(m.cantidad) * Number(m.precio_unitario),
                 ) || 0,
               proveedor: m.proveedor || null,
+              actividad_id:m.actividad_id??tables.materiales_proyecto.find((row:any)=>row.id===m.id)?.actividad_id??null,
               comprado: Boolean(m.comprado),
+              pagado: m.pagado ?? null,
             },
             { onConflict: "id" },
           ),
@@ -406,7 +427,7 @@ export async function POST(request: NextRequest) {
                 ? pay.metodo
                 : "transferencia",
               estado: pay.estado || "completado",
-              fecha: pay.fecha || new Date().toISOString().split("T")[0],
+              fecha: pay.fecha || chileToday(),
               notas: pay.notas || pay.nota || null,
               comprobante_url: pay.comprobante_url || null,
             },
@@ -430,6 +451,8 @@ export async function POST(request: NextRequest) {
               titulo: b.titulo,
               nota: b.nota,
               foto_url: b.foto_url || null,
+              material_id: b.material_id || null,
+              cantidad_recibida: b.cantidad_recibida ?? null,
               tipo: [
                 "avance",
                 "incidente",
@@ -438,7 +461,7 @@ export async function POST(request: NextRequest) {
               ].includes(b.tipo)
                 ? b.tipo
                 : "avance",
-              fecha: b.fecha || new Date().toISOString().split("T")[0],
+              fecha: b.fecha || chileToday(),
             },
             { onConflict: "id" },
           ),
@@ -459,11 +482,14 @@ export async function POST(request: NextRequest) {
                 imp.titulo || imp.descripcion?.slice(0, 80) || "Imprevisto",
               descripcion: imp.descripcion || "Imprevisto en obra",
               monto_adicional: Number(imp.monto ?? imp.monto_adicional) || 0,
+              categoria_gasto: imp.categoria_gasto || 'imprevisto',
+              usuario_id: imp.usuario_id || null,
+              pagado: imp.pagado ?? null,
               estado: imp.estado || "pendiente",
               origen: imp.origen === "whatsapp_ia" ? "whatsapp_ia" : "manual",
               foto_url: imp.foto_url || null,
               fecha_reporte:
-                imp.fecha || new Date().toISOString().split("T")[0],
+                imp.fecha || chileToday(),
             },
             { onConflict: "id" },
           ),
@@ -496,7 +522,7 @@ export async function POST(request: NextRequest) {
               foto_url: rc.foto_url || null,
               origen: rc.origen || "web",
               resolucion_notas: rc.resolucion_notas || null,
-              fecha: rc.fecha || new Date().toISOString().split("T")[0],
+              fecha: rc.fecha || chileToday(),
             },
             { onConflict: "id" },
           ),
@@ -529,7 +555,7 @@ export async function POST(request: NextRequest) {
               correo_asunto: doc.correo_asunto || null,
               correo_cuerpo: doc.correo_cuerpo || null,
               fecha_documento:
-                doc.fecha_documento || new Date().toISOString().split("T")[0],
+                doc.fecha_documento || chileToday(),
             },
             { onConflict: "id" },
           ),
@@ -584,6 +610,15 @@ export async function POST(request: NextRequest) {
         ),
         `el reporte de WhatsApp «${r.id}»`,
       );
+    for(const key of ['asistencias','documentos','reclamos_cambios','reportes_whatsapp','bitacora','pagos','materiales','imprevistos','actividades','proyectos','clientes','usuarios']) {
+      const ids = removed[key];
+      if(!ids?.length) continue;
+      let query = sb.from(mapping[key]).delete().in('id',ids);
+      query = ['proyectos','clientes','usuarios','documentos','reclamos_cambios','asistencias','reportes_whatsapp'].includes(key)
+        ? query.eq('empresa_id',empresaId)
+        : query.in('proyecto_id',tables.proyectos.map((p:any)=>p.id));
+      await checked(query,'la eliminación solicitada');
+    }
     return NextResponse.json({
       success: true,
       updated_at: new Date().toISOString(),

@@ -68,6 +68,9 @@ Incluye cliente_id, cliente_nombre, cliente_telefono y condiciones_pago solo si 
 El servidor recalcula subtotales, utilidad e IVA (19 %). Respeta margen, superficie y cantidades indicados por el usuario. No copies las cifras de este ejemplo.
 Para revisar una cotización anterior usa el contexto cotizacion_actual. Si no hay datos suficientes, pregunta primero.
 
+Para confirmar un cierre de jornada, solo jefatura, usa registrar_documento con categoria:'cierre_diario', fecha_documento y descripción opcional. Pide que los demás registros estén guardados y ejecuta el cierre como única acción; el servidor compila la asistencia, evidencias, recepciones, ingresos, costos y pendientes reales. No inventes información ni marques asistencia al cerrar.
+Para registrar una recepción de material existente usa crear_bitacora con material_id, cantidad_recibida, subtipo:'entrega_material' y fecha. La cantidad es SOLO la entrega nueva, no el acumulado; nunca supera lo pendiente. Comprado, recibido y pagado son estados distintos. Si no identificas el material de esa obra, pregunta antes; no crees un material duplicado.
+Para jornales o gastos generales usa registrar_imprevisto con categoria_gasto:'mano_obra' o 'gasto_general', monto, fecha y usuario_id cuando se conozca. pagado:true solo si el jefe confirmó el pago; omitirlo conserva estado desconocido. No marques pagado por recibir una boleta o material.
 Registros actuales de trabajo: ${JSON.stringify(context.operacion_obra || null)}
 Cliente de la obra seleccionada: ${JSON.stringify(context.cliente_actual || null)}
 Contexto (JSON): ${JSON.stringify({ ...context, operacion_obra: undefined }).slice(0, 60000)}
@@ -177,3 +180,11 @@ export function isAlternativeRequest(message: string) {
   const value = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   return /\balternativas?\b|\b(?:otra|nueva|segunda|tercera)\s+(?:opcion|cotizacion|version|propuesta)\b|\b(?:dos|tres|cuatro|2|3|4)\s+(?:opciones|cotizaciones|versiones|propuestas)\b/.test(value);
 }
+
+export const CONSTRUCTION_WORKFLOW_RULES = `
+Una obra con todas las partidas al 100% termina automáticamente; si se baja un avance o se agrega una partida pendiente, el cierre automático se revierte a En curso. Cancelada conserva su estado. No uses actualizar_proyecto para simular este automatismo ni cambies presupuesto o pagos por un avance.
+Terminada significa faenas completas, no recepción conforme ni cuentas saldadas. Para registrar recepción usa registrar_documento categoria acta_recepcion, recepcion_estado observaciones/conforme, recibido_por (nombre real del mandante o representante), fecha_documento, descripcion y fotos solo con referencias reales. Primero deben estar todas las partidas completas. Es una acción separada, solo jefatura; no firmas por el mandante. Si falta el nombre o el resultado, pregunta. Si se reabre el trabajo, la recepción vuelve a pendiente y el historial se conserva.
+Para registrar un jornal desde asistencia usa registrar_imprevisto con asistencia_id real, descripcion, valor_diario entero CLP, jornada 1 o 0.5, horas_extra y valor_hora_extra acordado (0 sin extras). Solo presentes o atrasos confirmados por jefatura; sin asistencia, solicita al supervisor que la registre. Confirma tarifa y jornada, no inventes recargos ni deduzcas jornada por atraso; el jornal queda por pagar. Nunca dupliques el jornal de una misma asistencia ni marques asistencia a terreno.
+Distingue comprado, recibido y pagado, y pagos desconocidos. Para vincular un material a una faena usa actividad_id real de esa obra; nunca presupongas que todo el material es para la siguiente partida. Advierte de faltantes solo según vínculos y entregas reales. Para reprogramar por lluvia/atrasos ofrece revisar la propuesta en Carta Gantt; no prometas cambios de fecha sin guardarlos. Usa calendario laboral de la obra y fechas excluidas, no asumas feriados. Explica si el avance es promedio simple o ponderado por montos contratados.
+Responde de forma natural, breve y específica: qué cambió, en qué obra y si reabrió/terminó. Sin encabezados automáticos, emojis ni nombres internos de estados. Si hay ambigüedad pregunta; conserva referencias validadas de conversación. No confirmes una acción antes del guardado verificado.
+`;

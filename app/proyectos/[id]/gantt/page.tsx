@@ -1,4 +1,9 @@
 'use client';
+import { chileToday } from '@/lib/ai/project-deadlines';
+
+import ProjectReceptionPanel from '@/components/ProjectReceptionPanel';
+import ProjectPlanningReview from '@/components/ProjectPlanningReview';
+import DailyClosePanel from '@/components/DailyClosePanel';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect } from 'react';
@@ -59,7 +64,7 @@ export default function ProyectoGanttPage() {
   const [nombreActividad, setNombreActividad] = useState('');
   const [responsableId, setResponsableId] = useState('');
   const [activityError, setActivityError] = useState('');
-  const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaInicio, setFechaInicio] = useState(chileToday());
   const [fechaTermino, setFechaTermino] = useState(
     new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
@@ -69,7 +74,7 @@ export default function ProyectoGanttPage() {
   const [notaBitacora, setNotaBitacora] = useState('');
   const [fotoBitacora, setFotoBitacora] = useState('');
   const [tipoBitacora, setTipoBitacora] = useState<'avance' | 'incidente' | 'clima' | 'entrega_material'>('avance');
-  const [fechaBitacora, setFechaBitacora] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaBitacora, setFechaBitacora] = useState(chileToday());
 
   // Formulario editar bitácora
   const [editTituloBitacora, setEditTituloBitacora] = useState('');
@@ -134,10 +139,11 @@ export default function ProyectoGanttPage() {
     showToast('Partida actualizada.');
   };
 
-  const handleDeleteActivity = (actId: string) => {
+  const handleDeleteActivity = async (actId: string) => {
     dataService.deleteActividad(actId);
     loadData();
-    showToast('Partida eliminada de la Carta Gantt.');
+    try { await dataService.confirmarCambios(); showToast('Eliminación guardada.'); }
+    catch(error) { showToast(error instanceof Error ? error.message : 'Eliminación pendiente de sincronización.'); }
   };
 
   const handleAddActivity = (e: React.FormEvent) => {
@@ -218,10 +224,11 @@ export default function ProyectoGanttPage() {
     showToast('Entrada de bitácora actualizada.');
   };
 
-  const handleConfirmDeleteBitacora = () => {
+  const handleConfirmDeleteBitacora = async () => {
     if (!bitacoraToDelete) return;
     dataService.deleteBitacoraEntrada(bitacoraToDelete.id);
-    showToast('Entrada de bitácora eliminada.');
+    try { await dataService.confirmarCambios(); showToast('Eliminación guardada.'); }
+    catch(error) { showToast(error instanceof Error ? error.message : 'Eliminación pendiente de sincronización.'); }
     setBitacoraToDelete(null);
     loadData();
   };
@@ -286,6 +293,7 @@ export default function ProyectoGanttPage() {
           onAddActivity={() => { setActivityError(''); setIsAddModalOpen(true); }}
         />
 
+        <div className="px-4 sm:px-6 space-y-4"><ProjectPlanningReview project={proyecto} onChanged={loadData}/><ProjectReceptionPanel project={proyecto} onChanged={loadData}/></div>
         {/* Sección Bitácora Diaria de Obra y Registro Fotográfico */}
         <div className="min-w-0 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200">
@@ -398,6 +406,8 @@ export default function ProyectoGanttPage() {
         </div>
 
       </div>
+
+      {proyecto && <div className="px-4 sm:px-6 pb-6"><DailyClosePanel proyecto={proyecto}/></div>}
 
       {/* Modal: + Agregar Partida / Actividad */}
       {isAddModalOpen && (

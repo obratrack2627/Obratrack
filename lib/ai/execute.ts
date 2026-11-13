@@ -1,11 +1,11 @@
-'use client';
-import { dataService } from '@/lib/data-service';
-import { supabase } from '@/lib/supabase/client';
-import type { AccionAsistenteIA } from '@/types/database';
-import { prepareActionPlan } from './actions';
-import { snapshot as takeSnapshot, changesBetween } from './rows';
-import { contactDatabaseMessage, teamContactFields } from './contacts';
-export { changesBetween } from './rows';
+"use client";
+import { dataService } from "@/lib/data-service";
+import { supabase } from "@/lib/supabase/client";
+import type { AccionAsistenteIA } from "@/types/database";
+import { prepareActionPlan } from "./actions";
+import { snapshot as takeSnapshot, changesBetween } from "./rows";
+import { contactDatabaseMessage, teamContactFields } from "./contacts";
+export { changesBetween } from "./rows";
 const snapshot = () => takeSnapshot(dataService, tenant());
 
 type Row = Record<string, any> & { id: string };
@@ -20,7 +20,7 @@ type Pending = {
 const memory = new Map<string, Pending>();
 const tenant = () => {
   const empresa = dataService.getActiveUser()?.empresa_id;
-  if (!empresa) throw new Error('Inicia sesión para guardar las acciones.');
+  if (!empresa) throw new Error("Inicia sesión para guardar las acciones.");
   return empresa;
 };
 const pendingKey = (empresa: string) => `obratrack_ia_pendientes_v1_${empresa}`;
@@ -29,7 +29,7 @@ function remember(job: Pending) {
   memory.set(job.id, job);
   try {
     const entries = JSON.parse(
-      localStorage.getItem(pendingKey(job.empresa)) || '{}',
+      localStorage.getItem(pendingKey(job.empresa)) || "{}",
     );
     entries[job.id] = job;
     localStorage.setItem(pendingKey(job.empresa), JSON.stringify(entries));
@@ -41,12 +41,12 @@ function forget(job: Pending) {
   memory.delete(job.id);
   try {
     const entries = JSON.parse(
-      localStorage.getItem(pendingKey(job.empresa)) || '{}',
+      localStorage.getItem(pendingKey(job.empresa)) || "{}",
     );
     delete entries[job.id];
     localStorage.setItem(pendingKey(job.empresa), JSON.stringify(entries));
     const key = `obratrack_ia_confirmadas_v1_${job.empresa}`;
-    const ids = JSON.parse(localStorage.getItem(key) || '[]');
+    const ids = JSON.parse(localStorage.getItem(key) || "[]");
     localStorage.setItem(key, JSON.stringify([...ids.slice(-199), job.id]));
   } catch {
     /* Los upserts son idempotentes si queda un intento persistido. */
@@ -55,70 +55,148 @@ function forget(job: Pending) {
 export function isAIWriteConfirmed(id: string) {
   try {
     return JSON.parse(
-      localStorage.getItem(`obratrack_ia_confirmadas_v1_${tenant()}`) || '[]',
+      localStorage.getItem(`obratrack_ia_confirmadas_v1_${tenant()}`) || "[]",
     ).includes(id);
   } catch {
     return false;
   }
 }
 function databaseError(error: any): never {
-  if (['PGRST205', 'PGRST204', '42P01', '42703'].includes(error?.code))
+  if (["PGRST205", "PGRST204", "42P01", "42703"].includes(error?.code))
     throw new Error(
-      'Falta habilitar el módulo correspondiente en Supabase (migrations_v2.sql).',
+      "Falta habilitar el módulo correspondiente en Supabase (migrations_v2.sql).",
     );
-  if (['42501', 'PGRST301'].includes(error?.code))
-    throw new Error('Tu sesión no tiene permisos para guardar estos cambios.');
-  throw new Error('No se pudo confirmar el guardado en Supabase.');
+  if (["42501", "PGRST301"].includes(error?.code))
+    throw new Error("Tu sesión no tiene permisos para guardar estos cambios.");
+  throw new Error("No se pudo confirmar el guardado en Supabase.");
 }
 async function persist(job: Pending) {
   if (job.empresa !== tenant())
-    throw new Error('Estos cambios pertenecen a otra sesión.');
+    throw new Error("Estos cambios pertenecen a otra sesión.");
+  let refreshNative = false;
   // Orden de claves externas. Reintentar guarda los mismos IDs; no vuelve a crear pagos o partidas.
   for (const [table, rows] of Object.entries(job.changed)) {
     for (const original of rows) {
       const { trabajadores_ids, _contacto_anterior, ...row } = original;
-      if (table === 'usuarios' && _contacto_anterior) {
-        const { data, error } = await supabase.rpc('actualizar_contacto_equipo', {
-          p_usuario: row.id,
-          p_datos: Object.fromEntries(teamContactFields.map(key => [key, (key === 'especialidades' ? row[key] || [] : row[key] ?? null)])),
-          p_anterior: _contacto_anterior,
+      if (table === "documentos_obra" && row.categoria === "acta_recepcion") {
+        refreshNative = true;
+        const { data, error } = await supabase.rpc("registrar_recepcion_obra", {
+          p_id: row.id,
+          p_proyecto: row.proyecto_id,
+          p_datos: row.recepcion_resumen,
         });
-        if (error) throw new Error(contactDatabaseMessage(error) || 'No se pudo confirmar la edición del contacto.');
-        if (data?.id !== row.id) throw new Error('El servidor no confirmó la edición del contacto.');
+        if (error) databaseError(error);
+        if (data?.id !== row.id)
+          throw new Error("El servidor no confirmó la recepción.");
+        if (job.result.detalles?.id === row.id) job.result.detalles = data;
         continue;
       }
-      if (table === 'usuarios') {
-        const project = job.changed.proyectos?.find(project => project.trabajadores_ids?.includes(row.id));
-        const { data, error } = await supabase.rpc('crear_integrante_equipo', {
-          p_datos: Object.fromEntries(['id','nombre','rut','email','telefono_whatsapp','rol',...(row.especialidades !== undefined ? ['especialidades'] : [])].map(key => [key,row[key] ?? null])),
+      if (table === "imprevistos" && row.asistencia_id) {
+        refreshNative = true;
+        const values = row.jornal_resumen;
+        const { data, error } = await supabase.rpc(
+          "registrar_jornal_asistencia",
+          {
+            p_id: row.id,
+            p_asistencia: row.asistencia_id,
+            p_diario: values.valor_diario,
+            p_jornada: values.jornada,
+            p_extra: values.horas_extra,
+            p_valor_extra: values.valor_hora_extra,
+          },
+        );
+        if (error) databaseError(error);
+        if (data?.id !== row.id)
+          throw new Error("El servidor no confirmó el jornal.");
+        if (job.result.detalles?.id === row.id) job.result.detalles = data;
+        continue;
+      }
+      if (table === "documentos_obra" && row.categoria === "cierre_diario") {
+        refreshNative = true;
+        const { data, error } = await supabase.rpc("confirmar_cierre_diario", {
+          p_id: row.id,
+          p_proyecto: row.proyecto_id,
+          p_fecha: row.fecha_documento,
+          p_nota: row.cierre_resumen?.nota || "",
+        });
+        if (error) databaseError(error);
+        if (data?.id !== row.id)
+          throw new Error("El servidor no confirmó la jornada.");
+        if (job.result.detalles?.id === row.id) job.result.detalles = data;
+        continue;
+      }
+      if (table === "usuarios" && _contacto_anterior) {
+        const { data, error } = await supabase.rpc(
+          "actualizar_contacto_equipo",
+          {
+            p_usuario: row.id,
+            p_datos: Object.fromEntries(
+              teamContactFields.map((key) => [
+                key,
+                key === "especialidades" ? row[key] || [] : (row[key] ?? null),
+              ]),
+            ),
+            p_anterior: _contacto_anterior,
+          },
+        );
+        if (error)
+          throw new Error(
+            contactDatabaseMessage(error) ||
+              "No se pudo confirmar la edición del contacto.",
+          );
+        if (data?.id !== row.id)
+          throw new Error("El servidor no confirmó la edición del contacto.");
+        continue;
+      }
+      if (table === "usuarios") {
+        const project = job.changed.proyectos?.find((project) =>
+          project.trabajadores_ids?.includes(row.id),
+        );
+        const { data, error } = await supabase.rpc("crear_integrante_equipo", {
+          p_datos: Object.fromEntries(
+            [
+              "id",
+              "nombre",
+              "rut",
+              "email",
+              "telefono_whatsapp",
+              "rol",
+              ...(row.especialidades !== undefined ? ["especialidades"] : []),
+            ].map((key) => [key, row[key] ?? null]),
+          ),
           p_proyecto: project?.id || null,
         });
-        if (error) throw new Error(contactDatabaseMessage(error) || 'No se pudo confirmar el alta del integrante con sus datos y obra.');
-        if (data?.id !== row.id) throw new Error('El servidor no confirmó el integrante registrado.');
+        if (error)
+          throw new Error(
+            contactDatabaseMessage(error) ||
+              "No se pudo confirmar el alta del integrante con sus datos y obra.",
+          );
+        if (data?.id !== row.id)
+          throw new Error("El servidor no confirmó el integrante registrado.");
         continue;
       }
       const { data, error } = await supabase
         .from(table)
-        .upsert(row, { onConflict: 'id' })
-        .select('id');
+        .upsert(row, { onConflict: "id" })
+        .select("id");
       if (error) databaseError(error);
       if (!data?.some((x) => x.id === row.id))
-        throw new Error('El servidor no confirmó el registro guardado.');
-      if (table === 'proyectos') {
+        throw new Error("El servidor no confirmó el registro guardado.");
+      if (table === "proyectos") {
         const { error: clearError } = await supabase
-          .from('proyecto_trabajadores')
+          .from("proyecto_trabajadores")
           .delete()
-          .eq('proyecto_id', row.id);
+          .eq("proyecto_id", row.id);
         if (clearError) databaseError(clearError);
         if (trabajadores_ids?.length) {
           const { error: assignError } = await supabase
-            .from('proyecto_trabajadores')
+            .from("proyecto_trabajadores")
             .upsert(
               trabajadores_ids.map((usuario_id: string) => ({
                 proyecto_id: row.id,
                 usuario_id,
               })),
-              { onConflict: 'proyecto_id,usuario_id' },
+              { onConflict: "proyecto_id,usuario_id" },
             );
           if (assignError) databaseError(assignError);
         }
@@ -127,22 +205,23 @@ async function persist(job: Pending) {
   }
   for (const [table, rows] of Object.entries(job.deleted).reverse()) {
     for (const row of rows) {
-      const { error } = await supabase.from(table).delete().eq('id', row.id);
+      const { error } = await supabase.from(table).delete().eq("id", row.id);
       if (error) databaseError(error);
     }
   }
   forget(job);
-  window.dispatchEvent(new CustomEvent('obratrack_cloud_synced'));
+  if (refreshNative) await dataService.pullFromCloudServer();
+  window.dispatchEvent(new CustomEvent("obratrack_cloud_synced"));
   return job.result;
 }
 export async function retryAIWrite(id: string) {
   const empresa = tenant();
   const job =
     memory.get(id) ||
-    JSON.parse(localStorage.getItem(pendingKey(empresa)) || '{}')[id];
+    JSON.parse(localStorage.getItem(pendingKey(empresa)) || "{}")[id];
   if (!job)
     throw new Error(
-      'No se encontró el guardado pendiente. Revisa los registros de la obra.',
+      "No se encontró el guardado pendiente. Revisa los registros de la obra.",
     );
   return persist(job);
 }
@@ -162,11 +241,11 @@ export function executeAI(input: any, currentId?: string) {
       currentId,
     );
     if (!actions.length)
-      return { result: undefined, pendingId: undefined, warning: '' };
+      return { result: undefined, pendingId: undefined, warning: "" };
     const before = snapshot();
     const backup = new Map(
       Object.keys(localStorage)
-        .filter((k) => k.startsWith('obratrack_') && k.endsWith(`_${empresa}`))
+        .filter((k) => k.startsWith("obratrack_") && k.endsWith(`_${empresa}`))
         .map((k) => [k, localStorage.getItem(k)!]),
     );
     let result: AccionAsistenteIA | null;
@@ -175,15 +254,15 @@ export function executeAI(input: any, currentId?: string) {
         dataService.ejecutarAccionGlobalIA(
           actions.length === 1
             ? actions[0]
-            : { tipo: 'lote_acciones', acciones: actions },
+            : { tipo: "lote_acciones", acciones: actions },
           currentId,
         ),
       );
-      if (!result) throw new Error('No se pudo ejecutar la acción solicitada.');
+      if (!result) throw new Error("No se pudo ejecutar la acción solicitada.");
     } catch (error) {
       for (const key of Object.keys(localStorage))
         if (
-          key.startsWith('obratrack_') &&
+          key.startsWith("obratrack_") &&
           key.endsWith(`_${empresa}`) &&
           !backup.has(key)
         )
@@ -203,7 +282,7 @@ export function executeAI(input: any, currentId?: string) {
     remember(job);
     try {
       await persist(job);
-      return { result, pendingId: undefined, warning: '' };
+      return { result, pendingId: undefined, warning: "" };
     } catch (error) {
       return {
         result: undefined,

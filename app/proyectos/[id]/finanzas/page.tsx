@@ -1,6 +1,10 @@
 'use client';
+import { chileToday } from '@/lib/ai/project-deadlines';
+
 import MoneyAmount from "@/components/MoneyAmount";
 import ActionMenu from '@/components/ActionMenu';
+import LabourFromAttendance from '@/components/LabourFromAttendance';
+import ProjectMaterials from '@/components/ProjectMaterials';
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
@@ -106,7 +110,7 @@ export default function ProyectoFinanzasPage() {
   // Formulario Nuevo Pago
   const [montoPago, setMontoPago] = useState('');
   const [metodoPago, setMetodoPago] = useState<PaymentMethod>('transferencia');
-  const [fechaPago, setFechaPago] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaPago, setFechaPago] = useState(chileToday());
   const [notaPago, setNotaPago] = useState('');
 
   // Formulario Editar Pago
@@ -119,7 +123,14 @@ export default function ProyectoFinanzasPage() {
   const [descImprevisto, setDescImprevisto] = useState('');
   const [montoImprevisto, setMontoImprevisto] = useState('');
   const [fotoUrlImprevisto, setFotoUrlImprevisto] = useState('');
-  const [fechaImprevisto, setFechaImprevisto] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaImprevisto, setFechaImprevisto] = useState(chileToday());
+  const [costCategory,setCostCategory]=useState<Imprevisto['categoria_gasto']>('imprevisto');
+  const [costWorker,setCostWorker]=useState('');
+  const [costPaid,setCostPaid]=useState<boolean|null>(null);
+  const [editCostCategory,setEditCostCategory]=useState<Imprevisto['categoria_gasto']>('imprevisto');
+  const [editCostWorker,setEditCostWorker]=useState('');
+  const [editCostPaid,setEditCostPaid]=useState<boolean|null>(null);
+
 
   // Formulario Editar Imprevisto
   const [editImpDesc, setEditImpDesc] = useState('');
@@ -133,6 +144,8 @@ export default function ProyectoFinanzasPage() {
   const [cantidadMat, setCantidadMat] = useState('1');
   const [unidadMat, setUnidadMat] = useState('unidades');
   const [precioUnitMat, setPrecioUnitMat] = useState('');
+  const [actividadMat,setActividadMat]=useState('');
+  const [editActividadMat,setEditActividadMat]=useState('');
   const [proveedorMat, setProveedorMat] = useState('Imperial');
 
   // Formulario Editar Material
@@ -232,7 +245,7 @@ export default function ProyectoFinanzasPage() {
       proyecto_id: projectId,
       monto,
       metodo: 'transferencia',
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: chileToday(),
       nota,
     });
     loadData();
@@ -286,10 +299,11 @@ export default function ProyectoFinanzasPage() {
     showToast(`Pago actualizado con éxito.`);
   };
 
-  const handleConfirmDeletePago = () => {
+  const handleConfirmDeletePago = async () => {
     if (!pagoToDelete) return;
     dataService.deletePago(pagoToDelete.id);
-    showToast(`Pago de ${formatCLP(pagoToDelete.monto)} eliminado.`);
+    try { await dataService.confirmarCambios(); showToast('Eliminación guardada.'); }
+    catch(error) { showToast(error instanceof Error ? error.message : 'Eliminación pendiente de sincronización.'); }
     setPagoToDelete(null);
     loadData();
   };
@@ -303,6 +317,9 @@ export default function ProyectoFinanzasPage() {
     dataService.createImprevisto({
       proyecto_id: projectId,
       descripcion: descImprevisto.trim(),
+      categoria_gasto: costCategory,
+      usuario_id: costWorker || undefined,
+      pagado: costPaid,
       monto: parsed,
       foto_url: fotoUrlImprevisto.trim() || undefined,
       fecha: fechaImprevisto,
@@ -319,6 +336,7 @@ export default function ProyectoFinanzasPage() {
 
   const handleOpenEditImprevisto = (imp: Imprevisto) => {
     setEditingImprevisto(imp);
+    setEditCostCategory(imp.categoria_gasto || 'imprevisto');setEditCostWorker(imp.usuario_id || '');setEditCostPaid(imp.pagado ?? null);
     setEditImpDesc(imp.descripcion);
     setEditImpMonto(formatThousands(imp.monto));
     setEditImpFoto(imp.foto_url || '');
@@ -332,6 +350,9 @@ export default function ProyectoFinanzasPage() {
 
     dataService.updateImprevisto(editingImprevisto.id, {
       descripcion: editImpDesc.trim(),
+      categoria_gasto: editCostCategory,
+      usuario_id: editCostWorker || undefined,
+      pagado: editCostPaid,
       monto: parsed,
       foto_url: editImpFoto.trim() || undefined,
       fecha: editImpFecha,
@@ -342,10 +363,11 @@ export default function ProyectoFinanzasPage() {
     showToast(`Imprevisto actualizado con éxito.`);
   };
 
-  const handleConfirmDeleteImprevisto = () => {
+  const handleConfirmDeleteImprevisto = async () => {
     if (!imprevistoToDelete) return;
     dataService.deleteImprevisto(imprevistoToDelete.id);
-    showToast(`Imprevisto eliminado.`);
+    try { await dataService.confirmarCambios(); showToast('Eliminación guardada.'); }
+    catch(error) { showToast(error instanceof Error ? error.message : 'Eliminación pendiente de sincronización.'); }
     setImprevistoToDelete(null);
     loadData();
   };
@@ -356,7 +378,7 @@ export default function ProyectoFinanzasPage() {
     if (!nombreMat.trim()) return;
 
     const parsedPrice = parseThousands(precioUnitMat);
-    const qty = Number(cantidadMat) || 1;
+    const qty = Number(cantidadMat);
 
     dataService.createMaterialProyecto({
       proyecto_id: projectId,
@@ -367,11 +389,13 @@ export default function ProyectoFinanzasPage() {
       precio_unitario: parsedPrice,
       subtotal: qty * parsedPrice,
       proveedor: proveedorMat,
+      actividad_id: actividadMat||null,
       comprado: false,
     });
 
     setIsMaterialModalOpen(false);
     setNombreMat('');
+    setActividadMat('');
     setCantidadMat('1');
     setPrecioUnitMat('');
     loadData();
@@ -380,6 +404,7 @@ export default function ProyectoFinanzasPage() {
 
   const handleOpenEditMaterial = (m: MaterialProyecto) => {
     setEditingMaterial(m);
+    setEditActividadMat(m.actividad_id||'');
     setEditMatNombre(m.nombre);
     setEditMatCategoria(m.categoria || 'Obra Gruesa');
     setEditMatCantidad(String(m.cantidad));
@@ -393,7 +418,7 @@ export default function ProyectoFinanzasPage() {
     if (!editingMaterial || !editMatNombre.trim()) return;
 
     const parsedPrice = parseThousands(editMatPrecioUnit);
-    const qty = Number(editMatCantidad) || 1;
+    const qty = Number(editMatCantidad);
 
     dataService.updateMaterialProyecto(editingMaterial.id, {
       nombre: editMatNombre.trim(),
@@ -403,6 +428,7 @@ export default function ProyectoFinanzasPage() {
       precio_unitario: parsedPrice,
       subtotal: qty * parsedPrice,
       proveedor: editMatProveedor,
+      actividad_id: editActividadMat||null,
     });
 
     setEditingMaterial(null);
@@ -415,10 +441,11 @@ export default function ProyectoFinanzasPage() {
     loadData();
   };
 
-  const handleConfirmDeleteMaterial = () => {
+  const handleConfirmDeleteMaterial = async () => {
     if (!materialToDelete) return;
     dataService.deleteMaterialProyecto(materialToDelete.id);
-    showToast(`Material "${materialToDelete.nombre}" eliminado.`);
+    try { await dataService.confirmarCambios(); showToast('Eliminación guardada.'); }
+    catch(error) { showToast(error instanceof Error ? error.message : 'Eliminación pendiente de sincronización.'); }
     setMaterialToDelete(null);
     loadData();
   };
@@ -454,6 +481,8 @@ export default function ProyectoFinanzasPage() {
   const saldoPendiente = Math.max(0, montoCotizado - totalPagado);
   const porcentajePagado = montoCotizado > 0 ? Math.min(100, Math.round((totalPagado / montoCotizado) * 100)) : 0;
 
+  const totalJornales = imprevistos.filter(row=>row.categoria_gasto==='mano_obra').reduce((sum,row)=>sum+Number(row.monto),0);
+  const flujoRegistrado = totalPagado-imprevistos.filter(row=>row.pagado===true).reduce((sum,row)=>sum+Number(row.monto),0)-materiales.filter(row=>row.pagado===true).reduce((sum,row)=>sum+Number(row.subtotal),0);
   const totalCostosDirectos = totalMateriales + totalImprevistos;
   const saldoTrasCostos = montoCotizado - totalCostosDirectos;
   const porcentajeDisponible = montoCotizado > 0 ? Math.round((saldoTrasCostos / montoCotizado) * 100) : 0;
@@ -549,7 +578,7 @@ export default function ProyectoFinanzasPage() {
               },
               {
                 id: 'imprevistos',
-                label: 'Imprevistos',
+                label: 'Gastos',
                 count: imprevistos.length,
                 dot: 'bg-red-500',
                 activeClass: 'bg-red-600 text-white border-red-600 shadow-sm',
@@ -668,10 +697,10 @@ export default function ProyectoFinanzasPage() {
               <MoneyAmount value={saldoTrasCostos} />
             </h3>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
-              Sin descontar mano de obra ni gastos generales
+              Materiales previstos y gastos registrados. Completa los jornales de la obra.
             </p>
           </div>
-        </div></CompactSummary>
+        </div></CompactSummary><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-gray-700 dark:bg-[#141A23]"><p className="text-xs text-gray-500">Mano de obra registrada</p><strong className="mt-1 block text-xl"><MoneyAmount value={totalJornales}/></strong></div><div className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-gray-700 dark:bg-[#141A23]"><p className="text-xs text-gray-500">Flujo registrado de la obra</p><strong className="mt-1 block text-xl"><MoneyAmount value={flujoRegistrado}/></strong><p className="mt-1 text-xs text-gray-500">Cobros menos pagos confirmados de gastos y materiales. No equivale al saldo bancario.</p></div></div>
 
         {/* Gráfico y Paneles de Control */}
         <div className={financeSection === 'materiales' ? 'hidden' : 'grid grid-cols-1 gap-6'}>
@@ -795,13 +824,13 @@ export default function ProyectoFinanzasPage() {
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-heading font-bold text-sm text-navy-900 flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-obra-red" />
-                  <span>Imprevistos de Costo</span>
+                  <span>Gastos registrados</span>
                 </h4>
                 <button
                   onClick={() => setIsImprevistoModalOpen(true)}
                   className="px-2.5 py-1 bg-obra-red hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
                 >
-                  + Reportar
+                  + Registrar gasto
                 </button>
               </div>
 
@@ -826,7 +855,7 @@ export default function ProyectoFinanzasPage() {
                             {imp.origen === 'whatsapp_ia' ? 'WhatsApp IA' : 'Manual'}
                           </span>
                         </div>
-                        <p className="text-[11px] text-gray-700 leading-tight">{imp.descripcion}</p>
+                        <p className="text-[11px] text-gray-700 leading-tight">{imp.descripcion}</p><p className="text-[11px] text-gray-500">{imp.categoria_gasto==='mano_obra'?'Mano de obra':imp.categoria_gasto==='gasto_general'?'Gasto general':'Imprevisto'} · {imp.pagado===true?'Pago confirmado':imp.pagado===false?'Pendiente de pago':'Pago sin confirmar'}</p>
                         <span className="text-[10px] font-mono text-gray-400">{formatDate(imp.fecha)}</span>
                       </div>
 
@@ -870,6 +899,7 @@ export default function ProyectoFinanzasPage() {
 
         </div>
 
+        <LabourFromAttendance projectId={projectId} onChanged={loadData}/>
         {/* Sección: Materiales & Insumos de la Obra (con CRUD) */}
         <div className={`${financeSection === 'materiales' ? '' : 'hidden'} bg-white border border-kraft-200 rounded-2xl p-6 shadow-sm space-y-4`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200">
@@ -904,69 +934,8 @@ export default function ProyectoFinanzasPage() {
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-kraft-200 text-gray-500 font-mono text-[11px] uppercase">
-                    <th className="py-2.5 px-3">Estado</th>
-                    <th className="py-2.5 px-3">Material</th>
-                    <th className="py-2.5 px-3">Categoría</th>
-                    <th className="py-2.5 px-3 text-center">Cantidad</th>
-                    <th className="py-2.5 px-3 text-right">P. Unitario</th>
-                    <th className="py-2.5 px-3 text-right">Subtotal</th>
-                    <th className="py-2.5 px-3">Proveedor</th>
-                    <th className="py-2.5 px-3 text-center">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 font-sans">
-                  {materiales.map((m) => (
-                    <tr key={m.id} className="hover:bg-kraft-50/60 transition-colors">
-                      <td className="py-2.5 px-3">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleMaterial(m)}
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono transition-colors ${
-                            m.comprado
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {m.comprado ? '✓ Comprado' : '⏳ Pendiente'}
-                        </button>
-                      </td>
-                      <td className="py-2.5 px-3 font-semibold text-navy-900">{m.nombre}</td>
-                      <td className="py-2.5 px-3 text-gray-500 text-[11px] font-mono">{formatMaterialCategory(m.categoria)}</td>
-                      <td className="py-2.5 px-3 text-center font-mono">
-                        {m.cantidad} {m.unidad}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-gray-700">{formatCLP(m.precio_unitario)}</td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-navy-900">{formatCLP(m.subtotal)}</td>
-                      <td className="py-2.5 px-3 text-gray-600 text-xs font-mono">{m.proveedor || '-'}</td>
-                      <td className="py-2.5 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditMaterial(m)}
-                            className="p-1 text-gray-400 hover:text-obra-orange rounded"
-                            title="Editar material"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setMaterialToDelete(m)}
-                            className="p-1 text-gray-400 hover:text-red-600 rounded"
-                            title="Eliminar material"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ProjectMaterials materials={materiales} onEdit={handleOpenEditMaterial} onDelete={setMaterialToDelete} onChanged={loadData}/>
+
           )}
         </div>
 
@@ -1200,7 +1169,7 @@ export default function ProyectoFinanzasPage() {
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
               <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-obra-red" />
-                <span>Registrar Imprevisto / Costo Extra</span>
+                <span>Registrar gasto de la obra</span>
               </h3>
               <button onClick={() => setIsImprevistoModalOpen(false)} className="text-gray-400 hover:text-gray-700">
                 <X className="w-5 h-5" />
@@ -1291,7 +1260,7 @@ export default function ProyectoFinanzasPage() {
                   type="submit"
                   className="px-4 py-2 bg-obra-red text-white text-xs font-bold rounded-xl font-heading shadow-sm hover:bg-red-700"
                 >
-                  Guardar Imprevisto
+                  Guardar gasto
                 </button>
               </div>
             </form>
@@ -1466,7 +1435,7 @@ export default function ProyectoFinanzasPage() {
                 />
                 <MaterialCatalogQuickSearch
                   query={nombreMat}
-                  cantidad={Number(cantidadMat) || 1}
+                  cantidad={Number(cantidadMat)}
                   unidad={unidadMat}
                   onSelect={(sel) => {
                     setNombreMat(sel.nombre);
@@ -1484,7 +1453,8 @@ export default function ProyectoFinanzasPage() {
                   </label>
                   <input
                     type="number"
-                    min="1"
+                    min="0.001"
+                    step="any"
                     required
                     value={cantidadMat}
                     onChange={(e) => setCantidadMat(e.target.value)}
@@ -1548,6 +1518,7 @@ export default function ProyectoFinanzasPage() {
                     <option value="Red MTS">Red MTS</option>
                     <option value="Barraca Local">Barraca Local</option>
                   </select>
+                  <label className="mt-3 block text-xs font-semibold">Partida que requiere el material (opcional)<select value={actividadMat} onChange={e=>setActividadMat(e.target.value)} className="mt-1 w-full rounded-xl border border-kraft-200 bg-kraft-50 px-3 py-2 text-sm"><option value="">Sin partida asociada</option>{actividades.map(row=><option key={row.id} value={row.id}>{row.nombre}</option>)}</select></label>
                 </div>
               </div>
 
@@ -1606,7 +1577,8 @@ export default function ProyectoFinanzasPage() {
                   </label>
                   <input
                     type="number"
-                    min="1"
+                    min="0.001"
+                    step="any"
                     required
                     value={editMatCantidad}
                     onChange={(e) => setEditMatCantidad(e.target.value)}
@@ -1669,6 +1641,7 @@ export default function ProyectoFinanzasPage() {
                     <option value="Red MTS">Red MTS</option>
                     <option value="Barraca Local">Barraca Local</option>
                   </select>
+                  <label className="mt-3 block text-xs font-semibold">Partida que requiere el material (opcional)<select value={editActividadMat} onChange={e=>setEditActividadMat(e.target.value)} className="mt-1 w-full rounded-xl border border-kraft-200 bg-kraft-50 px-3 py-2 text-sm"><option value="">Sin partida asociada</option>{actividades.map(row=><option key={row.id} value={row.id}>{row.nombre}</option>)}</select></label>
                 </div>
               </div>
 

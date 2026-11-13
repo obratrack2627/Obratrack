@@ -1,3 +1,4 @@
+import { chileToday } from '@/lib/ai/project-deadlines';
 import {isMaterialComparison} from '@/lib/materials/types';
 import { supabase } from './client';
 import {
@@ -298,6 +299,12 @@ export class SupabaseService {
       const { data, error } = await query;
       if (error) throw error;
       return (data || []).map((row) => ({
+        dias_laborales: row.dias_laborales,
+        fechas_no_laborales: row.fechas_no_laborales,
+        finalizada_automaticamente: row.finalizada_automaticamente,
+        recepcion_estado:row.recepcion_estado,
+        estado_anterior_cierre: row.estado_anterior_cierre,
+
         id: row.id,
         empresa_id: row.empresa_id,
         cliente_id: row.cliente_id,
@@ -369,8 +376,8 @@ export class SupabaseService {
       latitud: proyecto.latitud || null,
       longitud: proyecto.longitud || null,
       lugar_referencia: proyecto.lugar_referencia || null,
-      fecha_inicio: proyecto.fecha_inicio || new Date().toISOString().split('T')[0],
-      fecha_termino_estimada: proyecto.fecha_termino_estimada || new Date().toISOString().split('T')[0],
+      fecha_inicio: proyecto.fecha_inicio || chileToday(),
+      fecha_termino_estimada: proyecto.fecha_termino_estimada || chileToday(),
       estado: proyecto.estado || 'activo',
       monto_cotizado: Number(proyecto.monto_cotizado || 0),
     };
@@ -406,6 +413,8 @@ export class SupabaseService {
       const { data, error } = await query;
       if (error) throw error;
       return (data || []).map((row) => ({
+        monto_contratado: row.monto_contratado,
+
         id: row.id,
         proyecto_id: row.proyecto_id,
         responsable_id: row.responsable_id,
@@ -478,7 +487,7 @@ export class SupabaseService {
       monto: Number(pago.monto || 0),
       metodo: pago.metodo || 'transferencia',
       estado: pago.estado || 'completado',
-      fecha: pago.fecha || new Date().toISOString().split('T')[0],
+      fecha: pago.fecha || chileToday(),
       notas: pago.notas || null,
       comprobante_url: pago.comprobante_url || null,
     };
@@ -498,6 +507,11 @@ export class SupabaseService {
       const { data, error } = await q;
       if (error) throw error;
       return (data || []).map((r) => ({
+        pagado: r.pagado,
+        actividad_id:r.actividad_id,
+        asistencia_id:r.asistencia_id,
+        jornal_resumen:r.jornal_resumen,
+
         id: r.id,
         proyecto_id: r.proyecto_id,
         nombre: r.nombre,
@@ -545,6 +559,9 @@ export class SupabaseService {
       const { data, error } = await q;
       if (error) throw error;
       return (data || []).map((r) => ({
+        material_id: r.material_id,
+        cantidad_recibida: r.cantidad_recibida,
+
         id: r.id,
         proyecto_id: r.proyecto_id,
         usuario_id: r.usuario_id,
@@ -590,6 +607,12 @@ export class SupabaseService {
       const { data, error } = await q;
       if (error) throw error;
       return (data || []).map((r) => ({
+        categoria_gasto: r.categoria_gasto,
+        usuario_id: r.usuario_id,
+        pagado: r.pagado,
+        asistencia_id:r.asistencia_id,
+        jornal_resumen:r.jornal_resumen,
+
         id: r.id,
         proyecto_id: r.proyecto_id,
         actividad_id: r.actividad_id,
@@ -599,7 +622,7 @@ export class SupabaseService {
         monto_adicional: Number(r.monto_adicional || 0),
         estado: r.estado,
         origen: r.origen,
-        fecha: r.fecha_reporte || new Date().toISOString().split('T')[0],
+        fecha: r.fecha_reporte || chileToday(),
         fecha_reporte: r.fecha_reporte,
         created_at: r.created_at,
       }));
@@ -619,7 +642,7 @@ export class SupabaseService {
       monto_adicional: Number(imp.monto_adicional ?? imp.monto ?? 0),
       estado: imp.estado || 'pendiente',
       origen: imp.origen || 'manual',
-      fecha_reporte: imp.fecha_reporte || imp.fecha || new Date().toISOString().split('T')[0],
+      fecha_reporte: imp.fecha_reporte || imp.fecha || chileToday(),
     };
     const { error } = await this.client.from('imprevistos').upsert(payload, { onConflict: 'id' });
     if (error) console.error('Error guardando imprevisto en Supabase:', error);
@@ -866,7 +889,7 @@ export class SupabaseService {
         monto_adicional: Number(r.monto_adicional || 0),
         estado: r.estado,
         origen: r.origen,
-        fecha: r.fecha_reporte || new Date().toISOString().split('T')[0],
+        fecha: r.fecha_reporte || chileToday(),
         fecha_reporte: r.fecha_reporte,
         created_at: r.created_at,
       }));

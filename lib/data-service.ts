@@ -1,3 +1,7 @@
+import {labourAmount,validateReception} from '@/lib/construction-workflow';
+import { dailySummary } from '@/lib/daily-close';
+import { addWorkingDays, projectProgress } from '@/lib/work-calendar';
+import { chileToday } from '@/lib/ai/project-deadlines';
 import { assignedCrew, crewAttendance } from '@/lib/crew';
 import { assertAttendanceManager } from '@/lib/attendance-access';
 
@@ -106,7 +110,17 @@ export class DataService {
     if (!this.isBrowser() && !this.isolatedStorage) return defaultValue;
     try {
       const item = (this.isolatedStorage || localStorage).getItem(key);
-      return item ? JSON.parse(item) : defaultValue;
+      const parsed=item ? JSON.parse(item) : defaultValue;
+      if(Array.isArray(parsed) && !this.isolatedStorage) {
+        const activeRaw=localStorage.getItem(KEYS.ACTIVE_USER);
+        const empresa=activeRaw ? JSON.parse(activeRaw)?.empresa_id : '';
+        const base=Object.keys(this.syncNames || {}).find(base=>key===`${base}_${empresa}`);
+        if(base) {
+          const deleted=JSON.parse(localStorage.getItem(`obratrack_deleted_v1_${empresa}`) || '{}');
+          return parsed.filter(row=>!deleted[this.syncNames[base]]?.[row.id]) as T;
+        }
+      }
+      return parsed;
     } catch {
       return defaultValue;
     }
@@ -115,6 +129,18 @@ export class DataService {
   private isPullingCloud = false;
 
   private dirtyKey() { return `obratrack_dirty_v1_${this.getActiveUser()?.empresa_id || ''}`; }
+  private deletedKey() { return `obratrack_deleted_v1_${this.getActiveUser()?.empresa_id || ''}`; }
+  pendingCloudChanges() {
+    return [this.dirtyKey(),this.deletedKey()].reduce((count,key)=>count+Object.values(this.getItem<Record<string,Record<string,unknown>>>(key,{})).reduce((sum,rows)=>sum+Object.keys(rows||{}).length,0),0);
+  }
+  async confirmarCambios() {
+    for(let attempt=0;attempt<5;attempt++) {
+      const saved=await this.pushToCloudServer();
+      if(!saved.success) throw new Error(saved.message+' Los cambios siguen pendientes en este dispositivo.');
+      if(!this.pendingCloudChanges())return;
+    }
+    throw new Error('Aún hay cambios pendientes. Reintenta la sincronización.');
+  }
   private syncNames: Record<string,string> = {
     [KEYS.PROYECTOS]:'proyectos',[KEYS.CLIENTES]:'clientes',[KEYS.USUARIOS]:'usuarios',
     [KEYS.ACTIVIDADES]:'actividades',[KEYS.PAGOS]:'pagos',[KEYS.MATERIALES_PROYECTO]:'materiales',
@@ -133,6 +159,11 @@ export class DataService {
           const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
           const name=this.syncNames[base]; pending[name] ||= {};
           const retained=new Set(value.map(row=>row.id));
+          const deleted=this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{});
+          deleted[name] ||= {};
+          for(const id of Array.from(previous.keys())) if(!retained.has(id)) deleted[name][id]=crypto.randomUUID();
+          for(const id of Array.from(retained)) delete deleted[name][id];
+          localStorage.setItem(this.deletedKey(),JSON.stringify(deleted));
           for(const id of Object.keys(pending[name])) if(!retained.has(id)) delete pending[name][id];
           for(const row of value) if(row.id && previous.get(row.id)!==JSON.stringify(row)) pending[name][row.id]=row;
           localStorage.setItem(this.dirtyKey(),JSON.stringify(pending));
@@ -225,7 +256,6 @@ export class DataService {
     }
     const filtered = usuarios.filter((u) => u.id !== id);
     this.setItem(this.getTenantKey(KEYS.USUARIOS), filtered);
-    if (!this.aiLocalOnly) { supabaseService.deleteUsuario(id).catch((err) => console.warn('Delete supabase usuario:', err)); }
     return true;
   }
 
@@ -320,7 +350,6 @@ export class DataService {
     };
     clientes.push(newCliente);
     this.setItem(this.getTenantKey(KEYS.CLIENTES), clientes);
-    if (!this.aiLocalOnly) { supabaseService.saveCliente(newCliente).catch((err) => console.warn('Sync supabase cliente:', err)); }
     return newCliente;
   }
 
@@ -330,7 +359,6 @@ export class DataService {
     if (index === -1) return null;
     clientes[index] = { ...clientes[index], ...data };
     this.setItem(this.getTenantKey(KEYS.CLIENTES), clientes);
-    if (!this.aiLocalOnly) { supabaseService.saveCliente(clientes[index]).catch((err) => console.warn('Sync supabase cliente:', err)); }
     return clientes[index];
   }
 
@@ -338,7 +366,6 @@ export class DataService {
     const clientes = this.getClientes();
     const filtered = clientes.filter((c) => c.id !== id);
     this.setItem(this.getTenantKey(KEYS.CLIENTES), filtered);
-    if (!this.aiLocalOnly) { supabaseService.deleteCliente(id).catch((err) => console.warn('Delete supabase cliente:', err)); }
     return true;
   }
 
@@ -481,12 +508,17 @@ export class DataService {
 
       let porcentaje_avance_ponderado = 0;
       if (projActs.length > 0) {
-        const sumAvance = projActs.reduce((acc, curr) => acc + Number(curr.porcentaje_avance), 0);
-        porcentaje_avance_ponderado = Math.round(sumAvance / projActs.length);
+        porcentaje_avance_ponderado = projectProgress(projActs).percentage;
       }
 
+      const allComplete=projActs.length>0 && projActs.every(row=>Number(row.porcentaje_avance)>=100);
+      const autoFinish=p.estado!=='cancelada' && p.estado!=='terminado' && allComplete;
+      const reopen=p.estado==='terminado' && p.finalizada_automaticamente && !allComplete;
       return {
         ...p,
+        recepcion_estado: reopen ? 'pendiente' : p.recepcion_estado,
+        estado: autoFinish ? 'terminado' as const : reopen ? 'activo' as const : p.estado,
+        finalizada_automaticamente: autoFinish || (!!p.finalizada_automaticamente && !reopen),
         cliente: clientes.find((c) => c.id === p.cliente_id),
         trabajadores: projTrabajadores,
         actividades: projActs,
@@ -501,6 +533,10 @@ export class DataService {
         porcentaje_avance_ponderado,
       };
     });
+  }
+
+  getProyectoPersistido(id:string): Proyecto | undefined {
+    return this.getItem<Proyecto[]>(this.getTenantKey(KEYS.PROYECTOS),this.isDemoTenant()?INITIAL_PROYECTOS:[]).find(row=>row.id===id);
   }
 
   getProyectoById(id: string): Proyecto | null {
@@ -537,7 +573,6 @@ export class DataService {
     proyectos.unshift(newProyecto);
     this.setItem(this.getTenantKey(KEYS.PROYECTOS), proyectos);
 
-    if (!this.aiLocalOnly) { supabaseService.saveProyecto(newProyecto).catch((err) => console.warn('Sync supabase proyecto:', err)); }
 
     if (actividadesIniciales && actividadesIniciales.length > 0) {
       let currentDate = new Date(newProyecto.fecha_inicio);
@@ -566,7 +601,6 @@ export class DataService {
     const filtered = proyectos.filter((p) => p.id !== id);
     this.setItem(this.getTenantKey(KEYS.PROYECTOS), filtered);
 
-    if (!this.aiLocalOnly) { supabaseService.deleteProyecto(id).catch((err) => console.warn('Delete supabase proyecto:', err)); }
     return true;
   }
 
@@ -646,6 +680,28 @@ export class DataService {
     window.dispatchEvent(new Event('obratrack_cloud_synced'));
   }
 
+  async gestionarObra(projectId:string,path:string,body:Record<string,unknown>) {
+    await this.confirmarCambios();
+    const {data,error}=await supabase.auth.getSession();
+    if(error||!data.session?.access_token)throw new Error('Renueva tu sesión para guardar.');
+    const identity=this.getActiveUser()?.id;
+    const response=await fetch(`/api/proyectos/${encodeURIComponent(projectId)}/${path}`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${data.session.access_token}`},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
+    const result=await response.json().catch(()=>null);
+    if(!response.ok||!result)throw new Error(result?.error||'No se pudo confirmar el guardado.');
+    if(this.cloudPull)await this.cloudPull.promise;
+    if(this.getActiveUser()?.id!==identity)throw new Error('La sesión cambió durante el guardado.');
+    const pull=await this.pullFromCloudServer();
+    if(!pull.success){
+      // El RPC sí guardó: incorporar su respuesta autoritativa sin volver a encolarla.
+      const row=result.documento||result.registro||result.proyecto;
+      const key=row?.categoria?KEYS.DOCUMENTOS_OBRA:row?.monto_adicional!==undefined?KEYS.IMPREVISTOS:row?.monto_cotizado!==undefined?KEYS.PROYECTOS:null;
+      if(key&&row?.id){const rows=this.getItem<any[]>(this.getTenantKey(key),[]);const normalized=key===KEYS.IMPREVISTOS?{...row,monto:Number(row.monto_adicional),fecha:row.fecha_reporte}:row;this.setItem(this.getTenantKey(key),[normalized,...rows.filter(item=>item.id!==row.id)],false);}
+      if(row?.categoria==='acta_recepcion'){const projects=this.getItem<Proyecto[]>(this.getTenantKey(KEYS.PROYECTOS),[]);this.setItem(this.getTenantKey(KEYS.PROYECTOS),projects.map(project=>project.id===projectId?{...project,recepcion_estado:row.recepcion_resumen.estado}:project),false);}
+      window.dispatchEvent(new CustomEvent('obratrack_cloud_synced'));
+    }
+    return result;
+  }
+
   updateProyecto(id: string, data: Partial<Proyecto>): Proyecto | null {
     const defaultProjs = this.isDemoTenant() ? INITIAL_PROYECTOS : [];
     const proyectos = this.getItem<Proyecto[]>(this.getTenantKey(KEYS.PROYECTOS), defaultProjs);
@@ -654,7 +710,6 @@ export class DataService {
 
     proyectos[index] = { ...proyectos[index], ...data };
     this.setItem(this.getTenantKey(KEYS.PROYECTOS), proyectos);
-    if (!this.aiLocalOnly) { supabaseService.saveProyecto(proyectos[index]).catch((err) => console.warn('Update supabase proyecto:', err)); }
     return proyectos[index];
   }
 
@@ -676,14 +731,12 @@ export class DataService {
     };
     all.push(newMat);
     this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all);
-    if (!this.aiLocalOnly) { supabaseService.saveMaterial(newMat).catch((err) => console.warn('Sync supabase material:', err)); }
     return newMat;
   }
 
   deleteMaterialProyecto(id: string): boolean {
     const all = this.getItem<MaterialProyecto[]>(this.getTenantKey(KEYS.MATERIALES_PROYECTO), []);
     this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all.filter((m) => m.id !== id));
-    if (!this.aiLocalOnly) { supabaseService.deleteMaterial(id).catch((err) => console.warn('Delete supabase material:', err)); }
     return true;
   }
 
@@ -693,7 +746,6 @@ export class DataService {
     if (index === -1) return null;
     all[index] = { ...all[index], ...data };
     this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all);
-    if (!this.aiLocalOnly) { supabaseService.saveMaterial(all[index]).catch((err) => console.warn('Sync supabase material:', err)); }
     return all[index];
   }
 
@@ -713,9 +765,13 @@ export class DataService {
       id: 'bit-' + crypto.randomUUID(),
       created_at: new Date().toISOString(),
     };
+    if(entry.material_id) {
+      const mat=this.getMaterialesProyecto(entry.proyecto_id).find(row=>row.id===entry.material_id);
+      const received=all.filter(row=>row.material_id===entry.material_id).reduce((sum,row)=>sum+Number(row.cantidad_recibida||0),0);
+      if(!mat || entry.tipo!=='entrega_material' || !Number.isFinite(entry.cantidad_recibida) || Number(entry.cantidad_recibida)<=0 || received+Number(entry.cantidad_recibida)>mat.cantidad+0.000001)throw new Error('Revisa el material y la cantidad pendiente de recibir.');
+    }
     all.unshift(newEntry);
     this.setItem(this.getTenantKey(KEYS.BITACORA), all);
-    if (!this.aiLocalOnly) { supabaseService.saveBitacora(newEntry).catch((err) => console.warn('Sync supabase bitacora:', err)); }
     return newEntry;
   }
 
@@ -723,16 +779,20 @@ export class DataService {
     const all = this.getItem<BitacoraEntrada[]>(this.getTenantKey(KEYS.BITACORA), []);
     const index = all.findIndex((b) => b.id === id);
     if (index === -1) return null;
-    all[index] = { ...all[index], ...data };
+    const entry = {...all[index],...data};
+    if(entry.material_id){
+      const material=this.getMaterialesProyecto(entry.proyecto_id).find(row=>row.id===entry.material_id);
+      const received=all.filter(row=>row.id!==id&&row.material_id===entry.material_id).reduce((sum,row)=>sum+Number(row.cantidad_recibida||0),0);
+      if(!material||entry.tipo!=='entrega_material'||!Number.isFinite(entry.cantidad_recibida)||Number(entry.cantidad_recibida)<=0||received+Number(entry.cantidad_recibida)>material.cantidad+0.000001)throw new Error('Revisa el material y la cantidad pendiente de recibir.');
+    }
+    all[index] = entry;
     this.setItem(this.getTenantKey(KEYS.BITACORA), all);
-    if (!this.aiLocalOnly) { supabaseService.saveBitacora(all[index]).catch((err) => console.warn('Sync supabase bitacora:', err)); }
     return all[index];
   }
 
   deleteBitacoraEntrada(id: string): boolean {
     const all = this.getItem<BitacoraEntrada[]>(this.getTenantKey(KEYS.BITACORA), []);
     this.setItem(this.getTenantKey(KEYS.BITACORA), all.filter((b) => b.id !== id));
-    if (!this.aiLocalOnly) { supabaseService.deleteBitacora(id).catch((err) => console.warn('Delete supabase bitacora:', err)); }
     return true;
   }
 
@@ -760,7 +820,6 @@ export class DataService {
     };
     actividades.push(newActividad);
     this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), actividades);
-    if (!this.aiLocalOnly) { supabaseService.saveActividad(newActividad).catch((err) => console.warn('Sync supabase actividad:', err)); }
     return newActividad;
   }
 
@@ -772,7 +831,6 @@ export class DataService {
 
     actividades[index] = { ...actividades[index], ...data };
     this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), actividades);
-    if (!this.aiLocalOnly) { supabaseService.saveActividad(actividades[index]).catch((err) => console.warn('Sync supabase actividad:', err)); }
     return actividades[index];
   }
 
@@ -781,7 +839,6 @@ export class DataService {
     const actividades = this.getItem<Actividad[]>(this.getTenantKey(KEYS.ACTIVIDADES), defaultActs);
     const filtered = actividades.filter((a) => a.id !== id);
     this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), filtered);
-    if (!this.aiLocalOnly) { supabaseService.deleteActividad(id).catch((err) => console.warn('Delete supabase actividad:', err)); }
     return true;
   }
 
@@ -805,7 +862,6 @@ export class DataService {
     };
     pagos.push(newPago);
     this.setItem(this.getTenantKey(KEYS.PAGOS), pagos);
-    if (!this.aiLocalOnly) { supabaseService.savePago(newPago).catch((err) => console.warn('Sync supabase pago:', err)); }
     return newPago;
   }
 
@@ -817,7 +873,6 @@ export class DataService {
 
     pagos[index] = { ...pagos[index], ...data };
     this.setItem(this.getTenantKey(KEYS.PAGOS), pagos);
-    if (!this.aiLocalOnly) { supabaseService.savePago(pagos[index]).catch((err) => console.warn('Sync supabase pago:', err)); }
     return pagos[index];
   }
 
@@ -826,7 +881,6 @@ export class DataService {
     const pagos = this.getItem<Pago[]>(this.getTenantKey(KEYS.PAGOS), defaultPagos);
     const filtered = pagos.filter((p) => p.id !== id);
     this.setItem(this.getTenantKey(KEYS.PAGOS), filtered);
-    if (!this.aiLocalOnly) { supabaseService.deletePago(id).catch((err) => console.warn('Delete supabase pago:', err)); }
     return true;
   }
 
@@ -850,7 +904,6 @@ export class DataService {
     };
     imprevistos.push(newImprevisto);
     this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), imprevistos);
-    if (!this.aiLocalOnly) { supabaseService.saveImprevisto(newImprevisto).catch((err) => console.warn('Sync supabase imprevisto:', err)); }
     return newImprevisto;
   }
 
@@ -862,7 +915,6 @@ export class DataService {
 
     imprevistos[index] = { ...imprevistos[index], ...data };
     this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), imprevistos);
-    if (!this.aiLocalOnly) { supabaseService.saveImprevisto(imprevistos[index]).catch((err) => console.warn('Sync supabase imprevisto:', err)); }
     return imprevistos[index];
   }
 
@@ -871,7 +923,6 @@ export class DataService {
     const imprevistos = this.getItem<Imprevisto[]>(this.getTenantKey(KEYS.IMPREVISTOS), defaultImps);
     const filtered = imprevistos.filter((i) => i.id !== id);
     this.setItem(this.getTenantKey(KEYS.IMPREVISTOS), filtered);
-    if (!this.aiLocalOnly) { supabaseService.deleteImprevisto(id).catch((err) => console.warn('Delete supabase imprevisto:', err)); }
     return true;
   }
 
@@ -941,7 +992,7 @@ export class DataService {
       impacto_dias: Number(data.impacto_dias) || 0,
       materiales_requeridos: Array.isArray(data.materiales_requeridos) ? data.materiales_requeridos : [],
       materiales_inyectados: Boolean(data.materiales_inyectados),
-      fecha: data.fecha || new Date().toISOString().split('T')[0],
+      fecha: data.fecha || chileToday(),
       created_at: new Date().toISOString(),
     };
     list.unshift(newItem);
@@ -1006,17 +1057,15 @@ export class DataService {
     }
 
     let nuevoMonto = proj.monto_cotizado || 0;
-    const debeAjustarMonto = opciones?.ajustarPresupuesto !== false && item.impacto_monto > 0 && !item.materiales_inyectados;
+    const debeAjustarMonto = item.tipo === 'solicitud_cambio' && opciones?.ajustarPresupuesto !== false && item.impacto_monto > 0 && !item.materiales_inyectados;
     if (debeAjustarMonto) {
       nuevoMonto = nuevoMonto + item.impacto_monto;
     }
 
     let nuevaFechaTermino = proj.fecha_termino_estimada;
-    const debeAjustarPlazo = opciones?.ajustarPlazo !== false && item.impacto_dias > 0 && !item.materiales_inyectados;
+    const debeAjustarPlazo = item.tipo === 'solicitud_cambio' && opciones?.ajustarPlazo !== false && item.impacto_dias > 0 && !item.materiales_inyectados;
     if (debeAjustarPlazo && proj.fecha_termino_estimada) {
-      const f = new Date(proj.fecha_termino_estimada);
-      f.setDate(f.getDate() + item.impacto_dias);
-      nuevaFechaTermino = f.toISOString().split('T')[0];
+      nuevaFechaTermino = addWorkingDays(proj.fecha_termino_estimada,item.impacto_dias,proj.dias_laborales,proj.fechas_no_laborales);
     }
 
     if (debeAjustarMonto || debeAjustarPlazo) {
@@ -1028,6 +1077,8 @@ export class DataService {
 
     this.updateReclamoCambio(id, {
       estado: 'aprobado',
+      ajuste_presupuesto_aplicado: debeAjustarMonto || item.ajuste_presupuesto_aplicado || false,
+      ajuste_plazo_aplicado: debeAjustarPlazo || item.ajuste_plazo_aplicado || false,
       materiales_inyectados: true,
       resolucion_notas:
         opciones?.resolucionNotas ||
@@ -1043,7 +1094,7 @@ export class DataService {
       titulo: `Cambio Aprobado: ${item.titulo}`,
       nota: `${item.descripcion}. Impacto: +$${item.impacto_monto.toLocaleString('es-CL')} CLP, +${item.impacto_dias} días. Materiales inyectados: ${materialesAgregados}.`,
       tipo: 'avance',
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: chileToday(),
     });
 
     this.scheduleCloudSync();
@@ -1075,7 +1126,7 @@ export class DataService {
       empresa_id: data.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
       subido_por_id: data.subido_por_id || active?.id,
       subido_por_nombre: data.subido_por_nombre || active?.nombre || 'Administrador',
-      fecha_documento: data.fecha_documento || new Date().toISOString().split('T')[0],
+      fecha_documento: data.fecha_documento || chileToday(),
       created_at: new Date().toISOString(),
     };
     list.unshift(newDoc);
@@ -1298,7 +1349,7 @@ export class DataService {
       cotizacion.duracion_dias_estimada ||
       ((cotizacion as any).duracionSemanasEstimada ? (cotizacion as any).duracionSemanasEstimada * 7 : 30);
 
-    const fechaInicio = new Date().toISOString().split('T')[0];
+    const fechaInicio = chileToday();
     const fechaFinDate = new Date();
     fechaFinDate.setDate(fechaFinDate.getDate() + duracionDias);
     const fechaTermino = fechaFinDate.toISOString().split('T')[0];
@@ -1375,7 +1426,6 @@ export class DataService {
     const agenda = this.getEventosAgenda();
     const filtered = agenda.filter((e) => e.id !== id);
     this.setItem(this.getTenantKey(KEYS.AGENDA), filtered);
-    if (!this.aiLocalOnly) { supabaseService.deleteEventoAgenda(id).catch(() => {}); }
     return true;
   }
 
@@ -1429,7 +1479,7 @@ export class DataService {
       }
     }
 
-    const fechaInicio = datos.fecha_inicio || new Date().toISOString().split('T')[0];
+    const fechaInicio = datos.fecha_inicio || chileToday();
     const dias = datos.dias_estimados ?? datos.dias ?? 30;
     const fechaFinDate = new Date(fechaInicio + 'T12:00:00Z');
     fechaFinDate.setUTCDate(fechaFinDate.getUTCDate() + dias);
@@ -1868,7 +1918,7 @@ export class DataService {
             tipo: 'actualizar_avance',
             titulo: `Avance Actualizado`,
             detalles: updated || match,
-            resultado_texto: `Partida "${match.nombre}" actualizada al ${avance}% (${estado}).`,
+            resultado_texto: `Dejé \"${match.nombre}\" al ${avance}%.${proj.estado!==this.getProyectoById(proj.id)?.estado ? this.getProyectoById(proj.id)?.estado==='terminado' ? ' Todas las partidas están completas: la obra quedó terminada y pendiente de recepción del mandante.' : ' La obra volvió a En curso porque queda trabajo pendiente.' : ''}`,
             link_destino: `/proyectos/${proj.id}/gantt`,
             link_texto: 'Ver Carta Gantt ➔',
           };
@@ -1906,6 +1956,7 @@ export class DataService {
             precio_unitario: pu,
             subtotal: roundLine(cant, pu),
             categoria: m.categoria || 'General',
+            actividad_id:m.actividad_id || accion.actividad_id || null,
             comprado: false,
           });
         });
@@ -1923,14 +1974,29 @@ export class DataService {
       case 'registrar_imprevisto': {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;
-        const monto = Number(accion.monto) || 0;
+        let monto = Number(accion.monto) || 0;
+        let jornal:Imprevisto['jornal_resumen'];
+        if(accion.asistencia_id){
+          assertAttendanceManager(this.getActiveUser());
+          const attendance=this.getAsistencias(proj.id).find(row=>row.id===accion.asistencia_id);
+          if(!attendance)throw new Error('No encontré esa asistencia en la obra.');
+          if(this.getImprevistos(proj.id).some(row=>row.asistencia_id===attendance.id))throw new Error('Esta asistencia ya tiene un jornal registrado. Revísalo en Gastos.');
+          monto=labourAmount(attendance,Number(accion.valor_diario),Number(accion.jornada),Number(accion.horas_extra||0),Number(accion.valor_hora_extra||0));
+          jornal={valor_diario:Number(accion.valor_diario),jornada:Number(accion.jornada),horas_extra:Number(accion.horas_extra||0),valor_hora_extra:Number(accion.valor_hora_extra||0),asistencia_estado:attendance.estado,asistencia_horas:Number(attendance.horas_trabajadas||0)};
+          accion.usuario_id=attendance.usuario_id;accion.fecha=attendance.fecha;accion.categoria_gasto='mano_obra';
+        }
         const imp = this.createImprevisto({
+          asistencia_id: accion.asistencia_id || undefined,
+          jornal_resumen:jornal,
           proyecto_id: proj.id,
-          descripcion: accion.descripcion || 'Imprevisto detectado en faena',
+          descripcion: accion.descripcion || 'Gasto de la obra',
+          categoria_gasto: ['mano_obra','gasto_general','imprevisto'].includes(accion.categoria_gasto || '') ? accion.categoria_gasto as Imprevisto['categoria_gasto'] : 'imprevisto',
+          usuario_id: accion.usuario_id || undefined,
+          pagado: accion.asistencia_id ? false : typeof accion.pagado==='boolean' ? accion.pagado : null,
           monto,
           estado: 'pendiente',
           origen: 'whatsapp_ia',
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: accion.fecha || chileToday(),
         });
         return {
           tipo: 'registrar_imprevisto',
@@ -1949,7 +2015,7 @@ export class DataService {
         const pago = this.createPago({
           proyecto_id: proj.id,
           monto,
-          fecha: accion.fecha || new Date().toISOString().split('T')[0],
+          fecha: accion.fecha || chileToday(),
           nota: accion.nota || '',
           metodo: (['transferencia', 'efectivo', 'debito'].includes(accion.metodo || '')
             ? accion.metodo
@@ -1975,13 +2041,15 @@ export class DataService {
           proyecto_id: proj.id,
           usuario_id: active?.id || 'u-1',
           autor_nombre: active?.nombre || 'Inspector de Obra',
+          material_id: accion.material_id || undefined,
+          cantidad_recibida: accion.material_id ? Number(accion.cantidad_recibida) : undefined,
           titulo: accion.titulo || 'Registro de terreno',
           nota: accion.nota || accion.descripcion || 'Sin observaciones.',
           foto_url: accion.foto_url || undefined,
-          tipo: (['avance', 'incidente', 'clima', 'entrega_material'].includes(accion.subtipo || accion.tipo_bitacora || '')
+          tipo: accion.material_id ? 'entrega_material' : (['avance', 'incidente', 'clima', 'entrega_material'].includes(accion.subtipo || accion.tipo_bitacora || '')
             ? (accion.subtipo || accion.tipo_bitacora)
             : 'avance') as 'avance' | 'incidente' | 'clima' | 'entrega_material',
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: chileToday(),
         });
         return {
           tipo: 'crear_bitacora',
@@ -2005,7 +2073,7 @@ export class DataService {
             tiene_imprevisto: false,
           },
           estado: 'aprobado',
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: chileToday(),
         });
         return {
           tipo: 'generar_reporte',
@@ -2082,7 +2150,7 @@ export class DataService {
           impacto_dias: Number(accion.dias || accion.impacto_dias) || 0,
           materiales_requeridos: mats,
           origen: 'web',
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: chileToday(),
         });
         return {
           tipo: 'crear_solicitud_cambio',
@@ -2097,7 +2165,7 @@ export class DataService {
       case 'registrar_asistencia': {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;
-        const fecha = accion.fecha || new Date().toISOString().split('T')[0];
+        const fecha = accion.fecha || chileToday();
         if (accion.todos_presentes) {
           const regs = this.marcarCuadrillaPresente(
             proj.id,
@@ -2143,6 +2211,22 @@ export class DataService {
       case 'registrar_documento': {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;
+        if(accion.categoria==='acta_recepcion'){
+          const actor=this.getActiveUser();assertAttendanceManager(actor);
+          const summary=validateReception(proj,this.getActividades(proj.id),{estado:accion.recepcion_estado,fecha:accion.fecha_documento||chileToday(),recibido_por:accion.recibido_por||'',observaciones:accion.descripcion||accion.nota||'',fotos:accion.fotos||[]});
+          const doc=this.createDocumentoObra({proyecto_id:proj.id,categoria:'acta_recepcion',nombre:'Recepción · '+proj.nombre,fecha_documento:summary.fecha,recepcion_resumen:summary,subido_por_id:actor!.id});
+          return {tipo:'registrar_documento',titulo:'Recepción registrada',detalles:doc,resultado_texto:`Registré la recepción de ${proj.nombre} ${summary.estado==='conforme'?'conforme':'con observaciones'}. Queda en Documentos; los saldos conservan su estado.`,link_destino:`/proyectos/${proj.id}/documentos`,link_texto:'Ver recepción'};
+        }
+        if(accion.categoria==='cierre_diario') {
+          const actor=this.getActiveUser();assertAttendanceManager(actor);
+          const date=accion.fecha_documento || accion.fecha || chileToday();
+          const summary=dailySummary(proj,date,this.getUsuarios(),this.getAsistencias(proj.id),this.getBitacora(proj.id),this.getMaterialesProyecto(proj.id),this.getImprevistos(proj.id),this.getPagos(proj.id),this.getReclamosCambios(proj.id),this.getActividades(proj.id));
+          summary.version=this.getDocumentosObra(proj.id).filter(row=>row.categoria==='cierre_diario'&&row.fecha_documento===date).length+1;
+          summary.confirmado_por=actor!.nombre;summary.confirmado_en=new Date().toISOString();summary.nota=accion.descripcion || accion.nota || '';
+          const doc=this.createDocumentoObra({proyecto_id:proj.id,categoria:'cierre_diario',nombre:`Cierre diario ${date}`,fecha_documento:date,cierre_resumen:summary,subido_por_id:actor!.id});
+          return {tipo:'registrar_documento',titulo:`Cierre diario de ${proj.nombre}`,detalles:doc,resultado_texto:`Jornada del ${date.split('-').reverse().join('/')} confirmada en Documentos.`,link_destino:`/proyectos/${proj.id}/documentos`,link_texto:'Ver cierre diario'};
+        }
+
         const doc = this.createDocumentoObra({
           archivo_url: accion.archivo_url,
           archivo_nombre: accion.archivo_nombre,
@@ -2163,7 +2247,7 @@ export class DataService {
           correo_destinatario: accion.correo_destinatario || '',
           correo_asunto: accion.correo_asunto || '',
           correo_cuerpo: accion.correo_cuerpo || '',
-          fecha_documento: accion.fecha_documento || accion.fecha || new Date().toISOString().split('T')[0],
+          fecha_documento: accion.fecha_documento || accion.fecha || chileToday(),
         });
         return {
           tipo: 'registrar_documento',
@@ -2289,6 +2373,7 @@ export class DataService {
     this.cloudSyncTimeout = setTimeout(() => {
       this.pushToCloudServer().catch((err) => console.warn('Auto Cloud Sync:', err));
     }, 900);
+    window.dispatchEvent(new Event('obratrack_pending_changed'));
   }
 
   private cloudPush: {identity:string;promise:Promise<{success:boolean;message:string}>}|null=null;
@@ -2314,8 +2399,10 @@ export class DataService {
       const sameSession=()=>this.getActiveUser()?.id===active.id && this.getActiveUser()?.empresa_id===empresaId;
       const pending=this.getItem<Record<string,Record<string,any>>>(dirtyKey,{});
       const captured=JSON.parse(JSON.stringify(pending));
+      const capturedDeleted=this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{});
+      const eliminados=Object.fromEntries(Object.entries(capturedDeleted).filter(([,rows])=>Object.keys(rows).length).map(([table,rows])=>[table,Object.keys(rows)]));
       const cambios=Object.fromEntries(Object.entries(captured).map(([key,rows])=>[key,Object.values(rows as object)]).filter(([,rows])=>(rows as any[]).length));
-      if(!Object.keys(cambios).length) return {success:true,message:'No hay cambios pendientes.'};
+      if(!Object.keys(cambios).length && !Object.keys(eliminados).length) return {success:true,message:'No hay cambios pendientes.'};
       const {data,error}=await supabase.auth.getSession();
       if(error||!data.session?.access_token) return {success:false,message:'Inicia sesión para sincronizar.'};
       if(!sameSession()) return {success:false,message:'La sesión cambió durante la sincronización.'};
@@ -2323,7 +2410,7 @@ export class DataService {
         method: 'POST',
         signal: AbortSignal.timeout(20000),
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({cambios}),
+        body: JSON.stringify({cambios,eliminados}),
       });
       let res = await send(data.session.access_token);
       if (res.status === 401) {
@@ -2343,6 +2430,12 @@ export class DataService {
         if(JSON.stringify(remaining[key]?.[id])===JSON.stringify(row)) delete remaining[key][id];
       }
       localStorage.setItem(dirtyKey,JSON.stringify(remaining));
+      const remainingDeleted=this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{});
+      for(const [table,rows] of Object.entries(capturedDeleted)) for(const [id,version] of Object.entries(rows)) {
+        if(remainingDeleted[table]?.[id]===version) delete remainingDeleted[table][id];
+      }
+      localStorage.setItem(this.deletedKey(),JSON.stringify(remainingDeleted));
+      window.dispatchEvent(new Event('obratrack_pending_changed'));
       return { success: true, message: 'Sincronizado en vivo con Supabase Cloud.' };
     } catch (err: any) {
       return { success: false, message: 'No se pudieron subir los cambios de este dispositivo. Revisa la conexión y reintenta.' };
@@ -2393,11 +2486,12 @@ export class DataService {
       const localProjs = this.getProyectos();
 
       const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
+      const deleted=this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{});
       const mergeById = <T extends {id:string}>(localArr:T[],cloudArr:T[],name:string):T[] => {
         const table=pending[name];
         const rows=new Map(cloudArr.map(row=>[row.id,row]));
         for(const row of localArr) if(table?.[row.id]) rows.set(row.id,row);
-        return Array.from(rows.values());
+        return Array.from(rows.values()).filter(row=>!deleted[name]?.[row.id]);
       };
 
       this.isPullingCloud = true;

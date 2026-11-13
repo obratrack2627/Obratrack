@@ -28,8 +28,8 @@ export function snapshot(service: DataService, empresa_id: string): Snapshot {
     })),
     proyectos: service.getProyectos().map((x) => ({
       ...pick(
-        x,
-        "id,cliente_id,nombre,descripcion,direccion,comuna,region,latitud,longitud,lugar_referencia,fecha_inicio,fecha_termino_estimada,estado,monto_cotizado",
+        {...x, estado:service.getProyectoPersistido(x.id)?.estado || x.estado},
+        "id,cliente_id,nombre,descripcion,direccion,comuna,region,latitud,longitud,lugar_referencia,fecha_inicio,fecha_termino_estimada,estado,monto_cotizado,dias_laborales,fechas_no_laborales",
       ),
       empresa_id,
       trabajadores_ids: x.trabajadores_ids || [],
@@ -39,7 +39,7 @@ export function snapshot(service: DataService, empresa_id: string): Snapshot {
       .map((x) =>
         pick(
           x,
-          "id,proyecto_id,nombre,responsable_id,fecha_inicio,fecha_termino,porcentaje_avance,estado,orden",
+          "id,proyecto_id,nombre,responsable_id,fecha_inicio,fecha_termino,porcentaje_avance,estado,orden,monto_contratado",
         ),
       ),
     materiales_proyecto: service
@@ -47,7 +47,7 @@ export function snapshot(service: DataService, empresa_id: string): Snapshot {
       .map((x) =>
         pick(
           x,
-          "id,proyecto_id,nombre,categoria,cantidad,unidad,precio_unitario,subtotal,proveedor,comprado",
+          "id,proyecto_id,nombre,categoria,cantidad,unidad,precio_unitario,subtotal,proveedor,comprado,pagado,actividad_id",
         ),
       ),
     pagos: service.getPagos().map((x) => ({
@@ -62,11 +62,11 @@ export function snapshot(service: DataService, empresa_id: string): Snapshot {
       .map((x) =>
         pick(
           x,
-          "id,proyecto_id,usuario_id,autor_nombre,titulo,nota,foto_url,fecha,tipo",
+          "id,proyecto_id,usuario_id,autor_nombre,titulo,nota,foto_url,fecha,tipo,material_id,cantidad_recibida",
         ),
       ),
     imprevistos: service.getImprevistos().map((x) => ({
-      ...pick(x, "id,proyecto_id,actividad_id,descripcion,estado,origen"),
+      ...pick(x, "id,proyecto_id,actividad_id,descripcion,estado,origen,categoria_gasto,usuario_id,pagado,asistencia_id,jornal_resumen"),
       titulo: x.titulo || x.descripcion.slice(0, 80),
       monto_adicional: x.monto,
       fecha_reporte: x.fecha,
@@ -87,7 +87,7 @@ export function snapshot(service: DataService, empresa_id: string): Snapshot {
     documentos_obra: service.getDocumentosObra().map((x) => ({
       ...pick(
         x,
-        "id,proyecto_id,subido_por_nombre,categoria,nombre,descripcion,archivo_url,archivo_nombre,archivo_tamano,mime_type,numero_documento,proveedor_entidad,monto_documento,correo_remitente,correo_destinatario,correo_asunto,correo_cuerpo,fecha_documento",
+        "id,proyecto_id,subido_por_nombre,categoria,nombre,descripcion,archivo_url,archivo_nombre,archivo_tamano,mime_type,numero_documento,proveedor_entidad,monto_documento,correo_remitente,correo_destinatario,correo_asunto,correo_cuerpo,fecha_documento,cierre_resumen,recepcion_resumen",
       ),
       empresa_id,
     })),

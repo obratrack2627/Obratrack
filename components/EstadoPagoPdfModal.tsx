@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 import { dataService } from '@/lib/data-service';
+import { projectProgress } from '@/lib/work-calendar';
 import { calcularEstadoPago } from '@/lib/edp-calculator';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 import type {
@@ -224,7 +225,8 @@ export default function EstadoPagoPdfModal({
           </div>
         </div>
 
-        {/* Controles rápidos de configuración del EDP (Ocultos al imprimir) */}
+        {!projectProgress(actividades).weighted && actividades.length>0 && <p className="print:hidden mx-4 my-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">El avance usa un promedio simple de partidas. Completa sus montos contratados para ponderar el cobro o confirma un monto personalizado.</p>}
+      {/* Controles rápidos de configuración del EDP (Ocultos al imprimir) */}
         <div className="print:hidden px-4 sm:px-6 py-3 bg-kraft-100 dark:bg-[#0B0F14] border-b border-kraft-200 dark:border-[#263040] grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
           <div>
             <label htmlFor={`${formId}-modo`} className="block font-mono font-semibold text-gray-600 dark:text-gray-300 mb-1">
@@ -370,7 +372,7 @@ export default function EstadoPagoPdfModal({
                   1. Respaldo de Avance Físico de Partidas
                 </h4>
                 <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                  Avance Ponderado Total: {resumen.porcentajeAvanceFisico}%
+                  {projectProgress(actividades).weighted ? 'Avance ponderado' : 'Promedio de partidas'}: {resumen.porcentajeAvanceFisico}%
                 </span>
               </div>
 

@@ -1,3 +1,4 @@
+import { chileToday } from '@/lib/ai/project-deadlines';
 import { dataService } from './data-service';
 
 export interface ObraTrackFullBackup {
@@ -81,7 +82,7 @@ export const exportService = {
     try {
       const backup = this.buildFullBackupPayload();
       const jsonContent = JSON.stringify(backup, null, 2);
-      const filename = `ObraTrack_Backup_${backup.empresa.nombre.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`;
+      const filename = `ObraTrack_Backup_${backup.empresa.nombre.replace(/\s+/g, '_')}_${chileToday()}.json`;
 
       const downloadAnchor = document.createElement('a');
       let objectUrl: string | null = null;

@@ -12,6 +12,7 @@ import {
   UserMinus,
   ArrowRight,
 } from "lucide-react";
+import LabourFromAttendance from "@/components/LabourFromAttendance";
 import ProjectTabsHeader from "@/components/ProjectTabsHeader";
 import GoogleMapsProjectViewer from "@/components/GoogleMapsProjectViewer";
 import ModalOverlay from "@/components/ModalOverlay";
@@ -268,6 +269,7 @@ export default function ProjectCrewPage() {
         }
         onOpenMaps={() => setMaps(true)}
       />
+      <div className="px-4 sm:px-6 pt-4"><LabourFromAttendance projectId={projectId} onChanged={refresh}/></div>
       <div className="mx-auto max-w-7xl space-y-5 p-4 pb-28 sm:p-6 sm:pb-28">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>

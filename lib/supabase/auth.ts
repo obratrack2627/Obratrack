@@ -107,7 +107,7 @@ export async function signUpWithSupabase(
         data: {
           display_name: nombre.trim(),
           rut: rut.trim(),
-          empresa_nombre: empresaNombre.trim(),
+          empresa_nombre: empresaNombre.trim() || nombre.trim(),
           telefono: telefono.trim(),
         },
       },

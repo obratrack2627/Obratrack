@@ -3,7 +3,11 @@ import type { AIAction } from "./protocol";
 // El proveedor comparte un esquema para las operaciones. Un cero o una lista
 // vacía de otra operación no debe convertirse en un requisito para esta acción.
 const scoped: Record<string, string[]> = {
-  especialidades: ["agregar_trabajador", "agregar_trabajadores", "actualizar_trabajador"],
+  especialidades: [
+    "agregar_trabajador",
+    "agregar_trabajadores",
+    "actualizar_trabajador",
+  ],
   dias: [
     "crear_proyecto",
     "crear_proyecto_completo",
@@ -48,7 +52,19 @@ const scoped: Record<string, string[]> = {
     "crear_proyecto_completo",
     "actualizar_proyecto",
   ],
+  asistencia_id: ["registrar_imprevisto"],
+  valor_diario: ["registrar_imprevisto"],
+  jornada: ["registrar_imprevisto"],
+  horas_extra: ["registrar_imprevisto"],
+  valor_hora_extra: ["registrar_imprevisto"],
+  recepcion_estado: ["registrar_documento"],
+  recibido_por: ["registrar_documento"],
+  fotos: ["registrar_documento"],
   fecha_documento: ["registrar_documento"],
+  material_id: ["crear_bitacora"],
+  cantidad_recibida: ["crear_bitacora"],
+  categoria_gasto: ["registrar_imprevisto"],
+  pagado: ["registrar_imprevisto"],
   fecha: [
     "registrar_pago",
     "registrar_imprevisto",

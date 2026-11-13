@@ -1,4 +1,7 @@
 'use client';
+import { csvCell } from '@/lib/work-calendar';
+import { chileToday } from '@/lib/ai/project-deadlines';
+
 import CompactSummary from '@/components/CompactSummary';
 
 import React, { useState, useEffect } from 'react';
@@ -25,7 +28,7 @@ import { formatDate } from '@/lib/utils';
 export default function ControlAsistenciaGlobalPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [asistencias, setAsistencias] = useState<AsistenciaObrero[]>([]);
-  const [fechaFiltro, setFechaFiltro] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaFiltro, setFechaFiltro] = useState(chileToday());
   const [obraFiltro, setObraFiltro] = useState('todas');
   const [searchTerm, setSearchTerm] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState<'todos' | 'presente' | 'atraso' | 'ausente'>('todos');
@@ -57,25 +60,16 @@ export default function ControlAsistenciaGlobalPage() {
   };
 
   const handleExportarConsolidado = () => {
-    if (asistencias.length === 0) {
+    if (asistenciasFiltradas.length === 0) {
       showToast('No hay registros de asistencia para exportar.');
       return;
     }
     const headers = ['Fecha', 'Obra', 'Trabajador', 'Cargo', 'Estado', 'Entrada', 'Salida', 'Horas', 'Origen'];
-    const rows = asistencias.map((a) => {
-      const pName = proyectos.find((p) => p.id === a.proyecto_id)?.nombre || a.proyecto_id;
-      return [
-        a.fecha,
-        `"${pName}"`,
-        `"${a.trabajador_nombre}"`,
-        `"${a.trabajador_rol || ''}"`,
-        a.estado,
-        a.hora_entrada || '',
-        a.hora_salida || '',
-        String(a.horas_trabajadas || 0),
-        a.origen,
-      ].join(',');
-    });
+    const rows = asistenciasFiltradas.map((a) => [
+      a.fecha, proyectos.find(p=>p.id===a.proyecto_id)?.nombre || a.proyecto_id,
+      a.trabajador_nombre, a.trabajador_rol || '', a.estado, a.hora_entrada || '',
+      a.hora_salida || '', a.horas_trabajadas || 0, a.origen,
+    ].map(csvCell).join(','));
     const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

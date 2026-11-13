@@ -33,8 +33,7 @@ export default function CloudSync() {
       const active = dataService.getActiveUser();
       if (!active?.empresa_id) return;
       const identity = `${active.id}:${active.empresa_id}`;
-      const dirtyRaw = localStorage.getItem(`obratrack_dirty_v1_${active.empresa_id}`);
-      const hasDirty = Boolean(dirtyRaw && dirtyRaw !== "{}" && Object.values(JSON.parse(dirtyRaw)).some((t: any) => t && Object.keys(t).length > 0));
+      const hasDirty = dataService.pendingCloudChanges() > 0;
       if (!force && !hasDirty && lastSyncRef.current.identity === identity && Date.now() - lastSyncRef.current.at < 12000) {
         return;
       }
@@ -97,6 +96,7 @@ export default function CloudSync() {
     const offline = () => setError(offlineMessage);
     const triggerRequest = () => request(true);
     retry.current = triggerRequest;
+    window.addEventListener("obratrack_pending_changed", triggerRequest);
     window.addEventListener("focus", triggerRequest);
     window.addEventListener("pageshow", triggerRequest);
     window.addEventListener("online", triggerRequest);
@@ -109,6 +109,7 @@ export default function CloudSync() {
       clearTimeout(timer);
       clearInterval(interval);
       window.removeEventListener("storage", storageChanged);
+      window.removeEventListener("obratrack_pending_changed", triggerRequest);
       window.removeEventListener("focus", triggerRequest);
       window.removeEventListener("pageshow", triggerRequest);
       window.removeEventListener("online", triggerRequest);

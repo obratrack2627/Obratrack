@@ -42,7 +42,13 @@ export function chileanRequestContext(message: string) {
 }
 
 export function checkChileanAmounts(actions: any[], message: string) {
-  const moneyActions = actions.filter(action => ['registrar_pago','registrar_imprevisto'].includes(action.tipo));
+  const normalized=normalize(message);
+  const moneyActions = actions.filter(action => ['registrar_pago','registrar_imprevisto'].includes(action.tipo)).flatMap(action=>{
+    if(!action.asistencia_id)return [action];
+    // Un jornal derivado no es su tarifa diaria: medio día y extras se recalculan en servidor.
+    if(/\b(?:jornal|diari[oa]|por dia)\b/.test(normalized)&&!/\b(?:hora|horas|extra|extras|total)\b/.test(normalized))return [{...action,monto:action.valor_diario}];
+    return [];
+  });
   if (!moneyActions.length) return;
   const context = chileanRequestContext(message);
   if (context.expresiones_por_aclarar.length) throw new AIError('AMOUNT_AMBIGUOUS','Confirma el monto en pesos antes de registrar el movimiento.',422);

@@ -1,3 +1,4 @@
+import { chileToday } from '@/lib/ai/project-deadlines';
 import { projectStatusLabel } from '@/lib/project-status';
 import type {
   Actividad,
@@ -216,7 +217,7 @@ export async function downloadProjectExcel(payload: ProjectExcelExportPayload): 
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
   const safeName = payload.proyecto.nombre.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 40) || 'Obra';
-  const datePart = new Date().toISOString().split('T')[0];
+  const datePart = chileToday();
   const filename = `Cartola_ObraTrack_${safeName}_${datePart}.xlsx`;
 
   const url = URL.createObjectURL(blob);

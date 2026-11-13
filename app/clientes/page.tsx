@@ -162,10 +162,11 @@ export default function ClientesPage() {
     showToast(`Datos del cliente "${editNombre.trim()}" actualizados.`);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!clienteToDelete) return;
     dataService.deleteCliente(clienteToDelete.id);
-    showToast(`Cliente "${clienteToDelete.nombre}" eliminado.`);
+    try { await dataService.confirmarCambios(); showToast('Eliminación guardada.'); }
+    catch(error) { showToast(error instanceof Error ? error.message : 'Eliminación pendiente de sincronización.'); }
     setClienteToDelete(null);
     if (selectedClienteDetail?.id === clienteToDelete.id) {
       setSelectedClienteDetail(null);

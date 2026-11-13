@@ -1,9 +1,12 @@
 'use client';
+import { chileToday } from '@/lib/ai/project-deadlines';
+
 import MoneyAmount from "@/components/MoneyAmount";
 import CompactSummary from '@/components/CompactSummary';
 import { projectStatuses } from '@/lib/project-status';
 import { ProjectStatusBadge } from '@/components/ProjectStatus';
 import ActionMenu from '@/components/ActionMenu';
+import WorkCalendarEditor from '@/components/WorkCalendarEditor';
 import ModalOverlay from '@/components/ModalOverlay';
 
 import React, { useState, useEffect } from 'react';
@@ -86,10 +89,14 @@ export default function ProyectosPage() {
   const [nombre, setNombre] = useState('');
   const [clienteId, setClienteId] = useState('');
   const [montoCotizado, setMontoCotizado] = useState('');
-  const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split('T')[0]);
+  const [fechaInicio, setFechaInicio] = useState(chileToday());
   const [fechaTermino, setFechaTermino] = useState(
     new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
+  const [calendarDays,setCalendarDays]=useState([1,2,3,4,5]);
+  const [calendarExcluded,setCalendarExcluded]=useState<string[]>([]);
+  const [editDays,setEditDays]=useState([1,2,3,4,5]);
+  const [editExcluded,setEditExcluded]=useState<string[]>([]);
   const [descripcion, setDescripcion] = useState('');
   const [direccion, setDireccion] = useState('');
   const [comuna, setComuna] = useState('Las Condes');
@@ -185,6 +192,8 @@ export default function ProyectosPage() {
           latitud,
           longitud,
           lugar_referencia: lugarReferencia.trim(),
+          dias_laborales: calendarDays,
+          fechas_no_laborales: calendarExcluded,
           fecha_inicio: fechaInicio,
           fecha_termino_estimada: fechaTermino,
           estado: 'activo',
@@ -219,6 +228,8 @@ export default function ProyectosPage() {
     setEditClienteId(proj.cliente_id || '');
     setEditError('');
     setEditMontoCotizado(formatThousands(proj.monto_cotizado || ''));
+    setEditDays(proj.dias_laborales || [1,2,3,4,5]);
+    setEditExcluded(proj.fechas_no_laborales || []);
     setEditFechaInicio(proj.fecha_inicio);
     setEditFechaTermino(proj.fecha_termino_estimada);
     setEditDescripcion(proj.descripcion || '');
@@ -243,6 +254,8 @@ export default function ProyectosPage() {
       nombre: editNombre.trim(),
       cliente_id: editClienteId || undefined,
       monto_cotizado: parseThousands(editMontoCotizado),
+      dias_laborales: editDays,
+      fechas_no_laborales: editExcluded,
       fecha_inicio: editFechaInicio,
       fecha_termino_estimada: editFechaTermino,
       descripcion: editDescripcion.trim(),
@@ -279,7 +292,7 @@ export default function ProyectosPage() {
       nota: avanceNota.trim(),
       foto_url: avanceFoto.trim() || undefined,
       tipo: avanceTipo,
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: chileToday(),
       autor_nombre: autor,
     });
 
@@ -289,7 +302,7 @@ export default function ProyectosPage() {
       usuario_id: activeUser?.id,
       mensaje_original: `[Reporte de Faena Web] ${avanceTitulo.trim()}: ${avanceNota.trim()}`,
       transcripcion: avanceNota.trim(),
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: chileToday(),
       extraccion_ia: {
         actividad_detectada: avanceTitulo.trim(),
         avance_porcentaje: avanceTipo === 'avance' ? 100 : null,
@@ -1064,6 +1077,7 @@ export default function ProyectosPage() {
                 </div>
               </div>
 
+              <WorkCalendarEditor days={calendarDays} excluded={calendarExcluded} onChange={(days,excluded)=>{setCalendarDays(days);setCalendarExcluded(excluded);}}/>
               {/* Selector Interactivo de Ubicación en Google Maps */}
               <details className="rounded-xl border border-kraft-200 p-3 dark:border-[#263040]"><summary className="cursor-pointer text-sm font-semibold">Ubicación y referencias</summary><div className="mt-3"><GoogleMapsLocationPicker
                 direccion={direccion}
@@ -1174,6 +1188,8 @@ export default function ProyectosPage() {
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
+              <WorkCalendarEditor days={editDays} excluded={editExcluded} onChange={(days,excluded)=>{setEditDays(days);setEditExcluded(excluded);}}/>
+
               <div>
                 <label htmlFor="edit-project-name" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
                   Nombre de la Obra *
@@ -1299,6 +1315,7 @@ export default function ProyectosPage() {
                 </div>
               </div>
 
+              <WorkCalendarEditor days={calendarDays} excluded={calendarExcluded} onChange={(days,excluded)=>{setCalendarDays(days);setCalendarExcluded(excluded);}}/>
               {/* Selector Interactivo de Ubicación en Google Maps (Edición) */}
               <details className="rounded-xl border border-kraft-200 p-3 dark:border-[#263040]"><summary className="cursor-pointer text-sm font-semibold">Ubicación y referencias</summary><div className="mt-3"><GoogleMapsLocationPicker
                 direccion={editDireccion}

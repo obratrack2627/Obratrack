@@ -1,3 +1,4 @@
+import {CONSTRUCTION_WORKFLOW_RULES} from '@/lib/ai/prompt';
 import { generateAI, getServerGeminiKey } from "@/lib/ai/provider";
 import { AIError } from "@/lib/ai/errors";
 import {
@@ -94,7 +95,7 @@ export async function chatAsesorObrasGemini(
       ? WHATSAPP_RESPONSE_SCHEMA
       : CHAT_RESPONSE_SCHEMA;
   const result = parseChatResponse(
-    await generateAI(prompt, {
+    await generateAI(priceSearch||quote?prompt:prompt+"\n"+CONSTRUCTION_WORKFLOW_RULES, {
       ...options,
       json: true,
       schema,

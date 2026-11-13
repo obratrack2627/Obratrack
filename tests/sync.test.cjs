@@ -498,3 +498,29 @@ test('sincroniza especialidades opcionales sin modificar roles ni credenciales y
  }
  assert.equal((await POST(request({cambios:{usuarios:[{id:user.id,especialidades:'Pintura'}]}}))).status,422);
 });
+
+test('borrados rechazados conservan su operación, no reaparecen al actualizar y se reintentan con los mismos IDs', async()=>{
+ const pay={id:'pay-delete',proyecto_id:'p1',monto:2400000,metodo:'transferencia',fecha:'2026-11-13'};
+ fixture.tables.set('pagos',[pay]);
+ localStorage.setItem('obratrack_proyectos_v7_a',JSON.stringify([p1]));localStorage.setItem('obratrack_pagos_v7_a',JSON.stringify([pay]));
+ let failing=true;
+ global.fetch=async(url,init)=>{
+  if(init?.method==='POST')return failing ? Response.json({error:'Error temporal'},{status:503}) : POST(request(JSON.parse(init.body)));
+  return GET(new NextRequest('https://example.test/api/supabase/sync'));
+ };
+ dataService.deletePago(pay.id);
+ assert.equal(dataService.getPagos().length,0);assert.equal(dataService.pendingCloudChanges(),1);
+ assert.equal((await dataService.pushToCloudServer()).success,false);
+ await dataService.pullFromCloudServer();assert.equal(dataService.getPagos().length,0);
+ // Una lectura antigua al restaurar la sesión tampoco revive una eliminación pendiente.
+ localStorage.setItem('obratrack_pagos_v7_a',JSON.stringify([pay]));assert.equal(dataService.getPagos().length,0);
+ failing=false;await dataService.confirmarCambios();assert.equal(dataService.pendingCloudChanges(),0);assert.equal(fixture.tables.get('pagos').length,0);
+ await dataService.pullFromCloudServer();assert.equal(dataService.getPagos().length,0);
+});
+
+test('el borrado solo afecta la empresa y no elimina cuentas Auth ni acepta claves de tablas heredadas',async()=>{
+ fixture.tables.set('proyectos',[p1,{...p1,id:'foreign',empresa_id:'other'}]);fixture.tables.set('pagos',[{id:'owned',proyecto_id:'p1'},{id:'foreign-pay',proyecto_id:'foreign'}]);
+ const res=await POST(request({cambios:{},eliminados:{pagos:['owned','foreign-pay']}}));assert.equal(res.status,200);assert.deepEqual(fixture.tables.get('pagos').map(row=>row.id),['foreign-pay']);
+ assert.equal((await POST(request({cambios:{},eliminados:{usuarios:[user.id]}}))).status,403);
+ assert.equal((await POST(request(JSON.parse('{"cambios":{},"eliminados":{"toString":["x"]}}')))).status,400);
+});

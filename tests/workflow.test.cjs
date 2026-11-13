@@ -46,3 +46,12 @@ test('un enlace privado se renueva solo dentro de la empresa y sus obras autoriz
   assert.equal(await signStoredFile(url, 'company', new Set(['project']), client), 'https://example.test/temporary-file');
   assert.equal(signed, 1);
 });
+
+test('recepciones renuevan fotos privadas al leer el acta y descartan referencias de otras obras sin mutar el historial',async()=>{
+ const {signRows}=require('../lib/supabase/private-files.ts');
+ const base=supabaseUrl+'/storage/v1/object/sign/bitacora-fotos/';
+ const original={id:'acta',proyecto_id:'project',recepcion_resumen:{estado:'conforme',fotos:[base+'company/project/acta-photo.jpg?token=expired',base+'other-company/project/foreign.jpg?token=expired']}};
+ const client={storage:{from:()=>({createSignedUrl:async path=>({data:{signedUrl:'https://signed.example.test/'+path},error:null})})}};
+ const [signed]=await signRows([original],['archivo_url'],'company',new Set(['project']),client);
+ assert.deepEqual(signed.recepcion_resumen.fotos,['https://signed.example.test/company/project/acta-photo.jpg']);assert.equal(original.recepcion_resumen.fotos.length,2);assert.match(original.recepcion_resumen.fotos[0],/expired/);
+});

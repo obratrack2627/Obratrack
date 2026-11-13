@@ -1,9 +1,13 @@
-import { normalizeSpecialties } from '@/lib/team-specialties';
-import { relevantActionFields } from './action-fields';
+import { normalizeSpecialties } from "@/lib/team-specialties";
+import { relevantActionFields } from "./action-fields";
 import type { CotizacionEstimacion } from "@/types/database";
 import { AIError } from "./errors";
-import { commercialLines, agreedTotals, paymentMilestones } from '@/lib/quotes/commercial';
-import { validateContactAction } from './contacts';
+import {
+  commercialLines,
+  agreedTotals,
+  paymentMilestones,
+} from "@/lib/quotes/commercial";
+import { validateContactAction } from "./contacts";
 
 export const ACTION_TYPES = [
   "crear_proyecto",
@@ -93,10 +97,32 @@ export function validateAction(raw: any): AIAction {
   if (!raw || typeof raw !== "object" || !ACTION_TYPES.includes(raw.tipo))
     fail("La IA propuso una acción que la plataforma no admite.");
   const a: AIAction = relevantActionFields(JSON.parse(JSON.stringify(raw)));
-  if (a.tipo === 'actualizar_proyecto' && typeof a.estado === 'string') {
-    const aliases: Record<string, string> = { terminada:'terminado', finalizada:'terminado', finalizado:'terminado', activa:'activo', 'en curso':'activo', pausada:'pausado', cancelado:'cancelada' };
+  if (
+    a.tipo === "registrar_documento" &&
+    ["cierre_diario", "acta_recepcion"].includes(a.categoria) &&
+    !a.nombre
+  )
+    a.nombre = "Cierre de jornada";
+  if (a.tipo === "actualizar_proyecto" && typeof a.estado === "string") {
+    const aliases: Record<string, string> = {
+      terminada: "terminado",
+      finalizada: "terminado",
+      finalizado: "terminado",
+      activa: "activo",
+      "en curso": "activo",
+      pausada: "pausado",
+      cancelado: "cancelada",
+    };
     a.estado = aliases[a.estado.toLowerCase()] || a.estado;
   }
+  if (a.material_id) amount(a.cantidad_recibida, "la cantidad recibida", true);
+  if (
+    a.categoria_gasto &&
+    !["imprevisto", "mano_obra", "gasto_general"].includes(a.categoria_gasto)
+  )
+    fail("Categoría de gasto no válida.");
+  if (a.pagado !== undefined && typeof a.pagado !== "boolean")
+    fail("Revisa si el pago está confirmado.");
   const required = (field: string) => {
     if (!text(a[field]))
       fail(
@@ -148,7 +174,9 @@ export function validateAction(raw: any): AIAction {
   if (
     a.estado &&
     a.tipo === "actualizar_proyecto" &&
-    !["activo", "terminado", "pausado", "pendiente", "cancelada"].includes(a.estado)
+    !["activo", "terminado", "pausado", "pendiente", "cancelada"].includes(
+      a.estado,
+    )
   )
     fail("Estado de obra no válido.");
   if (
@@ -171,12 +199,23 @@ export function validateAction(raw: any): AIAction {
     fail("Indica el nuevo nombre de la obra.");
   if (a.tipo === "actualizar_cliente" && !text(a.nombre) && !text(a.cliente_id))
     fail("Indica el cliente que quieres actualizar.");
-  if (a.tipo === 'actualizar_trabajador' && !text(a.usuario_id) && !text(a.trabajador_nombre) && !text(a.nombre))
-    fail('Indica el integrante del equipo que quieres actualizar.');
-  if (['actualizar_cliente', 'actualizar_trabajador'].includes(a.tipo)) validateContactAction(a);
-  if (a.tipo === 'agregar_trabajador' && a.especialidades !== undefined) a.especialidades = normalizeSpecialties(a.especialidades);
-  if (a.tipo === 'agregar_trabajador' && a.rol !== undefined && !['terreno','supervisor'].includes(a.rol))
-    fail('Elige terreno o supervisor para registrar al integrante.');
+  if (
+    a.tipo === "actualizar_trabajador" &&
+    !text(a.usuario_id) &&
+    !text(a.trabajador_nombre) &&
+    !text(a.nombre)
+  )
+    fail("Indica el integrante del equipo que quieres actualizar.");
+  if (["actualizar_cliente", "actualizar_trabajador"].includes(a.tipo))
+    validateContactAction(a);
+  if (a.tipo === "agregar_trabajador" && a.especialidades !== undefined)
+    a.especialidades = normalizeSpecialties(a.especialidades);
+  if (
+    a.tipo === "agregar_trabajador" &&
+    a.rol !== undefined &&
+    !["terreno", "supervisor"].includes(a.rol)
+  )
+    fail("Elige terreno o supervisor para registrar al integrante.");
   if (a.tipo === "agregar_trabajadores") {
     if (!Array.isArray(a.trabajadores) || !a.trabajadores.length)
       fail("Falta la lista de trabajadores.");
@@ -226,7 +265,7 @@ export function validateAction(raw: any): AIAction {
   }
   if (a.tipo === "registrar_imprevisto") {
     required("descripcion");
-    amount(a.monto, "el costo del imprevisto");
+    if (!a.asistencia_id) amount(a.monto, "el costo del imprevisto");
   }
   if (a.tipo === "crear_bitacora") {
     required("titulo");
@@ -286,7 +325,9 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
     !text(raw.titulo_proyecto) ||
     !Array.isArray(raw.materiales) ||
     !Array.isArray(raw.mano_de_obra) ||
-    (raw.modo_presupuesto !== 'precio_acordado' && !raw.materiales.length && !raw.mano_de_obra.length)
+    (raw.modo_presupuesto !== "precio_acordado" &&
+      !raw.materiales.length &&
+      !raw.mano_de_obra.length)
   )
     fail("La cotización debe incluir un nombre y costos desglosados.");
   const materiales = raw.materiales.map((m: any) => {
@@ -351,15 +392,21 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
   );
   const costo_directo = costo_materiales_total + costo_mano_obra_total;
   const f = raw.estructura_financiera || {};
-  const agreed = raw.modo_presupuesto === 'precio_acordado';
+  const agreed = raw.modo_presupuesto === "precio_acordado";
   const sales = agreed ? commercialLines(raw.partidas_venta) : undefined;
   const prices = sales ? agreedTotals(sales, raw.tratamiento_iva) : null;
   const gg = amount(
-    agreed ? 0 : f.gastos_generales_porcentaje ?? 10,
+    agreed ? 0 : (f.gastos_generales_porcentaje ?? 10),
     "los gastos generales",
   );
-  const im = amount(agreed ? 0 : f.imprevistos_porcentaje ?? 5, "los imprevistos");
-  const margen = amount(agreed ? 0 : f.margen_utilidad_porcentaje ?? 30, "la utilidad");
+  const im = amount(
+    agreed ? 0 : (f.imprevistos_porcentaje ?? 5),
+    "los imprevistos",
+  );
+  const margen = amount(
+    agreed ? 0 : (f.margen_utilidad_porcentaje ?? 30),
+    "la utilidad",
+  );
   const gastos_generales_monto = roundLine(gg / 100, costo_directo),
     imprevistos_monto = roundLine(im / 100, costo_directo);
   const base = costo_directo + gastos_generales_monto + imprevistos_monto;
@@ -380,12 +427,23 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
   const margen_utilidad_monto = agreed ? 0 : precio_sugerido_neto - base;
   const iva_19 = prices ? prices.tax : roundLine(0.19, precio_sugerido_neto);
   return {
-    modo_presupuesto: agreed ? 'precio_acordado' : 'estimado',
-    ...(sales ? { partidas_venta: sales, tratamiento_iva: raw.tratamiento_iva } : {}),
-    nombre_alternativa: typeof raw.nombre_alternativa === 'string' ? raw.nombre_alternativa.trim().slice(0, 150) : undefined,
+    modo_presupuesto: agreed ? "precio_acordado" : "estimado",
+    ...(sales
+      ? { partidas_venta: sales, tratamiento_iva: raw.tratamiento_iva }
+      : {}),
+    nombre_alternativa:
+      typeof raw.nombre_alternativa === "string"
+        ? raw.nombre_alternativa.trim().slice(0, 150)
+        : undefined,
     mostrar_fecha: raw.mostrar_fecha !== false,
-    nombre_archivo: typeof raw.nombre_archivo === 'string' ? raw.nombre_archivo.slice(0, 150) : undefined,
-    hitos_pago: paymentMilestones(raw.hitos_pago, precio_sugerido_neto + iva_19),
+    nombre_archivo:
+      typeof raw.nombre_archivo === "string"
+        ? raw.nombre_archivo.slice(0, 150)
+        : undefined,
+    hitos_pago: paymentMilestones(
+      raw.hitos_pago,
+      precio_sugerido_neto + iva_19,
+    ),
     id: `cot-${crypto.randomUUID()}`,
     titulo_proyecto: raw.titulo_proyecto,
     tipo_obra: raw.tipo_obra || "General",
@@ -396,10 +454,16 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
       typeof raw.cliente_telefono === "string"
         ? raw.cliente_telefono
         : undefined,
-    cliente_email: typeof raw.cliente_email === 'string' ? raw.cliente_email : undefined,
-    cliente_contacto: typeof raw.cliente_contacto === 'string' ? raw.cliente_contacto : undefined,
-    fecha_validez: typeof raw.fecha_validez === 'string' ? raw.fecha_validez : undefined,
-    observaciones: typeof raw.observaciones === 'string' ? raw.observaciones : undefined,
+    cliente_email:
+      typeof raw.cliente_email === "string" ? raw.cliente_email : undefined,
+    cliente_contacto:
+      typeof raw.cliente_contacto === "string"
+        ? raw.cliente_contacto
+        : undefined,
+    fecha_validez:
+      typeof raw.fecha_validez === "string" ? raw.fecha_validez : undefined,
+    observaciones:
+      typeof raw.observaciones === "string" ? raw.observaciones : undefined,
     condiciones_pago:
       typeof raw.condiciones_pago === "string"
         ? raw.condiciones_pago
@@ -481,19 +545,56 @@ export function parseChatResponse(raw: string) {
   const actions = flattenActions(parsed.acciones ?? parsed.accion);
   let quote = parsed.cotizacion ? normalizeQuote(parsed.cotizacion) : null;
   if (parsed.cotizaciones != null) {
-    if (!Array.isArray(parsed.cotizaciones) || parsed.cotizaciones.length > 4 || actions.length || parsed.cotizacion || parsed.cotizaciones_alternativas) fail('Revisa las propuestas y evita combinar la cotización con cambios de obra.');
-    const options = parsed.cotizaciones.map((q: any, i: number) => normalizeQuote({ ...q, ...(parsed.cotizaciones.length > 1 ? { nombre_alternativa: q.nombre_alternativa || `Opción ${i + 1}` } : {}) }));
-    quote = options.length ? { ...options[0], ...(options.length > 1 ? { alternativas: options.slice(1) } : {}) } : null;
+    if (
+      !Array.isArray(parsed.cotizaciones) ||
+      parsed.cotizaciones.length > 4 ||
+      actions.length ||
+      parsed.cotizacion ||
+      parsed.cotizaciones_alternativas
+    )
+      fail(
+        "Revisa las propuestas y evita combinar la cotización con cambios de obra.",
+      );
+    const options = parsed.cotizaciones.map((q: any, i: number) =>
+      normalizeQuote({
+        ...q,
+        ...(parsed.cotizaciones.length > 1
+          ? { nombre_alternativa: q.nombre_alternativa || `Opción ${i + 1}` }
+          : {}),
+      }),
+    );
+    quote = options.length
+      ? {
+          ...options[0],
+          ...(options.length > 1 ? { alternativas: options.slice(1) } : {}),
+        }
+      : null;
   }
   if (parsed.cotizaciones_alternativas != null) {
-    if (!Array.isArray(parsed.cotizaciones_alternativas) || parsed.cotizaciones_alternativas.length < 2 || parsed.cotizaciones_alternativas.length > 4 || actions.length) fail('Prepara entre dos y cuatro alternativas sin ejecutar cambios de obra.');
-    const options = parsed.cotizaciones_alternativas.map((q: any, i: number) => normalizeQuote({ ...q, nombre_alternativa: q.nombre_alternativa || `Opción ${i + 1}` }));
+    if (
+      !Array.isArray(parsed.cotizaciones_alternativas) ||
+      parsed.cotizaciones_alternativas.length < 2 ||
+      parsed.cotizaciones_alternativas.length > 4 ||
+      actions.length
+    )
+      fail(
+        "Prepara entre dos y cuatro alternativas sin ejecutar cambios de obra.",
+      );
+    const options = parsed.cotizaciones_alternativas.map((q: any, i: number) =>
+      normalizeQuote({
+        ...q,
+        nombre_alternativa: q.nombre_alternativa || `Opción ${i + 1}`,
+      }),
+    );
     quote = { ...options[0], alternativas: options.slice(1) };
   }
   return {
     respuesta: parsed.respuesta.trim(),
-    ...(parsed.registro_propuesto && typeof parsed.registro_propuesto === 'object' && !Array.isArray(parsed.registro_propuesto)
-      ? { registro_propuesto: parsed.registro_propuesto } : {}),
+    ...(parsed.registro_propuesto &&
+    typeof parsed.registro_propuesto === "object" &&
+    !Array.isArray(parsed.registro_propuesto)
+      ? { registro_propuesto: parsed.registro_propuesto }
+      : {}),
     ...(parsed.busqueda_materiales &&
     typeof parsed.busqueda_materiales === "object" &&
     !Array.isArray(parsed.busqueda_materiales)

@@ -1,9 +1,12 @@
 'use client';
+import { chileToday } from '@/lib/ai/project-deadlines';
+
+import ChangeApprovalModal from '@/components/ChangeApprovalModal';
 import MoneyAmount from "@/components/MoneyAmount";
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -38,7 +41,7 @@ import {
   PrioridadReclamoCambio,
   MaterialRequeridoCambio,
 } from '@/types/database';
-import { formatCLP, formatDate } from '@/lib/utils';
+import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 
 export default function ProyectoCambiosPage() {
   const params = useParams();
@@ -51,6 +54,10 @@ export default function ProyectoCambiosPage() {
   const [busqueda, setBusqueda] = useState<string>('');
   const [isMapsModalOpen, setIsMapsModalOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [approval,setApproval]=useState<ReclamoCambioObra|null>(null);
+  const [formBusy,setFormBusy]=useState(false);
+  const [formError,setFormError]=useState('');
+  const formId=useRef('');
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -96,6 +103,7 @@ export default function ProyectoCambiosPage() {
   }, [projectId]);
 
   const handleOpenNewModal = (defaultTipo: TipoReclamoCambio = 'solicitud_cambio') => {
+    formId.current='';setFormError('');
     setTipo(defaultTipo);
     setPrioridad(defaultTipo === 'accidente' ? 'critica' : 'alta');
     setTitulo('');
@@ -114,8 +122,9 @@ export default function ProyectoCambiosPage() {
 
   const handleAgregarMaterialManual = () => {
     if (!matNombre.trim()) return;
-    const cantidad = Math.max(1, Number(matCant) || 1);
-    const precio_unitario = Math.max(0, Number(matPrecio) || 0);
+    const cantidad = Number(matCant);
+    if(!Number.isFinite(cantidad)||cantidad<=0){showToast('Indica una cantidad mayor que cero.');return;}
+    const precio_unitario = Math.max(0, parseThousands(matPrecio) || 0);
     const nuevo: MaterialRequeridoCambio = {
       nombre: matNombre.trim(),
       cantidad,
@@ -126,8 +135,8 @@ export default function ProyectoCambiosPage() {
     const nextMats = [...materiales, nuevo];
     setMateriales(nextMats);
     const sumaMats = nextMats.reduce((acc, m) => acc + m.subtotal, 0);
-    if (Number(impactoMonto) < sumaMats) {
-      setImpactoMonto(String(sumaMats));
+    if (parseThousands(impactoMonto) < sumaMats) {
+      setImpactoMonto(formatThousands(sumaMats));
     }
     setMatNombre('');
     setMatCant('1');
@@ -172,7 +181,7 @@ export default function ProyectoCambiosPage() {
         });
         setMateriales(sugeridos);
         if (data.impacto_monto_sugerido > 0) {
-          setImpactoMonto(String(data.impacto_monto_sugerido));
+          setImpactoMonto(formatThousands(data.impacto_monto_sugerido));
         }
         if (data.impacto_dias_sugerido > 0) {
           setImpactoDias(String(data.impacto_dias_sugerido));
@@ -194,7 +203,7 @@ export default function ProyectoCambiosPage() {
     try {
       const uploaded = await dataService.uploadArchivoObra(file, projectId, 'bitacora-fotos');
       setFotoUrl(uploaded.publicUrl);
-      showToast('📸 Evidencia fotográfica subida a Supabase Storage.');
+      showToast('Foto adjuntada. Guarda el registro para vincularla a la obra.');
     } catch (err: any) {
       showToast(err.message || 'Error subiendo fotografía.');
     } finally {
@@ -202,44 +211,35 @@ export default function ProyectoCambiosPage() {
     }
   };
 
-  const handleGuardar = (e: React.FormEvent) => {
+  const handleGuardar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!projectId || !titulo.trim()) return;
-
-    dataService.createReclamoCambio({
+    if(!projectId || !titulo.trim() || formBusy)return;
+    setFormBusy(true);setFormError('');
+    try {
+      const values={
       proyecto_id: projectId,
       cliente_id: cliente?.id,
       tipo,
       prioridad,
-      estado: 'pendiente',
+      estado: 'pendiente' as const,
       titulo: titulo.trim(),
       descripcion: descripcion.trim() || titulo.trim(),
       solicitado_por: solicitadoPor.trim() || 'Mandante',
-      impacto_monto: Number(impactoMonto) || 0,
+      impacto_monto: parseThousands(impactoMonto) || 0,
       impacto_dias: Number(impactoDias) || 0,
       materiales_requeridos: materiales,
       foto_url: fotoUrl || undefined,
-      origen: 'web',
-      fecha: new Date().toISOString().split('T')[0],
-    });
-
-    setIsModalOpen(false);
-    loadData();
-    showToast('✅ Registro guardado y sincronizado con Supabase.');
+      origen: 'web' as const,
+      fecha: chileToday(),
+      };
+      if(formId.current)dataService.updateReclamoCambio(formId.current,values);
+      else formId.current=dataService.createReclamoCambio(values).id;
+      await dataService.confirmarCambios();
+      setIsModalOpen(false);loadData();showToast('Registro guardado.');
+    }catch(error){setFormError(error instanceof Error?error.message:'No se pudo confirmar el registro.');loadData();}
+    finally{setFormBusy(false);}
   };
-
-  const handleAprobarEInyectar = (item: ReclamoCambioObra) => {
-    const res = dataService.aprobarEInyectarCambioObra(item.id, {
-      ajustarPresupuesto: true,
-      ajustarPlazo: true,
-    });
-    if (res.exito) {
-      loadData();
-      showToast(
-        `✅ Cambio aprobado: ${res.materialesAgregados} materiales cargados en Finanzas y presupuesto actualizado.`
-      );
-    }
-  };
+  const handleAprobarEInyectar = (item:ReclamoCambioObra) => setApproval(item);
 
   const handleCambiarEstado = (id: string, nuevoEstado: ReclamoCambioObra['estado']) => {
     dataService.updateReclamoCambio(id, { estado: nuevoEstado });
@@ -247,10 +247,11 @@ export default function ProyectoCambiosPage() {
     showToast(`Estado actualizado a ${nuevoEstado.replaceAll('_', ' ')}.`);
   };
 
-  const handleEliminar = (id: string) => {
+  const handleEliminar = async (id: string) => {
     dataService.deleteReclamoCambio(id);
     loadData();
-    showToast('Registro eliminado.');
+    try { await dataService.confirmarCambios(); showToast('Eliminación guardada.'); }
+    catch(error) { showToast(error instanceof Error ? error.message : 'Eliminación pendiente de sincronización.'); }
   };
 
   const registrosFiltrados = registros.filter((r) => {
@@ -689,27 +690,16 @@ export default function ProyectoCambiosPage() {
                   {/* Botonera de Acciones del Registro */}
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-kraft-100 dark:border-[#1E2530]">
                     <div className="flex flex-wrap items-center gap-2">
-                      {item.estado !== 'aprobado' && item.estado !== 'resuelto' && (
+                      {item.estado !== 'aprobado' && item.estado !== 'resuelto' && item.estado !== 'rechazado' && (
                         <>
-                          {item.tipo === 'solicitud_cambio' || item.materiales_requeridos.length > 0 ? (
-                            <button
+                          <button
                               type="button"
                               onClick={() => handleAprobarEInyectar(item)}
                               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#6B8F72] hover:bg-[#5A7B60] text-white text-xs font-heading font-bold shadow-sm transition-colors"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Aprobar y Cargar Materiales a la Obra</span>
+                              <span>Revisar resolución</span>
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleCambiarEstado(item.id, 'resuelto')}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#6B8F72] hover:bg-[#5A7B60] text-white text-xs font-heading font-bold shadow-sm transition-colors"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Marcar como Resuelto</span>
-                            </button>
-                          )}
 
                           <button
                             type="button"
@@ -749,7 +739,7 @@ export default function ProyectoCambiosPage() {
               </h3>
               <button
                 type="button"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {if(!formBusy)setIsModalOpen(false);}}
                 className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700"
               >
                 <X className="w-5 h-5" />
@@ -757,6 +747,7 @@ export default function ProyectoCambiosPage() {
             </div>
 
             <form onSubmit={handleGuardar} className="space-y-4 mt-4">
+              {formError && <p role="alert" className="text-sm text-red-600">{formError}</p>}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-navy-900 dark:text-gray-200 mb-1">
@@ -853,10 +844,10 @@ export default function ProyectoCambiosPage() {
                     <DollarSign className="w-3.5 h-3.5 inline text-[#FF6A00]" /> Monto Adicional al Presupuesto (CLP)
                   </label>
                   <input
-                    type="number"
-                    min="0"
+                    type="text"
+                    inputMode="numeric"
                     value={impactoMonto}
-                    onChange={(e) => setImpactoMonto(e.target.value)}
+                    onChange={(e) => setImpactoMonto(formatThousands(e.target.value))}
                     className="w-full px-3 py-2 rounded-xl border border-kraft-200 dark:border-[#263040] bg-[#FAF8F5] dark:bg-[#1E2530] text-xs font-mono text-navy-900 dark:text-white"
                   />
                 </div>
@@ -908,7 +899,7 @@ export default function ProyectoCambiosPage() {
                     min="0"
                     placeholder="$ Unit."
                     value={matPrecio}
-                    onChange={(e) => setMatPrecio(e.target.value)}
+                    onChange={(e) => setMatPrecio(formatThousands(e.target.value))}
                     className="col-span-2 px-2 py-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] text-xs text-navy-900 dark:text-white"
                   />
                   <button
@@ -966,16 +957,17 @@ export default function ProyectoCambiosPage() {
               <div className="flex justify-end gap-2 pt-3 border-t border-kraft-100 dark:border-[#263040]">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {if(!formBusy)setIsModalOpen(false);}}
                   className="px-4 py-2 rounded-xl bg-kraft-100 dark:bg-[#1E2530] text-xs font-bold text-navy-900 dark:text-gray-300"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
+                  disabled={formBusy || isUploadingFoto || isCalculandoIA}
                   className="px-5 py-2 rounded-xl bg-[#FF6A00] hover:bg-[#E05E00] text-white text-xs font-heading font-bold shadow"
                 >
-                  Guardar Registro
+                  {formBusy ? 'Guardando…' : 'Guardar Registro'}
                 </button>
               </div>
             </form>
@@ -983,6 +975,7 @@ export default function ProyectoCambiosPage() {
         </ModalOverlay>
       )}
 
+      {approval && proyecto && <ChangeApprovalModal item={approval} project={proyecto} onClose={()=>setApproval(null)} onSaved={()=>{loadData();showToast('Resolución guardada.');}}/>}
       {/* Visor de Foto */}
       {previewPhoto && (
         <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">

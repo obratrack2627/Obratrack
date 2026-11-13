@@ -23,6 +23,11 @@ export function checkActionPermissions(
 ) {
   const actions = flattenActions(input);
   checkChileanAmounts(actions, message);
+  if(actions.some(action=>action.tipo==='registrar_documento'&&['cierre_diario','acta_recepcion'].includes(action.categoria))) {
+    assertAttendanceManager(user);
+    if(actions.length!==1)throw new AIError('CLOSE_SEPARATE','Solicita el cierre de jornada después de guardar los demás registros.',422);
+  }
+  if (actions.some(action => action.tipo==='registrar_imprevisto'&&action.asistencia_id))assertAttendanceManager(user);
   if (actions.some(action => action.tipo === "registrar_asistencia")) assertAttendanceManager(user);
   if (!['admin', 'supervisor', 'terreno'].includes(user.rol))
     throw new AIError('ACTION_FORBIDDEN', 'Tu cuenta no tiene permisos para gestionar obras.', 403);

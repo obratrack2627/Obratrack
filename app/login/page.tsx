@@ -51,10 +51,10 @@ function validateSignUpFields(args: SignUpValidationArgs): string | null {
   if (!args.acceptTerms) {
     return 'Debes aceptar los Términos y la Política de Privacidad.';
   }
-  if (!validarRutChileno(args.rut)) {
+  if (args.rut.trim() && !validarRutChileno(args.rut)) {
     return 'El RUT ingresado no es válido.';
   }
-  if (args.empresaNombre.trim().length < 3) {
+  if (args.empresaNombre.trim() && args.empresaNombre.trim().length < 3) {
     return 'Ingresa el nombre de tu empresa o contratista.';
   }
   if (args.signupPassword !== args.signupConfirmPassword) {
@@ -378,7 +378,7 @@ function SignInView(props: SignInViewProps) {
           onClick={props.onGoToSignUp}
           className="font-medium text-gray-900 dark:text-white hover:text-[#FF6A00] dark:hover:text-[#FF8533]"
         >
-          Registrar empresa
+          Crear cuenta
         </button>
       </div>
     </>
@@ -419,7 +419,7 @@ function SignUpView(props: SignUpViewProps) {
       <div className="flex items-center gap-2.5 mb-5">
         <div className="w-1 h-5 rounded-full bg-[#FF6A00]" />
         <h1 className="font-heading text-[20px] font-semibold text-[#1E1E1E] dark:text-white tracking-tight">
-          Registrar empresa
+          Crear cuenta
         </h1>
       </div>
 
@@ -444,15 +444,14 @@ function SignUpView(props: SignUpViewProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label htmlFor="signup-empresa" className={LABEL_CLASS}>
-              Empresa
+              Nombre comercial (opcional)
             </label>
             <input
               id="signup-empresa"
               name="organization"
               type="text"
               autoComplete="organization"
-              required
-              placeholder="Constructora Sur SpA"
+              placeholder="Tu nombre o el de tu empresa"
               value={props.empresaNombre}
               onChange={(e) => props.onEmpresaChange(e.target.value)}
               className={INPUT_CLASS}
@@ -465,7 +464,7 @@ function SignUpView(props: SignUpViewProps) {
                 htmlFor="signup-rut"
                 className="text-[13px] font-medium text-[#3A3835] dark:text-gray-300"
               >
-                RUT
+                RUT personal (opcional)
               </label>
               {props.rut && !isRutValid && (
                 <span className="text-[11px] text-red-600 dark:text-red-400">Inválido</span>
@@ -475,9 +474,8 @@ function SignUpView(props: SignUpViewProps) {
               id="signup-rut"
               name="rut"
               type="text"
-              required
               maxLength={12}
-              placeholder="76.543.210-K"
+              placeholder="12.345.678-5"
               value={props.rut}
               onChange={(e) => props.onRutChange(formatRUT(e.target.value))}
               className={`${INPUT_CLASS} font-mono ${rutStateClass}`}

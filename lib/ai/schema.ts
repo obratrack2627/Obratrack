@@ -14,7 +14,7 @@ const array = (items: Record<string, unknown>) => ({ type: "array", items });
 const activity = object({ nombre: string, dias: number }, ["nombre", "dias"]);
 const material = object(
   {
-    ...strings("nombre,unidad,categoria,proveedor"),
+    ...strings("nombre,unidad,categoria,proveedor,actividad_id"),
     ...numbers("cantidad,precio_unitario"),
   },
   ["nombre", "cantidad", "precio_unitario"],
@@ -32,6 +32,24 @@ export const CHAT_RESPONSE_SCHEMA = object(
           nuevo_nombre: string,
           especialidades: array(string),
           usuario_id: string,
+          material_id: string,
+          asistencia_id: string,
+          valor_diario: number,
+          jornada: number,
+          horas_extra: number,
+          valor_hora_extra: number,
+          recepcion_estado: {
+            type: "string",
+            enum: ["observaciones", "conforme"],
+          },
+          recibido_por: string,
+          fotos: array(string),
+          categoria_gasto: {
+            type: "string",
+            enum: ["imprevisto", "mano_obra", "gasto_general"],
+          },
+          cantidad_recibida: number,
+          pagado: { type: "boolean" },
           cliente_rut: string,
           ...strings(
             "nombre,titulo,descripcion,comuna,direccion,fecha_inicio,fecha_termino_estimada,estado,cliente_id,cliente_nombre,cliente_email,cliente_telefono,proyecto_id,proyecto_nombre,telefono,email,rut,rol,trabajador_nombre,actividad_id,metodo,nota,fecha,subtipo,tipo_bitacora,tipo_evento,prioridad,hora_entrada,hora_salida,categoria,correo_remitente,correo_destinatario,correo_asunto,correo_cuerpo,hora,comuna_lugar,resumen,mensaje,observacion,numero_documento,proveedor,proveedor_entidad,fecha_documento",
@@ -49,7 +67,13 @@ export const CHAT_RESPONSE_SCHEMA = object(
             enum: ["admin", "supervisor", "terreno"],
           }),
           trabajadores: array(
-            object({...strings("nombre,rol,telefono,email,rut"), especialidades: array(string)}, ["nombre"]),
+            object(
+              {
+                ...strings("nombre,rol,telefono,email,rut"),
+                especialidades: array(string),
+              },
+              ["nombre"],
+            ),
           ),
         },
         ["tipo"],
@@ -57,8 +81,17 @@ export const CHAT_RESPONSE_SCHEMA = object(
     ),
     sugerencias: array(string),
     registro_propuesto: {
-      ...object({ tipo: { type: 'string', enum: ['trabajador', 'cliente'] }, ...strings('nombre,rut,telefono,email,rol,proyecto_id,proyecto_nombre,direccion,comuna'), especialidades: array(string) }, ['tipo']),
-      type: ['object', 'null'],
+      ...object(
+        {
+          tipo: { type: "string", enum: ["trabajador", "cliente"] },
+          ...strings(
+            "nombre,rut,telefono,email,rol,proyecto_id,proyecto_nombre,direccion,comuna",
+          ),
+          especialidades: array(string),
+        },
+        ["tipo"],
+      ),
+      type: ["object", "null"],
     },
     busqueda_materiales: {
       ...object(
@@ -91,13 +124,31 @@ export const CHAT_RESPONSE_SCHEMA = object(
             "titulo_proyecto,tipo_obra,comuna_region,resumen_ejecutivo,cliente_id,cliente_nombre,cliente_telefono,cliente_email,cliente_contacto,fecha_validez,observaciones,condiciones_pago",
           ),
           ...numbers("metros_cuadrados,duracion_dias_estimada"),
-          modo_presupuesto: { type: 'string', enum: ['estimado','precio_acordado'] },
-          tratamiento_iva: { type: 'string', enum: ['neto','incluido'] },
+          modo_presupuesto: {
+            type: "string",
+            enum: ["estimado", "precio_acordado"],
+          },
+          tratamiento_iva: { type: "string", enum: ["neto", "incluido"] },
           nombre_alternativa: string,
-          mostrar_fecha: { type: 'boolean' },
+          mostrar_fecha: { type: "boolean" },
           nombre_archivo: string,
-          partidas_venta: array(object({ nombre: string, unidad: string, cantidad: number, precio_unitario: number }, ['nombre','unidad','cantidad','precio_unitario'])),
-          hitos_pago: array(object({ nombre: string, porcentaje: number }, ['nombre','porcentaje'])),
+          partidas_venta: array(
+            object(
+              {
+                nombre: string,
+                unidad: string,
+                cantidad: number,
+                precio_unitario: number,
+              },
+              ["nombre", "unidad", "cantidad", "precio_unitario"],
+            ),
+          ),
+          hitos_pago: array(
+            object({ nombre: string, porcentaje: number }, [
+              "nombre",
+              "porcentaje",
+            ]),
+          ),
           materiales: array(
             object(
               {
@@ -154,11 +205,23 @@ export const CHAT_RESPONSE_SCHEMA = object(
 // Un solo esquema de cotización evita duplicar decenas de propiedades opcionales,
 // que Gemini rechaza como INVALID_ARGUMENT. No limitar maxItems en el esquema:
 // expande su gramática para el objeto completo. El servidor valida el máximo de 4.
-export const QUOTE_RESPONSE_SCHEMA = object({
-  respuesta: string,
-  cotizaciones: { type: 'array', items: { ...(CHAT_RESPONSE_SCHEMA.properties.cotizacion as Record<string, unknown>), type: 'object' } },
-  sugerencias: array(string),
-}, ['respuesta', 'cotizaciones']);
+export const QUOTE_RESPONSE_SCHEMA = object(
+  {
+    respuesta: string,
+    cotizaciones: {
+      type: "array",
+      items: {
+        ...(CHAT_RESPONSE_SCHEMA.properties.cotizacion as Record<
+          string,
+          unknown
+        >),
+        type: "object",
+      },
+    },
+    sugerencias: array(string),
+  },
+  ["respuesta", "cotizaciones"],
+);
 
 // En WhatsApp la creación pasa exclusivamente por el borrador y su validación de cinco campos.
 // El modelo no puede saltarse ese flujo emitiendo una creación directa incompleta.

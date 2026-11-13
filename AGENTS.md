@@ -33,3 +33,11 @@
 - WhatsApp: conversación natural sin cabecera de marca, emojis automáticos ni contadores de acciones. Los documentos conservan su desglose. No modificar presupuesto al cambiar un estado; no confirmar envíos entregados cuando solo están en cola.
 
 - Asistencia: solo administradores y supervisores pueden crear, corregir o eliminar registros. Terreno no marca ni siquiera su propia entrada/salida por texto, audio, imagen o ubicación. Aplicar `asistencia_solo_jefatura.sql` después de `flujo_terreno_rbac.sql`.
+
+## Lógica de obra (2026-11-13)
+- Aplicar `gestion_diaria_20261113.sql` y luego `logica_constructor_20261113.sql`. Las pruebas SQL son transacciones con ROLLBACK; nunca enviar WhatsApp real para probar.
+- Cierre automático: exige partidas y todas completas; corregir/agregar trabajo pendiente reabre a `activo` aunque antes estuviera pausada. Canceladas y cierres manuales se preservan. La recepción del mandante es independiente; al reabrir queda pendiente, conservando actas.
+- El snapshot de IA usa el estado persistido de la obra, no el derivado del avance, para no transformar un cierre automático en manual. No enviar columnas de recepción ni banderas automáticas mediante sincronización genérica.
+- Compra, recepción parcial y pago de materiales son independientes. Pago desconocido no equivale a pagado ni a deuda confirmada. Incidentes internos nunca incrementan contrato. Adicionales modifican contrato/plazo solo por revisión explícita con respaldo del mandante.
+- Jornales desde asistencia y actas de recepción usan RPCs con actor verificado, recálculo nativo e idempotencia. No crear pagos al recibir materiales, adjuntar boletas, cerrar jornada o calcular jornales. Terreno no puede realizar operaciones de jefatura.
+- Registro de cuenta: RUT personal y nombre comercial opcionales; nunca exigir RUT de empresa. Si se informa RUT debe ser válido. Correo y sesión siguen verificados por Auth.

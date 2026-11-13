@@ -1,4 +1,5 @@
 "use client";
+import { formatThousands, parseThousands } from '@/lib/utils';
 import { useState } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Actividad, Usuario } from "@/types/database";
@@ -79,6 +80,7 @@ export default function ActivityEditor({
           try {
             onSave(draft.id, {
               nombre: draft.nombre.trim(),
+              monto_contratado: draft.monto_contratado || null,
               fecha_inicio: draft.fecha_inicio,
               fecha_termino: draft.fecha_termino,
               responsable_id: draft.responsable_id || undefined,
@@ -120,6 +122,10 @@ export default function ActivityEditor({
             value={draft.nombre}
             onChange={(e) => setDraft({ ...draft, nombre: e.target.value })}
           />
+        </label>
+        <label className="block space-y-1.5 text-xs font-semibold text-gray-500">Monto contratado de esta partida (opcional)
+          <input className={field} inputMode="numeric" placeholder="Sin ponderación" value={draft.monto_contratado ? formatThousands(draft.monto_contratado) : ''} onChange={event=>setDraft({...draft,monto_contratado:parseThousands(event.target.value)||null})}/>
+          <span className="block font-normal">Completa los montos de todas las partidas para ponderar el avance y el estado de pago.</span>
         </label>
         <div className="space-y-2 rounded-xl border border-kraft-200 dark:border-[#263040] p-3">
           <div className="flex items-center justify-between gap-3">

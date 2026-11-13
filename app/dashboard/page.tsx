@@ -1,4 +1,5 @@
 'use client';
+import { calendarDays, chileToday } from '@/lib/work-calendar';
 import MoneyAmount from "@/components/MoneyAmount";
 import CompactSummary from '@/components/CompactSummary';
 import { ProjectStatusBadge } from '@/components/ProjectStatus';
@@ -120,13 +121,11 @@ export default function DashboardPage() {
 
   // Alertas de obras críticas (con plazo próximo o atrasadas)
   const today = new Date();
-  const todayISO = today.toISOString().slice(0, 10);
+  const todayISO = chileToday();
   const alertas = obrasActivas
     .map((p) => {
-      const fechaTermino = new Date(p.fecha_termino_estimada + 'T23:59:59');
-      const diasRestantes = Math.ceil(
-        (fechaTermino.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-      );
+      let diasRestantes = 99999;
+      try { diasRestantes = calendarDays(chileToday(), p.fecha_termino_estimada); } catch { /* Sin fecha válida: no inventar un vencimiento. */ }
       const avance = p.porcentaje_avance_ponderado || 0;
 
       let nivel: 'critico' | 'advertencia' | 'ok' = 'ok';
