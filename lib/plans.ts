@@ -1,4 +1,22 @@
-import { PlanSuscripcion, SubscriptionPlanId } from '@/types/database';
+import type {
+  BillingCycle,
+  PaidPlanId,
+  PlanSuscripcion,
+  SubscriptionPlanId,
+} from '@/types/database';
+
+export const ANNUAL_DISCOUNT_RATE = 0.15;
+
+export interface PlanPricingBreakdown {
+  planId: PaidPlanId;
+  nombre: string;
+  ciclo: BillingCycle;
+  precioMensualBaseCLP: number;
+  precioEfectivoMensualCLP: number;
+  montoCobroCLP: number;
+  ahorroAnualCLP: number;
+  duracionDias: number;
+}
 
 export const PLANES_SUSCRIPCION: PlanSuscripcion[] = [
   {
@@ -90,4 +108,47 @@ export function getPlanDetails(planId: SubscriptionPlanId): PlanSuscripcion {
     PLANES_SUSCRIPCION.find((p) => p.id === planId) ||
     PLANES_SUSCRIPCION[1] // Default Pro
   );
+}
+
+/** Valida si un identificador corresponde a un plan pagado comercializable. */
+export function isPaidPlanId(value: unknown): value is PaidPlanId {
+  return value === 'pro' || value === 'pro_ia';
+}
+
+/**
+ * Calcula los montos oficiales en CLP para un plan pagado y ciclo de cobro.
+ * Fuente única compartida entre el frontend (/planes) y la validación del servidor.
+ */
+export function getPlanPricing(planId: PaidPlanId, ciclo: BillingCycle): PlanPricingBreakdown {
+  const plan = PLANES_SUSCRIPCION.find((p) => p.id === planId);
+  if (!plan || plan.precioMensualCLP <= 0) {
+    throw new Error(`Plan sin tarifa comercial: ${planId}`);
+  }
+
+  const base = plan.precioMensualCLP;
+  if (ciclo === 'anual') {
+    const precioEfectivoMensualCLP = Math.round((base * (1 - ANNUAL_DISCOUNT_RATE)) / 10) * 10;
+    const montoCobroCLP = precioEfectivoMensualCLP * 12;
+    return {
+      planId,
+      nombre: plan.nombre,
+      ciclo,
+      precioMensualBaseCLP: base,
+      precioEfectivoMensualCLP,
+      montoCobroCLP,
+      ahorroAnualCLP: base * 12 - montoCobroCLP,
+      duracionDias: 365,
+    };
+  }
+
+  return {
+    planId,
+    nombre: plan.nombre,
+    ciclo,
+    precioMensualBaseCLP: base,
+    precioEfectivoMensualCLP: base,
+    montoCobroCLP: base,
+    ahorroAnualCLP: 0,
+    duracionDias: 30,
+  };
 }

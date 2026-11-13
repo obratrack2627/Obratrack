@@ -6,6 +6,7 @@ import { isSessionJWT } from '@/lib/auth/access';
 // Rutas públicas que NO requieren autenticación previa
 const PUBLIC_PAGES = [
   '/login',
+  '/precios',
   '/auth/callback',
   '/actualizar-password',
   '/manifest.webmanifest',
@@ -13,11 +14,14 @@ const PUBLIC_PAGES = [
   '/favicon.ico',
 ];
 
-// Endpoints de API específicamente públicos (ej. webhooks externos de Meta)
+// Endpoints de API específicamente públicos (ej. webhooks externos de Meta o Flow)
 const PUBLIC_API_ROUTES = [
   '/api/auth/session',
   '/api/whatsapp/procesar-envios',
   '/api/webhook/whatsapp', // Webhook entrante de Meta WhatsApp Cloud API
+  '/api/billing/webhook/flow', // Webhook server-to-server de Flow.cl
+  '/api/billing/return/flow', // Retorno POST/GET del checkout de Flow.cl
+  '/api/billing/reconcile', // Tarea programada protegida por CRON_SECRET
 ];
 
 

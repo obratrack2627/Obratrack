@@ -1,4 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { serverFetch } from '@/lib/server-fetch';
+import { AIError } from '@/lib/ai/errors';
+import { supabaseUrl as defaultSupabaseUrl } from '@/lib/supabase/client';
 import {
   ReclamoCambioObra,
   DocumentoObra,
@@ -6,24 +9,43 @@ import {
   ReporteWhatsApp,
 } from '@/types/database';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
 let cachedAdmin: SupabaseClient | null = null;
+let cachedKey = '';
+let cachedUrl = '';
 
+/**
+ * Crea o reutiliza un cliente Supabase administrativo usando exclusivamente SERVICE_ROLE_KEY.
+ * Nunca degrada silenciosamente a anonKey para evitar brechas o escrituras bloqueadas por RLS.
+ */
 export function getSupabaseAdmin(): SupabaseClient | null {
-  if (cachedAdmin) return cachedAdmin;
-  const key = serviceRoleKey || anonKey;
-  if (!supabaseUrl || !key) return null;
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL || defaultSupabaseUrl || '').trim();
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!url || !key) return null;
+  if (cachedAdmin && cachedUrl === url && cachedKey === key) return cachedAdmin;
 
-  cachedAdmin = createClient(supabaseUrl, key, {
+  cachedUrl = url;
+  cachedKey = key;
+  cachedAdmin = createClient(url, key, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
     },
+    global: { fetch: serverFetch },
   });
   return cachedAdmin;
+}
+
+/** Exige cliente Supabase con permisos service_role para facturación y webhooks verificados. */
+export function requireSupabaseAdmin(): SupabaseClient {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    throw new AIError(
+      'BILLING_DB_CONFIG',
+      'La configuración del servidor para facturación no está completa.',
+      503,
+    );
+  }
+  return client;
 }
 
 export interface CloudV2State {

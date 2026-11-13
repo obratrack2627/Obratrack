@@ -564,3 +564,57 @@ export interface MensajeChatProyecto {
   accion_ejecutada?: AccionAsistenteIA;
   created_at: string;
 }
+
+export type PaidPlanId = Exclude<SubscriptionPlanId, 'gratis'>;
+export type BillingCycle = 'mensual' | 'anual';
+export type BillingModality = 'recurrente' | 'prepago';
+export type BillingGateway = 'flow' | 'mercadopago';
+export type SubscriptionStatus = 'pending' | 'active' | 'past_due' | 'canceled' | 'expired';
+export type PaymentRecordStatus = 'pending' | 'paid' | 'failed' | 'refunded' | 'canceled';
+
+export interface Suscripcion {
+  id: string;
+  empresa_id: string;
+  plan_id: SubscriptionPlanId;
+  ciclo: BillingCycle;
+  modalidad: BillingModality;
+  estado: SubscriptionStatus;
+  pasarela: BillingGateway;
+  gateway_customer_id?: string | null;
+  gateway_subscription_id?: string | null;
+  card_brand?: string | null;
+  card_last4?: string | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  cancel_at_period_end: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PagoSuscripcion {
+  id: string;
+  empresa_id: string;
+  suscripcion_id?: string | null;
+  commerce_order: string;
+  gateway_payment_id?: string | null;
+  gateway_token?: string | null;
+  pasarela: BillingGateway;
+  plan_id: PaidPlanId;
+  ciclo: BillingCycle;
+  modalidad: BillingModality;
+  monto_clp: number;
+  estado: PaymentRecordStatus;
+  metodo_pago?: string | null;
+  paid_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BillingStatusSummary {
+  plan_id: SubscriptionPlanId | 'ilimitado';
+  rol: UserRole;
+  can_manage_billing: boolean;
+  gateway_configured: boolean;
+  suscripcion: Suscripcion | null;
+  pagos: PagoSuscripcion[];
+}

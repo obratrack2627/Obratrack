@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import Logo from '@/components/Logo';
@@ -986,7 +987,14 @@ function LoginForm() {
           )}
         </div>
 
-        <footer className="relative z-10 mt-7 flex items-center justify-center gap-3 text-[11px] text-[#8C867C] dark:text-gray-500">
+        <footer className="relative z-10 mt-7 flex flex-wrap items-center justify-center gap-3 text-[11px] text-[#8C867C] dark:text-gray-500">
+          <Link
+            href="/precios"
+            className="hover:text-gray-900 dark:hover:text-gray-300"
+          >
+            Planes y Precios
+          </Link>
+          <span aria-hidden="true">·</span>
           <button
             type="button"
             onClick={() => openLegalTab('terminos')}
