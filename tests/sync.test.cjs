@@ -530,3 +530,40 @@ test('el borrado solo afecta la empresa y no elimina cuentas Auth ni acepta clav
  assert.equal((await POST(request({cambios:{},eliminados:{usuarios:[user.id]}}))).status,403);
  assert.equal((await POST(request(JSON.parse('{"cambios":{},"eliminados":{"toString":["x"]}}')))).status,400);
 });
+
+test('POST /api/supabase/sync normaliza URLs firmadas de whatsapp-evidencias al formato persistente', async () => {
+  fixture.tables.set('proyectos', [p1]);
+  const signed = (name) => `${fixture.supabaseUrl}/storage/v1/object/sign/whatsapp-evidencias/a/u/${name}?token=tmp`;
+  const res = await POST(request({
+    cambios: {
+      pagos: [{ id: 'pay-url', proyecto_id: 'p1', monto: 50000, metodo: 'transferencia', fecha: '2026-11-13', comprobante_url: signed('pago.jpg') }],
+      bitacora: [{ id: 'bit-url', proyecto_id: 'p1', titulo: 'Avance', nota: 'Ok', tipo: 'avance', fecha: '2026-11-13', foto_url: signed('bit.jpg') }],
+      imprevistos: [{ id: 'imp-url', proyecto_id: 'p1', titulo: 'Falla', descripcion: 'Detalle', monto: 10000, fecha: '2026-11-13', foto_url: signed('imp.jpg') }],
+      reclamos_cambios: [{ id: 'rc-url', proyecto_id: 'p1', tipo: 'cambio', prioridad: 'alta', estado: 'pendiente', titulo: 'Cambio', descripcion: 'Desc', foto_url: signed('rc.jpg') }],
+      documentos: [{ id: 'doc-url', proyecto_id: 'p1', categoria: 'factura_boleta', nombre: 'Doc', archivo_url: signed('doc.pdf') }],
+    },
+  }));
+  assert.equal(res.status, 200);
+  assert.equal(fixture.tables.get('pagos')[0].comprobante_url, 'whatsapp-evidencias:a/u/pago.jpg');
+  assert.equal(fixture.tables.get('bitacora_entradas')[0].foto_url, 'whatsapp-evidencias:a/u/bit.jpg');
+  assert.equal(fixture.tables.get('imprevistos')[0].foto_url, 'whatsapp-evidencias:a/u/imp.jpg');
+  assert.equal(fixture.tables.get('reclamos_cambios_obra')[0].foto_url, 'whatsapp-evidencias:a/u/rc.jpg');
+  assert.equal(fixture.tables.get('documentos_obra')[0].archivo_url, 'whatsapp-evidencias:a/u/doc.pdf');
+});
+
+test('dataService.updateUsuario no promueve trabajadores a admin ni degrada cuentas admin', () => {
+  const worker = { id: 'w-1', empresa_id: 'a', nombre: 'Maestro', email: 'benja105.achavar@gmail.com', rol: 'terreno', auth_user_id: null, is_dev: false };
+  localStorage.setItem('obratrack_usuarios_v7_a', JSON.stringify([user, worker]));
+
+  const updatedWorker = dataService.updateUsuario('w-1', { rol: 'admin', nombre: 'Maestro Editado' });
+  assert.equal(updatedWorker.rol, 'terreno');
+  assert.equal(updatedWorker.is_dev, false);
+  assert.equal(updatedWorker.nombre, 'Maestro Editado');
+
+  const promotedSupervisor = dataService.updateUsuario('w-1', { rol: 'supervisor' });
+  assert.equal(promotedSupervisor.rol, 'supervisor');
+
+  const updatedAdmin = dataService.updateUsuario(user.id, { rol: 'terreno', nombre: 'Admin Editado' });
+  assert.equal(updatedAdmin.rol, 'admin');
+  assert.equal(updatedAdmin.nombre, 'Admin Editado');
+});

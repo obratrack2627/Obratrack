@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 import { loadAIContext, checkedRows } from "@/lib/ai/context";
-import { signRows } from "@/lib/supabase/private-files";
+import { persistentFile, signRows } from "@/lib/supabase/private-files";
 const mapping: Record<string, string> = {
   proyectos: "proyectos",
   clientes: "clientes",
@@ -429,7 +429,7 @@ export async function POST(request: NextRequest) {
               estado: pay.estado || "completado",
               fecha: pay.fecha || chileToday(),
               notas: pay.notas || pay.nota || null,
-              comprobante_url: pay.comprobante_url || null,
+              comprobante_url: persistentFile(pay.comprobante_url) || null,
             },
             { onConflict: "id" },
           ),
@@ -450,7 +450,7 @@ export async function POST(request: NextRequest) {
               autor_nombre: b.autor_nombre || "Terreno",
               titulo: b.titulo,
               nota: b.nota,
-              foto_url: b.foto_url || null,
+              foto_url: persistentFile(b.foto_url) || null,
               material_id: b.material_id || null,
               cantidad_recibida: b.cantidad_recibida ?? null,
               tipo: [
@@ -487,7 +487,7 @@ export async function POST(request: NextRequest) {
               pagado: imp.pagado ?? null,
               estado: imp.estado || "pendiente",
               origen: imp.origen === "whatsapp_ia" ? "whatsapp_ia" : "manual",
-              foto_url: imp.foto_url || null,
+              foto_url: persistentFile(imp.foto_url) || null,
               fecha_reporte:
                 imp.fecha || chileToday(),
             },
@@ -519,7 +519,7 @@ export async function POST(request: NextRequest) {
               impacto_dias: Number(rc.impacto_dias) || 0,
               materiales_requeridos: rc.materiales_requeridos || [],
               materiales_inyectados: Boolean(rc.materiales_inyectados),
-              foto_url: rc.foto_url || null,
+              foto_url: persistentFile(rc.foto_url) || null,
               origen: rc.origen || "web",
               resolucion_notas: rc.resolucion_notas || null,
               fecha: rc.fecha || chileToday(),
@@ -543,7 +543,7 @@ export async function POST(request: NextRequest) {
               categoria: doc.categoria,
               nombre: doc.nombre,
               descripcion: doc.descripcion || null,
-              archivo_url: doc.archivo_url || null,
+              archivo_url: persistentFile(doc.archivo_url) || null,
               archivo_nombre: doc.archivo_nombre || null,
               archivo_tamano: doc.archivo_tamano ?? null,
               mime_type: doc.mime_type || null,
