@@ -14,7 +14,10 @@ $$;
 REVOKE ALL ON FUNCTION public.get_auth_rol(),public.get_auth_usuario_id(),public.puede_ver_obra(text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.get_auth_rol(),public.get_auth_usuario_id(),public.puede_ver_obra(text) TO authenticated,service_role;
 DROP POLICY IF EXISTS obra_asignada_lectura ON public.proyectos;
-CREATE POLICY obra_asignada_lectura ON public.proyectos AS RESTRICTIVE FOR SELECT TO authenticated USING(public.puede_ver_obra(id));
+CREATE POLICY obra_asignada_lectura ON public.proyectos AS RESTRICTIVE FOR SELECT TO authenticated USING(
+ empresa_id=public.get_auth_empresa_id() AND
+ (public.get_auth_rol() IN ('admin','supervisor') OR public.puede_ver_obra(id))
+);
 DROP POLICY IF EXISTS equipo_datos_lectura ON public.usuarios;
 CREATE POLICY equipo_datos_lectura ON public.usuarios AS RESTRICTIVE FOR SELECT TO authenticated USING(public.get_auth_rol() IN ('admin','supervisor') OR id=public.get_auth_usuario_id());
 DROP POLICY IF EXISTS clientes_datos_lectura ON public.clientes;

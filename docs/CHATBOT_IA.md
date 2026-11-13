@@ -279,3 +279,17 @@ Aplicar `supabase/especialidades_equipo.sql` después de `flujo_terreno_rbac.sql
 antes de publicar esta versión. La migración conserva los contactos y admite
 clientes anteriores que todavía no envíen especialidades. Se valida con
 `tests/sql/especialidades_equipo.sql`; sus fixtures se revierten.
+
+### Corrección de guardado de obras por RLS
+
+En bases existentes, ejecutar `supabase/corregir_guardado_obras_rls.sql` en el
+SQL Editor de Supabase. La política anterior `obra_asignada_lectura` buscaba la
+obra persistida incluso al comprobar la fila candidata de un `upsert`, lo que
+rechazaba las altas con `42501`. La corrección autoriza la lectura de la fila
+por empresa y rol de jefatura sin exigir su existencia previa; conserva las
+demás políticas de acceso web, escritura y aislamiento. No requiere borrar
+datos ni desactivar RLS. Después, pulsar «Reintentar sincronización» en el
+dispositivo con cambios pendientes. Un despliegue en Vercel no aplica este SQL.
+La regresión nativa `tests/sql/guardar_obras_rls.sql` comprueba alta y edición
+propias y rechazo de lectura, alta y apropiación de obras ajenas; termina en
+ROLLBACK.
