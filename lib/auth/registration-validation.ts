@@ -17,9 +17,15 @@ export interface SignUpValidationInput {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export function sanitizeEmail(email: string | null | undefined): string {
+  return (email || '')
+    .replace(/\uFF20/g, '@')
+    .replace(/[\s\u00A0\u200B-\u200F\uFEFF]+/g, '');
+}
+
 export function isValidEmail(email: string | null | undefined): boolean {
-  const clean = (email || '').trim();
-  return clean.length > 0 && clean.length <= 100 && EMAIL_REGEX.test(clean);
+  const clean = sanitizeEmail(email);
+  return clean.length > 0 && clean.length <= 254 && EMAIL_REGEX.test(clean);
 }
 
 export function normalizeRutKey(rut: string | null | undefined): string {
@@ -41,12 +47,12 @@ export function validateSignUpFields(args: SignUpValidationInput): string | null
   if (!validarRutChileno(cleanRut)) {
     return 'El RUT ingresado no es válido. Revisa el dígito verificador (ej: 12.345.678-5).';
   }
-  const cleanEmail = args.email.trim();
+  const cleanEmail = sanitizeEmail(args.email);
   if (!cleanEmail) {
     return 'Ingresa tu correo electrónico.';
   }
   if (!isValidEmail(cleanEmail)) {
-    return 'Ingresa un correo electrónico válido.';
+    return 'Ingresa un correo electrónico válido (ej: nombre@dominio.cl).';
   }
   if (!canonicalPhone(args.telefono)) {
     return 'Ingresa un número de teléfono válido (ej: +56 9 1234 5678).';

@@ -4,6 +4,7 @@ import {
   formatRegistrationConflictMessage,
   normalizePhoneKeyDigits,
   normalizeRutKey,
+  sanitizeEmail,
   type RegistrationConflictField,
   validateSignUpFields,
 } from '@/lib/auth/registration-validation';
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const nombre = String(body.nombre || '').trim();
     const rut = String(body.rut || '').trim();
-    const email = String(body.email || '').trim().toLowerCase();
+    const email = sanitizeEmail(String(body.email || '')).toLowerCase();
     const telefono = String(body.telefono || '').trim();
     const empresaNombre = String(body.empresaNombre || '').trim();
 
@@ -85,13 +86,26 @@ export async function POST(request: NextRequest) {
         (row) => normalizePhoneKeyDigits(row.telefono_whatsapp) === targetPhone,
       );
 
-    const hasEmailConflict =
+    let hasEmailConflict =
       Boolean(email) &&
       (usuariosRes.data || []).some(
         (row) =>
-          (row.email || '').trim().toLowerCase() === email ||
-          (row.email_acceso || '').trim().toLowerCase() === email,
+          sanitizeEmail(row.email).toLowerCase() === email ||
+          sanitizeEmail(row.email_acceso).toLowerCase() === email,
       );
+
+    if (!hasEmailConflict && email && admin.auth?.admin?.listUsers) {
+      try {
+        const listed = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        hasEmailConflict = Boolean(
+          listed?.data?.users?.some(
+            (u) => sanitizeEmail(u.email).toLowerCase() === email,
+          ),
+        );
+      } catch {
+        // Ignorar si listUsers no está disponible en este entorno
+      }
+    }
 
     const conflicts: RegistrationConflictField[] = [];
     if (hasRutConflict) conflicts.push('rut');

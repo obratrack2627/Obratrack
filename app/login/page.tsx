@@ -10,6 +10,7 @@ import { formatRUT, validarRutChileno } from '@/lib/utils';
 import { canonicalPhone } from '@/lib/phone';
 import {
   isValidEmail,
+  sanitizeEmail,
   validateSignUpFields,
 } from '@/lib/auth/registration-validation';
 import {
@@ -69,7 +70,7 @@ async function executeSignInRequest(
   email: string,
   password: string
 ): Promise<{ ok: true; redirectTo: string } | { ok: false; errorMsg: string }> {
-  const cleanIdent = email.trim();
+  const cleanIdent = email.includes('@') ? sanitizeEmail(email) : email.trim();
   if (!cleanIdent) {
     return { ok: false, errorMsg: 'Ingresa tu correo electrónico o RUT.' };
   }
@@ -241,20 +242,21 @@ function SignInView(props: SignInViewProps) {
         </h1>
       </div>
 
-      <form onSubmit={props.onSubmit} className="space-y-4">
+      <form onSubmit={props.onSubmit} noValidate className="space-y-4">
         <div>
           <label htmlFor="login-email" className={LABEL_CLASS}>
-            Correo
+            Correo o RUT
           </label>
           <input
             id="login-email"
             name="email"
-            type="email"
-            autoComplete="email"
+            type="text"
+            inputMode="email"
+            autoComplete="username"
             value={props.email}
             onChange={(e) => props.onEmailChange(e.target.value)}
             className={INPUT_CLASS}
-            placeholder="nombre@empresa.cl"
+            placeholder="nombre@empresa.cl o 12.345.678-5"
             required
           />
         </div>
@@ -340,6 +342,9 @@ interface SignUpViewProps {
 function SignUpView(props: SignUpViewProps) {
   const isRutValid = props.rut ? validarRutChileno(props.rut) : true;
   const rutStateClass = isRutValid ? '' : 'border-red-400 focus:border-red-500';
+  const hasTypedEmail = sanitizeEmail(props.signupEmail).length > 0;
+  const isEmailValid = !hasTypedEmail || isValidEmail(props.signupEmail);
+  const emailStateClass = isEmailValid ? '' : 'border-red-400 focus:border-red-500';
   const hasTypedPhone = props.telefono.replace(/\D/g, '').length > 2;
   const isPhoneValid = !hasTypedPhone || Boolean(canonicalPhone(props.telefono));
   const phoneStateClass = isPhoneValid ? '' : 'border-red-400 focus:border-red-500';
@@ -416,9 +421,17 @@ function SignUpView(props: SignUpViewProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="signup-email" className={LABEL_CLASS}>
-              Correo
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label
+                htmlFor="signup-email"
+                className="text-[13px] font-medium text-[#3A3835] dark:text-gray-300"
+              >
+                Correo
+              </label>
+              {hasTypedEmail && !isEmailValid && (
+                <span className="text-[11px] text-red-600 dark:text-red-400">Inválido</span>
+              )}
+            </div>
             <input
               id="signup-email"
               name="email"
@@ -428,7 +441,7 @@ function SignUpView(props: SignUpViewProps) {
               placeholder="contacto@empresa.cl"
               value={props.signupEmail}
               onChange={(e) => props.onEmailChange(e.target.value)}
-              className={INPUT_CLASS}
+              className={`${INPUT_CLASS} ${emailStateClass}`}
             />
           </div>
 
@@ -584,7 +597,7 @@ function ForgotPasswordView({
         Enviaremos un enlace a tu correo para restablecer tu clave.
       </p>
 
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} noValidate className="space-y-4">
         <div>
           <label htmlFor="forgot-email" className={LABEL_CLASS}>
             Correo
@@ -756,10 +769,11 @@ function LoginForm() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
+    const cleanSignupEmail = sanitizeEmail(signupEmail).toLowerCase();
     const validationError = validateSignUpFields({
       nombre,
       rut,
-      email: signupEmail,
+      email: cleanSignupEmail,
       telefono,
       empresaNombre,
       signupPassword,
@@ -773,7 +787,7 @@ function LoginForm() {
 
     setIsLoading(true);
     const outcome = await executeSignUpRequest({
-      signupEmail,
+      signupEmail: cleanSignupEmail,
       signupPassword,
       nombre,
       rut,
@@ -798,12 +812,13 @@ function LoginForm() {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
-    if (!isValidEmail(forgotEmail)) {
+    const cleanForgot = sanitizeEmail(forgotEmail).toLowerCase();
+    if (!isValidEmail(cleanForgot)) {
       setErrorMsg('Ingresa un correo electrónico válido para recuperar tu contraseña.');
       return;
     }
     setIsLoading(true);
-    const outcome = await executeForgotPasswordRequest(forgotEmail);
+    const outcome = await executeForgotPasswordRequest(cleanForgot);
     setIsLoading(false);
     setSuccessMsg(outcome.ok ? outcome.message : null);
     setErrorMsg(outcome.ok ? null : outcome.message);

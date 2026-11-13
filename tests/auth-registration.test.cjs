@@ -10,6 +10,8 @@ const {
   validateSignUpFields,
   formatRegistrationConflictMessage,
   mapContactDatabaseError,
+  sanitizeEmail,
+  isValidEmail,
 } = require('../lib/auth/registration-validation.ts');
 const uid='00000000-0000-0000-0000-000000000001';
 let activated, calls;
@@ -78,4 +80,17 @@ test('mapSupabaseAuthError y validateSignUpFields traducen errores de base de da
   assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 ',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),/número de teléfono válido/);
   assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),null);
   assert.match(mapContactDatabaseError({code:'23505',message:'duplicate key value violates unique constraint "usuarios_rut_key"'}),/RUT ya está registrado/);
+});
+test('sanitiza correos vigentes y distingue correo no autorizado por SMTP de correo mal formado',async()=>{
+  assert.equal(sanitizeEmail(' \u200Bjorge.castro@gmail.com '), 'jorge.castro@gmail.com');
+  assert.equal(isValidEmail('\u200Bjorge.castro+obra@constructorachile.cl '), true);
+  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:' \u200Bjorge.castro@gmail.com ',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),null);
+  const smtpMsg=mapSupabaseAuthError('Email address not authorized','email_address_not_authorized');
+  assert.match(smtpMsg,/SMTP personalizado/);
+  assert.doesNotMatch(smtpMsg,/no es válido/);
+  assert.match(mapSupabaseAuthError('Email address "jorge@gmail.com" is invalid','email_address_invalid'),/rechazó la dirección de correo/);
+  fixture.supabase.auth.signUp=async()=>({data:{user:{id:uid,identities:[]},session:null},error:null});
+  const dup=await signUpWithSupabase('yaexiste@gmail.com','Contraseña123','Jorge Castro','12.345.678-5','BjSolutions','+56 9 48743041');
+  assert.equal(dup.success,false);
+  assert.match(dup.error,/ya está registrado/);
 });

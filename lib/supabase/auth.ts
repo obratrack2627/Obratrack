@@ -4,6 +4,7 @@ import { supabaseService } from './supabase-service';
 import { dataService } from '@/lib/data-service';
 import { canAccessWeb, WEB_ACCESS_ERROR } from '@/lib/auth/access';
 import { establishWebSession, clearWebSession } from '@/lib/auth/session-client';
+import { sanitizeEmail } from '@/lib/auth/registration-validation';
 
 export interface AuthResult {
   success: boolean;
@@ -22,15 +23,20 @@ export function getRedirectBaseUrl(): string {
 }
 
 // Mapeo exhaustivo de errores de Supabase Auth en español
-export function mapSupabaseAuthError(message: string): string {
+export function mapSupabaseAuthError(message: string, code?: string): string {
   const lower = (message || '').toLowerCase();
+  const normalizedCode = (code || '').toLowerCase();
   if (lower.includes('invalid login credentials') || lower.includes('invalid credentials')) {
     return 'Correo o contraseña incorrectos. Verifica tus credenciales.';
   }
   if (lower.includes('failed to fetch') || lower.includes('fetch failed') || lower.includes('networkerror')) {
     return 'Error de conexión con el servicio de autenticación. Verifica tu conexión o intenta nuevamente.';
   }
-  if (lower.includes('user already registered') || lower.includes('already exists')) {
+  if (
+    normalizedCode === 'user_already_exists' ||
+    lower.includes('user already registered') ||
+    lower.includes('already exists')
+  ) {
     return 'Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu clave.';
   }
   if (lower.includes('database error saving new user')) {
@@ -54,19 +60,44 @@ export function mapSupabaseAuthError(message: string): string {
   if (lower.includes('password should be at least')) {
     return 'La contraseña debe tener al menos 6 caracteres.';
   }
-  if (lower.includes('same_password') || lower.includes('new password should be different')) {
+  if (
+    normalizedCode === 'same_password' ||
+    lower.includes('same_password') ||
+    lower.includes('new password should be different')
+  ) {
     return 'La nueva contraseña debe ser diferente a la contraseña actual.';
   }
-  if (lower.includes('weak_password') || lower.includes('weak password')) {
+  if (
+    normalizedCode === 'weak_password' ||
+    lower.includes('weak_password') ||
+    lower.includes('weak password')
+  ) {
     return 'La contraseña es muy débil. Usa al menos 6 caracteres combinando letras y números.';
   }
-  if (lower.includes('email address not authorized') || lower.includes('email_address_invalid')) {
-    return 'El correo electrónico ingresado no es válido o no está autorizado.';
+  if (
+    normalizedCode === 'email_address_not_authorized' ||
+    lower.includes('email address not authorized')
+  ) {
+    return 'No se pudo enviar el correo de confirmación porque Supabase sigue usando el correo por defecto (requiere SMTP personalizado o autorizar el correo en el equipo de Supabase).';
   }
-  if (lower.includes('signup is disabled')) {
+  if (
+    normalizedCode === 'email_address_invalid' ||
+    lower.includes('email_address_invalid') ||
+    lower.includes('unable to validate email address') ||
+    /email address .* is invalid/i.test(lower)
+  ) {
+    return 'Supabase Auth rechazó la dirección de correo ingresada. Verifica que no tenga espacios ni caracteres especiales.';
+  }
+  if (normalizedCode === 'signup_disabled' || lower.includes('signup is disabled')) {
     return 'El registro de nuevas cuentas está deshabilitado temporalmente.';
   }
-  if (lower.includes('rate limit') || lower.includes('too many requests')) {
+  if (
+    normalizedCode === 'over_email_send_rate_limit' ||
+    normalizedCode === 'over_request_rate_limit' ||
+    lower.includes('for security purposes, you can only request this') ||
+    lower.includes('rate limit') ||
+    lower.includes('too many requests')
+  ) {
     return 'Demasiados intentos seguidos. Por favor espera un momento e intenta nuevamente.';
   }
   if (lower.includes('token has expired') || lower.includes('token expired') || lower.includes('invalid token')) {
@@ -147,7 +178,7 @@ export async function signUpWithSupabase(
   empresaNombre: string,
   telefono: string = '+56 9 '
 ): Promise<AuthResult> {
-  const cleanEmail = email.trim().toLowerCase();
+  const cleanEmail = sanitizeEmail(email).toLowerCase();
   const baseUrl = getRedirectBaseUrl();
 
   try {
@@ -183,7 +214,14 @@ export async function signUpWithSupabase(
     if (authError) {
       return {
         success: false,
-        error: mapSupabaseAuthError(authError.message),
+        error: mapSupabaseAuthError(authError.message, (authError as { code?: string }).code),
+      };
+    }
+
+    if (Array.isArray(authData?.user?.identities) && authData.user.identities.length === 0) {
+      return {
+        success: false,
+        error: 'Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu contraseña.',
       };
     }
 
@@ -216,7 +254,7 @@ export async function signUpWithSupabase(
  * Inicio de sesión seguro en Supabase Auth con resolución de email o RUT
  */
 export async function signInWithSupabase(emailOrRut: string, pass: string): Promise<AuthResult> {
-  const cleanInput = emailOrRut.trim().toLowerCase();
+  const cleanInput = (emailOrRut.includes('@') ? sanitizeEmail(emailOrRut) : emailOrRut.trim()).toLowerCase();
   let resolvedEmail = cleanInput;
 
   // Si no es un email pero parece RUT chileno, resolver el email correspondiente
@@ -257,7 +295,7 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
     if (authError) {
       return {
         success: false,
-        error: mapSupabaseAuthError(authError.message),
+        error: mapSupabaseAuthError(authError.message, (authError as { code?: string }).code),
       };
     }
 
@@ -294,7 +332,7 @@ export async function signOutSupabase(): Promise<void> {
  * Restablecer contraseña mediante Supabase Auth enviando correo con enlace seguro
  */
 export async function resetPasswordWithSupabase(email: string): Promise<AuthResult> {
-  const cleanEmail = email.trim().toLowerCase();
+  const cleanEmail = sanitizeEmail(email).toLowerCase();
   const baseUrl = getRedirectBaseUrl();
 
   try {
@@ -305,7 +343,7 @@ export async function resetPasswordWithSupabase(email: string): Promise<AuthResu
     if (error) {
       return {
         success: false,
-        error: mapSupabaseAuthError(error.message),
+        error: mapSupabaseAuthError(error.message, (error as { code?: string }).code),
       };
     }
 
@@ -341,7 +379,7 @@ export async function updatePasswordWithSupabase(newPassword: string): Promise<A
     if (error) {
       return {
         success: false,
-        error: mapSupabaseAuthError(error.message),
+        error: mapSupabaseAuthError(error.message, (error as { code?: string }).code),
       };
     }
 
@@ -362,7 +400,7 @@ export async function updatePasswordWithSupabase(newPassword: string): Promise<A
  * Reenviar correo de confirmación de registro
  */
 export async function resendConfirmationEmail(email: string): Promise<AuthResult> {
-  const cleanEmail = email.trim().toLowerCase();
+  const cleanEmail = sanitizeEmail(email).toLowerCase();
   const baseUrl = getRedirectBaseUrl();
 
   try {
@@ -377,7 +415,7 @@ export async function resendConfirmationEmail(email: string): Promise<AuthResult
     if (error) {
       return {
         success: false,
-        error: mapSupabaseAuthError(error.message),
+        error: mapSupabaseAuthError(error.message, (error as { code?: string }).code),
       };
     }
 
