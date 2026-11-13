@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
-import Logo from '@/components/Logo';
+import BlueprintBrandPanel from '@/components/BlueprintBrandPanel';
 import LegalTermsModal from '@/components/LegalTermsModal';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
 import { canonicalPhone } from '@/lib/phone';
@@ -163,71 +163,6 @@ async function executeResendConfirmationRequest(
     return { ok: true, message: 'Correo de activación reenviado.' };
   }
   return { ok: false, message: res.error || 'No se pudo reenviar el correo.' };
-}
-
-function MinimalBrandPanel() {
-  return (
-    <>
-      {/* Barra superior compacta en móvil */}
-      <header className="lg:hidden bg-[#141920] border-b border-[#222A36] shrink-0">
-        <div className="h-[2px] w-full bg-[#FF6A00]" />
-        <div className="px-5 py-3.5 pr-16 flex items-center justify-between">
-          <Logo variant="horizontal" theme="dark" size="sm" />
-          <span className="text-[11px] font-mono text-[#94A3B8] hidden sm:inline uppercase tracking-wider">
-            El copiloto digital del constructor
-          </span>
-        </div>
-      </header>
-
-      {/* Panel Izquierdo Centrado y Sobrio (Desktop) */}
-      <aside className="hidden lg:flex lg:col-span-5 bg-[#141920] text-white border-r border-[#222A36] flex-col justify-between relative overflow-hidden select-none">
-        <div className="h-[3px] w-full bg-[#FF6A00] shrink-0" />
-
-        {/* Textura sutil de plano técnico arquitectónico */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 pointer-events-none opacity-[0.035]"
-          style={{
-            backgroundImage:
-              'linear-gradient(to right, #FFFFFF 1px, transparent 1px), linear-gradient(to bottom, #FFFFFF 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-          }}
-        />
-
-        <div className="relative z-10 p-8 xl:p-10 flex items-center justify-between">
-          <span className="text-[10px] font-mono tracking-widest text-[#94A3B8] uppercase">
-            OBRATRACK SAAS
-          </span>
-          <span className="text-[11px] font-mono text-[#94A3B8]">CHILE</span>
-        </div>
-
-        {/* Contenido centrado vertical y horizontalmente */}
-        <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-8 xl:p-12 text-center my-auto">
-          <div className="max-w-sm flex flex-col items-center">
-            <Logo variant="vertical" theme="dark" size="lg" className="mb-6" />
-
-            <h2 className="font-heading text-2xl xl:text-[28px] font-semibold text-white tracking-tight leading-tight">
-              Tus obras bajo control
-            </h2>
-
-            <p className="text-sm text-[#94A3B8] mt-2.5 font-sans leading-relaxed">
-              El copiloto digital del constructor.
-            </p>
-
-            <div className="mt-8 inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#1C2430] border border-[#2B3747] text-[11px] font-mono text-[#CBD5E1]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#FF6A00]" />
-              <span>CONTROL · CUBICACIONES · FAENA</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Pie institucional sobrio */}
-        <div className="relative z-10 p-6 text-center text-xs text-[#5E6B7E] border-t border-[#1C232E]/60">
-          © {new Date().getFullYear()} ObraTrack · Plataforma de Obras
-        </div>
-      </aside>
-    </>
-  );
 }
 
 function PasswordToggleButton({
@@ -888,7 +823,7 @@ function LoginForm() {
 
   return (
     <div className="min-h-screen w-full flex flex-col lg:grid lg:grid-cols-12 bg-[#FAF8F5] dark:bg-[#0B0E14]">
-      <MinimalBrandPanel />
+      <BlueprintBrandPanel />
 
       <section className="flex-1 lg:col-span-7 flex flex-col items-center justify-center px-5 sm:px-10 py-12 relative overflow-hidden">
         {/* Retícula técnica de dibujo de planos / Blueprint grid tenue con personalidad de obra */}
