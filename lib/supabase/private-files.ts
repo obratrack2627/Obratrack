@@ -1,5 +1,4 @@
 import { supabaseUrl } from "./client";
-import { AIError } from "@/lib/ai/errors";
 
 export function storedFile(value: unknown) {
   if (typeof value !== "string") return null;
@@ -57,12 +56,10 @@ export async function signStoredFile(
   const { data, error } = await client.storage
     .from(file.bucket)
     .createSignedUrl(file.path, 3600);
-  if (error || !data?.signedUrl)
-    throw new AIError(
-      "FILES_READ",
-      "No se pudo actualizar el acceso a los archivos de la obra. Reintenta la sincronización.",
-      503,
-    );
+  if (error || !data?.signedUrl) {
+    console.warn(`[private-files] No se pudo firmar ${key}:`, error?.message || "sin url");
+    return null;
+  }
   if (cache.size > 2000) cache.clear();
   cache.set(key, { url: data.signedUrl, until: Date.now() + 45 * 60 * 1000 });
   return data.signedUrl;
