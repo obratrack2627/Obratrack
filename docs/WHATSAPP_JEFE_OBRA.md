@@ -154,3 +154,24 @@ Cancelar u otra creación cortan la búsqueda; no se recorren otras personas ni
 empresas. «Continúa» retoma el trámite y solo pide lo que siga faltando. Las
 confirmaciones de creación siguen dependiendo del guardado atómico nativo y del
 identificador de mensaje, para impedir duplicados en reintentos de Meta.
+
+### Identidad y creación sencilla de obras
+
+Aplicar `supabase/whatsapp_identidad_obra.sql` después de las migraciones del
+copiloto y de lógica de obra. La función de guardado vuelve a comprobar el
+número completo, su coincidencia única y el rol vigente. Admin gestiona obras
+de su empresa; jefe de obra (`supervisor`) solo las asignadas y queda asignado
+al crear una. Terreno solo registra avances y reportes de las obras asignadas;
+no crea ni edita obras, costos, pagos o integrantes. Un cambio de rol o una
+baja de asignación invalida la recuperación de respuestas antiguas.
+
+«Necesito crear otra obra» inicia un borrador. La descripción conserva el
+alcance y la comuna informada. «El cliente es Juan Campos que ya está en la
+lista de clientes» busca esa ficha dentro de la empresa: no registra otra ni
+pide completar sus contactos. Con cliente existente solo faltan nombre de
+obra y presupuesto; con cliente nuevo se solicitan los datos de alta. Las
+coincidencias ambiguas requieren aclarar el nombre, sin crear clientes por
+aproximación. El borrador se mantiene al responder los datos por separado.
+
+`tests/sql/whatsapp_identidad_obra.sql` prueba identidad, permisos y
+asignaciones con fixtures que terminan en ROLLBACK, sin enviar WhatsApp real.

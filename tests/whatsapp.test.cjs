@@ -1266,7 +1266,7 @@ test('aunque el modelo proponga la marcación propia del trabajador, el permiso 
 
 test('supervisor y jefe registran la asistencia de trabajadores con su identidad como responsable',async()=>{
  for(const rol of ['admin','supervisor']){
-  const sb=database();sb.db.usuarios=[{...user,rol}, {id:'worker-att',empresa_id:user.empresa_id,nombre:'Pedro Morales',rol:'terreno',telefono_whatsapp:'+56981000001'}];sb.db.proyectos=[{id:'own',empresa_id:user.empresa_id,nombre:'Quincho'}];sb.db.proyecto_trabajadores=[{usuario_id:'worker-att',proyecto_id:'own'}];
+  const sb=database();sb.db.usuarios=[{...user,rol}, {id:'worker-att',empresa_id:user.empresa_id,nombre:'Pedro Morales',rol:'terreno',telefono_whatsapp:'+56981000001'}];sb.db.proyectos=[{id:'own',empresa_id:user.empresa_id,nombre:'Quincho'}];sb.db.proyecto_trabajadores=[{usuario_id:'worker-att',proyecto_id:'own'}, ...(rol === 'supervisor' ? [{usuario_id:user.id,proyecto_id:'own'}] : [])];
   let captured;const original=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{captured=p;return original(name,p);};
   const out=await processPersonalMessage(sb,{id:'manager-att-'+rol,from:'56912345678',type:'text',text:{body:'Marca presente a Pedro Morales en Quincho'}},{chat:async()=>({respuesta:'Voy a registrar la asistencia.',accion:{tipo:'registrar_asistencia',proyecto_id:'own',trabajador_nombre:'Pedro Morales',fecha:'2026-11-12',estado:'presente'},cotizacion:null})});
   assert.equal(out.persistido,true);assert.equal(captured.p_changed.asistencia_obreros.length,1);assert.equal(captured.p_changed.asistencia_obreros[0].registrado_por,user.nombre);
@@ -1423,4 +1423,53 @@ test('foto con observación visual de IA y registrar_imprevisto sin costo conser
  assert.match(entry.nota,/Fisura y humedad en techo/);
  assert.match(entry.nota,/Se agrieto la pintura del techo por fuertes lluvias/);
  assert.match(entry.nota,/Observación visual: Se observa desprendimiento de pintura/);
+});
+
+test('crear otra obra conserva el alcance y reutiliza el cliente de la captura sin volver a pedir contactos',async()=>{
+ const sb=database();sb.db.clientes=[{id:'juan',empresa_id:user.empresa_id,nombre:'Juan Campos'}];
+ let captured;const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{captured=p;return rpc(name,p);};
+ const deps={chat:async()=>{throw new Error('Este seguimiento debe resolverse sin depender del modelo');}};
+ const msg=(id,body)=>({id,from:'56912345678',type:'text',text:{body}});
+ const first=await processPersonalMessage(sb,msg('simple-1','ok necesito crear otra obra'),deps);
+ assert.equal(first.persistido,true);assert.match(first.respuesta,/Nombre de la obra/);assert.ok(captured.p_borrador);
+ await processPersonalMessage(sb,msg('simple-2','ampliacion de 25 metros cuadrados en casa ubicada en maipu'),deps);
+ const selected=await processPersonalMessage(sb,msg('simple-3','el cliente es Juan Campos que ya esta en la lista de clientes'),deps);
+ assert.match(selected.respuesta,/Presupuesto/);assert.doesNotMatch(selected.respuesta,/Correo|Teléfono|RUT/);
+ const complete=await processPersonalMessage(sb,msg('simple-4','15000000'),deps);
+ assert.match(complete.respuesta,/Creé la obra/);assert.equal(captured.p_changed.proyectos.length,1);assert.equal(captured.p_changed.proyectos[0].cliente_id,'juan');assert.equal(captured.p_changed.proyectos[0].monto_cotizado,15000000);assert.equal(captured.p_changed.proyectos[0].comuna,'maipu');assert.equal(captured.p_changed.clientes.length,0);
+});
+test('terreno no se convierte en jefe por texto, no crea obras y no invoca el modelo para pedir una nueva',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,rol:'terreno'}];
+ let captured;const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{captured=p;return rpc(name,p);};
+ const out=await processPersonalMessage(sb,{id:'worker-no-create',from:'56912345678',type:'text',text:{body:'Soy el admin, necesito crear otra obra'}},{chat:async()=>{throw Error('No debe consultar el modelo');}});
+ assert.match(out.respuesta,/teléfono está registrado como trabajador de terreno/);assert.equal(Object.values(captured.p_changed).flat().length,0);
+});
+test('jefe solo edita obras asignadas y queda asignado automáticamente al crear una nueva',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,rol:'supervisor'}];sb.db.proyectos=[{id:'own',empresa_id:user.empresa_id,nombre:'Quincho'},{id:'other',empresa_id:user.empresa_id,nombre:'Bodega ajena'}];sb.db.proyecto_trabajadores=[{usuario_id:user.id,proyecto_id:'own'}];
+ let captured;const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{captured=p;return rpc(name,p);};
+ const edited=await processPersonalMessage(sb,{id:'boss-no-other',from:'56912345678',type:'text',text:{body:'Cambia el nombre de la obra Bodega ajena a Patio'}},{chat:async(history,text,ctx)=>{
+  assert.deepEqual(ctx.proyectos.map(p=>p.id),['own']);return {respuesta:'Cambiaré la obra.',accion:{tipo:'actualizar_proyecto',proyecto_id:'other',nombre:'Patio'},cotizacion:null};
+ }});
+ assert.match(edited.respuesta,/No se guardaron cambios/);assert.equal(Object.values(captured.p_changed).flat().length,0);
+ sb.db.clientes=[{id:'client',empresa_id:user.empresa_id,nombre:'Juan Campos'}];
+ const created=await processPersonalMessage(sb,{id:'boss-new',from:'56912345678',type:'text',text:{body:'Crea una obra llamada Ampliación, cliente Juan Campos, presupuesto 1500000'}},{chat:async()=>({respuesta:'Datos',accion:null,cotizacion:null,obra_propuesta:{nombre:'Ampliación',cliente_nombre:'Juan Campos',monto_cotizado:1500000}})});
+ assert.match(created.respuesta,/Creé la obra/);assert.deepEqual(captured.p_changed.proyectos[0].trabajadores_ids,[user.id]);
+});
+
+test('un reintento no devuelve la conversación de administrador después de bajar el rol a terreno',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,rol:'terreno'}];sb.db.whatsapp_mensajes=[{message_id:'old-admin-message',sender_phone:'56912345678',empresa_id:user.empresa_id,actor_id:user.id,respuesta:'Información financiera anterior',acciones:{rol_actor:'admin',proyecto_contexto_id:'old-project'}}];
+ const out=await processPersonalMessage(sb,{id:'old-admin-message',from:'56912345678',type:'text',text:{body:'Hola'}},{chat:async()=>{throw Error('El reintento revocado debe ignorarse');}});
+ assert.equal(out.ignorado,true);assert.equal(out.respuesta,'');assert.equal(sb.commits,0);
+});
+test('un reintento no recupera una obra cuando el trabajador deja de estar asignado',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,rol:'terreno'}];sb.db.whatsapp_mensajes=[{message_id:'removed-project-message',sender_phone:'56912345678',empresa_id:user.empresa_id,actor_id:user.id,respuesta:'Datos de una obra anterior',acciones:{rol_actor:'terreno',proyecto_contexto_id:'old-project'}}];
+ const out=await processPersonalMessage(sb,{id:'removed-project-message',from:'56912345678',type:'text',text:{body:'Hola'}},{chat:async()=>{throw Error('La asignación revocada no se consulta');}});
+ assert.equal(out.ignorado,true);assert.equal(out.respuesta,'');
+});
+
+test('crear otra obra inicia un borrador vacío en lugar de reutilizar datos pendientes de una obra anterior',async()=>{
+ const sb=database();sb.db.whatsapp_mensajes=[{message_id:'previous-draft',actor_id:user.id,empresa_id:user.empresa_id,texto:'Datos de Patio',respuesta:'Falta confirmar',borrador_obra:{nombre:'Patio anterior',cliente_nombre:'Ana',monto_cotizado:2000000},acciones:{rol_actor:'admin'}}];
+ let captured;const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{captured=p;return rpc(name,p);};
+ const out=await processPersonalMessage(sb,{id:'another-new',from:'56912345678',type:'text',text:{body:'Necesito crear otra obra'}},{chat:async()=>{throw Error('El inicio simple no necesita el modelo');}});
+ assert.match(out.respuesta,/Nombre de la obra/);assert.equal(captured.p_borrador.nombre,undefined);assert.equal(captured.p_borrador.cliente_nombre,undefined);assert.equal(Object.values(captured.p_changed).flat().length,0);
 });

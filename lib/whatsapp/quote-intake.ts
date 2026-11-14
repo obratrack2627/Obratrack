@@ -18,7 +18,7 @@ export function resumesProjectDraft(text: string) {
 }
 export function startsProjectDraft(text: string) {
   const value = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  return requestsQuotedProject(text) || /\b(?:crea\w*|registra\w*)\s+(?:(?:una?|la|el|nueva?)\s+){0,3}(?:obra|proyecto)\b/.test(value);
+  return requestsQuotedProject(text) || /\b(?:crea\w*|registra\w*)\s+(?:(?:una?|la|el|otra?|otro|nueva?)\s+){0,3}(?:obra|proyecto)\b/.test(value);
 }
 /** Recupera solo el inicio del borrador vigente; una cancelación u otra obra corta la búsqueda. */
 export function legacyQuotedProjectMessage(rows: any[]) {

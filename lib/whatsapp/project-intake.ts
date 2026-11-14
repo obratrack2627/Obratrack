@@ -1,4 +1,4 @@
-import { projectLiterals } from './project-literals';
+import { projectLiterals, clientReference } from './project-literals';
 import { isConversationalName } from '@/lib/ai/person-name';
 import { phonesInText } from '@/lib/phone';
 import { canonicalPhone } from "./meta";
@@ -32,6 +32,11 @@ export function projectIntake(
   const literals = projectLiterals(userText, previous || {});
   proposal = {...(proposal || {}), ...literals};
   const draft: Record<string, any> = { ...(previous || {}) };
+  if (text(draft.cliente_nombre)) draft.cliente_nombre = clientReference(draft.cliente_nombre);
+  if (proposal?.cliente_nombre) {
+    proposal.cliente_nombre = clientReference(proposal.cliente_nombre);
+    if (norm(proposal.cliente_nombre) !== norm(previous?.cliente_nombre || '')) delete draft.cliente_id;
+  }
   const stringFields = [
     "nombre",
     "cliente_nombre",
@@ -100,23 +105,38 @@ export function projectIntake(
       .at(-1)?.[1]
       ?.trim();
     if (name)
-      draft.cliente_nombre = name
+      draft.cliente_nombre = clientReference(name
         .split(/\s+(?:presupuesto|email|correo|tel[eé]fono)\b/i)[0]
         .trim()
-        .slice(0, 150);
+        .slice(0, 150));
   }
   let client: any;
+  let lookupError = '';
+  const availableClients = clients.filter(c => !user.empresa_id || c.empresa_id === user.empresa_id);
   if (draft.cliente_id || draft.cliente_nombre) {
     try {
-      client = resolveEntity(clients, draft.cliente_id || draft.cliente_nombre);
-    } catch {}
+      client = resolveEntity(availableClients, draft.cliente_nombre || draft.cliente_id);
+    } catch (error) {
+      if (/más de una coincidencia/.test((error as Error).message) || /\b(?:ya est[aá]|ya existe|lista de clientes)\b/i.test(userText))
+        lookupError = `No pude identificar de forma única al cliente ${draft.cliente_nombre || ''}. Indica su nombre completo tal como aparece en Clientes.`;
+    }
+  }
+  if (lookupError) {
+    delete draft.cliente_id;
+    return { draft, question: lookupError, result: { tipo: 'solicitar_datos_obra', titulo: 'Seleccionar cliente existente', detalles: { borrador: draft }, resultado_texto: lookupError } as AccionAsistenteIA, actions: [] };
+  }
+  if (client && client.id !== previous?.cliente_id && norm(previous?.cliente_nombre || '') !== norm(client.nombre)
+    && ![client.nombre, client.id, draft.cliente_nombre].filter(text).some(value => norm(userText).includes(norm(value)))) {
+    client = undefined;
+    delete draft.cliente_id;
   }
   if (client) {
     draft.cliente_id = client.id;
     draft.cliente_nombre = client.nombre;
-    draft.cliente_email ||= client.email;
-    draft.cliente_telefono ||= client.telefono;
-    draft.cliente_rut ||= client.rut;
+    // Asociar una ficha existente no modifica sus contactos ni exige completarlos.
+    draft.cliente_email = client.email || '';
+    draft.cliente_telefono = client.telefono || '';
+    draft.cliente_rut = client.rut || '';
   }
   // No aceptar contactos inventados por la IA. Los datos ya pedidos se conservan en el borrador.
   for (const key of ["nombre", "cliente_nombre", "cliente_email"]) {
@@ -177,16 +197,17 @@ export function projectIntake(
     draft.monto_cotizado <= 0
   )
     missing.push("Presupuesto de la obra en CLP");
-  if (
+  if (!client && (
     !text(draft.cliente_email) ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.cliente_email)
-  )
+  ))
     missing.push("Correo electrónico del cliente");
-  if (!draft.cliente_telefono)
+  if (!client && !draft.cliente_telefono)
     missing.push("Teléfono del cliente");
   if (missing.length) {
     const question =
-      "Para crear la obra necesito estos datos:\n" +
+      (client ? `Usaré al cliente ${client.nombre}, que ya está registrado.\n` : '') +
+      "Para crear la obra falta:\n" +
       missing.map((s) => "• " + s).join("\n") +
       "\nLos demás datos son opcionales. Puedes responderlos juntos o uno por uno.";
     const result: AccionAsistenteIA = {
@@ -198,19 +219,6 @@ export function projectIntake(
     return { draft, question, result, actions: [] };
   }
   const actions: any[] = [];
-  if (
-    client &&
-    (client.email !== draft.cliente_email ||
-      canonicalPhone(client.telefono || "") !==
-        canonicalPhone(draft.cliente_telefono))
-  )
-    actions.push({
-      tipo: "actualizar_cliente",
-      cliente_id: client.id,
-      nombre: client.nombre,
-      email: draft.cliente_email,
-      telefono: draft.cliente_telefono,
-    });
   actions.push({ tipo: "crear_proyecto", ...draft });
   return { draft, question: null, result: null, actions };
 }

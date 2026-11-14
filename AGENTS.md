@@ -26,6 +26,8 @@
 - Web y sus APIs: solo `admin` o `is_dev=true` verificado en Supabase. `supervisor` sin Dev y `terreno` usan WhatsApp, nunca una cookie UUID como credencial.
 - Developer es un privilegio de sistema protegido, no un rol que el cliente pueda autoconcederse. El selector de planes de desarrollo usa un RPC con JWT y no cobra.
 - WhatsApp identifica por teléfono único; terreno solo usa obras asignadas y conserva un contexto de obra validado. No enviarle presupuestos ni información financiera privada.
+- Jefe de obra corresponde al rol `supervisor`: por WhatsApp solo gestiona obras donde está asignado; al crear una queda asignado automáticamente. Admin gestiona las obras de su empresa. Validar teléfono único, rol y asignación también al guardar con `whatsapp_identidad_obra.sql`. No recuperar respuestas antiguas tras perder rol o asignación.
+- Crear obras por WhatsApp reutiliza el cliente existente sin exigir ni modificar correo, teléfono o RUT de su ficha. No confundir «Juan Campos que ya está en Clientes» con un cliente nuevo; pedir solo los datos faltantes de la obra y aclarar coincidencias ambiguas.
 - Nuevas fichas de equipo: nombre completo, RUT, teléfono, correo, rol y obra para terreno. Se crean sin cuenta Auth ni contraseña. El registro y la asignación usan `crear_integrante_equipo`; no crear personas implícitas al asignar una cuadrilla.
 - Evidencias de WhatsApp: originales privados, referencia estable `whatsapp-evidencias:` y firma de URL en lectura. PDF/Word/Excel son documentos; una boleta no genera un pago automáticamente.
 - Migraciones finales en orden: `contactos_whatsapp.sql`, luego `flujo_terreno_rbac.sql`. Las pruebas nativas en `tests/sql` revierten sus fixtures.

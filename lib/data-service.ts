@@ -1511,6 +1511,7 @@ export class DataService {
         fecha_termino_estimada: fechaTermino,
         estado: 'activo',
         cliente_id: finalClienteId,
+        trabajadores_ids: this.getActiveUser()?.rol === 'supervisor' ? [this.getActiveUser()!.id] : undefined,
         empresa_id: this.getActiveUser()?.empresa_id || DEMO_EMPRESA_ID,
       },
       partidasFormateadas.length > 0 ? partidasFormateadas : undefined

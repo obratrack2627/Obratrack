@@ -333,6 +333,7 @@ test("el borrador no acepta contactos inventados y puede usar los del cliente ya
     [
       {
         id: "client1",
+        empresa_id: actor.empresa_id,
         nombre: "Ana",
         email: "ana@example.test",
         telefono: "+56987654321",

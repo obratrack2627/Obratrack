@@ -1,4 +1,4 @@
-import { projectLiterals } from './project-literals';
+import { projectLiterals, requestsNewProject } from './project-literals';
 import { anotherTask } from '@/lib/ai/person-literals';
 import { isAttendanceManagementRequest, ATTENDANCE_MANAGEMENT_MESSAGE } from '@/lib/attendance-access';
 import { conversationPreferences } from '@/lib/ai/preferences';
@@ -55,7 +55,7 @@ export function identifySender(users: any[], phone: string) {
         (u) => canonicalPhone(u.telefono_whatsapp || "") === canonical,
       )
     : [];
-  return matches.length === 1 && matches[0].empresa_id ? matches[0] : null;
+  return matches.length === 1 && matches[0].empresa_id && ['admin','supervisor','terreno'].includes(matches[0].rol) ? matches[0] : null;
 }
 export async function processPersonalMessage(
   sb: any,
@@ -81,7 +81,10 @@ export async function processPersonalMessage(
     const results = previous.acciones?.tipo === 'lote_acciones' ? previous.acciones.detalles?.acciones || [] : [previous.acciones];
     const changedOwnPhone = results.some((a: any) => a?.tipo === 'actualizar_trabajador' && a.detalles?.id === previous.actor_id
       && canonicalPhone(a.detalles?.telefono_whatsapp || '') !== canonicalPhone(message.from));
-    if (actor && ['admin', 'supervisor', 'terreno'].includes(actor.rol)
+    const sameRole = previous.acciones?.rol_actor === actor?.rol;
+    const previousProject = previous.acciones?.proyecto_contexto_id || previous.adjunto?.proyecto_id;
+    const assigned = actor?.rol === 'admin' || !previousProject || checked(await sb.from('proyecto_trabajadores').select('proyecto_id').eq('proyecto_id', previousProject).eq('usuario_id', actor?.id)).length > 0;
+    if (actor && sameRole && assigned && ['admin', 'supervisor', 'terreno'].includes(actor.rol)
       && ((user?.id === actor.id && user?.empresa_id === actor.empresa_id) || (!matches.length && changedOwnPhone)))
       return { ...previous, persistido: true };
     if (user && (user.id !== previous.actor_id || user.empresa_id !== previous.empresa_id))
@@ -101,7 +104,12 @@ export async function processPersonalMessage(
       .eq("empresa_id", user.empresa_id)
       .eq("actor_id", user.id),
   );
-  if (cached[0]) return { ...cached[0], persistido: true };
+  if (cached[0] && cached[0].acciones?.rol_actor === user.rol) {
+    const projectId = cached[0].acciones?.proyecto_contexto_id || cached[0].adjunto?.proyecto_id;
+    const assigned = user.rol === 'admin' || !projectId || checked(await sb.from('proyecto_trabajadores').select('proyecto_id').eq('proyecto_id', projectId).eq('usuario_id', user.id)).length > 0;
+    if (assigned) return { ...cached[0], persistido: true };
+  }
+  if (cached[0]) return { respuesta: '', persistido: false, ignorado: true };
   const company = checked(
     await sb.from("empresas").select("id,plan_id").eq("id", user.empresa_id),
   )[0];
@@ -129,7 +137,7 @@ export async function processPersonalMessage(
   ].forEach((table, i) => {
     tables[table] = checked(queries[i]);
   });
-  if (user.rol === "terreno") {
+  if (["terreno", "supervisor"].includes(user.rol)) {
     const assigned = new Set(
       tables.proyecto_trabajadores
         .filter((r) => r.usuario_id === user.id)
@@ -138,9 +146,11 @@ export async function processPersonalMessage(
     tables.proyectos = tables.proyectos.filter((p) => assigned.has(p.id));
     for (const table of [...childTables, "proyecto_trabajadores"])
       tables[table] = tables[table].filter((r) => assigned.has(r.proyecto_id));
-    tables.clientes = [];
-    tables.agenda_eventos = [];
-    tables.usuarios = [user];
+    if (user.rol === 'terreno') {
+      tables.clientes = [];
+      tables.agenda_eventos = [];
+      tables.usuarios = [user];
+    }
   } else if (!["admin", "supervisor"].includes(user.rol))
     return {
       respuesta: whatsappCard("Acceso pendiente", "Tu cuenta no tiene permisos para usar este canal."),
@@ -163,6 +173,11 @@ export async function processPersonalMessage(
       .limit(80),
   );
   if (user.rol === 'terreno') conversationRows = workerHistory(conversationRows, new Set(tables.proyectos.map(p => p.id)));
+  if (user.rol === 'supervisor') {
+    const assigned = new Set(tables.proyectos.map(p => p.id));
+    conversationRows = conversationRows.filter(row => row.acciones?.rol_actor === 'supervisor' &&
+      (assigned.has(row.acciones?.proyecto_contexto_id) || row.borrador_obra && !row.acciones?.proyecto_contexto_id));
+  }
   const history = conversationRows.slice(0, 6);
   const pendingPerson = history[0]?.acciones?.borrador_registro || history[0]?.acciones?.detalles?.borrador_registro || null;
   let nextPerson = pendingPerson;
@@ -217,6 +232,10 @@ export async function processPersonalMessage(
       persistido: false,
     };
   const deadlineProjects = tables.proyectos.slice();
+  if (requestsNewProject(text) && /\botr[ao]\b/i.test(text) && !requestsQuotedProject(text)) {
+    pendingProject = null;
+    nextDraft = null;
+  }
   const activeProject = activeWhatsAppProject(tables.proyectos, text, history);
   if (user.rol === 'terreno' && activeProject) {
     tables.proyectos = tables.proyectos.filter(p => p.id === activeProject);
@@ -315,7 +334,9 @@ export async function processPersonalMessage(
   ]);
   const preferences = conversationPreferences(contactHistory, user, activeProject || undefined, attachment ? '' : text);
   const preferenceReply = !attachment && preferences.respuesta ? {respuesta:preferences.respuesta,accion:null,cotizacion:null,sugerencias:[]} : null;
-  const nameCommand = !attachment && !pendingPerson && ['admin','supervisor'].includes(user.rol) ? contactNameCommand(text,tables.usuarios,contactHistory,user.id) : null;
+  const nameCommand = !attachment && !pendingPerson && !/\b(?:obra|proyecto)\b/i.test(text) && ['admin','supervisor'].includes(user.rol) ? contactNameCommand(text,tables.usuarios,contactHistory,user.id) : null;
+  const creationRequest = requestsNewProject(text);
+  const projectRefusal = user.rol === 'terreno' && !attachment && creationRequest ? {respuesta:'Solo administradores y jefes de obra pueden crear o editar obras. Tu teléfono está registrado como trabajador de terreno; puedes subir avances y reportes de incidentes de tus obras asignadas.',accion:null,cotizacion:null,sugerencias:[]} : null;
   const attendanceRefusal = user.rol === 'terreno' && !attachment && isAttendanceManagementRequest(text) ? {respuesta:ATTENDANCE_MANAGEMENT_MESSAGE,accion:null,cotizacion:null,sugerencias:[]} : null;
   const nameReply = nameCommand?.handled ? {respuesta:nameCommand.question || 'Voy a corregir el nombre de la ficha.',accion:nameCommand.action || null,cotizacion:null,sugerencias:[]} : null;
   let analysisFailed = false;
@@ -326,7 +347,8 @@ export async function processPersonalMessage(
     const statusCommand = !attachment ? projectStatusCommand(text, tables.proyectos, activeProject, conversationRows.slice().reverse().flatMap((row: any) => [{ rol: 'user' as const, texto: row.texto || '' }, { rol: 'model' as const, texto: row.respuesta || '' }])) : null;
     localRegistration = !attachment && user.rol !== 'terreno' ? personIntake([], null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios) : null;
     registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
-    result = acceptCreation || confirmationResponse || cancelCreation || continueCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || await deps.chat(
+    const simpleCreation = creationRequest && !attachment && !/[,;\n]|\b(?:y registra|y envia|y asigna)\b/i.test(text) && /(?:obra|proyecto)[.!?]*$/i.test(text.trim());
+    result = projectRefusal || (acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || await deps.chat(
       conversationRows
         .slice()
         .reverse()
@@ -357,11 +379,12 @@ export async function processPersonalMessage(
             "cliente_telefono",
           ],
           rut_cliente_nuevo_obligatorio: true,
+          cliente_existente_no_requiere_contactos: true,
         },
         ...(image ? { foto_adjunta: true } : {}),
       },
       { budgetMs: message.type === 'text' || image ? 45000 : 30000, timeoutMs: message.type === 'text' || image ? 40000 : 20000, ...(image ? { image } : {}) },
-    );
+    ));
     if (image && attachment) attachment.descripcion = result.respuesta;
   } catch (error) {
     if (!attachment) throw error;
@@ -434,17 +457,7 @@ export async function processPersonalMessage(
     const create = actions.find((a) =>
       ["crear_proyecto", "crear_proyecto_completo"].includes(a.tipo),
     );
-    const normalized = text
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-    const wantsProject = acceptCreation ||
-      /\b(crea\w*|crees?|registra\w*|agrega\w*|abre|inicia\w*)\s+(?:(?:una?|la|el|nuev[oa])\s+){0,3}(obra|proyecto)\b|\b(obra|proyecto)\s+nuev[oa]\b/.test(
-        normalized,
-      ) &&
-      !/\bno\s+(?:(?:quiero|debes|necesito|que)\s+){0,3}(crea\w*|crees?|registra\w*|agrega\w*)/.test(
-        normalized,
-      );
+    const wantsProject = !projectRefusal && (acceptCreation || requestsNewProject(text));
     if (create && !pendingProject && !wantsProject)
       throw new AIError(
         "CREATE_NOT_REQUESTED",

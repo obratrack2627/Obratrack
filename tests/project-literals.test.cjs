@@ -45,3 +45,26 @@ test('una fecha no se convierte en teléfono al completar una obra y dos teléfo
  const date=projectIntake(actor,null,previous,[],'2026-11-12');assert.match(date.question,/Teléfono/);assert.equal(date.draft.cliente_telefono,undefined);
  const phones=projectIntake(actor,null,previous,[],'912345678\n987654321');assert.match(phones.question,/Teléfono/);assert.equal(phones.draft.cliente_telefono,undefined);
 });
+
+test('la captura reutiliza Juan Campos aunque falten contactos y pide solo el monto de la obra',()=>{
+ const manager={id:'boss',rol:'admin',empresa_id:'company'};
+ const clients=[{id:'juan',empresa_id:'company',nombre:'Juan Campos',email:null,telefono:null,rut:null}];
+ const scope=projectIntake(manager,null,{},clients,'ampliacion de 25 metros cuadrados en casa ubicada en maipu');
+ assert.equal(scope.draft.nombre,'ampliacion de 25 metros cuadrados');assert.equal(scope.draft.comuna,'maipu');
+ const selected=projectIntake(manager,null,scope.draft,clients,'el cliente es Juan Campos que ya esta en la lista de clientes');
+ assert.equal(selected.draft.cliente_id,'juan');assert.match(selected.question,/Presupuesto/);assert.doesNotMatch(selected.question,/Correo|Teléfono|RUT/);
+ const complete=projectIntake(manager,null,selected.draft,clients,'15000000');
+ assert.equal(complete.question,null);assert.equal(complete.actions.length,1);assert.equal(complete.actions[0].cliente_id,'juan');assert.equal(complete.draft.monto_cotizado,15000000);
+});
+test('un cambio de cliente no conserva el ID anterior ni crea fichas con coincidencias ambiguas',()=>{
+ const clients=[{id:'old',nombre:'Ana Pérez'},{id:'juan1',nombre:'Juan Campos'},{id:'juan2',nombre:'Juan Castro'}];
+ const previous={nombre:'Ampliación',cliente_id:'old',cliente_nombre:'Ana Pérez',monto_cotizado:500000};
+ const ambiguous=projectIntake(actor,null,previous,clients,'el cliente es Juan');
+ assert.match(ambiguous.question,/forma única/);assert.equal(ambiguous.actions.length,0);assert.equal(ambiguous.draft.cliente_id,undefined);
+ const selected=projectIntake(actor,null,ambiguous.draft,clients,'Cliente Juan Campos');assert.equal(selected.question,null);assert.equal(selected.actions[0].cliente_id,'juan1');
+});
+test('crear otra obra es una solicitud; consultas y negativas no autorizan altas',()=>{
+ const {requestsNewProject}=require('../lib/whatsapp/project-literals.ts');
+ for(const text of ['ok necesito crear otra obra','Crea una obra nueva','necesito crear un proyecto'])assert.equal(requestsNewProject(text),true,text);
+ for(const text of ['No quiero crear otra obra','Cómo puedo crear una obra','Coméntame el avance de la obra'])assert.equal(requestsNewProject(text),false,text);
+});
