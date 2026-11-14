@@ -70,66 +70,15 @@ test("obra terminada no muestra entrega y recepción", async ({ page }) => {
   await expect(page.getByText("Saldos de la obra", { exact: true })).toHaveCount(0);
 });
 
-test("jornal desde asistencia propone medio día y extras y queda por pagar", async ({
-  page,
-}) => {
-  const db = await setup(page, {}, true);
-  db.asistencia_obreros = [
-    {
-      id: "attendance-1",
-      proyecto_id: "p-existing",
-      empresa_id: company,
-      trabajador_nombre: "Pedro Soto",
-      fecha: today(),
-      estado: "presente",
-      horas_trabajadas: 4,
-      origen: "web",
-      registrado_por: ownerId,
-    },
-  ];
-  await page.route("**/api/proyectos/p-existing/gestion", async (route) => {
-    const body = route.request().postDataJSON();
-    expect(body.operacion).toBe("jornal");
-    expect(body.asistencia_id).toBe("attendance-1");
-    expect(body.jornada).toBe(0.5);
-    expect(body.valor_diario).toBe(45000);
-    const expense = {
-      id: body.id,
-      proyecto_id: "p-existing",
-      asistencia_id: body.asistencia_id,
-      descripcion: "Jornal · Pedro Soto",
-      monto: 27500,
-      monto_adicional: 27500,
-      fecha: today(),
-      fecha_reporte: today(),
-      categoria_gasto: "mano_obra",
-      pagado: false,
-    };
-    db.imprevistos = [expense];
-    await route.fulfill({ json: { registro: expense } });
-  });
+test("jornales desde asistencia no aparece en Cuadrilla ni en Finanzas", async ({ page }) => {
+  await setup(page, {}, true);
+  await page.goto("/proyectos/p-existing/asistencia");
+  await expect(page.getByRole("heading", { name: "Cuadrilla de la obra", exact: true })).toBeVisible();
+  await expect(page.getByText("Jornales desde asistencia", { exact: true })).toHaveCount(0);
   await page.goto("/proyectos/p-existing/finanzas");
-  await page.getByText("Jornales desde asistencia", { exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "Asistencia", exact: true })
-    .selectOption("attendance-1");
-  await page.getByLabel("Valor del jornal diario").fill("45000");
-  await page
-    .getByRole("combobox", { name: "Jornada a pagar", exact: true })
-    .selectOption("0.5");
-  await page.getByLabel("Horas extra autorizadas").fill("1");
-  await page.getByLabel("Valor acordado por hora extra").fill("5000");
-  await expect(page.getByText("Costo propuesto:")).toContainText("27.500");
-  await page
-    .getByRole("button", { name: "Registrar jornal por pagar" })
-    .click();
-  await expect.poll(() => db.imprevistos?.length).toBe(1);
-  expect(db.imprevistos[0].pagado).toBe(false);
-  await expect(
-    page.getByText(
-      "No hay asistencias presentes o con atraso sin jornal para esta fecha.",
-    ),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: /Finanzas y materiales/ })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("Jornales desde asistencia", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Registrar jornal por pagar", exact: true })).toHaveCount(0);
 });
 
 test("material fraccionado tiene entregas parciales y no se paga al recibirlo, sin desborde a 320px", async ({

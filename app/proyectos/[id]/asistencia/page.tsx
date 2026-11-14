@@ -21,7 +21,6 @@ import {
   ChartNoAxesColumnIncreasing,
   FileText,
 } from "lucide-react";
-import LabourFromAttendance from "@/components/LabourFromAttendance";
 import ProjectTabsHeader from "@/components/ProjectTabsHeader";
 import GoogleMapsProjectViewer from "@/components/GoogleMapsProjectViewer";
 import ModalOverlay from "@/components/ModalOverlay";
@@ -929,7 +928,6 @@ export default function ProjectCrewPage() {
             </aside>
           )}
         </div>
-        <LabourFromAttendance projectId={projectId} onChanged={refresh} />
       </div>
       {editor && (
         <CrewAttendanceEditor

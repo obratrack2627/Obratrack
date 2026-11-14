@@ -3,7 +3,6 @@ import { chileToday } from '@/lib/ai/project-deadlines';
 
 import MoneyAmount from "@/components/MoneyAmount";
 import ActionMenu from '@/components/ActionMenu';
-import LabourFromAttendance from '@/components/LabourFromAttendance';
 import ProjectMaterials from '@/components/ProjectMaterials';
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
@@ -899,7 +898,6 @@ export default function ProyectoFinanzasPage() {
 
         </div>
 
-        <LabourFromAttendance projectId={projectId} onChanged={loadData}/>
         {/* Sección: Materiales & Insumos de la Obra (con CRUD) */}
         <div className={`${financeSection === 'materiales' ? '' : 'hidden'} bg-white border border-kraft-200 rounded-2xl p-6 shadow-sm space-y-4`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200">
