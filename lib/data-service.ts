@@ -280,6 +280,8 @@ export class DataService {
 
   setActiveUser(user: Usuario | null): void {
     if (user) {
+      const previous=this.getActiveUser();
+      if(previous && (previous.id!==user.id || previous.empresa_id!==user.empresa_id))this.getChatSessionHistory();
       if (isDeveloperEmail(user.email)) {
         user.is_dev = true;
       }
@@ -293,8 +295,8 @@ export class DataService {
   clearActiveUser(): void {
     if (!this.isBrowser()) return;
     try {
-      localStorage.removeItem(KEYS.ACTIVE_USER);
       this.clearChatSessionHistory();
+      localStorage.removeItem(KEYS.ACTIVE_USER);
     } catch (e) {
       console.error(e);
     }
@@ -374,35 +376,48 @@ export class DataService {
   }
 
   // --- PERSISTENCIA DE CHAT POR SESIÓN ---
-  getChatSessionHistory(): MensajeChatCotizador[] | null {
-    if (!this.isBrowser()) return null;
-    try {
-      const data = sessionStorage.getItem(KEYS.CHAT_SESSION) || localStorage.getItem(KEYS.CHAT_SESSION);
-      return data ? JSON.parse(data) : null;
-    } catch {
-      return null;
-    }
+  private chatSessionKey(): string | null {
+    const actor=this.getActiveUser();
+    return actor?.empresa_id && actor.id ? `${KEYS.CHAT_SESSION}:${JSON.stringify([actor.empresa_id,actor.id])}` : null;
   }
 
-  saveChatSessionHistory(messages: any[]): void {
-    if (!this.isBrowser()) return;
+  getChatSessionHistory(): MensajeChatCotizador[] | null {
+    if (!this.isBrowser()) return null;
+    const key=this.chatSessionKey();if(!key)return null;
     try {
-      const serialized = JSON.stringify(messages);
-      sessionStorage.setItem(KEYS.CHAT_SESSION, serialized);
-      localStorage.setItem(KEYS.CHAT_SESSION, serialized);
-    } catch (e) {
-      console.error(e);
-    }
+      let data=sessionStorage.getItem(key)||localStorage.getItem(key);
+      if(!data){
+        // Migración única en la cuenta activa; retirar la clave compartida después.
+        data=sessionStorage.getItem(KEYS.CHAT_SESSION)||localStorage.getItem(KEYS.CHAT_SESSION);
+        if(data){localStorage.setItem(key,data);sessionStorage.setItem(key,data);sessionStorage.removeItem(KEYS.CHAT_SESSION);localStorage.removeItem(KEYS.CHAT_SESSION);}
+      }
+      const parsed=data?JSON.parse(data):null;
+      return Array.isArray(parsed)?parsed:Array.isArray(parsed?.messages)?parsed.messages:null;
+    } catch {return null;}
+  }
+
+  getChatSessionSyncState(): {version:number|null;reset_pending:boolean} {
+    const key=this.chatSessionKey();
+    if(!key||!this.isBrowser())return {version:null,reset_pending:false};
+    try{const value=JSON.parse(sessionStorage.getItem(key)||localStorage.getItem(key)||'null');return {version:Number.isInteger(value?.cloud_version)?value.cloud_version:null,reset_pending:value?.reset_pending===true};}catch{return {version:null,reset_pending:false};}
+  }
+
+  setChatSessionSyncState(state:{version:number|null;reset_pending:boolean}):void {
+    this.saveChatSessionHistory(this.getChatSessionHistory()||[],state);
+  }
+
+  saveChatSessionHistory(messages: any[], syncState?:{version:number|null;reset_pending:boolean}): void {
+    if (!this.isBrowser()) return;
+    const key=this.chatSessionKey();if(!key)return;
+    try {const state=syncState||this.getChatSessionSyncState();const serialized=JSON.stringify({messages,cloud_version:state.version,reset_pending:state.reset_pending});sessionStorage.setItem(key,serialized);localStorage.setItem(key,serialized);}catch{/* Conservar el estado de la conversación en memoria. */}
   }
 
   clearChatSessionHistory(): void {
     if (!this.isBrowser()) return;
     try {
-      sessionStorage.removeItem(KEYS.CHAT_SESSION);
-      localStorage.removeItem(KEYS.CHAT_SESSION);
-    } catch (e) {
-      console.error(e);
-    }
+      const key=this.chatSessionKey();
+      for(const value of [key,KEYS.CHAT_SESSION])if(value){sessionStorage.removeItem(value);localStorage.removeItem(value);}
+    }catch{/* Cerrar sesión no depende del almacenamiento del navegador. */}
   }
 
   // --- PLAN DE LA EMPRESA ---

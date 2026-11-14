@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "synthetic": true,
   "entities": {
     "proyectos": [
@@ -37,7 +37,19 @@
         "proyecto_id": "p-bano"
       }
     ],
-    "usuarios": []
+    "usuarios": [
+      {
+        "id": "u-eval-terreno",
+        "nombre": "Trabajador de prueba",
+        "rol": "terreno"
+      }
+    ],
+    "proyecto_trabajadores": [
+      {
+        "proyecto_id": "p-bano",
+        "usuario_id": "u-eval-terreno"
+      }
+    ]
   },
   "cases": [
     {
@@ -1077,7 +1089,8 @@
           }
         ],
         "cotizacion": null
-      }
+      },
+      "fixture_image": "wall-crack.png"
     },
     {
       "id": "pro-cotiza",

@@ -11,7 +11,7 @@ const object = (
   required: string[] = [],
 ) => ({ type: "object", properties, required, additionalProperties: false });
 const array = (items: Record<string, unknown>) => ({ type: "array", items });
-const activity = object({ nombre: string, dias: number }, ["nombre", "dias"]);
+const activity = object({ nombre: string, dias: {type:"integer",minimum:1,description:"Días completos de trabajo; sin fracciones."} }, ["nombre", "dias"]);
 const material = object(
   {
     ...strings("nombre,unidad,categoria,proveedor,actividad_id"),
@@ -118,6 +118,7 @@ const actionFields: Record<typeof ACTION_TYPES[number], string> = {
 export const ACTION_SCHEMAS = ACTION_TYPES.map(tipo => {
   const fields = ['proyecto_id', 'proyecto_nombre', ...actionFields[tipo].split(' ').filter(Boolean)];
   const properties = Object.fromEntries(fields.map(field => [field, actionProperties[field]]));
+  if(['crear_proyecto','crear_proyecto_completo'].includes(tipo))properties.monto_cotizado={type:['number','null'],description:'Monto CLP confirmado. Solo si se genera cotizacion completa en este mismo turno, null: el servidor lo completa con su total determinista antes de validar. Sin cotizacion ni monto confirmado, pedir aclaración sin acción.'};
   return object({ tipo: { type: 'string', enum: [tipo] }, ...properties },
     ['crear_proyecto', 'crear_proyecto_completo'].includes(tipo) ? ['tipo', 'nombre', 'monto_cotizado'] : ['tipo']);
 });

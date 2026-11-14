@@ -33,7 +33,7 @@ export async function loadAIContext(
     client.from('empresas').select('id,nombre,rut,plan_id,logo_url,configuracion').eq('id', user.empresa_id),
     client.from('proyectos').select('*').eq('empresa_id', user.empresa_id),
     options.includeBudgets && !options.projectsOnly && user.rol !== "terreno"
-      ? client.from("presupuestos").select("*").eq("empresa_id", user.empresa_id)
+      ? client.from("presupuestos").select("id,empresa_id,proyecto_id,estado,nombre_alternativa,cotizacion,created_at,updated_at").eq("empresa_id", user.empresa_id).order("updated_at", {ascending:false}).limit(8)
       : Promise.resolve({ data: [], error: null }),
   ]);
   const company = checkedRows(companyResult)[0];

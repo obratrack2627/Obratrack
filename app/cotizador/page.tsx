@@ -47,7 +47,8 @@ import {
 import { formatCLP, formatDate } from '@/lib/utils';
 import PlanLockOverlay from '@/components/PlanLockOverlay';
 import ChatMessageFormatter from '@/components/ChatMessageFormatter';
-import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
+import { CloudChatHistory } from '@/lib/ai/cloud-chat-history';
+import { aiContext, aiHeaders, requestAI, applyAIResponse } from '@/lib/ai/client';
 import AIMessageTools from '@/components/AIMessageTools';
 
 
@@ -82,6 +83,17 @@ export default function CopilotoObreroPage() {
   const [inputChat, setInputChat] = useState('');
   const [obraSeleccionada,setObraSeleccionada]=useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [isHistoryLoading,setIsHistoryLoading]=useState(true);
+  const [historyHasMore,setHistoryHasMore]=useState(false);
+  const [historyStatus,setHistoryStatus]=useState<'synced'|'pending'>('pending');
+  const cloudHistory=useRef<CloudChatHistory|null>(null);
+  const persistHistory=(rows:MensajeChatCotizador[])=>{
+    dataService.saveChatSessionHistory(rows);
+    void cloudHistory.current?.sync();
+  };
+  const feedback=(kind:'action_cancelled'|'execution_failure')=>{
+    void aiHeaders().then(headers=>fetch('/api/ia/quality',{method:'POST',headers,body:JSON.stringify({kind}),signal:AbortSignal.timeout(3000)})).catch(()=>undefined);
+  };
 
   // Cargar datos y restaurar historial de sesión
   const reloadData = () => {
@@ -119,6 +131,29 @@ export default function CopilotoObreroPage() {
         },
       ]);
     }
+    const actor=dataService.getActiveUser();
+    let alive=true;
+    const owner=actor?.empresa_id&&actor.id?JSON.stringify([actor.empresa_id,actor.id]):null;
+    const active=()=>{const current=dataService.getActiveUser();return alive&&!!owner&&JSON.stringify([current?.empresa_id,current?.id])===owner;};
+    const cloud=owner?new CloudChatHistory({
+      active,read:()=>dataService.getChatSessionHistory()||[],
+      write:(rows,state)=>{if(active()){dataService.saveChatSessionHistory(rows,state);setMensajesChat(rows.length?rows:[INITIAL_CHAT_MESSAGE]);}},
+      readCache:()=>dataService.getChatSessionSyncState(),
+      writeCache:cache=>{if(active())dataService.setChatSessionSyncState(cache);},
+      status:state=>{if(active())setHistoryStatus(state);},
+      request:async(method,body)=>{
+        if(!active())throw Error('CHAT_ACCOUNT_CHANGED');
+        const headers=await aiHeaders();if(!active())throw Error('CHAT_ACCOUNT_CHANGED');
+        const url='/api/cotizador/historial'+(method==='GET'&&body?'?'+new URLSearchParams(body).toString():'');
+        const response=await fetch(url,{method,headers,...(body&&method==='POST'?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});
+        const data=await response.json();if(!response.ok)throw Error('CHAT_SYNC');if(method==='GET'&&!body&&active())setHistoryHasMore(data.has_more===true);return data;
+      },
+    }):null;
+    cloudHistory.current=cloud;
+    if(cloud)void cloud.initialize().then(()=>cloud.sync()).finally(()=>{if(alive)setIsHistoryLoading(false);});
+    else setIsHistoryLoading(false);
+    const resume=()=>{void cloud?.sync();};
+    window.addEventListener('online',resume);window.addEventListener('focus',resume);
     try {
       const intent = new URLSearchParams(window.location.search).get('intent');
       if (intent === 'agendar') {
@@ -126,6 +161,7 @@ export default function CopilotoObreroPage() {
       }
     } catch {}
     return () => {
+      alive=false;cloudHistory.current=null;window.removeEventListener('online',resume);window.removeEventListener('focus',resume);
       window.removeEventListener('obratrack_plan_changed', planHandler);
       window.removeEventListener('obratrack_cloud_synced', syncHandler);
     };
@@ -143,6 +179,8 @@ export default function CopilotoObreroPage() {
 
   // Reiniciar conversación activa para empezar una nueva
   const handleResetChat = () => {
+    if(isChatLoading||isHistoryLoading)return;
+    if(mensajesChat.some(m=>m.accion_ejecutada?.tipo==='solicitar_datos_persona'))feedback('action_cancelled');
     const remaining=mensajesChat.filter(m=>(m.obra_contexto_id||'')!==obraSeleccionada);
     const freshMessage: MensajeChatCotizador = {
       ...INITIAL_CHAT_MESSAGE,
@@ -152,16 +190,18 @@ export default function CopilotoObreroPage() {
     };
     setMensajesChat([...remaining,freshMessage]);
     dataService.saveChatSessionHistory([...remaining,freshMessage]);
-    showToast('✨ Conversación reiniciada para esta sesión.');
+    if(!obraSeleccionada)void cloudHistory.current?.reset();
+    showToast('Conversación reiniciada.');
   };
 
   // Enviar mensaje a ObraBot y ejecutar acciones
   const handleSendChat = async (texto?: string) => {
     const msgToSend = texto || inputChat;
-    if (!msgToSend.trim() || isChatLoading || !['pro','pro_ia'].includes(dataService.getActivePlan())) return;
+    if (!msgToSend.trim() || isChatLoading || isHistoryLoading || !['pro','pro_ia'].includes(dataService.getActivePlan())) return;
 
     const userMsg: MensajeChatCotizador = {
-      id: 'm-u-' + Date.now(),
+      id: 'm-u-' + crypto.randomUUID(),
+      created_at:new Date().toISOString(),
       remitente: 'usuario',
       texto: msgToSend,
       obra_contexto_id:obraSeleccionada||undefined,
@@ -170,22 +210,27 @@ export default function CopilotoObreroPage() {
 
     const nextHistory = [...mensajesChat, userMsg];
     setMensajesChat(nextHistory);
-    dataService.saveChatSessionHistory(nextHistory);
+    persistHistory(nextHistory);
 
     setInputChat('');
     setIsChatLoading(true);
 
+    let executingAction=false;
     try {
       const ultimaCotizacion = [...mensajesChat].reverse().find(m => m.cotizacion_generada&&(m.obra_contexto_id||'')===obraSeleccionada)?.cotizacion_generada;
       const data = await requestAI(obraSeleccionada?`/api/proyectos/${obraSeleccionada}/chat`:'/api/cotizador/chat', {
         mensaje: msgToSend, historial: conversationRequest(mensajesChat.filter(m=>(m.obra_contexto_id||'')===obraSeleccionada), msgToSend), contexto_db: aiContext(), contexto_cotizacion: ultimaCotizacion,
       });
+      executingAction=!!data.accion;
       const processed = await applyAIResponse(data, obraSeleccionada || undefined);
+      if(processed.pendiente_sincronizacion)feedback('execution_failure');
+      executingAction=false;
       reloadData();
       if (processed.accion_ejecutada && processed.accion_ejecutada.tipo !== 'solicitar_datos_persona') showToast(processed.accion_ejecutada.titulo);
 
       const agentMsg: MensajeChatCotizador = {
-        id: 'm-a-' + Date.now(),
+        id: 'm-a-' + crypto.randomUUID(),
+        created_at:new Date().toISOString(),
         remitente: 'agente',
         ...processed,
         obra_contexto_id:obraSeleccionada||undefined,
@@ -194,11 +239,13 @@ export default function CopilotoObreroPage() {
 
       const updatedHistory = [...nextHistory, agentMsg];
       setMensajesChat(updatedHistory);
-      dataService.saveChatSessionHistory(updatedHistory);
+      persistHistory(updatedHistory);
     } catch (err: any) {
+      if(executingAction)feedback('execution_failure');
       console.error(err);
       const errMsg: MensajeChatCotizador = {
-        id: 'm-err-' + Date.now(),
+        id: 'm-err-' + crypto.randomUUID(),
+        created_at:new Date().toISOString(),
         obra_contexto_id:obraSeleccionada||undefined,
         remitente: 'agente',
         texto: err?.message || 'No se pudo completar la solicitud. Intenta nuevamente.',
@@ -206,7 +253,7 @@ export default function CopilotoObreroPage() {
       };
       const updatedHistory = [...nextHistory, errMsg];
       setMensajesChat(updatedHistory);
-      dataService.saveChatSessionHistory(updatedHistory);
+      persistHistory(updatedHistory);
     } finally {
       setIsChatLoading(false);
     }
@@ -273,6 +320,7 @@ export default function CopilotoObreroPage() {
                 {/* Botón Nueva Conversación */}
                 <button
                   onClick={handleResetChat}
+                  disabled={isChatLoading||isHistoryLoading}
                   title="Iniciar nueva conversación limpia"
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-gray-300 hover:text-white border border-navy-700 text-[11px] font-bold transition-all shadow-sm"
                 >
@@ -288,6 +336,7 @@ export default function CopilotoObreroPage() {
                   {proyectos.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
                 </select>
               </div>
+              {!obraSeleccionada&&historyHasMore&&<button type="button" className="px-4 py-2 text-xs text-obra-orange" onClick={()=>{void cloudHistory.current?.older().then(setHistoryHasMore).catch(()=>showToast('No se pudieron recuperar los mensajes anteriores.'));}}>Ver mensajes anteriores</button>}
               {/* Feed de Conversación */}
               <div className="flex-1 min-h-0 p-4 sm:p-5 overflow-y-auto space-y-4 bg-kraft-50/40 dark:bg-[#0B0E14] text-xs">
                 {(mensajesChat.some(m=>(m.obra_contexto_id||'')===obraSeleccionada)?mensajesChat.filter(m=>(m.obra_contexto_id||'')===obraSeleccionada):[INITIAL_CHAT_MESSAGE]).map((m) => (
@@ -390,6 +439,7 @@ export default function CopilotoObreroPage() {
                     <span className="font-mono text-xs font-bold">Revisando tu solicitud…</span>
                   </div>
                 )}
+                <p className="px-4 text-xs text-gray-500">{obraSeleccionada?'Conversación de esta obra en este dispositivo':isHistoryLoading?'Recuperando conversación…':historyStatus==='synced'?'Historial sincronizado':'Historial guardado en este dispositivo'}</p>
                 <div ref={chatBottomRef} />
               </div>
 
@@ -406,7 +456,7 @@ export default function CopilotoObreroPage() {
                 />
                 <button
                   onClick={() => handleSendChat()}
-                  disabled={!inputChat.trim() || isChatLoading}
+                  disabled={!inputChat.trim() || isChatLoading || isHistoryLoading}
                   className="px-5 py-3 bg-obra-orange hover:bg-orange-600 text-white rounded-2xl font-heading font-bold text-xs flex items-center gap-2 disabled:opacity-50 transition-all shadow-md hover:shadow-lg"
                 >
                   <span>Enviar</span>

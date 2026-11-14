@@ -88,9 +88,9 @@ test('las instrucciones no incluyen texto del usuario, historial ni datos de con
 test('JSONL SFT exporta únicamente ejemplos validados sin iniciar entrenamiento',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'obrabot-sft-'));const destination=path.join(dir,'examples.jsonl');
  try{
-  const {exportExamples}=require('../scripts/export-obrabot-sft.cjs');assert.equal(exportExamples(destination),dataset.cases.length);
+  const {exportExamples,sftEligibleCase}=require('../scripts/export-obrabot-sft.cjs');const eligible=dataset.cases.filter(sftEligibleCase);assert.equal(exportExamples(destination),eligible.length);assert.ok(eligible.length>0&&eligible.length<dataset.cases.length);
   const records=fs.readFileSync(destination,'utf8').trim().split('\n').map(JSON.parse);
-  for(const [i,record] of records.entries()){assert.deepEqual(record.messages.map(m=>m.role),['system','user','assistant']);validateCandidate(dataset.cases[i],JSON.parse(record.messages[2].content));}
+  for(const [i,record] of records.entries()){assert.deepEqual(record.messages.map(m=>m.role),['system','user','assistant']);validateCandidate(eligible[i],JSON.parse(record.messages[2].content));}
   assert.throws(()=>exportExamples(destination),e=>e.code==='EEXIST');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

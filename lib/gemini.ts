@@ -60,11 +60,9 @@ export async function generarCotizacionGemini(params: {
   });
 }
 
-export async function chatAsesorObrasGemini(
-  historial: { rol: "user" | "model"; texto: string }[],
-  mensajeUsuario: string,
-  contextoDB: Record<string, any> = {},
-  options: ChatGenerationOptions = {},
+export function chatGenerationRequest(
+  historial: { rol: "user" | "model"; texto: string }[], mensajeUsuario: string,
+  contextoDB: Record<string, any> = {}, options: ChatGenerationOptions = {},
 ) {
   const quote =
     !requestsPlatformAction(mensajeUsuario) &&
@@ -98,13 +96,25 @@ export async function chatAsesorObrasGemini(
       : CHAT_RESPONSE_SCHEMA;
   const extended = quote || Boolean(options.image);
   const separated = separatePrompt(prompt);
-  const result = await generateValidatedChat(separated.input, mensajeUsuario, contextoDB, {
-    ...options,
-    instructions: separated.instructions + (pureSearchOnly || quote ? '' : '\n' + CONSTRUCTION_WORKFLOW_RULES + '\n' + ACTION_EXAMPLES),
-    json: true, schema,
-    budgetMs: Math.min(options.budgetMs || (extended ? 45000 : 30000), extended ? 45000 : 30000),
-    timeoutMs: Math.min(options.timeoutMs || (extended ? 40000 : 30000), extended ? 40000 : 30000),
-  });
+  return { mode: pureSearchOnly ? 'search' : quote ? 'quote' : 'chat', pureSearchOnly,
+    input: separated.input, options: {
+      ...options,
+      instructions: separated.instructions + (pureSearchOnly || quote ? '' : '\n' + CONSTRUCTION_WORKFLOW_RULES + '\n' + ACTION_EXAMPLES),
+      json: true, schema,
+      budgetMs: Math.min(options.budgetMs || (extended ? 45000 : 30000), extended ? 45000 : 30000),
+      timeoutMs: Math.min(options.timeoutMs || (extended ? 40000 : 30000), extended ? 40000 : 30000),
+    } };
+}
+
+export async function chatAsesorObrasGemini(
+  historial: { rol: "user" | "model"; texto: string }[],
+  mensajeUsuario: string,
+  contextoDB: Record<string, any> = {},
+  options: ChatGenerationOptions = {},
+) {
+  const request = chatGenerationRequest(historial, mensajeUsuario, contextoDB, options);
+  const pureSearchOnly = request.pureSearchOnly;
+  const result = await generateValidatedChat(request.input, mensajeUsuario, contextoDB, request.options);
   if (result.busqueda_materiales) {
     const comparison = await compareMaterialPrices(
       completePurchaseQuantity(result.busqueda_materiales, mensajeUsuario),

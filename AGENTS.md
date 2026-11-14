@@ -46,3 +46,11 @@
 - Jornales desde asistencia y actas de recepción usan RPCs con actor verificado, recálculo nativo e idempotencia. No crear pagos al recibir materiales, adjuntar boletas, cerrar jornada o calcular jornales. Terreno no puede realizar operaciones de jefatura.
 - Registro de cuenta: RUT personal y nombre comercial opcionales; nunca exigir RUT de empresa. Si se informa RUT debe ser válido. Correo y sesión siguen verificados por Auth.
 - Entrega y recepción del mandante retirada de la interfaz y de ObraBot. No reintroducir el panel ni el registro de actas; los datos históricos se conservan sin mostrarse en Documentos. La recepción de materiales y los plazos de obra siguen vigentes.
+
+## Mejora continua de ObraBot (2026-11-14)
+- `chatGenerationRequest` comparte los contratos del motor y el runner `scripts/eval-obrabot-live.cjs`. El Golden Set v2 incluye asignaciones explícitas y una foto sintética. Evaluar con API real de forma manual; sin clave debe omitir la red. Los mocks no acreditan precisión real.
+- En cotización nueva + creación, monto_cotizado puede ser null en la propuesta únicamente hasta que quoteProjectFields lo complete con el total normalizado. Nunca ejecutar una creación sin monto numérico validado ni calcularlo con el modelo. Las fases usan días enteros.
+- Aplicar `obrabot_quality.sql`, `obrabot_rag.sql` y `obrabot_chat_history.sql`; sus pruebas nativas terminan en ROLLBACK. Telemetría asíncrona con waitUntil: códigos/categorías, sin textos, contactos ni montos.
+- RAG top-4 por empresa, solo para consultas/cotizaciones autorizadas; no terreno, mutaciones ni retail. Solo APUs revisados con fuente y presupuestos aprobados. Invalidar embeddings al cambiar contenido/modelo. Retail y CLP/IVA siguen en los cálculos deterministas.
+- Historial general privado por empresa/usuario: mensajes y versión de caché se guardan juntos, cargas por lotes y paginación. Un reset incrementa versión para impedir resurrección desde otro dispositivo. Recuperar historial jamás ejecuta acciones. Los presupuestos se recuperan por ID canónico y empresa.
+- SFT: solo ejemplos revisados, anonimizados y consentidos; deduplicación y holdout independiente. No entrenar precios retail, aritmética, validación de permisos ni datos de contacto. Generar JSONL no autoriza iniciar un entrenamiento ni cambiar el modelo de producción.

@@ -1,3 +1,5 @@
+import { turnQualityEvent } from '@/lib/ai/quality';
+import { scheduleQualityEvent } from '@/lib/ai/quality-server';
 import { projectLiterals, requestsNewProject } from './project-literals';
 import { loadWhatsAppContext, whatsappChildTables as childTables } from './context-loader';
 import { projectListAnswer } from './project-list';
@@ -293,6 +295,8 @@ export async function processPersonalMessage(
   if (!confirmationResponse && !pendingProject && !chosenBudget && nativeBudget?.grupo_id && !candidates.length) confirmationResponse = 'No se pudieron recuperar las alternativas. Revisa el presupuesto en ObraTrack.';
   const cancelCreation = !!pendingProject && cancelsProjectDraft(text);
   const continueCreation = !!pendingProject && !attachment && !anotherTask(text) && (resumesProjectDraft(text) || Object.keys(projectLiterals(text,pendingProject)).length > 0);
+  const feedback=turnQualityEvent(text,conversationRows.filter((row:any)=>row.respuesta).map(()=>({rol:'model'})),!!pendingPerson||!!pendingProject);
+  if(feedback)scheduleQualityEvent(sb,user,feedback,'whatsapp');
   const contactHistory: ContactTurn[] = conversationRows.slice().reverse().flatMap((row:any)=>[
     {rol:'user' as const,texto:row.texto || ''},
     {rol:'model' as const,texto:row.respuesta || '',action:row.acciones,preferencias_conversacion:row.acciones?.preferencias_conversacion,...(Object.hasOwn(row.acciones || {},'edicion_nombre_pendiente')?{pendingNameEdit:row.acciones.edicion_nombre_pendiente}:{})},
@@ -348,7 +352,7 @@ export async function processPersonalMessage(
         },
         ...(image ? { foto_adjunta: true } : {}),
       },
-      { budgetMs: message.type === 'text' || image ? 45000 : 30000, timeoutMs: message.type === 'text' || image ? 40000 : 20000, ...(image ? { image } : {}) },
+      { onQualityEvent: event => scheduleQualityEvent(sb,user,event,'whatsapp'), budgetMs: message.type === 'text' || image ? 45000 : 30000, timeoutMs: message.type === 'text' || image ? 40000 : 20000, ...(image ? { image } : {}) },
     ));
     if (image && attachment) attachment.descripcion = result.respuesta;
   } catch (error) {

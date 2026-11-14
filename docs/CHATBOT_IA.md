@@ -23,7 +23,7 @@ Texto, cotizador, cambio de materiales y visión usan `/v1/responses`, `store:fa
 
 Las peticiones de crear, convertir o actualizar tienen prioridad sobre los esquemas exclusivos de cotización/búsqueda. Una solicitud combinada usa el contrato de chat, que admite cotizacion, acciones y búsqueda en el mismo turno. Los campos de creación a partir de una cotización se completan desde su versión normalizada por el servidor: total con IVA, fases, materiales y cliente; las alternativas ambiguas exigen elegir.
 
-Las reglas se envían en `instructions`; contexto, historial y mensaje permanecen en `input` como datos no confiables. Se eliminan columnas y secciones duplicadas conservando IDs, candidatos ambiguos y el presupuesto seleccionado, sin cortar JSON serializado. Las acciones usan subesquemas `anyOf` discriminados por `tipo`, con nombre y monto_cotizado requeridos en creación. `parseChatResponse`, `validateAction`, `prepareActionPlan` y los permisos del servidor siguen siendo autoritativos.
+Las reglas se envían en `instructions`; contexto, historial y mensaje permanecen en `input` como datos no confiables. Se eliminan columnas y secciones duplicadas conservando IDs, candidatos ambiguos y el presupuesto seleccionado, sin cortar JSON serializado. Las acciones usan subesquemas `anyOf` discriminados por `tipo`, con nombre y monto_cotizado requeridos en creación. En una respuesta combinada de cotización nueva y creación, el monto propuesto puede ser null únicamente hasta que el servidor lo complete con el total normalizado; sin cotización válida, la validación lo rechaza. `parseChatResponse`, `validateAction`, `prepareActionPlan` y los permisos del servidor siguen siendo autoritativos.
 
 Ante `AI_INVALID_ACTION` o `ACTION_PLAN_INVALID` con estado 422 se permite **un** reintento de generación, dentro del plazo total original y antes de escrituras, búsquedas externas o envíos. El error exacto y la salida anterior se envían como datos para corregir. Si no hay un monto/ID autorizado, debe preguntar. Los rechazos de permisos, plan, alcance o solicitud solo de lectura no se reintentan. El flujo WhatsApp conserva `obra_propuesta`, validación nativa y confirmación; nunca acepta creación directa del modelo.
 
@@ -31,7 +31,7 @@ Ante `AI_INVALID_ACTION` o `ACTION_PLAN_INVALID` con estado 422 se permite **un*
 
 El Golden Set en `tests/fixtures/obrabot-golden.json` contiene casos sintéticos representativos de construcción chilena, sin datos personales reales. `node --test tests/ai-golden.test.cjs` comprueba contratos, enrutamiento y límites del servidor de forma determinística; no representa una evaluación de calidad del modelo en vivo.
 
-`node scripts/export-obrabot-sft.cjs /tmp/obrabot-sft.jsonl` valida los ejemplos antes de exportar mensajes system/user/assistant en JSONL para SFT. Exportar no sube datos ni inicia un entrenamiento. Seleccionar un modelo compatible con SFT y medir resultados con un conjunto de evaluación independiente antes de entrenar. No entrenar y evaluar con los mismos ejemplos.
+`node scripts/export-obrabot-sft.cjs /tmp/obrabot-sft.jsonl` valida los ejemplos antes de exportar mensajes system/user/assistant en JSONL para SFT. Exportar no sube datos ni inicia un entrenamiento. Desde el plan de mejora continua, este exportador excluye estimaciones, búsquedas retail y totales derivados; no exporta todos los casos del Golden Set a entrenamiento. Seleccionar un modelo compatible con SFT y medir resultados con un conjunto de evaluación independiente antes de entrenar. No entrenar y evaluar con los mismos ejemplos.
 
 El token personal `SUPABASE_ACCESS_TOKEN` sirve para administración de Supabase; no reemplaza la sesión de usuario ni se envía desde el navegador para ejecutar las acciones del chat. El chatbot usa la sesión real de Supabase Auth y las políticas RLS, sin requerir la clave service_role para sus nuevas escrituras.
 
@@ -50,7 +50,7 @@ Las escrituras de un lote a varias tablas no son una transacción SQL. Si un pas
 
 ObraBot recupera antecedentes literales de la conversación: medidas, cliente, ubicación, materiales, cantidades, IVA, condiciones y correcciones. Selecciona turnos recientes y antecedentes relevantes dentro de un presupuesto de texto, conservando el orden cronológico y una referencia a las primeras especificaciones. No genera un resumen adicional con otra llamada de IA. Las tres rutas de interpretación (consulta/gestión, cotización y búsqueda de materiales) usan esta misma selección. Las cotizaciones admiten hasta 45 segundos de generación incluyendo como máximo un reintento de corrección dentro de ese plazo; las consultas mantienen 30 segundos. Fotos y audios de WhatsApp conservan límites más cortos para reservar tiempo al almacenamiento y al envío.
 
-La plataforma selecciona los antecedentes antes de enviarlos, en vez de limitarse a los últimos diez mensajes. Cada obra conserva su conversación separada. Los mensajes de error también mantienen ese contexto. El chat general se conserva en el navegador actual; el chat de proyecto conserva su sincronización existente con Supabase. Este cambio no agrega sincronización del chat general entre dispositivos ni memoria ilimitada.
+La plataforma selecciona los antecedentes antes de enviarlos, en vez de limitarse a los últimos diez mensajes. Cada obra conserva su conversación separada. Los mensajes de error también mantienen ese contexto. El chat general se sincroniza en Supabase por empresa y usuario; el navegador conserva una copia para fallos de conexión. El chat de proyecto conserva su sincronización existente. El historial persistido y el contexto enviado al modelo son distintos: el selector de antecedentes sigue acotando el contexto por turno.
 
 WhatsApp recupera hasta 80 intercambios recientes del mismo actor y empresa para la conversación. Las confirmaciones, menús y borradores siguen su flujo transaccional existente; ampliar el contexto no repite una creación o un pago antiguo.
 
@@ -295,3 +295,152 @@ dispositivo con cambios pendientes. Un despliegue en Vercel no aplica este SQL.
 La regresión nativa `tests/sql/guardar_obras_rls.sql` comprueba alta y edición
 propias y rechazo de lectura, alta y apropiación de obras ajenas; termina en
 ROLLBACK.
+
+
+## Mejora continua: evaluaciones reales y promoción
+
+El contrato se comparte mediante `chatGenerationRequest`: el runner usa los mismos
+prompts, esquemas y adaptador `openai-provider.ts`, sin consultas retail, escrituras
+ni envíos de WhatsApp. Es una ejecución manual con costo de API:
+
+```bash
+node scripts/eval-obrabot-live.cjs --output /tmp/obrabot-eval.json
+# Diagnóstico acotado antes de ejecutar el conjunto completo:
+node scripts/eval-obrabot-live.cjs --limit 1 --output /tmp/obrabot-eval-first.json
+```
+
+Sin `OPENAI_API_KEY` termina con `skipped:true` y no usa red. El informe separa
+modo, contrato de acciones, payload, entidades, reintentos y duración por caso.
+Una aclaración vacía no cuenta como éxito cuando se pidió una creación completa.
+El proceso sale con error si no termina todos los casos o no alcanza 98% de acierto.
+Los tests con mocks validan el runner, pero **no acreditan 98% con el modelo real**.
+No promover cambios de prompts o un modelo entrenado solo por resultados simulados.
+Las claves sensibles de Vercel no son recuperables: habilitar una clave en el
+entorno que ejecuta el runner mediante su gestor de secretos.
+
+## Telemetría privada y retroalimentación
+
+Aplicar `supabase/obrabot_quality.sql`. `obrabot_quality_events` guarda empresa,
+actor, canal, categoría, código de error, intento y recuperación. No admite
+columnas de prompts, respuestas, contactos, IDs de clientes ni montos. Su RLS
+limita lectura e inserción a la identidad autenticada de la misma empresa; el
+backend WhatsApp usa su identidad ya verificada. La escritura usa `waitUntil`,
+timeout y captura de errores; nunca se espera para devolver la respuesta del chat.
+
+Se registran rechazos recuperados/no recuperados, fallos del proveedor,
+correcciones explícitas del siguiente turno y cancelación de borradores. En la
+web también se notifican fallos de ejecución y reinicios con un registro pendiente.
+Los eventos son indicadores; una corrección textual no prueba que la respuesta
+anterior fuera incorrecta.
+
+```bash
+node scripts/export-obrabot-feedback.cjs EMPRESA /tmp/feedback.json
+```
+
+Usar credenciales de servicio o un JWT autorizado en `OBRABOT_EXPORT_TOKEN` con
+la clave pública y URL de Supabase. La consulta siempre filtra `empresa_id`.
+El exportador crea **plantillas sintéticas de regresión** deduplicadas por el tipo
+de fallo: como no se guardan conversaciones privadas, no intenta reconstruirlas.
+Los registros salen con `review_required:true` y no pueden convertirse directamente
+en datos de entrenamiento sin revisión humana. El esquema es compatible con los
+casos del Golden Set. Para casos revisados, el exportador JSONL admite:
+
+```bash
+node scripts/export-obrabot-sft.cjs /tmp/revisados.jsonl --dataset /tmp/feedback-revisado.json
+```
+
+## Recuperación semántica de antecedentes propios
+
+Aplicar `supabase/obrabot_rag.sql`: habilita pgvector, HNSW, `obrabot_apu` y
+`obrabot_knowledge`. Cada empresa registra APUs con categoría, unidad, rendimiento,
+unidad del rendimiento, fuente, fecha y responsable de revisión. Solo entradas
+aprobadas pasan al índice. **No se incluyen rendimientos chilenos inventados ni
+sin fuente profesional revisada**.
+
+Los triggers indexan únicamente presupuestos `aprobada`, sin contactos ni campos
+tributarios del cliente, y eliminan referencias al rechazarlos o desaprobarlos.
+Un cambio del contenido invalida su embedding. La escritura de un embedding
+verifica también `content_hash` para no guardar resultados de una versión anterior.
+
+```bash
+node scripts/index-obrabot-knowledge.cjs EMPRESA
+```
+
+El indexador requiere `SUPABASE_SERVICE_ROLE_KEY` y `OPENAI_API_KEY`; procesa hasta
+10 pendientes por ejecución. Con `OBRABOT_RAG_ENABLED=true`, las consultas también
+programan lotes pequeños en segundo plano. La primera indexación puede necesitar
+varios lotes. El modelo de embeddings predeterminado es `text-embedding-3-small`,
+con 1536 dimensiones; al cambiarlo se deben invalidar y regenerar todos los
+embeddings antes de recuperar con el modelo nuevo.
+
+La recuperación consulta top-4 con similitud mínima, RLS y permisos web; terreno,
+mutaciones y consultas de precios retail no usan RAG. Un fallo devuelve cero
+referencias y conserva el flujo normal. Las referencias llevan tipo/source_id y
+se presentan como antecedentes históricos, nunca precios vigentes ni autorización
+para ejecutar. `compareMaterialPrices`, `saveBudget`, IVA y cálculos CLP conservan
+su autoridad determinística. Los últimos presupuestos del contexto se consultan
+con un límite de ocho; un presupuesto seleccionado se recupera por su ID canónico.
+
+## Curación y entrenamiento supervisado
+
+```bash
+node scripts/curate-obrabot-sft.cjs revisadas.json train.jsonl validation.jsonl
+```
+
+La entrada es un array de ejemplos con `reviewed:true`, `anonymized:true`,
+`consent:true`, `source:"success"` o `"correction"`, `role:"admin"`,
+`plan:"pro_ia"`, `market_prices:false`, `arithmetic:false`, `message`, `context` y
+`response` con el contrato ObraBot. Las entidades usan IDs `anon-...` y nombres
+`Entidad N`. El operador debe limpiar texto libre y datos confidenciales antes:
+las comprobaciones de teléfonos/correos/RUT no sustituyen esa revisión.
+
+El pipeline valida acciones, referencias y permisos, rechaza conversaciones de
+retail, estimaciones y cálculos derivados, y deduplica por entrada/contrato/contexto.
+Separa entrenamiento y validación de forma estable por hash (80/20), sin copiar
+el mismo ejemplo entre conjuntos. Los montos de extracción deben aparecer
+literalmente en el mensaje; **no se entrena aritmética CLP/IVA, precios de mercado
+ni controles de autorización**. Los flujos de personas/pagos/documentos se excluyen
+del conjunto curado. Una muestra rechazada no debe forzarse para aumentar el tamaño.
+
+Para entrenar, primero comprobar revisión, consentimiento, al menos diez ejemplos
+válidos de entrenamiento, validación independiente no vacía y compatibilidad SFT
+del modelo base. Después, mediante el SDK oficial:
+
+```javascript
+const training = await client.files.create({file: fs.createReadStream('train.jsonl'), purpose: 'fine-tune'});
+const validation = await client.files.create({file: fs.createReadStream('validation.jsonl'), purpose: 'fine-tune'});
+const job = await client.fineTuning.jobs.create({
+  training_file: training.id, validation_file: validation.id,
+  model: process.env.OPENAI_SFT_BASE_MODEL,
+});
+```
+
+Estos comandos son operativos, **no se ejecutan al generar datasets ni al desplegar**.
+Esperar `succeeded`, evaluar el modelo obtenido y comparar con la base antes de
+activar su ID mediante `OPENAI_MODEL`. Ajustar u omitir `OPENAI_REASONING_EFFORT`
+según las capacidades del modelo. Para revertir basta restaurar el modelo anterior;
+no cambia SQL, permisos, cálculo ni la cola de ejecución de acciones.
+
+## Historial general en la nube
+
+Aplicar `supabase/obrabot_chat_history.sql`. `/api/cotizador/historial` usa la sesión
+real y las tablas privadas `obrabot_chat_sessions`/`obrabot_chat_messages`. El RPC
+no acepta empresa ni usuario del navegador: los obtiene de `auth.uid()`.
+La RLS separa empresas y también usuarios de una misma empresa. Esto permite al
+mismo administrador continuar en un móvil en terreno, **sin dar acceso web al rol
+terreno ni compartir conversaciones con otros integrantes**.
+
+Los mensajes se agregan idempotentemente por ID, con cargas en lotes de hasta 100;
+la primera página devuelve los últimos 100 y «Ver mensajes anteriores» pagina sin
+borrar los anteriores. Solo se sincroniza el chat general; el chat de proyecto
+conserva su mecanismo existente. Los presupuestos se guardan por referencia y se
+hidratan desde `presupuestos` con la empresa autenticada, no desde una copia de
+cálculos del navegador. Recuperar historial nunca ejecuta ni reintenta acciones.
+
+La caché local está separada por empresa/usuario. La clave antigua se migra una
+vez a la cuenta activa y se elimina de la ubicación compartida; al cambiar de
+cuenta se conserva primero el propietario anterior. Los fallos de red conservan
+la copia local y se reintentan al volver la conexión o enfocar la aplicación.
+Reiniciar la conversación incrementa una versión: clientes atrasados no pueden
+restaurar mensajes borrados. Un reinicio sin conexión queda pendiente. Las
+respuestas en vuelo de otra cuenta o anteriores al reinicio se descartan.

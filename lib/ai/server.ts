@@ -1,3 +1,7 @@
+import { scheduleKnowledgeIndex } from './rag-index';
+import { retrieveReferences,ragEligible } from './rag';
+import { scheduleQualityEvent } from './quality-server';
+import { turnQualityEvent } from './quality';
 import { conversationPreferences, withPreferences } from './preferences';
 import { contactNameCommand, contactTurns, withNameEditContext } from './contact-name-command';
 import { personIntake } from '@/lib/whatsapp/person-intake';
@@ -155,6 +159,9 @@ export function createChatHandler(
       let registrationDraft = pendingPerson(body.historial_original, body.historial, tables.proyectos, projectId);
       const nameCommand = !registrationDraft ? contactNameCommand(body.mensaje, tables.usuarios, contactTurns(body.historial_original), user.id) : null;
       const pendingNameEdit = nameCommand?.pending || null;
+      const onQualityEvent = (event: import('./quality').QualityEvent) => scheduleQualityEvent(client,user,event);
+      const feedback = turnQualityEvent(body.mensaje,body.historial,!!registrationDraft);
+      if(feedback)onQualityEvent(feedback);
       const validateResult = (result: any) => {
         // Prevalidación pura sobre copias: jamás guardar ni encolar en un reintento.
         const candidate = structuredClone(result);
@@ -324,7 +331,9 @@ export function createChatHandler(
         canonicalBudget = data;
         return data?.cotizacion || null;
       };
-      const capability = { preferencias_conversacion: preferences.state.valores, registro_persona: registrationDraft, acciones_habilitadas: company.plan_id === "pro_ia" };
+      if(ragEligible(body.mensaje,user.rol))scheduleKnowledgeIndex(user.empresa_id);
+      const semanticReferences = await retrieveReferences(client,body.mensaje,user.rol);
+      const capability = { referencias_semanticas:semanticReferences, preferencias_conversacion: preferences.state.valores, registro_persona: registrationDraft, acciones_habilitadas: company.plan_id === "pro_ia" };
       if (projectId) {
         if (!/^[a-zA-Z0-9_-]+$/.test(projectId))
           throw new AIError("PROJECT_INVALID", "La obra no es válida.", 400);
@@ -342,7 +351,7 @@ export function createChatHandler(
             ...data,
             cotizacion_actual: await budgetContext(projectId),
           },
-          options: { validateResult },
+          options: { validateResult, onQualityEvent },
           contextoDB: { ...context, ...capability, operacion_obra: operationsContext(tables, projectId, user.rol, body.mensaje), cliente_actual: user.rol === 'terreno' ? null : tables.clientes.find((c) => c.id === data.cliente_id) || null },
         });
         const queued = await finish(result, projectId);
@@ -357,7 +366,7 @@ export function createChatHandler(
         proyecto_actual: tables.proyectos.find(project => project.id === referencedId) || null,
         operacion_obra: operationsContext(tables, undefined, user.rol, body.mensaje),
         cotizacion_actual: await budgetContext(),
-      }, { validateResult });
+      }, { validateResult, onQualityEvent });
       const queued = await finish(result);
       if (queued) return queued;
       if (result.cotizacion) await saveBudget(client, user, result.cotizacion, undefined, isAlternativeRequest(body.mensaje) ? canonicalBudget : null);
