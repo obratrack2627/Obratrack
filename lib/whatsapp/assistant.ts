@@ -1,4 +1,6 @@
 import { projectLiterals, requestsNewProject } from './project-literals';
+import { loadWhatsAppContext, whatsappChildTables as childTables } from './context-loader';
+import { projectListAnswer } from './project-list';
 import { anotherTask } from '@/lib/ai/person-literals';
 import { isAttendanceManagementRequest, ATTENDANCE_MANAGEMENT_MESSAGE } from '@/lib/attendance-access';
 import { conversationPreferences } from '@/lib/ai/preferences';
@@ -19,7 +21,7 @@ import { generateAI } from "@/lib/ai/provider";
 import { canonicalPhone, downloadMetaMedia } from "./meta";
 import { isolatedState, planWhatsAppActions, mergeWhatsAppPlans } from "./state";
 import { checkActionPermissions } from "@/lib/ai/permissions";
-import { WHATSAPP_BRAND, whatsappCard, whatsappText, quoteWhatsApp, quoteMenuChoice, materialComparisonWhatsApp } from "./format";
+import { WHATSAPP_BRAND, whatsappCard, whatsappText, quoteWhatsApp, quoteMenuChoice, materialComparisonWhatsApp, photoReceiptWhatsApp, dailyCloseWhatsApp } from "./format";
 export { quoteWhatsApp } from "./format";
 import { storeEvidence, evidenceActions } from "./evidence";
 import { projectIntake } from "./project-intake";
@@ -29,16 +31,6 @@ import { contactDatabaseMessage } from '@/lib/ai/contacts';
 import { personIntake } from './person-intake';
 import { activeWhatsAppProject, workerHistory, projectContextForRole } from './project-context';
 
-const childTables = [
-  "actividades",
-  "materiales_proyecto",
-  "pagos",
-  "bitacora_entradas",
-  "imprevistos",
-  "asistencia_obreros",
-  "reclamos_cambios_obra",
-  "documentos_obra",
-];
 const checked = (result: any) => {
   if (result.error)
     throw new AIError(
@@ -69,12 +61,16 @@ export async function processPersonalMessage(
 ) {
   if (!message.id || !canonicalPhone(message.from || ""))
     throw new Error("Mensaje inválido.");
-  const users = checked(await sb.from("usuarios").select("*"));
+  const [usersResult, previousResult] = await Promise.all([
+    sb.from('usuarios').select('*'),
+    sb.from('whatsapp_mensajes').select('*').eq('message_id', message.id)
+      .eq('sender_phone', canonicalPhone(message.from)),
+  ]);
+  const users = checked(usersResult);
   const user = identifySender(users, message.from);
   // Meta puede reenviar el mismo evento después de cambiar el teléfono propio.
   // Solo repetir su confirmación: el número anterior no obtiene acceso a mensajes nuevos.
-  const previous = checked(await sb.from('whatsapp_mensajes').select('*')
-    .eq('message_id', message.id).eq('sender_phone', canonicalPhone(message.from)))[0];
+  const previous = checked(previousResult)[0];
   if (previous) {
     const actor = users.find((u: any) => u.id === previous.actor_id && u.empresa_id === previous.empresa_id);
     const matches = users.filter((u: any) => canonicalPhone(u.telefono_whatsapp || '') === canonicalPhone(message.from));
@@ -110,33 +106,8 @@ export async function processPersonalMessage(
     if (assigned) return { ...cached[0], persistido: true };
   }
   if (cached[0]) return { respuesta: '', persistido: false, ignorado: true };
-  const company = checked(
-    await sb.from("empresas").select("id,plan_id").eq("id", user.empresa_id),
-  )[0];
-  const tables: Record<string, any[]> = {
-    usuarios: users.filter((u: any) => u.empresa_id === user.empresa_id),
-  };
-  tables.proyectos = checked(
-    await sb.from("proyectos").select("*").eq("empresa_id", user.empresa_id),
-  );
-  const ids = tables.proyectos.map((p) => p.id);
-  const queries = await Promise.all([
-    sb.from("clientes").select("*").eq("empresa_id", user.empresa_id),
-    sb.from("agenda_eventos").select("*").eq("empresa_id", user.empresa_id),
-    ...[...childTables, "proyecto_trabajadores"].map((table) =>
-      ids.length
-        ? sb.from(table).select("*").in("proyecto_id", ids)
-        : Promise.resolve({ data: [] }),
-    ),
-  ]);
-  [
-    "clientes",
-    "agenda_eventos",
-    ...childTables,
-    "proyecto_trabajadores",
-  ].forEach((table, i) => {
-    tables[table] = checked(queries[i]);
-  });
+  const loaded = await loadWhatsAppContext(sb, user, users);
+  const { company, tables } = loaded;
   if (["terreno", "supervisor"].includes(user.rol)) {
     const assigned = new Set(
       tables.proyecto_trabajadores
@@ -163,15 +134,7 @@ export async function processPersonalMessage(
         whatsappCard("Plan de tu empresa", "El canal de gestión por WhatsApp requiere el plan Pro IA de tu empresa."),
       persistido: false,
     };
-  let conversationRows: any[] = checked(
-    await sb
-      .from("whatsapp_mensajes")
-      .select("*")
-      .eq("empresa_id", user.empresa_id)
-      .eq("actor_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(80),
-  );
+  let conversationRows: any[] = loaded.conversationRows;
   if (user.rol === 'terreno') conversationRows = workerHistory(conversationRows, new Set(tables.proyectos.map(p => p.id)));
   if (user.rol === 'supervisor') {
     const assigned = new Set(tables.proyectos.map(p => p.id));
@@ -232,6 +195,8 @@ export async function processPersonalMessage(
       persistido: false,
     };
   const deadlineProjects = tables.proyectos.slice();
+  const authorizedProjects = service.getProyectos();
+  const projectListing = !attachment ? projectListAnswer(text, authorizedProjects, user) : null;
   if (requestsNewProject(text) && /\botr[ao]\b/i.test(text) && !requestsQuotedProject(text)) {
     pendingProject = null;
     nextDraft = null;
@@ -348,7 +313,7 @@ export async function processPersonalMessage(
     localRegistration = !attachment && user.rol !== 'terreno' ? personIntake([], null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios) : null;
     registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
     const simpleCreation = creationRequest && !attachment && !/[,;\n]|\b(?:y registra|y envia|y asigna)\b/i.test(text) && /(?:obra|proyecto)[.!?]*$/i.test(text.trim());
-    result = projectRefusal || (acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || await deps.chat(
+    result = projectListing || projectRefusal || (acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || await deps.chat(
       conversationRows
         .slice()
         .reverse()
@@ -361,6 +326,7 @@ export async function processPersonalMessage(
         preferencias_conversacion: preferences.state.valores,
         operacion_obra: operationsContext(tables, undefined, user.rol, text),
         proyectos: projectContextForRole(service.getProyectos(), user.rol),
+        obras_asignadas: authorizedProjects.filter(p => p.trabajadores_ids?.includes(user.id)).map(p => ({id:p.id,nombre:p.nombre,estado:p.estado})),
         proyecto_actual: projectContextForRole(service.getProyectos(), user.rol).find(p => p.id === activeProject) || null,
         trabajadores: tables.usuarios,
         usuario_actual: { id: user.id, nombre: user.nombre, rol: user.rol },
@@ -499,7 +465,7 @@ export async function processPersonalMessage(
         if (intake.question) response = intake.question;
       }
     }
-    const person = result === preferenceReply ? {actions:[],draft:pendingPerson,prepared:undefined,question:null,result:null} : result === registrationReply && localRegistration ? localRegistration : personIntake(actions, 'registro_propuesto' in result ? result.registro_propuesto : null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios);
+    const person = result === preferenceReply || result === projectListing ? {actions:[],draft:pendingPerson,prepared:undefined,question:null,result:null} : result === registrationReply && localRegistration ? localRegistration : personIntake(actions, 'registro_propuesto' in result ? result.registro_propuesto : null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios);
     if (user.rol === 'terreno' && (person.draft || person.result || person.actions.some(a => ['crear_cliente','agregar_trabajador','agregar_trabajadores'].includes(a.tipo))))
       throw new Error('Solo administradores y supervisores pueden registrar personas.');
     actions = scopeProjectActions(person.actions, activeProject, service.getProyectos());
@@ -577,8 +543,11 @@ export async function processPersonalMessage(
   if (result.cotizacion && nativeBudget && isAlternativeRequest(text)) {
     Object.assign(result.cotizacion, { presupuesto_origen_id: nativeBudget.id, presupuesto_origen_version: nativeBudget.updated_at, presupuesto_proyecto_id: nativeBudget.proyecto_id });
   }
+  const photoAttachment = attachment && (attachment.mime_type?.startsWith('image/') || /\.(jpg|png|webp)$/i.test(attachment.path));
+  const photoReceipt = photoAttachment ? photoReceiptWhatsApp(plan.result, attachment, service.getProyectos()) : null;
+  const photoQuestion = image && /\b(?:analiza|revisa|explica|dime|problema|riesgo|solucion|que se ve|que ves|que observas)\b/.test(text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
   if (plan.result && !['solicitar_datos_obra','solicitar_datos_persona'].includes(plan.result.tipo))
-    response = actionReply(plan.result) + (image ? `\n\n${result.respuesta}` : '');
+    response = photoReceipt ? photoReceipt + (photoQuestion ? `\n\n*Observación de la foto*\n${result.respuesta}` : '') : dailyCloseWhatsApp(plan.result) || actionReply(plan.result) + (image ? `\n\n${result.respuesta}` : '');
   if (actionWarning && plan.result) response += `\n\nLa evidencia se conservó. El resto de la solicitud quedó pendiente: ${actionWarning}`;
   if (user.rol === 'terreno') result.cotizacion = null;
   if (result.cotizacion)
@@ -587,8 +556,7 @@ export async function processPersonalMessage(
       : quoteWhatsApp(result.cotizacion, user.rol !== "terreno");
   const comparison = "comparacion_materiales" in result ? result.comparacion_materiales : null;
   if (isMaterialComparison(comparison)) response = materialComparisonWhatsApp(comparison);
-  const photoAttachment = attachment && (attachment.mime_type?.startsWith('image/') || /\.(jpg|png|webp)$/i.test(attachment.path));
-  if (attachment)
+  if (attachment && !photoReceipt)
     response += attachment.proyecto_id
       ? `\n\n${photoAttachment ? 'Foto guardada' : 'Archivo guardado'} en la obra y su bitácora.`
       : readOnlyEvidence ? '\n\nArchivo recibido en el chat; no se incorporó a la bitácora.'

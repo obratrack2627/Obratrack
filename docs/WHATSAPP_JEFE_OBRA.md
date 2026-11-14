@@ -175,3 +175,24 @@ aproximación. El borrador se mantiene al responder los datos por separado.
 
 `tests/sql/whatsapp_identidad_obra.sql` prueba identidad, permisos y
 asignaciones con fixtures que terminan en ROLLBACK, sin enviar WhatsApp real.
+
+### Respuestas, listados y PDF de cierre
+
+Las lecturas independientes de identidad, contexto e historial se ejecutan en
+paralelo; se conservan las consultas actuales, el límite de historial y los
+controles de plan, rol y obra. No se cachean permisos ni se cambian los modelos.
+
+Las preguntas por obras asignadas se resuelven desde todas las asignaciones
+vigentes, antes de acotar la conversación a la obra activa. El listado usa
+fichas con nombre, estado y avance, sin montos para terreno. Las confirmaciones
+de fotos indican obra, tipo y título una sola vez. El reporte mantiene su nota
+completa; si hay una pregunta sobre la imagen, su respuesta se conserva aparte.
+
+El cierre confirmado se puede abrir desde Documentos mediante
+`?documento=<id>` y descargar como PDF paginado. La vista y la exportación
+comparten el resumen nativo. En WhatsApp se envía además como documento privado
+por ID de medio de Meta: se vuelve a validar teléfono, rol y asignación y se
+lee el cierre guardado antes de generarlo. No se crean URLs públicas. Solo se
+marca la respuesta enviada tras adjuntar el documento; un reintento no vuelve
+a ejecutar el cierre. Las pruebas del envío usan exclusivamente transportes
+simulados.

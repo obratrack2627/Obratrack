@@ -1207,9 +1207,9 @@ test('WhatsApp completa el caso de Ramón con teléfono local y RUT corregido si
  assert.equal(modelCalls,0);assert.equal(captured.p_changed.usuarios.length,0);
  const incomplete=await processPersonalMessage(sb,message('ramon-data','Ramón Escobar, terreno, 67345678, rut 200635468, correo ramon@example.test, asignalo a la obra Baño'),deps);
  assert.match(incomplete.respuesta,/RUT válido/);assert.doesNotMatch(incomplete.respuesta,/duración|Teléfono|Correo/);
- await processPersonalMessage(sb,message('ramon-query','¿Qué obras tengo?'),deps);assert.equal(modelCalls,1);
+ await processPersonalMessage(sb,message('ramon-query','¿Qué obras tengo?'),deps);assert.equal(modelCalls,0);
  const complete=await processPersonalMessage(sb,message('ramon-rut','12.345.678-5'),deps);
- assert.equal(modelCalls,1);assert.match(complete.respuesta,/Registré el trabajador/);
+ assert.equal(modelCalls,0);assert.match(complete.respuesta,/Registré el trabajador/);
  assert.equal(captured.p_changed.usuarios.length,1);assert.equal(captured.p_changed.usuarios[0].telefono_whatsapp,'+56967345678');
  assert.equal(captured.p_changed.proyectos[0].id,'bath');assert.equal(captured.p_acciones.borrador_registro,null);
  const commits=sb.commits;await processPersonalMessage(sb,message('ramon-rut','12.345.678-5'),deps);assert.equal(sb.commits,commits);
@@ -1472,4 +1472,43 @@ test('crear otra obra inicia un borrador vacío en lugar de reutilizar datos pen
  let captured;const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{captured=p;return rpc(name,p);};
  const out=await processPersonalMessage(sb,{id:'another-new',from:'56912345678',type:'text',text:{body:'Necesito crear otra obra'}},{chat:async()=>{throw Error('El inicio simple no necesita el modelo');}});
  assert.match(out.respuesta,/Nombre de la obra/);assert.equal(captured.p_borrador.nombre,undefined);assert.equal(captured.p_borrador.cliente_nombre,undefined);assert.equal(Object.values(captured.p_changed).flat().length,0);
+});
+
+test('identidad y comprobación del reintento empiezan juntas sin saltar la validación del remitente',async()=>{
+ const sb=database();const started=[];let release;const blocked=new Promise(resolve=>{release=resolve;});
+ const from=sb.from.bind(sb);sb.from=table=>{const q=from(table);const then=q.then.bind(q);q.then=(resolve,reject)=>{started.push(table);return (async()=>{if(table==='usuarios')await blocked;return await {then};})().then(resolve,reject);};return q;};
+ const pending=processPersonalMessage(sb,{id:'parallel-identity',from:'56912345678',type:'text',text:{body:'Hola'}},{chat:async()=>({respuesta:'Hola',accion:null,cotizacion:null})});
+ await new Promise(resolve=>setImmediate(resolve));
+ const first=started.slice();release();
+ const out=await pending;
+ assert.deepEqual(first,['usuarios','whatsapp_mensajes']);assert.equal(out.persistido,true);assert.equal(sb.commits,1);
+});
+
+test('Benjamin lista todas sus obras asignadas aunque la conversación esté enfocada en Baño, también desde audio',async()=>{
+ const sb=database();sb.db.usuarios=[{...user,nombre:'Benjamin Arriagada',rol:'terreno'}];
+ sb.db.proyectos=[{id:'bath',empresa_id:user.empresa_id,nombre:'Baño',estado:'activo',monto_cotizado:999999},{id:'roof',empresa_id:user.empresa_id,nombre:'Cobertizo La Cisterna',estado:'activo'},{id:'unassigned',empresa_id:user.empresa_id,nombre:'Obra sin asignar',estado:'activo'}];
+ sb.db.proyecto_trabajadores=[{usuario_id:user.id,proyecto_id:'bath'},{usuario_id:user.id,proyecto_id:'roof'}];
+ sb.db.whatsapp_mensajes=[{message_id:'bath-context',empresa_id:user.empresa_id,actor_id:user.id,texto:'Coméntame Baño',respuesta:'En Baño hay avance.',acciones:{rol_actor:'terreno',proyecto_contexto_id:'bath'}}];
+ const deps={chat:async()=>{throw Error('La lista debe salir de las asignaciones actuales');},media:async()=>({mimeType:'audio/ogg',data:'YXVkaW8='}),transcribe:async()=> '¿A cuáles obras estoy asignado?'};
+ const out=await processPersonalMessage(sb,{id:'all-projects-audio',from:'56912345678',type:'audio',audio:{id:'123'}},deps);
+ assert.match(out.respuesta,/\*Tus obras asignadas \(2\)\*/);assert.match(out.respuesta,/Baño/);assert.match(out.respuesta,/Cobertizo La Cisterna/);assert.doesNotMatch(out.respuesta,/Obra sin asignar|999999|Presupuesto/);
+ assert.match(out.respuesta,/\*1\. Baño\*\n• Estado:/);assert.equal(sb.commits,1);
+});
+test('la confirmación de foto de incidente es una ficha breve sin duplicar el análisis ni truncar la nota guardada',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'bath',empresa_id:user.empresa_id,nombre:'Baño'}];
+ let saved;const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{saved=p;return rpc(name,p);};
+ const observation='Se observa daño en pintura del techo. '+ 'Detalle importante. '.repeat(20);
+ const out=await processPersonalMessage(sb,{id:'clear-photo',from:'56912345678',type:'image',image:{id:'123',caption:'Añade esta foto como incidencia en Baño'}},{media:async()=>({mimeType:'image/jpeg',data:'YQ=='}),store:async()=>({path:'empresa1/jefe/clear.jpg',mime_type:'image/jpeg'}),chat:async()=>({respuesta:observation,accion:{tipo:'crear_bitacora',proyecto_id:'bath',titulo:'Daño en pintura del techo',nota:observation,tipo_bitacora:'incidente'},cotizacion:null})});
+ assert.match(out.respuesta,/\*Foto guardada\*/);assert.match(out.respuesta,/\*Obra:\* Baño/);assert.match(out.respuesta,/\*Tipo:\* Incidente/);assert.equal((out.respuesta.match(/Foto guardada/g)||[]).length,1);assert.doesNotMatch(out.respuesta,/Detalle importante|\.\.\./);assert.ok(saved.p_changed.bitacora_entradas[0].nota.includes(observation.trim()));
+});
+
+test('el webhook adjunta el PDF del cierre nativo a su jefatura antes de confirmar el envío',async()=>{
+ setup();const sb=database();
+ const summary={version:1,fecha:'2026-11-13',proyecto_nombre:'Baño',confirmado_por:user.nombre,confirmado_en:'2026-11-14T00:00:00Z',presentes:0,horas:0,personas:[],avances:[],recepciones:[],ingresos:0,gastos:0,mano_obra:0,pendientes:[],tareas_manana:[],nota:'Resumen guardado'};
+ sb.db.documentos_obra=[{id:'confirmed-close',empresa_id:user.empresa_id,proyecto_id:'bath',categoria:'cierre_diario',cierre_resumen:summary}];
+ let marked=false;const from=sb.from.bind(sb);sb.from=table=>{const q=from(table);q.update=()=>{marked=true;return q};return q;};
+ const sent=[];
+ const handler=createWhatsAppWebhook({client:()=>sb,process:async()=>({persistido:true,actor_id:user.id,empresa_id:user.empresa_id,respuesta:'Cierre guardado',acciones:{tipo:'registrar_documento',detalles:{id:'confirmed-close',categoria:'cierre_diario'}}}),send:async()=>{sent.push('text')},sendDocument:async(to,bytes,name)=>{assert.equal(marked,false);assert.equal(to,'56912345678');assert.equal(Buffer.from(bytes).subarray(0,5).toString(),'%PDF-');assert.match(name,/cierre_Bano/);sent.push('pdf')}});
+ const out=await handler(request(event([{id:'closed-pdf',from:'56912345678',type:'text',text:{body:'Cierra la jornada'}}])));
+ assert.equal(out.status,200);assert.deepEqual(sent,['text','pdf']);assert.equal(marked,true);
 });

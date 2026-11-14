@@ -5,7 +5,7 @@ import {DailyCloseSummary, downloadDailyClose} from '@/components/DailyClosePane
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import {
   FolderOpen,
@@ -39,6 +39,7 @@ import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/ut
 export default function ProyectoDocumentosPage() {
   const params = useParams();
   const projectId = params?.id as string;
+  const openedDocument = useRef('');
 
   const [proyecto, setProyecto] = useState<Proyecto | null>(null);
   const [cliente, setCliente] = useState<Cliente | null>(null);
@@ -90,6 +91,13 @@ export default function ProyectoDocumentosPage() {
     window.addEventListener('obratrack_cloud_synced', onSync);
     return () => window.removeEventListener('obratrack_cloud_synced', onSync);
   }, [projectId]);
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('documento');
+    if (!id || openedDocument.current === `${projectId}:${id}`) return;
+    const document = documentos.find(row => row.id === id && row.proyecto_id === projectId);
+    if (document) { openedDocument.current = `${projectId}:${id}`; setDocPreview(document); }
+  }, [documentos, projectId]);
 
   const handleOpenModal = (cat: CategoriaDocumentoObra = 'contrato') => {
     setCategoria(cat);

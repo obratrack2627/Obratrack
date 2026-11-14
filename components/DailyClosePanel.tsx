@@ -1,6 +1,20 @@
 "use client";
 import { useState, useRef } from "react";
-import { ClipboardCheck, Download, X } from "lucide-react";
+import {
+  ClipboardCheck,
+  Download,
+  X,
+  Users,
+  Clock3,
+  TrendingUp,
+  Wallet,
+  CalendarDays,
+  Camera,
+  Package,
+  ListChecks,
+  CheckCircle2,
+} from "lucide-react";
+import { createDailyClosePDF, dailyCloseFilename } from "@/lib/daily-close-pdf";
 import ModalOverlay from "@/components/ModalOverlay";
 import { dataService } from "@/lib/data-service";
 import { dailySummary, type DailyClose } from "@/lib/daily-close";
@@ -13,64 +27,145 @@ import {
   crewSecondary,
 } from "@/components/CrewAttendanceEditor";
 export function DailyCloseSummary({ summary }: { summary: DailyClose }) {
-  const list = (title: string, rows: string[]) => (
-    <div>
-      <h4 className="text-sm font-bold">{title}</h4>
-      <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-300">
-        {rows.length ? (
-          rows.map((row, index) => (
-            <li key={index} className="break-words">
+  const section = (
+    title: string,
+    Icon: typeof Users,
+    rows: React.ReactNode[],
+  ) => (
+    <section className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-[#263040] dark:bg-[#141A23]">
+      <h4 className="flex items-center gap-2 text-sm font-bold">
+        <Icon size={17} className="shrink-0 text-[#FF6A00]" />
+        {title}
+        <span className="ml-auto rounded-md bg-kraft-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-800">
+          {rows.length}
+        </span>
+      </h4>
+      {rows.length ? (
+        <ul className="mt-3 divide-y divide-kraft-100 dark:divide-[#263040]">
+          {rows.map((row, index) => (
+            <li
+              key={index}
+              className="break-words py-2.5 text-sm first:pt-0 last:pb-0"
+            >
               {row}
             </li>
-          ))
-        ) : (
-          <li>Sin registros.</li>
-        )}
-      </ul>
-    </div>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-xs text-gray-500">
+          Sin registros para esta jornada.
+        </p>
+      )}
+    </section>
   );
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3">
+    <div
+      className="min-w-0 space-y-4"
+      aria-label="Resumen del cierre de jornada"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-[#141A23] p-4 text-white">
+        <div className="min-w-0">
+          <p className="text-xs text-orange-300">CIERRE DE JORNADA</p>
+          <h3 className="mt-1 break-words text-lg font-bold">
+            {summary.proyecto_nombre}
+          </h3>
+          <p className="mt-2 flex items-center gap-2 text-xs text-gray-300">
+            <CalendarDays size={14} />
+            {formatDate(summary.fecha)}
+          </p>
+        </div>
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-medium ${summary.confirmado_por ? "bg-emerald-400/15 text-emerald-200" : "bg-white/10 text-gray-200"}`}
+        >
+          {summary.confirmado_por
+            ? `Confirmado · revisión ${summary.version}`
+            : "Vista previa"}
+        </span>
+      </div>
+      <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          ["Personas presentes", summary.presentes],
-          ["Horas-hombre", summary.horas],
-          ["Ingresos", formatCLP(summary.ingresos)],
-          ["Gastos del día", formatCLP(summary.gastos)],
-        ].map(([label, value]) => (
+          { label: "Presentes", value: summary.presentes, Icon: Users },
+          { label: "Horas-hombre", value: summary.horas, Icon: Clock3 },
+          {
+            label: "Ingresos",
+            value: formatCLP(summary.ingresos),
+            Icon: TrendingUp,
+          },
+          {
+            label: "Gastos del día",
+            value: formatCLP(summary.gastos),
+            Icon: Wallet,
+          },
+        ].map(({ label, value, Icon }) => (
           <div
             key={label}
-            className="min-w-0 rounded-xl bg-kraft-100 p-3 dark:bg-gray-900"
+            className="min-w-0 rounded-xl border border-kraft-200 bg-white p-3 dark:border-[#263040] dark:bg-[#141A23]"
           >
+            <Icon size={17} className="mb-2 text-[#FF6A00]" />
             <p className="text-xs text-gray-500">{label}</p>
-            <strong className="mt-1 block break-all">{value}</strong>
+            <strong className="mt-1 block break-words text-base">
+              {value}
+            </strong>
           </div>
         ))}
       </div>
-      {list(
+      {section(
         "Asistencia confirmada",
-        summary.personas.map(
-          (row) => `${row.nombre}: ${row.estado} · ${row.horas} h`,
-        ),
+        Users,
+        summary.personas.map((row) => (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-medium">{row.nombre}</span>
+            <span className="rounded-md bg-kraft-50 px-2 py-1 text-xs capitalize text-gray-500 dark:bg-gray-900">
+              {row.estado} · {row.horas} h
+            </span>
+          </div>
+        )),
       )}
-      {list(
+      {section(
         "Avances y evidencias",
-        summary.avances.map(
-          (row) =>
-            `${row.titulo}${row.foto_url ? " · Con fotografía" : ""}: ${row.nota}`,
-        ),
+        Camera,
+        summary.avances.map((row) => (
+          <div>
+            <p className="font-semibold">{row.titulo}</p>
+            <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+              {row.nota}
+            </p>
+            {row.foto_url && (
+              <span className="mt-2 inline-flex items-center gap-1 text-xs text-[#6B8F72]">
+                <Camera size={13} />
+                Fotografía en bitácora
+              </span>
+            )}
+          </div>
+        )),
       )}
-      {list(
-        "Materiales recibidos",
-        summary.recepciones.map(
-          (row) => `${row.material}: ${row.cantidad} ${row.unidad}`,
-        ),
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+        {section(
+          "Materiales recibidos",
+          Package,
+          summary.recepciones.map((row) => (
+            <span>
+              {row.material}
+              <strong className="ml-2">
+                {row.cantidad} {row.unidad}
+              </strong>
+            </span>
+          )),
+        )}
+        {section("Pendientes e incidentes", ListChecks, summary.pendientes)}
+      </div>
+      {section("Próxima jornada", CalendarDays, summary.tareas_manana)}
+      {summary.nota && (
+        <section className="rounded-xl bg-orange-50 p-4 dark:bg-orange-950/20">
+          <h4 className="text-sm font-bold">Observación de jefatura</h4>
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm">
+            {summary.nota}
+          </p>
+        </section>
       )}
-      {list("Incidentes y adicionales pendientes", summary.pendientes)}
-      {list("Próxima jornada", summary.tareas_manana)}
-      {summary.nota && <p className="break-words text-sm">{summary.nota}</p>}
       {summary.confirmado_por && (
-        <p className="border-t border-kraft-200 pt-3 text-xs text-gray-500">
+        <p className="flex items-start gap-2 text-xs text-gray-500">
+          <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
           Confirmado por {summary.confirmado_por} · revisión {summary.version}
         </p>
       )}
@@ -78,54 +173,8 @@ export function DailyCloseSummary({ summary }: { summary: DailyClose }) {
   );
 }
 export async function downloadDailyClose(summary: DailyClose) {
-  const { jsPDF } = await import("jspdf");
-  const { default: autoTable } = await import("jspdf-autotable");
-  const pdf = new jsPDF();
-  pdf.setFontSize(17);
-  pdf.text("ObraTrack · Cierre diario", 14, 20);
-  pdf.setFontSize(11);
-  pdf.text(
-    pdf.splitTextToSize(
-      `${summary.proyecto_nombre} · ${formatDate(summary.fecha)}`,
-      180,
-    ),
-    14,
-    29,
-  );
-  const rows = [
-    ["Responsable", summary.confirmado_por],
-    [
-      "Presentes / horas",
-      `${summary.presentes} personas / ${summary.horas} horas`,
-    ],
-    [
-      "Ingresos / gastos",
-      `${formatCLP(summary.ingresos)} / ${formatCLP(summary.gastos)}`,
-    ],
-    ...summary.personas.map((row) => [
-      "Asistencia",
-      `${row.nombre}: ${row.estado}, ${row.horas} h`,
-    ]),
-    ...summary.avances.map((row) => [
-      "Avance",
-      `${row.titulo}: ${row.nota}${row.foto_url ? " (con evidencia en bitácora)" : ""}`,
-    ]),
-    ...summary.recepciones.map((row) => [
-      "Recepción",
-      `${row.material}: ${row.cantidad} ${row.unidad}`,
-    ]),
-    ...summary.pendientes.map((row) => ["Pendiente", row]),
-    ...summary.tareas_manana.map((row) => ["Próxima jornada", row]),
-    ["Observación", summary.nota || "—"],
-  ];
-  autoTable(pdf, {
-    startY: 44,
-    head: [["Registro", "Detalle"]],
-    body: rows,
-    styles: { fontSize: 9, overflow: "linebreak" },
-    headStyles: { fillColor: [255, 106, 0] },
-  });
-  pdf.save(`ObraTrack_cierre_${summary.fecha}_r${summary.version}.pdf`);
+  const pdf = await createDailyClosePDF(summary);
+  pdf.save(dailyCloseFilename(summary));
 }
 export default function DailyClosePanel({ proyecto }: { proyecto: Proyecto }) {
   const [date, setDate] = useState(chileToday());
@@ -135,6 +184,7 @@ export default function DailyClosePanel({ proyecto }: { proyecto: Proyecto }) {
   const [note, setNote] = useState("");
   const [saved, setSaved] = useState<DailyClose | null>(null);
   const id = useRef("");
+  const report = useRef<HTMLDivElement>(null);
   const summary =
     saved ||
     dailySummary(
@@ -190,7 +240,10 @@ export default function DailyClosePanel({ proyecto }: { proyecto: Proyecto }) {
           max={chileToday()}
           value={date}
           onChange={(event) => {
-            if (event.target.value) setDate(event.target.value);
+            if (event.target.value) {
+              setDate(event.target.value);
+              setSaved(null);
+            }
           }}
           className="min-w-0 rounded-lg border border-kraft-200 bg-transparent p-2"
         />
@@ -204,6 +257,52 @@ export default function DailyClosePanel({ proyecto }: { proyecto: Proyecto }) {
           para esta fecha. Disponibles en Documentos.
         </p>
       )}
+      {previous.some((row) => row.cierre_resumen) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={crewSecondary}
+            onClick={() => {
+              const last = previous
+                .filter((row) => row.cierre_resumen)
+                .sort(
+                  (a, b) =>
+                    (b.cierre_resumen?.version || 0) -
+                    (a.cierre_resumen?.version || 0),
+                )[0];
+              setSaved(last.cierre_resumen!);
+              setError("");
+              setOpen(true);
+            }}
+          >
+            Ver último cierre
+          </button>
+          <button
+            type="button"
+            className={crewPrimary}
+            onClick={() => {
+              const last = previous
+                .filter((row) => row.cierre_resumen)
+                .sort(
+                  (a, b) =>
+                    (b.cierre_resumen?.version || 0) -
+                    (a.cierre_resumen?.version || 0),
+                )[0];
+              void downloadDailyClose(last.cierre_resumen!).catch(() =>
+                setError("No se pudo descargar el resumen."),
+              );
+            }}
+          >
+            <Download size={16} />
+            Descargar último PDF
+          </button>
+        </div>
+      )}
+      {error && !open && (
+        <p role="alert" className="mt-3 text-sm text-red-600">
+          {error}
+        </p>
+      )}
       {open && (
         <ModalOverlay
           onClose={() => {
@@ -212,7 +311,10 @@ export default function DailyClosePanel({ proyecto }: { proyecto: Proyecto }) {
           aria-label="Cierre de jornada"
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
         >
-          <div className="w-full max-w-2xl space-y-5 rounded-2xl bg-[#FAF8F5] p-5 dark:bg-[#0B0F14]">
+          <div
+            ref={report}
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-3xl space-y-5 overflow-y-auto rounded-2xl bg-[#FAF8F5] p-4 sm:p-6 dark:bg-[#0B0F14]"
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold">
@@ -250,7 +352,7 @@ export default function DailyClosePanel({ proyecto }: { proyecto: Proyecto }) {
                 {error}
               </p>
             )}
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="sticky -bottom-4 sm:-bottom-6 flex flex-wrap justify-end gap-2 border-t border-kraft-200 bg-[#FAF8F5] py-4 dark:border-[#263040] dark:bg-[#0B0F14]">
               <button
                 type="button"
                 className={crewSecondary}
@@ -287,6 +389,7 @@ export default function DailyClosePanel({ proyecto }: { proyecto: Proyecto }) {
                         { id: id.current, fecha: date, nota: note },
                       );
                       setSaved(result.documento.cierre_resumen);
+                      report.current?.scrollTo({ top: 0, behavior: "instant" });
                     } catch (cause) {
                       setError(
                         cause instanceof Error

@@ -1,7 +1,8 @@
 import type { CotizacionEstimacion } from "@/types/database";
 import type { ComparacionMateriales } from "@/lib/materials/types";
-import { formatCLP } from "@/lib/utils";
+import { formatCLP, formatDate } from "@/lib/utils";
 import { profitLabel } from "@/lib/ai/quote-format";
+import { actionReply } from '@/lib/ai/action-reply';
 
 export const WHATSAPP_BRAND = "🟧 *ObraTrack*";
 const createOption = "*1* · Crear la obra";
@@ -29,6 +30,38 @@ export function whatsappCard(title: string, body: string) {
   const content = whatsappText(body).split("\n")
     .filter((s) => s.trim() !== WHATSAPP_BRAND).join("\n").trim();
   return /^(Cotización|Alternativas|Precios de materiales)/.test(title) ? `*${line(title)}*\n\n${content}` : content;
+}
+
+/** Confirmación breve derivada del registro preparado; se envía solo tras persistir. */
+export function photoReceiptWhatsApp(result: any, attachment: any, projects: any[]): string | null {
+  if (!attachment?.proyecto_id) return null;
+  const leaves = (value: any): any[] => value?.tipo === 'lote_acciones'
+    ? (value.detalles?.acciones || []).flatMap(leaves) : value ? [value] : [];
+  const results = leaves(result);
+  const photoLog = results.find(row => row.tipo === 'crear_bitacora' && row.detalles?.proyecto_id === attachment.proyecto_id
+    && String(row.detalles.foto_url || '').includes(attachment.path));
+  const record = photoLog?.detalles;
+  const project = projects.find(row => row.id === attachment.proyecto_id);
+  if (!record || !project) return null;
+  const types: Record<string,string> = { incidente: 'Incidente', avance: 'Avance', clima: 'Clima', entrega_material: 'Entrega de materiales' };
+  const other = results.filter(row => row !== photoLog).map(actionReply).filter(Boolean);
+  return [
+    '*Foto guardada*',
+    [`*Obra:* ${line(project.nombre)}`, `*Tipo:* ${types[record.tipo] || 'Reporte de terreno'}`, record.titulo ? `*Detalle:* ${line(record.titulo)}` : ''].filter(Boolean).join('\n'),
+    'La foto y el reporte quedaron en la bitácora.',
+    other.length ? '*Otros cambios*\n' + other.join('\n\n') : '',
+  ].filter(Boolean).join('\n\n');
+}
+
+export function dailyCloseWhatsApp(result: any): string | null {
+  const doc = result?.detalles;
+  if (result?.tipo !== 'registrar_documento' || doc?.categoria !== 'cierre_diario' || !doc.cierre_resumen || !doc.id || !doc.proyecto_id) return null;
+  const summary = doc.cierre_resumen;
+  const base = (process.env.NEXT_PUBLIC_APP_URL || 'https://obratrack-cl.vercel.app').replace(/\/+$/, '');
+  return ['*Cierre de jornada guardado*',
+    [`*Obra:* ${line(summary.proyecto_nombre)}`, `*Fecha:* ${formatDate(summary.fecha)}`, summary.confirmado_por ? `*Responsable:* ${line(summary.confirmado_por)}` : ''].filter(Boolean).join('\n'),
+    'Ver resumen y descargar PDF:\n' + `${base}/proyectos/${encodeURIComponent(doc.proyecto_id)}/documentos?documento=${encodeURIComponent(doc.id)}`,
+  ].join('\n\n');
 }
 
 export function quoteWhatsApp(q: CotizacionEstimacion, canCreate = true) {

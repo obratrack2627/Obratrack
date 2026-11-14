@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { serverFetch } from "@/lib/server-fetch";
 import { processPersonalMessage } from "@/lib/whatsapp/assistant";
-import { sendMetaText, validMetaSignature } from "@/lib/whatsapp/meta";
+import { sendMetaText, sendMetaDocument, validMetaSignature } from "@/lib/whatsapp/meta";
+import { dailyCloseDocument } from './daily-close-document';
 import { receiveDeliveryStatus } from "./outbox";
 
 export function whatsappConfigured() {
@@ -43,9 +44,15 @@ export async function getWhatsAppStatus(request: NextRequest) {
   );
 }
 export function createWhatsAppWebhook(
-  deps = {
+  deps: {
+    process: typeof processPersonalMessage;
+    send: typeof sendMetaText;
+    sendDocument?: typeof sendMetaDocument;
+    client: () => any;
+  } = {
     process: processPersonalMessage,
     send: sendMetaText,
+    sendDocument: sendMetaDocument,
     client: () =>
       createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -110,6 +117,11 @@ export function createWhatsAppWebhook(
             if (!result.sent_at) {
               stage = "send";
               await deps.send(message.from, result.respuesta);
+              if (deps.sendDocument) {
+                stage = 'daily_close_pdf';
+                const document = await dailyCloseDocument(sb, result, message.from);
+                if (document) await deps.sendDocument(message.from, document.bytes, document.filename, document.caption);
+              }
               if (result.persistido) {
                 stage = "confirm_delivery";
                 const { error } = await sb

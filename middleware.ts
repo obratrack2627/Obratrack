@@ -72,7 +72,7 @@ export async function middleware(request: NextRequest) {
       );
     }
 
-    const safeRedirect = sanitizeRedirectPath(pathname);
+    const safeRedirect = sanitizeRedirectPath(pathname + request.nextUrl.search);
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', safeRedirect);
     return NextResponse.redirect(loginUrl);
