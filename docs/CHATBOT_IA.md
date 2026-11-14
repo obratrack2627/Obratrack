@@ -6,30 +6,32 @@ El chat general (`/cotizador`) y el asistente de cada obra usan el mismo protoco
 
 La identidad pública es **ObraBot**. La interfaz, los mensajes de error y los planes no muestran el fabricante ni el modelo. Los nombres técnicos se mantienen únicamente en configuración y documentación de operación.
 
-- `AI_PROVIDER`: `gemini` (predeterminado para conservar despliegues existentes) u `openai`. No se cambia automáticamente al encontrar una clave.
-- `OPENAI_API_KEY`: clave privada del nuevo proveedor, solo en el servidor.
-- `OPENAI_MODEL`: predeterminado `gpt-6.1-sol`, equilibrio entre capacidad y costo. Configurable sin cambiar el código.
-- `OPENAI_REASONING_EFFORT`: predeterminado `low`, para acotar latencia y consumo. Debe ser compatible con el modelo configurado.
-- `OPENAI_TRANSCRIPTION_MODEL`: predeterminado `gpt-transcribe`.
-- `AI_FALLBACK_PROVIDER`: `none` (predeterminado), `gemini` u `openai`. Solo se usa ante cuota/límites, red, timeout o indisponibilidad, dentro del tiempo total permitido. Errores de credencial, esquema, truncamiento o rechazo no se ocultan con un respaldo.
-- `GEMINI_API_KEY`: conservar para la reversión; también admite `GOOGLE_API_KEY` o `GOOGLE_GENAI_API_KEY`.
-- `GEMINI_MODEL`: conserva el predeterminado `gemini-3.5-flash-lite`.
-- `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`: proyecto donde los usuarios inician sesión.
+- `AI_PROVIDER=openai`: único proveedor activo. Una variable antigua con otro valor no reactiva Gemini.
+- `OPENAI_API_KEY`: clave privada obligatoria, solo en el servidor.
+- `OPENAI_MODEL`: predeterminado `gpt-6.1-sol`; debe estar disponible para la cuenta y admitir Structured Outputs e imágenes.
+- `OPENAI_REASONING_EFFORT`: predeterminado `low`; debe ser compatible con el modelo elegido.
+- `OPENAI_TRANSCRIPTION_MODEL`: predeterminado `gpt-transcribe`; debe estar disponible para la cuenta.
+- `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`: proyecto de autenticación.
 
-Todas las claves de IA son privadas: no usar variables `NEXT_PUBLIC_`. Codex y Vercel tienen configuraciones independientes. En Codex, guardar `OPENAI_API_KEY` como secreto con destino `api.openai.com`. El transporte respeta HTTPS_PROXY/NO_PROXY y verifica TLS. En Vercel, guardar las variables para el entorno correspondiente y desplegar de nuevo.
+No existe fallback a otro proveedor. `AI_FALLBACK_PROVIDER`, `GEMINI_API_KEY` y `GEMINI_MODEL` no activan rutas de negocio. Los nombres históricos exportados desde `lib/gemini.ts` son aliases de compatibilidad para los imports existentes; llaman exclusivamente al motor OpenAI. El adaptador histórico `gemini-provider.ts` también es un alias de OpenAI; no conserva transporte ni claves del proveedor anterior.
 
-### Activación y vuelta al proveedor anterior
+Todas las claves son privadas: nunca usar `NEXT_PUBLIC_`. Configurar las variables también en Vercel y volver a desplegar; el cambio de código no instala secretos. El transporte respeta HTTPS_PROXY/NO_PROXY y verifica TLS. No se publican respuestas internas de error del proveedor.
 
-1. Guardar `OPENAI_API_KEY` y comprobar llamadas reales de texto estructurado, imagen y transcripción con datos temporales.
-2. Cambiar `AI_PROVIDER=openai`. Si se desea continuidad ante agotamiento de cuota, configurar `AI_FALLBACK_PROVIDER=gemini` y conservar la clave anterior.
-3. Para volver al motor anterior: `AI_PROVIDER=gemini`, `AI_FALLBACK_PROVIDER=none` y volver a desplegar. No requiere SQL, cambiar cotizaciones ni modificar usuarios.
-4. El commit anterior a esta migración es `6ea718b`, guardado también como etiqueta `backup/pre-openai-2026-11-03`. Sirve como referencia para una reversión completa del código si fuera necesaria; el cambio por variable es la primera opción.
+Texto, cotizador, cambio de materiales y visión usan `/v1/responses`, `store:false` y JSON Schema con `strict:true`. El recálculo y edición manual de presupuestos siguen siendo determinísticos, sin llamadas innecesarias a IA. Audio usa `/v1/audio/transcriptions` con `OPENAI_TRANSCRIPTION_MODEL`: las notas Ogg/Opus se convierten localmente a WAV mono de 16 kHz, y el texto transcrito se interpreta con el mismo motor Responses. Las pruebas usan audio sintético, sin mensajes reales de WhatsApp.
 
-El respaldo solo repite la generación de una respuesta, nunca una escritura ya ejecutada. Los registros de negocio conservan sus identificadores, permisos y mecanismos de reintento. Ninguna prueba de proveedor envía mensajes reales al equipo.
+### Enrutamiento, contexto y acciones
 
-El nuevo adaptador usa Responses con `store:false`, salida JSON estricta y el esquema de acciones de la plataforma. Convierte los campos opcionales a nullable para el proveedor y los restaura como ausentes antes de validar el protocolo; esto evita interpretar un `null` como una instrucción para borrar datos. La imagen original y la pregunta viajan juntas. Las notas Ogg/Opus de Meta se decodifican localmente a WAV mono de 16 kHz, con tamaño y plazo limitados, para la API de transcripción. Las pruebas usan una señal de audio de 100 ms, no una conversación real.
+Las peticiones de crear, convertir o actualizar tienen prioridad sobre los esquemas exclusivos de cotización/búsqueda. Una solicitud combinada usa el contrato de chat, que admite cotizacion, acciones y búsqueda en el mismo turno. Los campos de creación a partir de una cotización se completan desde su versión normalizada por el servidor: total con IVA, fases, materiales y cliente; las alternativas ambiguas exigen elegir.
 
-Modelos y capacidades consultados el 3 de noviembre de 2026: https://developers.openai.com/api/docs/models/gpt-6.1-sol y https://developers.openai.com/api/docs/models/gpt-transcribe . Los costos dependen del contexto y la respuesta; un saldo pequeño sirve para validación limitada, no garantiza operación continua. Verificar el consumo en el panel del proveedor.
+Las reglas se envían en `instructions`; contexto, historial y mensaje permanecen en `input` como datos no confiables. Se eliminan columnas y secciones duplicadas conservando IDs, candidatos ambiguos y el presupuesto seleccionado, sin cortar JSON serializado. Las acciones usan subesquemas `anyOf` discriminados por `tipo`, con nombre y monto_cotizado requeridos en creación. `parseChatResponse`, `validateAction`, `prepareActionPlan` y los permisos del servidor siguen siendo autoritativos.
+
+Ante `AI_INVALID_ACTION` o `ACTION_PLAN_INVALID` con estado 422 se permite **un** reintento de generación, dentro del plazo total original y antes de escrituras, búsquedas externas o envíos. El error exacto y la salida anterior se envían como datos para corregir. Si no hay un monto/ID autorizado, debe preguntar. Los rechazos de permisos, plan, alcance o solicitud solo de lectura no se reintentan. El flujo WhatsApp conserva `obra_propuesta`, validación nativa y confirmación; nunca acepta creación directa del modelo.
+
+### Evaluación y preparación SFT
+
+El Golden Set en `tests/fixtures/obrabot-golden.json` contiene casos sintéticos representativos de construcción chilena, sin datos personales reales. `node --test tests/ai-golden.test.cjs` comprueba contratos, enrutamiento y límites del servidor de forma determinística; no representa una evaluación de calidad del modelo en vivo.
+
+`node scripts/export-obrabot-sft.cjs /tmp/obrabot-sft.jsonl` valida los ejemplos antes de exportar mensajes system/user/assistant en JSONL para SFT. Exportar no sube datos ni inicia un entrenamiento. Seleccionar un modelo compatible con SFT y medir resultados con un conjunto de evaluación independiente antes de entrenar. No entrenar y evaluar con los mismos ejemplos.
 
 El token personal `SUPABASE_ACCESS_TOKEN` sirve para administración de Supabase; no reemplaza la sesión de usuario ni se envía desde el navegador para ejecutar las acciones del chat. El chatbot usa la sesión real de Supabase Auth y las políticas RLS, sin requerir la clave service_role para sus nuevas escrituras.
 
@@ -46,7 +48,7 @@ Las escrituras de un lote a varias tablas no son una transacción SQL. Si un pas
 
 ## Continuidad y contexto de obra
 
-ObraBot recupera antecedentes literales de la conversación: medidas, cliente, ubicación, materiales, cantidades, IVA, condiciones y correcciones. Selecciona turnos recientes y antecedentes relevantes dentro de un presupuesto de texto, conservando el orden cronológico y una referencia a las primeras especificaciones. No genera un resumen adicional con otra llamada de IA. Las tres rutas de interpretación (consulta/gestión, cotización y búsqueda de materiales) usan esta misma selección. Las cotizaciones admiten hasta 45 segundos de generación con respaldo dentro de ese plazo; las consultas mantienen 30 segundos. Fotos y audios de WhatsApp conservan límites más cortos para reservar tiempo al almacenamiento y al envío.
+ObraBot recupera antecedentes literales de la conversación: medidas, cliente, ubicación, materiales, cantidades, IVA, condiciones y correcciones. Selecciona turnos recientes y antecedentes relevantes dentro de un presupuesto de texto, conservando el orden cronológico y una referencia a las primeras especificaciones. No genera un resumen adicional con otra llamada de IA. Las tres rutas de interpretación (consulta/gestión, cotización y búsqueda de materiales) usan esta misma selección. Las cotizaciones admiten hasta 45 segundos de generación incluyendo como máximo un reintento de corrección dentro de ese plazo; las consultas mantienen 30 segundos. Fotos y audios de WhatsApp conservan límites más cortos para reservar tiempo al almacenamiento y al envío.
 
 La plataforma selecciona los antecedentes antes de enviarlos, en vez de limitarse a los últimos diez mensajes. Cada obra conserva su conversación separada. Los mensajes de error también mantienen ese contexto. El chat general se conserva en el navegador actual; el chat de proyecto conserva su sincronización existente con Supabase. Este cambio no agrega sincronización del chat general entre dispositivos ni memoria ilimitada.
 
@@ -125,7 +127,7 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:e2e
 
 Las pruebas de proveedor y rutas usan respuestas controladas. Las pruebas de ejecución comprueban los campos enviados contra el esquema del repositorio, y las del navegador interceptan API y Supabase. Ninguna modifica datos reales ni consume cuota de los proveedores. Estas pruebas no sustituyen una validación con las credenciales reales ya aplicadas y una cuenta de usuario auténtica.
 
-Validación automatizada: pruebas de lógica, rutas y navegador, TypeScript y compilación de producción. Además se comprobó Gemini con cotización real (cantidades, margen e IVA) y un plan de acciones sin ejecutarlo sobre registros de negocio. Supabase se verificó por separado con diagnóstico transaccional y ROLLBACK. El proveedor puede devolver indisponibilidad temporal; el chat muestra ese error para permitir reintentar. No se realizó una sesión de navegador con las credenciales de una cuenta real.
+Validación automatizada: pruebas de lógica, rutas y navegador, TypeScript y compilación de producción. La comprobación histórica del proveedor anterior no acredita esta migración: las pruebas de OpenAI usan respuestas simuladas y no ejecutan acciones sobre datos de producción. Supabase se verificó por separado con diagnóstico transaccional y ROLLBACK. El proveedor puede devolver indisponibilidad temporal; el chat muestra ese error para permitir reintentar. No se realizó una sesión de navegador con las credenciales de una cuenta real.
 
 ## Canal del jefe por WhatsApp
 

@@ -2,6 +2,7 @@ import { generateAI } from "./provider";
 import { quotePrompt } from "./prompt";
 import { QUOTE_RESPONSE_SCHEMA } from "./schema";
 import { parseChatResponse } from "./protocol";
+import { separatePrompt } from "./prompt-context";
 
 export async function sugerirMaterialesCambioGemini(params: {
   titulo: string;
@@ -10,14 +11,12 @@ export async function sugerirMaterialesCambioGemini(params: {
   comuna?: string;
 }) {
   const message = `Cotiza exclusivamente este trabajo adicional: ${JSON.stringify(params)}. Pide dimensiones, especificaciones o alcance si no permiten calcular cantidades. No incluyas la obra completa ni inventes una superficie. Si se puede estimar, desglosa materiales, mano de obra, gastos generales, imprevistos y utilidad. Indica los supuestos.`;
-  const result = parseChatResponse(
-    await generateAI(
-      quotePrompt([], message, {
-        proyecto_actual: { nombre: params.nombreObra, comuna: params.comuna },
-      }),
-      { json: true, schema: QUOTE_RESPONSE_SCHEMA },
-    ),
-  );
+  const prompt = separatePrompt(quotePrompt([], message, {
+    proyecto_actual: { nombre: params.nombreObra, comuna: params.comuna },
+  }));
+  const result = parseChatResponse(await generateAI(prompt.input, {
+    instructions: prompt.instructions, json: true, schema: QUOTE_RESPONSE_SCHEMA,
+  }));
   if (!result.cotizacion)
     return {
       requiere_datos: true,

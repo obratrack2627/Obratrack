@@ -20,6 +20,12 @@ export function strictOutputSchema(schema: Schema): Schema {
 }
 export function restoreOptionalFields(value: any, schema: Schema): any {
   if (value == null) return value;
+  if (schema.anyOf) {
+    const branch = schema.anyOf.find((candidate: Schema) =>
+      candidate.properties?.tipo?.enum?.includes(value?.tipo)) || schema.anyOf.find((candidate: Schema) =>
+      value !== null && candidate.type !== 'null');
+    return branch ? restoreOptionalFields(value, branch) : value;
+  }
   if (Array.isArray(value)) return value.map((item) => restoreOptionalFields(item, schema.items || {}));
   if (typeof value !== 'object' || !schema.properties) return value;
   const required = new Set(schema.required || []);

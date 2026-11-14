@@ -580,3 +580,33 @@ test('la web no guarda un pago cuando el modelo convierte mal un palo y medio',a
  const handler=createChatHandler({authorize:authorized,global:async()=>({respuesta:'Voy a registrar el pago.',accion:{tipo:'registrar_pago',proyecto_id:'p-chile',monto:1500,fecha:'2026-11-12',metodo:'transferencia'},cotizacion:null}),project:async()=>response});
  const out=await handler(makeRequest({mensaje:'Registra un abono de un palo y medio en Quincho'}));assert.equal(out.status,422);assert.equal((await out.json()).code,'AMOUNT_MISMATCH');assert.ok(!fixture.calls.some(call=>call.mode==='upsert'));
 });
+
+test('la ruta corrige una referencia inválida con una segunda generación antes de guardar acciones', async () => {
+  const {chatAsesorObrasGemini}=require('../lib/gemini.ts');
+  const original=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='fixture-openai';
+  fixture.tables.set('proyectos',[{id:'p-real',empresa_id:'company-a',nombre:'Baño Ñuñoa',estado:'activo'}]);
+  let calls=0;
+  try{
+    const handler=createChatHandler({authorize:authorized,global:(h,m,c,options)=>chatAsesorObrasGemini(h,m,c,{...options,fetcher:async(_url,opts)=>{
+      calls++;const body=JSON.parse(opts.body);
+      if(calls===2)assert.match(body.input[0].content[0].text,/No se encontró/);
+      return new Response(JSON.stringify({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({respuesta:'Preparando cambios',acciones:[{tipo:'crear_actividad',proyecto_id:calls===1?'id-inventado':'p-real',partidas:[{nombre:'Pintura',dias:2}]}],cotizacion:null})}]}]}));
+    }}),project:async()=>response});
+    const res=await handler(makeRequest({mensaje:'Agrega Pintura de 2 días a Baño Ñuñoa'}));
+    assert.equal(res.status,200);assert.equal(calls,2);assert.equal((await res.json()).accion.proyecto_id,'p-real');
+    assert.equal((fixture.tables.get('actividades')||[]).length,0,'la generación no ejecuta escrituras');
+  }finally{if(original===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=original;}
+});
+
+test('la ruta no reintenta ni ejecuta cambios para un plan Pro aunque el modelo proponga crear',async()=>{
+  const {chatAsesorObrasGemini}=require('../lib/gemini.ts');
+  const original=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='fixture-openai';
+  fixture.tables.set('empresas',[{id:'company-a',plan_id:'pro'}]);let calls=0;
+  try{
+    const handler=createChatHandler({authorize:authorized,global:(h,m,c,options)=>chatAsesorObrasGemini(h,m,c,{...options,fetcher:async()=>{
+      calls++;return new Response(JSON.stringify({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({respuesta:'Preparando',acciones:[{tipo:'crear_proyecto',nombre:'Bodega',monto_cotizado:600000}],cotizacion:null})}]}]}));
+    }}),project:async()=>response});
+    const res=await handler(makeRequest({mensaje:'Crea Bodega por 600000'}));assert.equal(res.status,403);assert.equal((await res.json()).code,'PLAN_REQUIRED');assert.equal(calls,1);
+    assert.equal((fixture.tables.get('proyectos')||[]).length,0);
+  }finally{if(original===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=original;}
+});

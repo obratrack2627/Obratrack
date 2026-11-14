@@ -2,7 +2,7 @@ import type { CotizacionEstimacion } from '@/types/database';
 import { normalizeQuote } from '@/lib/ai/protocol';
 import { AIError } from '@/lib/ai/errors';
 
-// Recalcula la edición sin llamar a Gemini y conserva la identidad del presupuesto.
+// Recalcula la edición sin llamar al motor de IA y conserva la identidad del presupuesto.
 export function reviseQuote(original: CotizacionEstimacion, changes: any): CotizacionEstimacion {
   const fail = (message: string): never => { throw new AIError('QUOTE_INVALID_EDIT', message, 422); };
   if (!changes || typeof changes !== 'object') fail('Revisa los datos de la cotización.');

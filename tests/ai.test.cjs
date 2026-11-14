@@ -1,7 +1,7 @@
 require('./helpers/typescript.cjs');
 const { test, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { generateGemini, AIError } = require('../lib/ai/provider.ts');
+const { generateAI, AIError } = require('../lib/ai/provider.ts');
 const {
   parseChatResponse,
   extractLegacyActions,
@@ -12,10 +12,10 @@ const { prepareActionPlan, resolveEntity } = require('../lib/ai/actions.ts');
 const originalEnv = { ...process.env };
 afterEach(() => {
   for (const key of [
-    'GEMINI_API_KEY',
+    'OPENAI_API_KEY',
     'GOOGLE_API_KEY',
     'GOOGLE_GENAI_API_KEY',
-    'GEMINI_MODEL',
+    'OPENAI_MODEL',
   ]) {
     if (originalEnv[key] === undefined) delete process.env[key];
     else process.env[key] = originalEnv[key];
@@ -24,28 +24,28 @@ afterEach(() => {
 const completion = (text) =>
   new Response(
     JSON.stringify({
-      candidates: [{ finishReason: 'STOP', content: { parts: [{ text }] } }],
+      status: 'completed', output: [{type:'message', content:[{type:'output_text', text}]}],
     }),
     { headers: { 'Content-Type': 'application/json' } },
   );
 test('falta de clave produce error de configuración y no una respuesta de muestra', async () => {
-  for (const k of ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY'])
+  for (const k of ['OPENAI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY'])
     delete process.env[k];
   await assert.rejects(
-    generateGemini('Hola'),
+    generateAI('Hola'),
     (e) => e.code === 'AI_NOT_CONFIGURED' && e.status === 503,
   );
 });
 test('clave solo en cabecera, salida JSON y presupuesto de respuesta acotado', async () => {
-  process.env.GEMINI_API_KEY = 'fixture-token';
-  const result = await generateGemini('Cotiza', {
+  process.env.OPENAI_API_KEY = 'fixture-token';
+  const result = await generateAI('Cotiza', {
     json: true,
     fetcher: async (url, opts) => {
       assert.ok(!url.includes('fixture-token'));
-      assert.equal(opts.headers['x-goog-api-key'], 'fixture-token');
+      assert.equal(opts.headers.Authorization, 'Bearer fixture-token');
       assert.equal(
-        JSON.parse(opts.body).generationConfig.responseMimeType,
-        'application/json',
+        JSON.parse(opts.body).text.format.type,
+        'json_object',
       );
       assert.ok(opts.signal);
       return completion('{"respuesta":"Lista"}');
@@ -54,43 +54,31 @@ test('clave solo en cabecera, salida JSON y presupuesto de respuesta acotado', a
   assert.equal(result, '{"respuesta":"Lista"}');
 });
 test('cuota y credenciales fallidas se informan sin filtrar el cuerpo del proveedor', async () => {
-  process.env.GEMINI_API_KEY = 'fixture-token';
+  process.env.OPENAI_API_KEY = 'fixture-token';
   for (const [http, code] of [
     [429, 'AI_RATE_LIMIT'],
     [403, 'AI_CREDENTIALS'],
   ])
     await assert.rejects(
-      generateGemini('Hola', {
+      generateAI('Hola', {
         fetcher: async () =>
           new Response('sensitive-provider-message', { status: http }),
       }),
       (e) => e.code === code && !e.message.includes('sensitive'),
     );
 });
-test('modelo inexistente usa el modelo estable; respuestas truncadas no generan acciones', async () => {
-  process.env.GEMINI_API_KEY = 'fixture-token';
-  process.env.GEMINI_MODEL = 'gemini-no-existe';
+test('modelo inexistente no cambia de proveedor ni oculta errores; truncamiento no genera acciones', async () => {
+  process.env.OPENAI_API_KEY = 'fixture-token';
+  process.env.OPENAI_MODEL = 'modelo-inexistente';
   let calls = 0;
-  const result = await generateGemini('Hola', {
-    fetcher: async () =>
-      ++calls === 1 ? new Response('', { status: 404 }) : completion('Hola'),
-  });
-  assert.equal(result, 'Hola');
-  assert.equal(calls, 2);
-  await assert.rejects(
-    generateGemini('Hola', {
-      fetcher: async () =>
-        new Response(
-          JSON.stringify({ candidates: [{ finishReason: 'MAX_TOKENS' }] }),
-        ),
-    }),
-    (e) => e.code === 'AI_INCOMPLETE',
-  );
+  await assert.rejects(generateAI('Hola', {fetcher: async () => {calls++; return new Response('', {status:404});}}), e => e.code === 'AI_CREDENTIALS');
+  assert.equal(calls, 1);
+  await assert.rejects(generateAI('Hola', {fetcher:async()=>new Response(JSON.stringify({status:'incomplete'}))}), e=>e.code==='AI_INCOMPLETE');
 });
 test('timeout y JSON del proveedor inválido son errores explícitos', async () => {
-  process.env.GEMINI_API_KEY = 'fixture-token';
+  process.env.OPENAI_API_KEY = 'fixture-token';
   await assert.rejects(
-    generateGemini('hola', {
+    generateAI('hola', {
       fetcher: async () => {
         throw new DOMException('timeout', 'TimeoutError');
       },
@@ -98,7 +86,7 @@ test('timeout y JSON del proveedor inválido son errores explícitos', async () 
     (e) => e.code === 'AI_TIMEOUT',
   );
   await assert.rejects(
-    generateGemini('hola', { fetcher: async () => new Response('not json') }),
+    generateAI('hola', { fetcher: async () => new Response('not json') }),
     (e) => e.code === 'AI_INVALID_RESPONSE',
   );
 });
@@ -268,10 +256,10 @@ test('el formateador conserva nombres de variables con guiones bajos', () => {
   const Formatter = require('../components/ChatMessageFormatter.tsx').default;
   const html = renderToStaticMarkup(
     React.createElement(Formatter, {
-      content: 'Configura GEMINI_API_KEY en el servidor.',
+      content: 'Configura OPENAI_API_KEY en el servidor.',
     }),
   );
-  assert.ok(html.includes('GEMINI_API_KEY'));
+  assert.ok(html.includes('OPENAI_API_KEY'));
   assert.ok(!html.includes('<em>API</em>'));
 });
 
@@ -292,20 +280,22 @@ test('las cotizaciones simples usan el prompt breve sin perder solicitudes con a
   assert.ok(prompt.includes('cliente-real'));
 });
 
-test('Gemini recibe el contrato de acciones y sus parámetros en el esquema JSON', async () => {
+test('Responses recibe el contrato de acciones y sus parámetros en el esquema JSON', async () => {
   const { CHAT_RESPONSE_SCHEMA } = require('../lib/ai/schema.ts');
-  process.env.GEMINI_API_KEY = 'fixture-token';
-  await generateGemini('Crea obra con materiales', {
+  process.env.OPENAI_API_KEY = 'fixture-token';
+  await generateAI('Crea obra con materiales', {
     json: true,
     schema: CHAT_RESPONSE_SCHEMA,
     fetcher: async (_, opts) => {
-      const schema = JSON.parse(opts.body).generationConfig.responseJsonSchema;
-      const action = schema.properties.acciones.items;
-      assert.ok(action.properties.tipo.enum.includes('crear_proyecto'));
-      assert.ok(!action.properties.tipo.enum.includes('crear_obra_inventada'));
-      assert.equal(action.properties.materiales.items.properties.precio_unitario.type, 'number');
-      assert.equal(action.properties.partidas.items.properties.nombre.type, 'string');
-      assert.equal(action.properties.tipo_bitacora.type, 'string');
+      const schema = JSON.parse(opts.body).text.format.schema;
+      const branches = schema.properties.acciones.items.anyOf;
+      const action = branches.find(s=>s.properties.tipo.enum.includes('crear_proyecto'));
+      assert.ok(!branches.some(s=>s.properties.tipo.enum.includes('crear_obra_inventada')));
+      assert.ok(action.required.includes('monto_cotizado'));
+      const materials = action.properties.materiales.anyOf[0];
+      assert.equal(materials.items.properties.precio_unitario.type, 'number');
+      assert.equal(action.properties.partidas.anyOf[0].items.properties.nombre.type, 'string');
+      assert.equal(action.properties.tipo_bitacora, undefined);
       return completion('{"respuesta":"Preparada","acciones":[],"cotizacion":null}');
     },
   });

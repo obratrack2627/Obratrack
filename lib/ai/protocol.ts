@@ -322,7 +322,7 @@ export function validateAction(raw: any): AIAction {
   )
     required("nombre");
   if (["crear_proyecto", "crear_proyecto_completo"].includes(a.tipo)) {
-    amount(a.monto_cotizado ?? a.monto, "el presupuesto");
+    amount(a.monto_cotizado ?? a.monto, "monto_cotizado (presupuesto)");
   }
   if (
     a.estado &&

@@ -1,0 +1,1220 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "entities": {
+    "proyectos": [
+      {
+        "id": "p-bano",
+        "nombre": "Baño Ñuñoa",
+        "estado": "activo",
+        "monto_cotizado": 1500000
+      },
+      {
+        "id": "p-terraza",
+        "nombre": "Terraza Maipú",
+        "estado": "activo",
+        "monto_cotizado": 2400000
+      }
+    ],
+    "clientes": [
+      {
+        "id": "c-ana",
+        "nombre": "Ana Soto"
+      },
+      {
+        "id": "c-juan-1",
+        "nombre": "Juan Pérez Soto"
+      },
+      {
+        "id": "c-juan-2",
+        "nombre": "Juan Pérez Rojas"
+      }
+    ],
+    "actividades": [
+      {
+        "id": "a-ceramica",
+        "nombre": "Cerámicas",
+        "proyecto_id": "p-bano"
+      }
+    ],
+    "usuarios": []
+  },
+  "cases": [
+    {
+      "id": "crear-radier",
+      "message": "Crea Radier Maipú por 1500000 para Ana Soto, 5 días",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto",
+            "nombre": "Radier Maipú",
+            "monto_cotizado": 1500000,
+            "cliente_id": "c-ana",
+            "dias": 5
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "crear-completa",
+      "message": "Crear obra Baño La Florida por 800000 con Preparación de 2 días y 4 sacos de cemento a 6000",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto_completo",
+            "nombre": "Baño La Florida",
+            "monto_cotizado": 800000,
+            "partidas": [
+              {
+                "nombre": "Preparación",
+                "dias": 2
+              }
+            ],
+            "materiales": [
+              {
+                "nombre": "Cemento",
+                "cantidad": 4,
+                "unidad": "saco",
+                "precio_unitario": 6000
+              }
+            ]
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "cotizacion-a-obra",
+      "message": "Crea la obra con esa cotización",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {
+        "cotizacion_actual": {
+          "titulo_proyecto": "Ampliación Maipú",
+          "comuna_region": "Maipú",
+          "duracion_dias_estimada": 10,
+          "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+          "materiales": [
+            {
+              "nombre": "Cemento",
+              "cantidad": 10,
+              "unidad": "saco",
+              "precio_unitario_estimado": 6000
+            }
+          ],
+          "mano_de_obra": [
+            {
+              "rol": "Maestro",
+              "cantidad_personas": 1,
+              "dias_estimados": 10,
+              "valor_jornal_diario": 45000
+            }
+          ],
+          "estructura_financiera": {
+            "gastos_generales_porcentaje": 10,
+            "imprevistos_porcentaje": 5,
+            "margen_utilidad_porcentaje": 20
+          },
+          "actividades_gantt": [
+            {
+              "nombre": "Preparación",
+              "dias": 3
+            },
+            {
+              "nombre": "Ejecución",
+              "dias": 7
+            }
+          ],
+          "cliente_id": "c-ana"
+        }
+      },
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto",
+            "nombre": "Ampliación Maipú",
+            "monto_cotizado": 1
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "presupuesto-a-obra",
+      "message": "Convierte ese presupuesto en una obra",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {
+        "cotizacion_actual": {
+          "titulo_proyecto": "Ampliación Maipú",
+          "comuna_region": "Maipú",
+          "duracion_dias_estimada": 10,
+          "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+          "materiales": [
+            {
+              "nombre": "Cemento",
+              "cantidad": 10,
+              "unidad": "saco",
+              "precio_unitario_estimado": 6000
+            }
+          ],
+          "mano_de_obra": [
+            {
+              "rol": "Maestro",
+              "cantidad_personas": 1,
+              "dias_estimados": 10,
+              "valor_jornal_diario": 45000
+            }
+          ],
+          "estructura_financiera": {
+            "gastos_generales_porcentaje": 10,
+            "imprevistos_porcentaje": 5,
+            "margen_utilidad_porcentaje": 20
+          },
+          "actividades_gantt": [
+            {
+              "nombre": "Preparación",
+              "dias": 3
+            },
+            {
+              "nombre": "Ejecución",
+              "dias": 7
+            }
+          ],
+          "cliente_id": "c-ana"
+        }
+      },
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto",
+            "nombre": "Ampliación Maipú",
+            "monto_cotizado": 1
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "creala",
+      "message": "Perfecto, créala como obra",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {
+        "cotizacion_actual": {
+          "titulo_proyecto": "Ampliación Maipú",
+          "comuna_region": "Maipú",
+          "duracion_dias_estimada": 10,
+          "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+          "materiales": [
+            {
+              "nombre": "Cemento",
+              "cantidad": 10,
+              "unidad": "saco",
+              "precio_unitario_estimado": 6000
+            }
+          ],
+          "mano_de_obra": [
+            {
+              "rol": "Maestro",
+              "cantidad_personas": 1,
+              "dias_estimados": 10,
+              "valor_jornal_diario": 45000
+            }
+          ],
+          "estructura_financiera": {
+            "gastos_generales_porcentaje": 10,
+            "imprevistos_porcentaje": 5,
+            "margen_utilidad_porcentaje": 20
+          },
+          "actividades_gantt": [
+            {
+              "nombre": "Preparación",
+              "dias": 3
+            },
+            {
+              "nombre": "Ejecución",
+              "dias": 7
+            }
+          ],
+          "cliente_id": "c-ana"
+        }
+      },
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto",
+            "nombre": "Ampliación Maipú",
+            "monto_cotizado": 1
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "generar-obra",
+      "message": "Genera una obra con esa cotización",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {
+        "cotizacion_actual": {
+          "titulo_proyecto": "Ampliación Maipú",
+          "comuna_region": "Maipú",
+          "duracion_dias_estimada": 10,
+          "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+          "materiales": [
+            {
+              "nombre": "Cemento",
+              "cantidad": 10,
+              "unidad": "saco",
+              "precio_unitario_estimado": 6000
+            }
+          ],
+          "mano_de_obra": [
+            {
+              "rol": "Maestro",
+              "cantidad_personas": 1,
+              "dias_estimados": 10,
+              "valor_jornal_diario": 45000
+            }
+          ],
+          "estructura_financiera": {
+            "gastos_generales_porcentaje": 10,
+            "imprevistos_porcentaje": 5,
+            "margen_utilidad_porcentaje": 20
+          },
+          "actividades_gantt": [
+            {
+              "nombre": "Preparación",
+              "dias": 3
+            },
+            {
+              "nombre": "Ejecución",
+              "dias": 7
+            }
+          ],
+          "cliente_id": "c-ana"
+        }
+      },
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto",
+            "nombre": "Ampliación Maipú",
+            "monto_cotizado": 1
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "cotizar-y-crear",
+      "message": "Cotiza una ampliación de 20 m2 en Maipú y crea la obra para Ana Soto",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto",
+            "nombre": "Ampliación Maipú",
+            "monto_cotizado": 1
+          }
+        ],
+        "cotizacion": {
+          "titulo_proyecto": "Ampliación Maipú",
+          "comuna_region": "Maipú",
+          "duracion_dias_estimada": 10,
+          "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+          "materiales": [
+            {
+              "nombre": "Cemento",
+              "cantidad": 10,
+              "unidad": "saco",
+              "precio_unitario_estimado": 6000
+            }
+          ],
+          "mano_de_obra": [
+            {
+              "rol": "Maestro",
+              "cantidad_personas": 1,
+              "dias_estimados": 10,
+              "valor_jornal_diario": 45000
+            }
+          ],
+          "estructura_financiera": {
+            "gastos_generales_porcentaje": 10,
+            "imprevistos_porcentaje": 5,
+            "margen_utilidad_porcentaje": 20
+          },
+          "actividades_gantt": [
+            {
+              "nombre": "Preparación",
+              "dias": 3
+            },
+            {
+              "nombre": "Ejecución",
+              "dias": 7
+            }
+          ],
+          "cliente_id": "c-ana"
+        }
+      }
+    },
+    {
+      "id": "revisar-y-crear",
+      "message": "Ajusta el presupuesto a 30 m2 y crea el proyecto",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {
+        "cotizacion_actual": {
+          "titulo_proyecto": "Ampliación Maipú",
+          "comuna_region": "Maipú",
+          "duracion_dias_estimada": 10,
+          "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+          "materiales": [
+            {
+              "nombre": "Cemento",
+              "cantidad": 10,
+              "unidad": "saco",
+              "precio_unitario_estimado": 6000
+            }
+          ],
+          "mano_de_obra": [
+            {
+              "rol": "Maestro",
+              "cantidad_personas": 1,
+              "dias_estimados": 10,
+              "valor_jornal_diario": 45000
+            }
+          ],
+          "estructura_financiera": {
+            "gastos_generales_porcentaje": 10,
+            "imprevistos_porcentaje": 5,
+            "margen_utilidad_porcentaje": 20
+          },
+          "actividades_gantt": [
+            {
+              "nombre": "Preparación",
+              "dias": 3
+            },
+            {
+              "nombre": "Ejecución",
+              "dias": 7
+            }
+          ],
+          "cliente_id": "c-ana"
+        }
+      },
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto",
+            "nombre": "Ampliación Maipú",
+            "monto_cotizado": 1
+          }
+        ],
+        "cotizacion": {
+          "titulo_proyecto": "Ampliación Maipú",
+          "comuna_region": "Maipú",
+          "duracion_dias_estimada": 10,
+          "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+          "materiales": [
+            {
+              "nombre": "Cemento",
+              "cantidad": 15,
+              "unidad": "saco",
+              "precio_unitario_estimado": 6000
+            }
+          ],
+          "mano_de_obra": [
+            {
+              "rol": "Maestro",
+              "cantidad_personas": 1,
+              "dias_estimados": 10,
+              "valor_jornal_diario": 45000
+            }
+          ],
+          "estructura_financiera": {
+            "gastos_generales_porcentaje": 10,
+            "imprevistos_porcentaje": 5,
+            "margen_utilidad_porcentaje": 20
+          },
+          "actividades_gantt": [
+            {
+              "nombre": "Preparación",
+              "dias": 3
+            },
+            {
+              "nombre": "Ejecución",
+              "dias": 7
+            }
+          ],
+          "cliente_id": "c-ana"
+        }
+      }
+    },
+    {
+      "id": "crear-y-partida",
+      "message": "Crea Bodega por 600000 y agrega Excavación de 2 días",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto",
+            "nombre": "Bodega",
+            "monto_cotizado": 600000
+          },
+          {
+            "tipo": "crear_actividad",
+            "proyecto_nombre": "Bodega",
+            "partidas": [
+              {
+                "nombre": "Excavación",
+                "dias": 2
+              }
+            ]
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "multi-estado-pago",
+      "message": "Pausa Baño Ñuñoa y registra un abono de 50000 por transferencia",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "actualizar_proyecto",
+            "proyecto_id": "p-bano",
+            "estado": "pausado"
+          },
+          {
+            "tipo": "registrar_pago",
+            "proyecto_id": "p-bano",
+            "monto": 50000,
+            "metodo": "transferencia"
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "buscar-y-crear",
+      "message": "Busca precio de cemento y crea Bodega por 600000",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto",
+            "nombre": "Bodega",
+            "monto_cotizado": 600000
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "buscar-y-avance",
+      "message": "Compara precios de cemento y marca Cerámicas al 30% en Baño Ñuñoa",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "actualizar_avance",
+            "proyecto_id": "p-bano",
+            "actividad_id": "a-ceramica",
+            "porcentaje_avance": 30
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "buscar-convertir",
+      "message": "Busca cemento barato y convierte el presupuesto en obra",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {
+        "cotizacion_actual": {
+          "titulo_proyecto": "Ampliación Maipú",
+          "comuna_region": "Maipú",
+          "duracion_dias_estimada": 10,
+          "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+          "materiales": [
+            {
+              "nombre": "Cemento",
+              "cantidad": 10,
+              "unidad": "saco",
+              "precio_unitario_estimado": 6000
+            }
+          ],
+          "mano_de_obra": [
+            {
+              "rol": "Maestro",
+              "cantidad_personas": 1,
+              "dias_estimados": 10,
+              "valor_jornal_diario": 45000
+            }
+          ],
+          "estructura_financiera": {
+            "gastos_generales_porcentaje": 10,
+            "imprevistos_porcentaje": 5,
+            "margen_utilidad_porcentaje": 20
+          },
+          "actividades_gantt": [
+            {
+              "nombre": "Preparación",
+              "dias": 3
+            },
+            {
+              "nombre": "Ejecución",
+              "dias": 7
+            }
+          ],
+          "cliente_id": "c-ana"
+        }
+      },
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_proyecto",
+            "nombre": "Ampliación Maipú",
+            "monto_cotizado": 1
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "actualizar-presupuesto",
+      "message": "Actualiza el presupuesto de Baño Ñuñoa a 1600000",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {
+        "cotizacion_actual": {
+          "titulo_proyecto": "Ampliación Maipú",
+          "comuna_region": "Maipú",
+          "duracion_dias_estimada": 10,
+          "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+          "materiales": [
+            {
+              "nombre": "Cemento",
+              "cantidad": 10,
+              "unidad": "saco",
+              "precio_unitario_estimado": 6000
+            }
+          ],
+          "mano_de_obra": [
+            {
+              "rol": "Maestro",
+              "cantidad_personas": 1,
+              "dias_estimados": 10,
+              "valor_jornal_diario": 45000
+            }
+          ],
+          "estructura_financiera": {
+            "gastos_generales_porcentaje": 10,
+            "imprevistos_porcentaje": 5,
+            "margen_utilidad_porcentaje": 20
+          },
+          "actividades_gantt": [
+            {
+              "nombre": "Preparación",
+              "dias": 3
+            },
+            {
+              "nombre": "Ejecución",
+              "dias": 7
+            }
+          ],
+          "cliente_id": "c-ana"
+        }
+      },
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "actualizar_proyecto",
+            "proyecto_id": "p-bano",
+            "monto_cotizado": 1600000
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "sin-monto",
+      "message": "Crea una obra llamada Quincho",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "¿Cuál es el monto cotizado para Quincho?",
+        "acciones": [],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "cliente-ambiguo",
+      "message": "Crea Quincho por 900000 para Juan Pérez",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "¿Corresponde a Juan Pérez Soto o Juan Pérez Rojas?",
+        "acciones": [],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "obra-ambigua",
+      "message": "Registra un pago de 50000",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "¿En qué obra quieres registrar el pago?",
+        "acciones": [],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "actividad-ambigua",
+      "message": "Actualiza el avance de la partida en Baño Ñuñoa",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "¿Qué partida quieres actualizar y a qué porcentaje?",
+        "acciones": [],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "solo-consulta",
+      "message": "Solo quiero consultar el saldo de Baño Ñuñoa",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Necesito los pagos registrados para informar un saldo confirmado.",
+        "acciones": [],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "cotizar-sin-crear",
+      "message": "Cotiza un radier de 20 m2 en Maipú. No crees una obra",
+      "route": "quote",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Valores referenciales para revisión.",
+        "cotizaciones": [
+          {
+            "titulo_proyecto": "Ampliación Maipú",
+            "comuna_region": "Maipú",
+            "duracion_dias_estimada": 10,
+            "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+            "materiales": [
+              {
+                "nombre": "Cemento",
+                "cantidad": 10,
+                "unidad": "saco",
+                "precio_unitario_estimado": 6000
+              }
+            ],
+            "mano_de_obra": [
+              {
+                "rol": "Maestro",
+                "cantidad_personas": 1,
+                "dias_estimados": 10,
+                "valor_jornal_diario": 45000
+              }
+            ],
+            "estructura_financiera": {
+              "gastos_generales_porcentaje": 10,
+              "imprevistos_porcentaje": 5,
+              "margen_utilidad_porcentaje": 20
+            },
+            "actividades_gantt": [
+              {
+                "nombre": "Preparación",
+                "dias": 3
+              },
+              {
+                "nombre": "Ejecución",
+                "dias": 7
+              }
+            ],
+            "cliente_id": "c-ana"
+          }
+        ]
+      }
+    },
+    {
+      "id": "revisar-solo-cotizacion",
+      "message": "Cambia el margen de la cotización al 25%",
+      "route": "quote",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {
+        "cotizacion_actual": {
+          "titulo_proyecto": "Ampliación Maipú",
+          "comuna_region": "Maipú",
+          "duracion_dias_estimada": 10,
+          "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+          "materiales": [
+            {
+              "nombre": "Cemento",
+              "cantidad": 10,
+              "unidad": "saco",
+              "precio_unitario_estimado": 6000
+            }
+          ],
+          "mano_de_obra": [
+            {
+              "rol": "Maestro",
+              "cantidad_personas": 1,
+              "dias_estimados": 10,
+              "valor_jornal_diario": 45000
+            }
+          ],
+          "estructura_financiera": {
+            "gastos_generales_porcentaje": 10,
+            "imprevistos_porcentaje": 5,
+            "margen_utilidad_porcentaje": 20
+          },
+          "actividades_gantt": [
+            {
+              "nombre": "Preparación",
+              "dias": 3
+            },
+            {
+              "nombre": "Ejecución",
+              "dias": 7
+            }
+          ],
+          "cliente_id": "c-ana"
+        }
+      },
+      "response": {
+        "respuesta": "Presupuesto revisado.",
+        "cotizaciones": [
+          {
+            "titulo_proyecto": "Ampliación Maipú",
+            "comuna_region": "Maipú",
+            "duracion_dias_estimada": 10,
+            "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+            "materiales": [
+              {
+                "nombre": "Cemento",
+                "cantidad": 10,
+                "unidad": "saco",
+                "precio_unitario_estimado": 6000
+              }
+            ],
+            "mano_de_obra": [
+              {
+                "rol": "Maestro",
+                "cantidad_personas": 1,
+                "dias_estimados": 10,
+                "valor_jornal_diario": 45000
+              }
+            ],
+            "estructura_financiera": {
+              "gastos_generales_porcentaje": 10,
+              "imprevistos_porcentaje": 5,
+              "margen_utilidad_porcentaje": 25
+            },
+            "actividades_gantt": [
+              {
+                "nombre": "Preparación",
+                "dias": 3
+              },
+              {
+                "nombre": "Ejecución",
+                "dias": 7
+              }
+            ],
+            "cliente_id": "c-ana"
+          }
+        ]
+      }
+    },
+    {
+      "id": "buscar-solo",
+      "message": "Busca el precio publicado de cemento en Easy",
+      "route": "search",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "¿Qué presentación de cemento necesitas?",
+        "acciones": [],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "incidente-sin-costo",
+      "message": "Registra una filtración en el cielo del Baño Ñuñoa",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_bitacora",
+            "proyecto_id": "p-bano",
+            "titulo": "Filtración en cielo del baño",
+            "nota": "Filtración reportada en el cielo.",
+            "tipo_bitacora": "incidente"
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "avance-terreno",
+      "message": "Marca Cerámicas al 50% en Baño Ñuñoa",
+      "route": "chat",
+      "role": "terreno",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "actualizar_avance",
+            "proyecto_id": "p-bano",
+            "actividad_id": "a-ceramica",
+            "porcentaje_avance": 50
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "pro-no-crea",
+      "message": "Crea Quincho por 900000",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro",
+      "context": {},
+      "response": {
+        "respuesta": "Los cambios por ObraBot requieren Pro IA.",
+        "acciones": [],
+        "cotizacion": null
+      },
+      "rejected_action": {
+        "tipo": "crear_proyecto",
+        "nombre": "Quincho",
+        "monto_cotizado": 900000
+      },
+      "denied": "PLAN_REQUIRED"
+    },
+    {
+      "id": "terreno-no-crea",
+      "message": "Crea Quincho por 900000",
+      "route": "chat",
+      "role": "terreno",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Solo administradores y jefes autorizados pueden crear obras.",
+        "acciones": [],
+        "cotizacion": null
+      },
+      "rejected_action": {
+        "tipo": "crear_proyecto",
+        "nombre": "Quincho",
+        "monto_cotizado": 900000
+      },
+      "denied": "ACTION_FORBIDDEN"
+    },
+    {
+      "id": "terreno-no-paga",
+      "message": "Registra un pago de 50000 en Baño Ñuñoa",
+      "route": "chat",
+      "role": "terreno",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Tu perfil de terreno no puede registrar pagos.",
+        "acciones": [],
+        "cotizacion": null
+      },
+      "rejected_action": {
+        "tipo": "registrar_pago",
+        "proyecto_id": "p-bano",
+        "monto": 50000
+      },
+      "denied": "ACTION_FORBIDDEN"
+    },
+    {
+      "id": "terreno-no-asistencia",
+      "message": "Registra mi asistencia de hoy en Baño Ñuñoa",
+      "route": "chat",
+      "role": "terreno",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "La asistencia debe verificarla el jefe de obra.",
+        "acciones": [],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "whatsapp-propuesta",
+      "message": "Crea Quincho por 900000 para Ana Soto",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {
+        "creacion_obra_whatsapp": true
+      },
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [],
+        "cotizacion": null,
+        "obra_propuesta": {
+          "nombre": "Quincho",
+          "cliente_id": "c-ana",
+          "cliente_nombre": "Ana Soto",
+          "monto_cotizado": 900000
+        }
+      }
+    },
+    {
+      "id": "whatsapp-cliente-existente",
+      "message": "Crea la obra para Ana Soto que ya está en Clientes",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {
+        "creacion_obra_whatsapp": true
+      },
+      "response": {
+        "respuesta": "¿Cuál es el nombre de la obra y el monto cotizado?",
+        "acciones": [],
+        "cotizacion": null,
+        "obra_propuesta": {
+          "cliente_id": "c-ana",
+          "cliente_nombre": "Ana Soto"
+        }
+      }
+    },
+    {
+      "id": "whatsapp-foto",
+      "message": "Añade esta foto como incidencia en Baño Ñuñoa",
+      "route": "chat",
+      "role": "terreno",
+      "plan": "pro_ia",
+      "context": {
+        "creacion_obra_whatsapp": true
+      },
+      "response": {
+        "respuesta": "Voy a preparar los cambios solicitados.",
+        "acciones": [
+          {
+            "tipo": "crear_bitacora",
+            "proyecto_id": "p-bano",
+            "titulo": "Daño reportado en pintura",
+            "nota": "Daño en pintura reportado por el trabajador.",
+            "tipo_bitacora": "incidente"
+          }
+        ],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "pro-cotiza",
+      "message": "Cotiza una ampliación de 20 m2 en Maipú",
+      "route": "quote",
+      "role": "admin",
+      "plan": "pro",
+      "context": {},
+      "response": {
+        "respuesta": "Estimación referencial.",
+        "cotizaciones": [
+          {
+            "titulo_proyecto": "Ampliación Maipú",
+            "comuna_region": "Maipú",
+            "duracion_dias_estimada": 10,
+            "resumen_ejecutivo": "Ampliación de 20 m². Valores de referencia.",
+            "materiales": [
+              {
+                "nombre": "Cemento",
+                "cantidad": 10,
+                "unidad": "saco",
+                "precio_unitario_estimado": 6000
+              }
+            ],
+            "mano_de_obra": [
+              {
+                "rol": "Maestro",
+                "cantidad_personas": 1,
+                "dias_estimados": 10,
+                "valor_jornal_diario": 45000
+              }
+            ],
+            "estructura_financiera": {
+              "gastos_generales_porcentaje": 10,
+              "imprevistos_porcentaje": 5,
+              "margen_utilidad_porcentaje": 20
+            },
+            "actividades_gantt": [
+              {
+                "nombre": "Preparación",
+                "dias": 3
+              },
+              {
+                "nombre": "Ejecución",
+                "dias": 7
+              }
+            ],
+            "cliente_id": "c-ana"
+          }
+        ]
+      }
+    },
+    {
+      "id": "no-id-inventado",
+      "message": "Actualiza la obra que no figura en el contexto",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "¿Cuál es el nombre de una obra disponible?",
+        "acciones": [],
+        "cotizacion": null
+      }
+    },
+    {
+      "id": "sin-creacion-en-obra",
+      "message": "Crea otra obra llamada Quincho por 900000",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Abre el chat general del Cotizador para crear otra obra.",
+        "acciones": [],
+        "cotizacion": null
+      },
+      "selectedId": "p-bano",
+      "rejected_action": {
+        "tipo": "crear_proyecto",
+        "nombre": "Quincho",
+        "monto_cotizado": 900000
+      },
+      "denied": "PROJECT_CONTEXT"
+    },
+    {
+      "id": "actualizar-otra-obra",
+      "message": "Actualiza Terraza Maipú a pausada",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Abre el chat de Terraza Maipú o el chat general.",
+        "acciones": [],
+        "cotizacion": null
+      },
+      "selectedId": "p-bano",
+      "rejected_action": {
+        "tipo": "actualizar_proyecto",
+        "proyecto_id": "p-terraza",
+        "estado": "pausado"
+      },
+      "denied": "PROJECT_CONTEXT"
+    },
+    {
+      "id": "cliente-ajeno",
+      "message": "Crea Bodega por 600000 con el cliente externo",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "Indica un cliente disponible de tu empresa.",
+        "acciones": [],
+        "cotizacion": null
+      },
+      "rejected_action": {
+        "tipo": "crear_proyecto",
+        "nombre": "Bodega",
+        "monto_cotizado": 600000,
+        "cliente_id": "c-otra-empresa"
+      },
+      "denied": "ACTION_PLAN_INVALID"
+    },
+    {
+      "id": "no-recepcion",
+      "message": "Registra el acta de entrega y recepción del mandante",
+      "route": "chat",
+      "role": "admin",
+      "plan": "pro_ia",
+      "context": {},
+      "response": {
+        "respuesta": "El registro de actas de recepción del mandante fue retirado de ObraTrack.",
+        "acciones": [],
+        "cotizacion": null
+      }
+    }
+  ]
+}

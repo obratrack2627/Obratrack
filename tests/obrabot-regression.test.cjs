@@ -44,7 +44,7 @@ const authorizedAs =
   });
 
 const baseEnv = {
-  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
   AI_PROVIDER: process.env.AI_PROVIDER,
   AI_FALLBACK_PROVIDER: process.env.AI_FALLBACK_PROVIDER,
 };
@@ -345,21 +345,16 @@ test("createChatHandler combina acción cliente + envío WhatsApp servidor y evi
 });
 
 test("chatAsesorObrasGemini en modo híbrido consulta + búsqueda de precios conserva ambos resultados", async () => {
-  process.env.GEMINI_API_KEY = "test-key";
-  process.env.AI_PROVIDER = "gemini";
+  process.env.OPENAI_API_KEY = "test-key";
+  process.env.AI_PROVIDER = "openai";
   delete process.env.AI_FALLBACK_PROVIDER;
 
   globalThis.fetch = async (url) => {
     const u = String(url);
-    if (u.includes("generativelanguage.googleapis.com")) {
+    if (u.includes("api.openai.com/v1/responses")) {
       return new Response(
         JSON.stringify({
-          candidates: [
-            {
-              content: {
-                parts: [
-                  {
-                    text: JSON.stringify({
+          status: 'completed', output: [{type:'message',content:[{type:'output_text',text: JSON.stringify({
                       respuesta: "Cobertizo La Cisterna está En curso y su saldo por cobrar es $311.632.",
                       respuesta_consulta:
                         "Cobertizo La Cisterna está En curso y su saldo por cobrar es $311.632.",
@@ -371,12 +366,7 @@ test("chatAsesorObrasGemini en modo híbrido consulta + búsqueda de precios con
                         cantidad: 10,
                         unidad_cantidad: "saco",
                       },
-                    }),
-                  },
-                ],
-              },
-            },
-          ],
+                    }),}]}],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );

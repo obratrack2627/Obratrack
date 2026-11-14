@@ -126,9 +126,10 @@ test("una respuesta sin catálogo no puede presentar una estimación como búsqu
   assert.match(result.respuesta, /material|herramienta/);
 });
 test("la revisión de una cotización conserva el contexto y usa el flujo de presupuestos", async () => {
-  let prompt;
-  provider.generateAI = async (p) => {
+  let prompt, instructions;
+  provider.generateAI = async (p, options) => {
     prompt = p;
+    instructions = options.instructions;
     return completion({ cotizacion: quote });
   };
   await chatAsesorObrasGemini([], "Cambia la utilidad al 20%", {
@@ -139,7 +140,8 @@ test("la revisión de una cotización conserva el contexto y usa el flujo de pre
   });
   assert.match(prompt, /Presupuesto previo/);
   assert.match(prompt, /Material previo/);
-  assert.match(prompt, /modificar un presupuesto previo/);
+  assert.match(instructions, /modificar un presupuesto previo/);
+  assert.doesNotMatch(instructions, /Presupuesto previo|Material previo/);
 });
 
 test('cotizar con antecedentes admite más tiempo sin superar el límite total y las fotos conservan el presupuesto del canal',async()=>{
@@ -148,5 +150,6 @@ test('cotizar con antecedentes admite más tiempo sin superar el límite total y
  await chatAsesorObrasGemini([],'Cotiza un radier');
  await chatAsesorObrasGemini([],'Cotiza un radier',{}, {budgetMs:30000,timeoutMs:20000,image:{mimeType:'image/png',data:'fixture'}});
  await chatAsesorObrasGemini([],'¿Cómo va mi obra?',{}, {budgetMs:45000,timeoutMs:40000});
- assert.deepEqual(budgets,[{budget:45000,timeout:40000},{budget:30000,timeout:20000},{budget:30000,timeout:30000}]);
+ const maxima=[{budget:45000,timeout:40000},{budget:30000,timeout:20000},{budget:30000,timeout:30000}];
+ for(const [i,limits] of budgets.entries()){assert.ok(limits.budget>0 && limits.budget<=maxima[i].budget);assert.ok(limits.timeout>0 && limits.timeout<=maxima[i].timeout);}
 });

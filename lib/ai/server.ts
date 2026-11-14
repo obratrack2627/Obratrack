@@ -3,7 +3,7 @@ import { contactNameCommand, contactTurns, withNameEditContext } from './contact
 import { personIntake } from '@/lib/whatsapp/person-intake';
 import { pendingPerson, withPersonContext } from './person-context';
 import { flattenActions } from './protocol';
-import { scopeProjectActions } from './actions';
+import { scopeProjectActions, prepareActionPlan } from './actions';
 import { projectStatusCommand } from './project-status-command';
 import { conversationProjectId } from './project-reference';
 import { isProjectDeadlineQuestion, projectDeadlineAnswer } from './project-deadlines';
@@ -155,6 +155,21 @@ export function createChatHandler(
       let registrationDraft = pendingPerson(body.historial_original, body.historial, tables.proyectos, projectId);
       const nameCommand = !registrationDraft ? contactNameCommand(body.mensaje, tables.usuarios, contactTurns(body.historial_original), user.id) : null;
       const pendingNameEdit = nameCommand?.pending || null;
+      const validateResult = (result: any) => {
+        // Prevalidación pura sobre copias: jamás guardar ni encolar en un reintento.
+        const candidate = structuredClone(result);
+        const registration = personIntake(flattenActions(candidate.accion), candidate.registro_propuesto, registrationDraft, body.mensaje, tables.proyectos, projectId, tables.usuarios);
+        const scoped = scopeProjectActions(registration.actions, conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId), tables.proyectos, projectId);
+        const actions = checkActionPermissions(user, scoped, body.mensaje);
+        if ((actions.length || registration.prepared || registration.question && registration.draft) && company.plan_id !== 'pro_ia')
+          throw new AIError('PLAN_REQUIRED', 'Los cambios por ObraBot requieren Pro IA.', 403);
+        try {
+          prepareActionPlan(actions, { proyectos: tables.proyectos, clientes: tables.clientes, actividades: tables.actividades || [], usuarios: tables.usuarios }, projectId);
+        } catch (error) {
+          if (error instanceof AIError) throw error;
+          throw new AIError('ACTION_PLAN_INVALID', error instanceof Error ? error.message : 'Revisa las referencias de las acciones.', 422);
+        }
+      };
       const preferences = conversationPreferences(body.historial_original, user, projectId, body.mensaje);
       const finish = async (result: any, currentId?: string, prepared?: ReturnType<typeof personIntake>) => {
         const registration = prepared || personIntake(flattenActions(result.accion), result.registro_propuesto, registrationDraft, body.mensaje, tables.proyectos, projectId, tables.usuarios);
@@ -178,6 +193,7 @@ export function createChatHandler(
             403,
           );
         result.accion = actions.length === 1 ? actions[0] : actions.length ? { tipo: 'lote_acciones', acciones: actions } : null;
+        validateResult(result);
         const broadcasts = actions.filter(
           (a) => a.tipo === "enviar_mensaje_equipo",
         );
@@ -326,6 +342,7 @@ export function createChatHandler(
             ...data,
             cotizacion_actual: await budgetContext(projectId),
           },
+          options: { validateResult },
           contextoDB: { ...context, ...capability, operacion_obra: operationsContext(tables, projectId, user.rol, body.mensaje), cliente_actual: user.rol === 'terreno' ? null : tables.clientes.find((c) => c.id === data.cliente_id) || null },
         });
         const queued = await finish(result, projectId);
@@ -340,7 +357,7 @@ export function createChatHandler(
         proyecto_actual: tables.proyectos.find(project => project.id === referencedId) || null,
         operacion_obra: operationsContext(tables, undefined, user.rol, body.mensaje),
         cotizacion_actual: await budgetContext(),
-      });
+      }, { validateResult });
       const queued = await finish(result);
       if (queued) return queued;
       if (result.cotizacion) await saveBudget(client, user, result.cotizacion, undefined, isAlternativeRequest(body.mensaje) ? canonicalBudget : null);

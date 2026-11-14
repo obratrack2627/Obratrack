@@ -51,19 +51,23 @@ test('cuota, credenciales, cortes y rechazos no publican datos del proveedor ni 
   await assert.rejects(()=>generateOpenAI('X',{fetcher:async()=>{throw new DOMException('timeout','TimeoutError');}}),e=>e.code==='AI_TIMEOUT');
 });
 
-test('el respaldo se usa solo para disponibilidad y antes de cualquier ejecución de negocio',async()=>{
-  process.env.AI_FALLBACK_PROVIDER='gemini';process.env.GEMINI_API_KEY='fixture-gemini';const calls=[];
-  const result=await generateAI('Hola',{fetcher:async(url)=>{calls.push(url);return url.includes('api.openai.com')?new Response('',{status:429}):new Response(JSON.stringify({candidates:[{finishReason:'STOP',content:{parts:[{text:'Respaldo disponible'}]}}]}));}});
-  assert.equal(result,'Respaldo disponible');assert.equal(calls.length,2);assert.ok(calls[1].includes('googleapis.com'));
-  let requests=0;await assert.rejects(()=>generateAI('X',{fetcher:async()=>{requests++;return response('',{status:'incomplete'});}}),e=>e.code==='AI_INCOMPLETE');assert.equal(requests,1);
-  requests=0;await assert.rejects(()=>generateAI('X',{fetcher:async()=>{requests++;return new Response('',{status:401});}}),e=>e.code==='AI_CREDENTIALS');assert.equal(requests,1);
+test('no existe fallback aun con variables anteriores ante cuota o indisponibilidad',async()=>{
+  process.env.AI_FALLBACK_PROVIDER='gemini';process.env.GEMINI_API_KEY='fixture-gemini';
+  for (const [status,code] of [[429,'AI_RATE_LIMIT'],[503,'AI_UNAVAILABLE'],[401,'AI_CREDENTIALS']]) {
+    let requests=0;
+    await assert.rejects(()=>generateAI('X',{fetcher:async(url)=>{requests++;assert.ok(url.startsWith('https://api.openai.com/'));return new Response('',{status});}}),e=>e.code===code);
+    assert.equal(requests,1);
+  }
 });
 
-test('la reversión usa Gemini con una variable y WhatsApp reconoce la configuración del proveedor elegido',async()=>{
-  delete process.env.GEMINI_API_KEY;assert.equal(isAIConfigured(),true);delete process.env.OPENAI_API_KEY;assert.equal(isAIConfigured(),false);
-  process.env.AI_PROVIDER='gemini';process.env.GEMINI_API_KEY='fixture-gemini';assert.equal(getAIProvider(),'gemini');assert.equal(isAIConfigured(),true);
-  const result=await generateAI('Hola',{fetcher:async(url)=>{assert.ok(url.includes('googleapis.com'));return new Response(JSON.stringify({candidates:[{finishReason:'STOP',content:{parts:[{text:'Anterior'}]}}]}));}});assert.equal(result,'Anterior');
-  process.env.AI_PROVIDER='unknown';assert.equal(isAIConfigured(),false);await assert.rejects(()=>generateAI('X'),e=>e.code==='AI_PROVIDER_INVALID');
+test('OpenAI es único proveedor por defecto e ignora variables antiguas sin usar claves Gemini',async()=>{
+  delete process.env.AI_PROVIDER;assert.equal(getAIProvider(),'openai');assert.equal(isAIConfigured(),true);
+  delete process.env.OPENAI_API_KEY;process.env.GEMINI_API_KEY='fixture-gemini';assert.equal(isAIConfigured(),false);
+  process.env.OPENAI_API_KEY='fixture-openai';
+  for (const old of ['gemini','unknown']) {
+    process.env.AI_PROVIDER=old;assert.equal(getAIProvider(),'openai');
+    assert.equal(await generateAI('Hola',{fetcher:async(url)=>{assert.ok(url.includes('api.openai.com'));return response('Hola');}}),'Hola');
+  }
 });
 
 test('las notas Opus de WhatsApp se convierten en WAV mono de 16 kHz y se transcriben como texto',async()=>{
@@ -74,4 +78,11 @@ test('las notas Opus de WhatsApp se convierten en WAV mono de 16 kHz y se transc
     const upload=opts.body.get('file');assert.equal(upload.name,'nota.wav');assert.equal(upload.type,'audio/wav');return new Response(JSON.stringify({text:'Avance de la terraza.'}));
   }});assert.equal(result,'Avance de la terraza.');
   await assert.rejects(()=>transcriptionFile({mimeType:'audio/ogg',data:'aW52YWxpZA=='},Date.now()+10000),e=>e.code==='AI_AUDIO_INVALID');
+});
+
+test('los imports históricos tampoco pueden llamar al proveedor anterior',async()=>{
+  const {generateGemini,getServerGeminiKey}=require('../lib/ai/gemini-provider.ts');
+  process.env.GEMINI_API_KEY='fixture-legacy';process.env.AI_PROVIDER='gemini';
+  assert.equal(getServerGeminiKey(),'fixture-openai');
+  assert.equal(await generateGemini('Hola',{fetcher:async(url)=>{assert.equal(url,'https://api.openai.com/v1/responses');return response('Hola');}}),'Hola');
 });

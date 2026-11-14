@@ -82,10 +82,10 @@ export function prepareActionPlan(
   },
   currentId?: string,
 ): AIAction[] {
-  const projects = [...context.proyectos],
+  const projects = context.proyectos.map(p => ({ ...p })),
     clients = context.clientes.map(c => ({ ...c })),
     users = context.usuarios.map(u => ({ ...u })),
-    activities = [...context.actividades];
+    activities = context.actividades.map(a => ({ ...a }));
   const actions = flattenActions(input);
   // Se verifica el lote completo antes de modificar el primer registro.
   for (const [i, a] of Array.from(actions.entries())) {
@@ -174,6 +174,8 @@ export function prepareActionPlan(
 /** Completar solo la obra inequívoca del contexto autorizado, nunca la primera de una lista. */
 export function scopeProjectActions(input: unknown, reference: string | undefined | null, projects: {id:string}[], selectedId?: string) {
   const actions = flattenActions(input);
+  if (selectedId && actions.some(a => ['crear_proyecto', 'crear_proyecto_completo'].includes(a.tipo)))
+    throw new AIError('PROJECT_CONTEXT', 'Para crear una obra nueva abre el chat general del Cotizador.', 422);
   const validReference = reference && projects.some(project => project.id === reference) ? reference : undefined;
   for (const action of actions) {
     if (!PROJECT_ACTIONS.has(action.tipo)) continue;

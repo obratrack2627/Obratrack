@@ -41,7 +41,7 @@ const setup = () => {
     "WHATSAPP_CLOUD_API_PHONE_NUMBER_ID",
     "NEXT_PUBLIC_SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
-    "GEMINI_API_KEY",
+    "OPENAI_API_KEY",
   ])
     process.env[key] = "fixture";
 };
@@ -984,7 +984,7 @@ test('WhatsApp puede quedar configurado con OpenAI sin requerir una clave del mo
   process.env.AI_PROVIDER='openai';process.env.OPENAI_API_KEY='fixture-openai';delete process.env.GEMINI_API_KEY;
   assert.equal(whatsappConfigured(),true);
   delete process.env.OPENAI_API_KEY;assert.equal(whatsappConfigured(),false);
-  process.env.AI_PROVIDER='gemini';process.env.GEMINI_API_KEY='fixture-gemini';assert.equal(whatsappConfigured(),true);
+  process.env.AI_PROVIDER='gemini';process.env.GEMINI_API_KEY='fixture-gemini';assert.equal(whatsappConfigured(),false);
 });
 
 test('WhatsApp conserva antecedentes más antiguos que seis intercambios sin mezclar mensajes de otro actor',async()=>{

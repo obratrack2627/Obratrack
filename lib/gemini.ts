@@ -1,8 +1,9 @@
+import { compactAIContext, separatePrompt, ACTION_EXAMPLES } from '@/lib/ai/prompt-context';
+import { generateValidatedChat, type ChatGenerationOptions } from '@/lib/ai/generation';
 import {CONSTRUCTION_WORKFLOW_RULES} from '@/lib/ai/prompt';
-import { generateAI, getServerGeminiKey } from "@/lib/ai/provider";
+import { getServerOpenAIKey } from "@/lib/ai/provider";
 import { AIError } from "@/lib/ai/errors";
 import {
-  parseChatResponse,
   extractLegacyActions,
   normalizeQuote,
 } from "@/lib/ai/protocol";
@@ -15,6 +16,7 @@ import {
   materialSearchPrompt,
   isAlternativeRequest,
   hasNonSearchTask,
+  requestsPlatformAction,
 } from "@/lib/ai/prompt";
 import {
   CHAT_RESPONSE_SCHEMA,
@@ -29,7 +31,8 @@ import {
 import { formatMaterialComparison } from "@/lib/materials/format";
 import { quoteSummaryText } from "@/lib/ai/quote-format";
 
-export const getGeminiApiKey = getServerGeminiKey;
+// Alias histórico para los imports existentes; el único motor es OpenAI.
+export const getGeminiApiKey = getServerOpenAIKey;
 export const extraerAccionesDeTexto = extractLegacyActions;
 
 export async function generarCotizacionGemini(params: {
@@ -61,13 +64,10 @@ export async function chatAsesorObrasGemini(
   historial: { rol: "user" | "model"; texto: string }[],
   mensajeUsuario: string,
   contextoDB: Record<string, any> = {},
-  options: {
-    budgetMs?: number;
-    timeoutMs?: number;
-    image?: { mimeType: string; data: string };
-  } = {},
+  options: ChatGenerationOptions = {},
 ) {
   const quote =
+    !requestsPlatformAction(mensajeUsuario) &&
     !isMaterialPriceRequest(mensajeUsuario) &&
     (isQuoteRequest(mensajeUsuario) ||
       Boolean(contextoDB.cotizacion_actual && (isQuoteRevision(mensajeUsuario) || isAlternativeRequest(mensajeUsuario))));
@@ -86,10 +86,10 @@ export async function chatAsesorObrasGemini(
             m.rol === "model" &&
             m.texto.includes("Precios publicados en CLP; confirma"),
         ));
-  const pureSearchOnly = priceSearch && !hasNonSearchTask(mensajeUsuario);
+  const pureSearchOnly = priceSearch && !hasNonSearchTask(mensajeUsuario) && !requestsPlatformAction(mensajeUsuario);
   const prompt = (
     pureSearchOnly ? materialSearchPrompt : quote ? quotePrompt : chatPrompt
-  )(historial, mensajeUsuario, contextoDB);
+  )(historial, mensajeUsuario, compactAIContext(contextoDB));
   const schema = pureSearchOnly
     ? MATERIAL_QUERY_SCHEMA
     : quote ? QUOTE_RESPONSE_SCHEMA
@@ -97,15 +97,14 @@ export async function chatAsesorObrasGemini(
       ? WHATSAPP_RESPONSE_SCHEMA
       : CHAT_RESPONSE_SCHEMA;
   const extended = quote || Boolean(options.image);
-  const result = parseChatResponse(
-    await generateAI(pureSearchOnly || quote ? prompt : prompt + "\n" + CONSTRUCTION_WORKFLOW_RULES, {
-      ...options,
-      json: true,
-      schema,
-      budgetMs: Math.min(options.budgetMs || (extended ? 45000 : 30000), extended ? 45000 : 30000),
-      timeoutMs: Math.min(options.timeoutMs || (extended ? 40000 : 30000), extended ? 40000 : 30000),
-    }),
-  );
+  const separated = separatePrompt(prompt);
+  const result = await generateValidatedChat(separated.input, mensajeUsuario, contextoDB, {
+    ...options,
+    instructions: separated.instructions + (pureSearchOnly || quote ? '' : '\n' + CONSTRUCTION_WORKFLOW_RULES + '\n' + ACTION_EXAMPLES),
+    json: true, schema,
+    budgetMs: Math.min(options.budgetMs || (extended ? 45000 : 30000), extended ? 45000 : 30000),
+    timeoutMs: Math.min(options.timeoutMs || (extended ? 40000 : 30000), extended ? 40000 : 30000),
+  });
   if (result.busqueda_materiales) {
     const comparison = await compareMaterialPrices(
       completePurchaseQuantity(result.busqueda_materiales, mensajeUsuario),
@@ -163,17 +162,20 @@ export async function chatAgenteProyectoGemini(params: {
   mensajeUsuario: string;
   contextoProyecto: any;
   contextoDB?: Record<string, any>;
+  options?: ChatGenerationOptions;
 }) {
   const context = {
     ...params.contextoDB,
     proyectos: [params.contextoProyecto],
     proyecto_actual: params.contextoProyecto,
+    chat_proyecto_id: params.contextoProyecto.id,
     cotizacion_actual: params.contextoProyecto.cotizacion_actual,
   };
   return chatAsesorObrasGemini(
     params.historial,
     params.mensajeUsuario,
     context,
+    params.options,
   );
 }
 

@@ -353,7 +353,7 @@ export async function processPersonalMessage(
     if (image && attachment) attachment.descripcion = result.respuesta;
   } catch (error) {
     if (!attachment) throw error;
-    // Guardar el original es independiente del análisis. No inventar observaciones si falla Gemini.
+    // Guardar el original es independiente del análisis. No inventar observaciones si falla el análisis.
     const code = error instanceof AIError ? error.code : "AI_INTERNAL";
     console.error("whatsapp_image_analysis_failure", { code });
     analysisFailed = true;
