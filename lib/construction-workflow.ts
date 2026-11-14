@@ -188,3 +188,18 @@ export function rescheduleSuggestion(
     };
   });
 }
+
+export function materialPurchasePaymentPatch(
+  current: Pick<MaterialProyecto, "comprado" | "pagado">,
+  key: "comprado" | "pagado",
+  value: boolean,
+): Pick<MaterialProyecto, "comprado" | "pagado"> {
+  if (key === "pagado") {
+    return value
+      ? { comprado: true, pagado: true }
+      : { comprado: Boolean(current.comprado), pagado: false };
+  }
+  return value
+    ? { comprado: true, pagado: current.pagado ?? null }
+    : { comprado: false, pagado: null };
+}

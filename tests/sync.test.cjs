@@ -567,3 +567,57 @@ test('dataService.updateUsuario no promueve trabajadores a admin ni degrada cuen
   assert.equal(updatedAdmin.rol, 'admin');
   assert.equal(updatedAdmin.nombre, 'Admin Editado');
 });
+
+test('toggle de compra y pago sincroniza solo el material editado y conserva el orden estable ante respuestas reordenadas', async () => {
+  const m1 = { id: 'm-1', proyecto_id: 'p1', nombre: 'Cemento', cantidad: 10, unidad: 'sacos', precio_unitario: 5000, subtotal: 50000, comprado: false, pagado: null, created_at: '2026-11-10T10:00:00.000Z' };
+  const m2 = { id: 'm-2', proyecto_id: 'p1', nombre: 'Fierro', cantidad: 4, unidad: 'barras', precio_unitario: 8000, subtotal: 32000, comprado: false, pagado: null, created_at: '2026-11-10T10:00:00.000Z' };
+  const m3 = { id: 'm-3', proyecto_id: 'p1', nombre: 'Arena', cantidad: 2, unidad: 'm3', precio_unitario: 20000, subtotal: 40000, comprado: true, pagado: false, created_at: '2026-11-10T10:00:00.000Z' };
+  fixture.tables.set('materiales_proyecto', [m1, m2, m3]);
+  localStorage.setItem('obratrack_proyectos_v7_a', JSON.stringify([p1]));
+  localStorage.setItem('obratrack_materiales_proyecto_v7_a', JSON.stringify([m1, m2, m3]));
+
+  global.fetch = async (_url, init) => {
+    if (init?.method === 'POST') return POST(request(JSON.parse(init.body)));
+    const getRes = await GET(new NextRequest('https://example.test/api/supabase/sync'));
+    const body = await getRes.json();
+    // Simula reordenamiento físico de filas en PostgreSQL tras actualizar m-1
+    body.materiales = [body.materiales[1], body.materiales[2], body.materiales[0]].filter(Boolean);
+    return Response.json(body);
+  };
+
+  dataService.toggleMaterialStatus('m-1', 'pagado', true);
+  await dataService.confirmarCambios();
+  await dataService.pullFromCloudServer();
+
+  const materiales = dataService.getMaterialesProyecto('p1');
+  assert.deepEqual(materiales.map((m) => m.id), ['m-1', 'm-2', 'm-3']);
+  assert.deepEqual(
+    materiales.map((m) => [m.id, m.comprado, m.pagado]),
+    [
+      ['m-1', true, true],
+      ['m-2', false, null],
+      ['m-3', true, false],
+    ],
+  );
+
+  // Verifica que loadAIContext solicita orden determinista created_at + id para materiales_proyecto
+  const { loadAIContext } = require('../lib/ai/context.ts');
+  const orderCalls = [];
+  const spyClient = {
+    from(table) {
+      const q = {
+        select() { return q; },
+        eq() { return Promise.resolve({ data: table === 'empresas' ? [{ id: 'a', plan_id: 'pro_ia' }] : table === 'proyectos' ? [p1] : [], error: null }); },
+        in() { return q; },
+        order(col, opts) { orderCalls.push({ table, col, opts }); return q; },
+        then(resolve, reject) { return Promise.resolve({ data: [], error: null }).then(resolve, reject); },
+      };
+      return q;
+    },
+  };
+  await loadAIContext(spyClient, user);
+  assert.deepEqual(
+    orderCalls.filter((c) => c.table === 'materiales_proyecto').map((c) => [c.col, c.opts?.ascending]),
+    [['created_at', true], ['id', true]],
+  );
+});

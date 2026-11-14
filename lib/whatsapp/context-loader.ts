@@ -43,11 +43,17 @@ export async function loadWhatsAppContext(sb: any, user: any, users: any[]) {
     const results = await Promise.all([
       sb.from("clientes").select("*").eq("empresa_id", user.empresa_id),
       sb.from("agenda_eventos").select("*").eq("empresa_id", user.empresa_id),
-      ...[...whatsappChildTables, "proyecto_trabajadores"].map((table) =>
-        ids.length
-          ? sb.from(table).select("*").in("proyecto_id", ids)
-          : Promise.resolve({ data: [] }),
-      ),
+      ...[...whatsappChildTables, "proyecto_trabajadores"].map((table) => {
+        if (!ids.length) return Promise.resolve({ data: [] });
+        const query = sb.from(table).select("*").in("proyecto_id", ids);
+        if (table !== "materiales_proyecto" || typeof query?.order !== "function") {
+          return query;
+        }
+        const byCreated = query.order("created_at", { ascending: true });
+        return typeof byCreated?.order === "function"
+          ? byCreated.order("id", { ascending: true })
+          : byCreated;
+      }),
     ]);
     const tables: Record<string, any[]> = {
       usuarios: users.filter((u) => u.empresa_id === user.empresa_id),

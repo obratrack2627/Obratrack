@@ -1,4 +1,4 @@
-import {labourAmount,validateReception} from '@/lib/construction-workflow';
+import {labourAmount,materialPurchasePaymentPatch,validateReception} from '@/lib/construction-workflow';
 import { dailySummary } from '@/lib/daily-close';
 import { addWorkingDays, projectProgress } from '@/lib/work-calendar';
 import { chileToday } from '@/lib/ai/project-deadlines';
@@ -844,6 +844,16 @@ export class DataService {
     const index = all.findIndex((m) => m.id === id);
     if (index === -1) return null;
     all[index] = { ...all[index], ...data };
+    this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all);
+    return all[index];
+  }
+
+  toggleMaterialStatus(id: string, key: 'comprado' | 'pagado', value: boolean): MaterialProyecto | null {
+    const all = this.getItem<MaterialProyecto[]>(this.getTenantKey(KEYS.MATERIALES_PROYECTO), []);
+    const index = all.findIndex((m) => m.id === id);
+    if (index === -1) return null;
+    const patch = materialPurchasePaymentPatch(all[index], key, value);
+    all[index] = { ...all[index], ...patch };
     this.setItem(this.getTenantKey(KEYS.MATERIALES_PROYECTO), all);
     return all[index];
   }
@@ -2147,20 +2157,24 @@ export class DataService {
               : typeof itemMonto === 'number'
                 ? itemMonto
                 : target.subtotal;
-          const pagado =
+          const explicitPagado =
             typeof item.pagado === 'boolean'
               ? item.pagado
               : typeof accion.pagado === 'boolean'
                 ? accion.pagado
-                : target.pagado;
-          const comprado =
+                : undefined;
+          const explicitComprado =
             typeof item.comprado === 'boolean'
               ? item.comprado
               : typeof accion.comprado === 'boolean'
                 ? accion.comprado
-                : pagado === true
-                  ? true
-                  : target.comprado;
+                : undefined;
+          const statusPatch =
+            explicitPagado !== undefined
+              ? materialPurchasePaymentPatch(target, 'pagado', explicitPagado)
+              : explicitComprado !== undefined
+                ? materialPurchasePaymentPatch(target, 'comprado', explicitComprado)
+                : {};
           const proveedor =
             (typeof item.proveedor === 'string' && item.proveedor.trim()) ||
             (typeof accion.proveedor === 'string' && accion.proveedor.trim()) ||
@@ -2171,8 +2185,7 @@ export class DataService {
             precio_unitario: pu,
             subtotal,
             ...(proveedor ? { proveedor } : {}),
-            ...(typeof comprado === 'boolean' ? { comprado } : {}),
-            ...(typeof pagado === 'boolean' ? { pagado } : {}),
+            ...statusPatch,
           });
           if (updated) {
             actualizados.push(updated);
@@ -2721,9 +2734,27 @@ export class DataService {
       const deleted=this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{});
       const mergeById = <T extends {id:string}>(localArr:T[],cloudArr:T[],name:string):T[] => {
         const table=pending[name];
-        const rows=new Map(cloudArr.map(row=>[row.id,row]));
-        for(const row of localArr) if(table?.[row.id]) rows.set(row.id,row);
-        return Array.from(rows.values()).filter(row=>!deleted[name]?.[row.id]);
+        const del=deleted[name];
+        const cloudMap=new Map(cloudArr.map(row=>[row.id,row]));
+        const result:T[]=[];
+        const seen=new Set<string>();
+        for(const row of localArr){
+          if(seen.has(row.id)) continue;
+          seen.add(row.id);
+          if(del?.[row.id]) continue;
+          const cloudRow=cloudMap.get(row.id);
+          if(cloudRow){
+            result.push(table?.[row.id]?row:cloudRow);
+          }else if(table?.[row.id]){
+            result.push(row);
+          }
+        }
+        for(const row of cloudArr){
+          if(seen.has(row.id)||del?.[row.id]) continue;
+          seen.add(row.id);
+          result.push(row);
+        }
+        return result;
       };
 
       this.isPullingCloud = true;

@@ -7,6 +7,7 @@ const {
 } = require("../lib/whatsapp/state.ts");
 const {
   materialNeeds,
+  materialPurchasePaymentPatch,
   recordedFlow,
   labourAmount,
   validateReception,
@@ -375,4 +376,100 @@ test("una foto no habilita actas de recepción retiradas en WhatsApp", () => {
     checkActionPermissions(user, result.actions, "Recibió conforme"),
     /ya no está disponible/,
   );
+});
+
+test("compra registrada y pago confirmado se sincronizan coherentemente sin alterar otros materiales", () => {
+  assert.deepEqual(
+    materialPurchasePaymentPatch({ comprado: false, pagado: null }, "pagado", true),
+    { comprado: true, pagado: true },
+  );
+  assert.deepEqual(
+    materialPurchasePaymentPatch({ comprado: true, pagado: true }, "pagado", false),
+    { comprado: true, pagado: false },
+  );
+  assert.deepEqual(
+    materialPurchasePaymentPatch({ comprado: true, pagado: true }, "comprado", false),
+    { comprado: false, pagado: null },
+  );
+  assert.deepEqual(
+    materialPurchasePaymentPatch({ comprado: false, pagado: null }, "comprado", true),
+    { comprado: true, pagado: null },
+  );
+
+  const service = isolatedState(
+    user,
+    {
+      usuarios: [user],
+      proyectos: [project],
+      materiales_proyecto: [
+        {
+          id: "m1",
+          proyecto_id: "p",
+          nombre: "Cemento",
+          cantidad: 10,
+          unidad: "sacos",
+          precio_unitario: 5000,
+          subtotal: 50000,
+          comprado: false,
+          pagado: null,
+        },
+        {
+          id: "m2",
+          proyecto_id: "p",
+          nombre: "Fierro",
+          cantidad: 5,
+          unidad: "barras",
+          precio_unitario: 8000,
+          subtotal: 40000,
+          comprado: true,
+          pagado: false,
+        },
+        {
+          id: "m3",
+          proyecto_id: "p",
+          nombre: "Arena",
+          cantidad: 2,
+          unidad: "m3",
+          precio_unitario: 25000,
+          subtotal: 50000,
+          comprado: true,
+          pagado: true,
+        },
+      ],
+    },
+    "pro_ia",
+  );
+
+  const paidM1 = service.toggleMaterialStatus("m1", "pagado", true);
+  assert.equal(paidM1.comprado, true);
+  assert.equal(paidM1.pagado, true);
+
+  const afterM1Pay = service.getMaterialesProyecto("p");
+  assert.deepEqual(
+    afterM1Pay.map((m) => [m.id, m.comprado, m.pagado]),
+    [
+      ["m1", true, true],
+      ["m2", true, false],
+      ["m3", true, true],
+    ],
+  );
+
+  const unboughtM3 = service.toggleMaterialStatus("m3", "comprado", false);
+  assert.equal(unboughtM3.comprado, false);
+  assert.equal(unboughtM3.pagado, null);
+
+  const finalList = service.getMaterialesProyecto("p");
+  assert.deepEqual(
+    finalList.map((m) => [m.id, m.comprado, m.pagado]),
+    [
+      ["m1", true, true],
+      ["m2", true, false],
+      ["m3", false, null],
+    ],
+  );
+
+  const flow = recordedFlow(project, finalList, [], []);
+  assert.equal(flow.paid, 50000);
+  assert.equal(flow.unpaidMaterials, 40000);
+  assert.equal(flow.unknown, 1);
 });

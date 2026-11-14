@@ -505,11 +505,15 @@ export class SupabaseService {
   // --- MATERIALES ---
   async getMateriales(proyectoId?: string): Promise<MaterialProyecto[]> {
     try {
-      let q = this.client.from('materiales_proyecto').select('*');
+      let q: any = this.client.from('materiales_proyecto').select('*');
       if (proyectoId) q = q.eq('proyecto_id', proyectoId);
+      if (typeof q?.order === 'function') {
+        q = q.order('created_at', { ascending: true });
+        if (typeof q?.order === 'function') q = q.order('id', { ascending: true });
+      }
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []).map((r) => ({
+      return (data || []).map((r: any) => ({
         pagado: r.pagado,
         actividad_id:r.actividad_id,
         asistencia_id:r.asistencia_id,
@@ -537,6 +541,7 @@ export class SupabaseService {
     const payload = {
       id: mat.id,
       proyecto_id: mat.proyecto_id,
+      actividad_id: mat.actividad_id || null,
       nombre: mat.nombre,
       categoria: mat.categoria || null,
       cantidad: Number(mat.cantidad || 1),
@@ -545,6 +550,7 @@ export class SupabaseService {
       subtotal: Number(mat.subtotal || 0),
       proveedor: mat.proveedor || null,
       comprado: Boolean(mat.comprado),
+      pagado: mat.pagado ?? null,
     };
     const { error } = await this.client.from('materiales_proyecto').upsert(payload, { onConflict: 'id' });
     if (error) console.error('Error guardando material en Supabase:', error);
@@ -821,10 +827,20 @@ export class SupabaseService {
     let imprevistos: Imprevisto[] = [];
 
     if (projectIds.length > 0) {
+      const matsQuery = this.client.from('materiales_proyecto').select('*').in('proyecto_id', projectIds);
+      const orderedMats =
+        typeof (matsQuery as any)?.order === 'function'
+          ? (matsQuery as any).order('created_at', { ascending: true })
+          : matsQuery;
+      const finalMatsQuery =
+        typeof orderedMats?.order === 'function'
+          ? orderedMats.order('id', { ascending: true })
+          : orderedMats;
+
       const [acts, pgs, mats, bits, imps] = await Promise.all([
         this.client.from('actividades').select('*').in('proyecto_id', projectIds),
         this.client.from('pagos').select('*').in('proyecto_id', projectIds),
-        this.client.from('materiales_proyecto').select('*').in('proyecto_id', projectIds),
+        finalMatsQuery,
         this.client.from('bitacora_entradas').select('*').in('proyecto_id', projectIds),
         this.client.from('imprevistos').select('*').in('proyecto_id', projectIds),
       ]);
@@ -855,9 +871,10 @@ export class SupabaseService {
         created_at: row.created_at,
       }));
 
-      materiales = (mats.data || []).map((r) => ({
+      materiales = (mats.data || []).map((r: any) => ({
         id: r.id,
         proyecto_id: r.proyecto_id,
+        actividad_id: r.actividad_id,
         nombre: r.nombre,
         categoria: r.categoria,
         cantidad: Number(r.cantidad || 0),
@@ -866,6 +883,7 @@ export class SupabaseService {
         subtotal: Number(r.subtotal || 0),
         proveedor: r.proveedor,
         comprado: Boolean(r.comprado),
+        pagado: r.pagado,
         created_at: r.created_at,
       }));
 

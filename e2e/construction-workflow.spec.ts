@@ -121,6 +121,67 @@ test("material fraccionado tiene entregas parciales y no se paga al recibirlo, s
   });
 });
 
+test("materiales se muestran en lista, aíslan compra/pago entre filas y permiten edición minimalista", async ({
+  page,
+}) => {
+  const db = await setup(page, {}, true);
+  db.materiales_proyecto = [
+    {
+      id: "mat-a",
+      proyecto_id: "p-existing",
+      nombre: "Cemento Polpaico",
+      categoria: "obra_gruesa",
+      cantidad: 10,
+      unidad: "saco",
+      precio_unitario: 5000,
+      subtotal: 50000,
+      proveedor: "Por confirmar",
+      comprado: false,
+      pagado: null,
+    },
+    {
+      id: "mat-b",
+      proyecto_id: "p-existing",
+      nombre: "Fierro A630",
+      categoria: "estructura",
+      cantidad: 5,
+      unidad: "barra",
+      precio_unitario: 8000,
+      subtotal: 40000,
+      proveedor: "Imperial",
+      comprado: false,
+      pagado: null,
+    },
+  ];
+  await page.goto("/proyectos/p-existing/finanzas");
+  await page.getByRole("button", { name: /^Materiales/ }).click();
+
+  const rows = page.locator("ul > li");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText("Cemento Polpaico");
+  await expect(rows.nth(1)).toContainText("Fierro A630");
+
+  await rows.nth(0).getByLabel("Pago confirmado").check();
+  await expect(rows.nth(0).getByLabel("Compra registrada")).toBeChecked();
+  await expect(rows.nth(1).getByLabel("Compra registrada")).not.toBeChecked();
+  await expect(rows.nth(1).getByLabel("Pago confirmado")).not.toBeChecked();
+  await expect(rows.nth(0)).toContainText("Cemento Polpaico");
+  await expect(rows.nth(1)).toContainText("Fierro A630");
+  expect(db.materiales_proyecto.find((m) => m.id === "mat-a")?.comprado).toBe(true);
+  expect(db.materiales_proyecto.find((m) => m.id === "mat-a")?.pagado).toBe(true);
+  expect(db.materiales_proyecto.find((m) => m.id === "mat-b")?.comprado).toBe(false);
+  expect(db.materiales_proyecto.find((m) => m.id === "mat-b")?.pagado).toBe(null);
+
+  await page.getByRole("button", { name: "Editar Cemento Polpaico", exact: true }).click();
+  await page.getByLabel("Proveedor").fill("Sodimac Homecenter");
+  await page.getByLabel("Precio c/u *").fill("6000");
+  await page.getByRole("button", { name: "Guardar Cambios", exact: true }).click();
+
+  await expect(rows.nth(0)).toContainText("Sodimac Homecenter");
+  await expect(rows.nth(0)).toContainText("$60.000");
+  expect(db.materiales_proyecto.find((m) => m.id === "mat-a")?.unidad).toBe("saco");
+});
+
 test("reprogramación muestra propuesta y pide motivo, conserva entrega si no se autoriza", async ({
   page,
 }) => {

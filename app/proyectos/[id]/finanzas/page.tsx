@@ -51,30 +51,8 @@ import EstadoPagoPdfModal from '@/components/EstadoPagoPdfModal';
 import { downloadProjectExcel } from '@/lib/excel-export';
 import MaterialCatalogQuickSearch from '@/components/MaterialCatalogQuickSearch';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
-
-const MATERIAL_CATEGORY_LABELS: Record<string, string> = {
-  obra_gruesa: 'Obra gruesa',
-  ferreteria: 'Ferretería',
-  terminaciones: 'Terminaciones',
-  pintura: 'Pintura',
-  instalaciones: 'Instalaciones',
-  electricidad: 'Electricidad',
-  gasfiteria: 'Gasfitería',
-  estructura: 'Estructura',
-  herramientas: 'Herramientas',
-  otro: 'Otro',
-};
-
-function formatMaterialCategory(raw?: string): string {
-  if (!raw) return 'General';
-  const key = raw.trim().toLowerCase();
-  if (MATERIAL_CATEGORY_LABELS[key]) return MATERIAL_CATEGORY_LABELS[key];
-  if (raw.includes('_')) {
-    const cleaned = raw.replace(/_/g, ' ').trim();
-    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
-  }
-  return raw;
-}
+import { materialPurchasePaymentPatch } from '@/lib/construction-workflow';
+import { MATERIAL_CATEGORY_LABELS } from '@/lib/materials/format';
 
 export default function ProyectoFinanzasPage() {
   const params = useParams();
@@ -153,7 +131,9 @@ export default function ProyectoFinanzasPage() {
   const [editMatCantidad, setEditMatCantidad] = useState('1');
   const [editMatUnidad, setEditMatUnidad] = useState('unidades');
   const [editMatPrecioUnit, setEditMatPrecioUnit] = useState('');
-  const [editMatProveedor, setEditMatProveedor] = useState('Imperial');
+  const [editMatProveedor, setEditMatProveedor] = useState('');
+  const [editMatComprado, setEditMatComprado] = useState(false);
+  const [editMatPagado, setEditMatPagado] = useState<boolean | null>(null);
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [cambios, setCambios] = useState<ReclamoCambioObra[]>([]);
   const [isEdpModalOpen, setIsEdpModalOpen] = useState(false);
@@ -372,23 +352,28 @@ export default function ProyectoFinanzasPage() {
   };
 
   // --- CRUD MATERIALES ---
-  const handleCreateMaterial = (e: React.FormEvent) => {
+  const handleCreateMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombreMat.trim()) return;
 
     const parsedPrice = parseThousands(precioUnitMat);
     const qty = Number(cantidadMat);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      showToast('Ingresa una cantidad válida mayor a 0.');
+      return;
+    }
 
+    const createdName = nombreMat.trim();
     dataService.createMaterialProyecto({
       proyecto_id: projectId,
-      nombre: nombreMat.trim(),
-      categoria: categoriaMat,
+      nombre: createdName,
+      categoria: categoriaMat.trim() || 'Obra Gruesa',
       cantidad: qty,
-      unidad: unidadMat,
+      unidad: unidadMat.trim() || 'unidades',
       precio_unitario: parsedPrice,
-      subtotal: qty * parsedPrice,
-      proveedor: proveedorMat,
-      actividad_id: actividadMat||null,
+      subtotal: Math.round(qty * parsedPrice),
+      proveedor: proveedorMat.trim() || undefined,
+      actividad_id: actividadMat || null,
       comprado: false,
     });
 
@@ -398,46 +383,84 @@ export default function ProyectoFinanzasPage() {
     setCantidadMat('1');
     setPrecioUnitMat('');
     loadData();
-    showToast(`Material "${nombreMat.trim()}" agregado a la lista.`);
+    try {
+      await dataService.confirmarCambios();
+      showToast(`Material "${createdName}" agregado a la lista.`);
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : `Material "${createdName}" guardado localmente; pendiente de sincronización.`,
+      );
+    } finally {
+      loadData();
+    }
   };
 
   const handleOpenEditMaterial = (m: MaterialProyecto) => {
     setEditingMaterial(m);
-    setEditActividadMat(m.actividad_id||'');
+    setEditActividadMat(m.actividad_id || '');
     setEditMatNombre(m.nombre);
     setEditMatCategoria(m.categoria || 'Obra Gruesa');
     setEditMatCantidad(String(m.cantidad));
     setEditMatUnidad(m.unidad);
     setEditMatPrecioUnit(formatThousands(m.precio_unitario));
-    setEditMatProveedor(m.proveedor || 'Imperial');
+    setEditMatProveedor(m.proveedor || '');
+    setEditMatComprado(Boolean(m.comprado));
+    setEditMatPagado(m.pagado ?? null);
   };
 
-  const handleSaveEditMaterial = (e: React.FormEvent) => {
+  const handleSaveEditMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMaterial || !editMatNombre.trim()) return;
 
     const parsedPrice = parseThousands(editMatPrecioUnit);
     const qty = Number(editMatCantidad);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      showToast('Ingresa una cantidad válida mayor a 0.');
+      return;
+    }
 
+    const received = dataService
+      .getBitacora(projectId)
+      .filter((b) => b.material_id === editingMaterial.id && b.tipo === 'entrega_material')
+      .reduce((s, b) => s + Number(b.cantidad_recibida || 0), 0);
+    if (qty < received - 0.000001) {
+      showToast(
+        `La cantidad no puede ser menor a lo ya recibido en bitácora (${received} ${editMatUnidad || editingMaterial.unidad}).`,
+      );
+      return;
+    }
+
+    const savedName = editMatNombre.trim();
+    const isComprado = editMatComprado || editMatPagado === true;
     dataService.updateMaterialProyecto(editingMaterial.id, {
-      nombre: editMatNombre.trim(),
-      categoria: editMatCategoria,
+      nombre: savedName,
+      categoria: editMatCategoria.trim() || undefined,
       cantidad: qty,
-      unidad: editMatUnidad,
+      unidad: editMatUnidad.trim() || editingMaterial.unidad || 'unidades',
       precio_unitario: parsedPrice,
-      subtotal: qty * parsedPrice,
-      proveedor: editMatProveedor,
-      actividad_id: editActividadMat||null,
+      subtotal: Math.round(qty * parsedPrice),
+      proveedor: editMatProveedor.trim() || undefined,
+      actividad_id: editActividadMat || null,
+      comprado: isComprado,
+      pagado: isComprado ? editMatPagado : null,
     });
 
     setEditingMaterial(null);
     loadData();
-    showToast(`Material "${editMatNombre.trim()}" actualizado.`);
-  };
-
-  const handleToggleMaterial = (mat: MaterialProyecto) => {
-    dataService.updateMaterialProyecto(mat.id, { comprado: !mat.comprado });
-    loadData();
+    try {
+      await dataService.confirmarCambios();
+      showToast(`Material "${savedName}" actualizado.`);
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : `Material "${savedName}" guardado localmente; pendiente de sincronización.`,
+      );
+    } finally {
+      loadData();
+    }
   };
 
   const handleConfirmDeleteMaterial = async () => {
@@ -899,15 +922,15 @@ export default function ProyectoFinanzasPage() {
         </div>
 
         {/* Sección: Materiales & Insumos de la Obra (con CRUD) */}
-        <div className={`${financeSection === 'materiales' ? '' : 'hidden'} bg-white border border-kraft-200 rounded-2xl p-6 shadow-sm space-y-4`}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200">
+        <div className={`${financeSection === 'materiales' ? '' : 'hidden'} bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-6 shadow-sm space-y-4`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200 dark:border-[#263040]">
             <div>
-              <h3 className="font-heading font-black text-lg text-navy-900 flex items-center gap-2">
+              <h3 className="font-heading font-black text-lg text-navy-900 dark:text-white flex items-center gap-2">
                 <Package className="w-5 h-5 text-obra-orange" />
                 <span>Materiales</span>
               </h3>
-              <p className="text-xs text-gray-500 font-sans mt-0.5">
-                Compras y materiales pendientes.
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-sans mt-0.5">
+                Compras, pagos y recepciones en obra.
               </p>
             </div>
             
@@ -921,8 +944,8 @@ export default function ProyectoFinanzasPage() {
           </div>
 
           {materiales.length === 0 ? (
-            <div className="py-8 text-center text-gray-500 font-sans space-y-2">
-              <ShoppingBag className="w-8 h-8 text-gray-300 mx-auto" />
+            <div className="py-8 text-center text-gray-500 dark:text-gray-400 font-sans space-y-2">
+              <ShoppingBag className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto" />
               <p className="text-xs">No has agregado materiales a esta obra aún.</p>
               <button
                 onClick={() => setIsMaterialModalOpen(true)}
@@ -932,8 +955,15 @@ export default function ProyectoFinanzasPage() {
               </button>
             </div>
           ) : (
-            <ProjectMaterials materials={materiales} onEdit={handleOpenEditMaterial} onDelete={setMaterialToDelete} onChanged={loadData}/>
-
+            <ProjectMaterials
+              projectId={projectId}
+              materials={materiales}
+              activities={actividades}
+              onEdit={handleOpenEditMaterial}
+              onDelete={setMaterialToDelete}
+              onChanged={loadData}
+              onNotify={showToast}
+            />
           )}
         </div>
 
@@ -1404,6 +1434,32 @@ export default function ProyectoFinanzasPage() {
         </ModalOverlay>
       )}
 
+      <datalist id="material-providers-list">
+        <option value="Easy" />
+        <option value="Dimaco" />
+        <option value="Imperial" />
+        <option value="Construmart" />
+        <option value="Sodimac Constructor" />
+        <option value="Red MTS" />
+        <option value="Barraca Local" />
+      </datalist>
+      <datalist id="material-units-list">
+        <option value="sacos" />
+        <option value="placas" />
+        <option value="tiras" />
+        <option value="barras" />
+        <option value="m2" />
+        <option value="m3" />
+        <option value="kg" />
+        <option value="unidades" />
+        <option value="global" />
+      </datalist>
+      <datalist id="material-categories-list">
+        {Object.values(MATERIAL_CATEGORY_LABELS).map((label) => (
+          <option key={label} value={label} />
+        ))}
+      </datalist>
+
       {/* Modal: + Agregar Material a la Obra */}
       {isMaterialModalOpen && (
         <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1500,31 +1556,43 @@ export default function ProyectoFinanzasPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  <label className="block text-xs font-mono font-semibold text-gray-700 dark:text-gray-300 uppercase mb-1">
                     Proveedor Sugerido
                   </label>
-                  <select
+                  <input
+                    type="text"
+                    list="material-providers-list"
+                    placeholder="Ej: Imperial, Sodimac, Dimaco"
                     value={proveedorMat}
                     onChange={(e) => setProveedorMat(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
-                  >
-                    <option value="Easy">Easy</option>
-                    <option value="Dimaco">Dimaco</option>
-                    <option value="Imperial">Imperial</option>
-                    <option value="Construmart">Construmart</option>
-                    <option value="Sodimac">Sodimac Constructor</option>
-                    <option value="Red MTS">Red MTS</option>
-                    <option value="Barraca Local">Barraca Local</option>
-                  </select>
-                  <label className="mt-3 block text-xs font-semibold">Partida que requiere el material (opcional)<select value={actividadMat} onChange={e=>setActividadMat(e.target.value)} className="mt-1 w-full rounded-xl border border-kraft-200 bg-kraft-50 px-3 py-2 text-sm"><option value="">Sin partida asociada</option>{actividades.map(row=><option key={row.id} value={row.id}>{row.nombre}</option>)}</select></label>
+                    className="w-full px-3 py-2 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#2C3748] rounded-xl text-xs font-mono text-gray-900 dark:text-white focus:outline-none focus:border-obra-orange"
+                  />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                  Partida que requiere el material (opcional)
+                  <select
+                    value={actividadMat}
+                    onChange={(e) => setActividadMat(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-kraft-200 dark:border-[#2C3748] bg-kraft-50 dark:bg-[#0F141C] px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-obra-orange"
+                  >
+                    <option value="">Sin partida asociada</option>
+                    {actividades.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200 dark:border-[#263040]">
                 <button
                   type="button"
                   onClick={() => setIsMaterialModalOpen(false)}
-                  className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900"
+                  className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 >
                   Cancelar
                 </button>
@@ -1543,111 +1611,214 @@ export default function ProyectoFinanzasPage() {
       {/* Modal: Editar Material */}
       {editingMaterial && (
         <ModalOverlay className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl sm:rounded-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-kraft-200">
-              <h3 className="font-heading font-bold text-base text-navy-900 flex items-center gap-2">
+          <div className="relative w-full max-w-md my-auto bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-5 shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 mb-3.5 border-b border-kraft-200 dark:border-[#263040]">
+              <h3 className="font-heading font-bold text-sm sm:text-base text-navy-900 dark:text-white flex items-center gap-2">
                 <Edit3 className="w-4 h-4 text-obra-orange" />
-                <span>Editar Insumo / Material</span>
+                <span>Editar material</span>
               </h3>
-              <button onClick={() => setEditingMaterial(null)} className="text-gray-400 hover:text-gray-700">
-                <X className="w-5 h-5" />
+              <button
+                type="button"
+                onClick={() => setEditingMaterial(null)}
+                aria-label="Cerrar"
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#1E2633]"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditMaterial} className="space-y-4">
+            <form onSubmit={handleSaveEditMaterial} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                  Nombre del Material *
+                <label
+                  htmlFor="edit-mat-nombre"
+                  className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
+                >
+                  Nombre *
                 </label>
                 <input
+                  id="edit-mat-nombre"
                   type="text"
                   required
                   value={editMatNombre}
                   onChange={(e) => setEditMatNombre(e.target.value)}
-                  className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs focus:outline-none focus:border-obra-orange font-semibold"
+                  className="w-full px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-kraft-200 dark:border-[#2C3748] rounded-xl text-xs sm:text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:border-obra-orange"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                  <label
+                    htmlFor="edit-mat-categoria"
+                    className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
+                  >
+                    Categoría
+                  </label>
+                  <input
+                    id="edit-mat-categoria"
+                    type="text"
+                    list="material-categories-list"
+                    placeholder="Obra gruesa"
+                    value={editMatCategoria}
+                    onChange={(e) => setEditMatCategoria(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-kraft-200 dark:border-[#2C3748] rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-obra-orange"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="edit-mat-proveedor"
+                    className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
+                  >
+                    Proveedor
+                  </label>
+                  <input
+                    id="edit-mat-proveedor"
+                    type="text"
+                    list="material-providers-list"
+                    placeholder="Por definir"
+                    value={editMatProveedor}
+                    onChange={(e) => setEditMatProveedor(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-kraft-200 dark:border-[#2C3748] rounded-xl text-xs text-gray-900 dark:text-white focus:outline-none focus:border-obra-orange"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label
+                    htmlFor="edit-mat-cantidad"
+                    className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
+                  >
                     Cantidad *
                   </label>
                   <input
+                    id="edit-mat-cantidad"
                     type="number"
                     min="0.001"
                     step="any"
                     required
                     value={editMatCantidad}
                     onChange={(e) => setEditMatCantidad(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"
+                    className="w-full px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-kraft-200 dark:border-[#2C3748] rounded-xl text-xs font-mono text-gray-900 dark:text-white focus:outline-none focus:border-obra-orange"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                    Unidad
+                  <label
+                    htmlFor="edit-mat-unidad"
+                    className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
+                  >
+                    Unidad *
                   </label>
-                  <select
+                  <input
+                    id="edit-mat-unidad"
+                    type="text"
+                    list="material-units-list"
+                    required
                     value={editMatUnidad}
                     onChange={(e) => setEditMatUnidad(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
-                  >
-                    <option value="sacos">Sacos</option>
-                    <option value="placas">Placas</option>
-                    <option value="tiras">Tiras</option>
-                    <option value="barras">Barras</option>
-                    <option value="m2">m²</option>
-                    <option value="m3">m³</option>
-                    <option value="kg">kg</option>
-                    <option value="unidades">Unidades</option>
-                    <option value="global">Global</option>
-                  </select>
+                    className="w-full px-3 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-kraft-200 dark:border-[#2C3748] rounded-xl text-xs font-mono text-gray-900 dark:text-white focus:outline-none focus:border-obra-orange"
+                  />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                    Precio Unitario (CLP) *
+                <div className="col-span-2 sm:col-span-1">
+                  <label
+                    htmlFor="edit-mat-precio"
+                    className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
+                  >
+                    Precio c/u *
                   </label>
                   <div className="relative">
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 font-mono text-xs">$</span>
                     <input
+                      id="edit-mat-precio"
                       type="text"
                       required
                       value={editMatPrecioUnit}
                       onChange={(e) => setEditMatPrecioUnit(formatThousands(e.target.value))}
-                      className="w-full pl-6 pr-2 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-obra-orange"
+                      className="w-full pl-6 pr-2.5 py-2 bg-[#FAF8F5] dark:bg-[#0F141C] border border-kraft-200 dark:border-[#2C3748] rounded-xl text-xs font-mono font-semibold text-gray-900 dark:text-white focus:outline-none focus:border-obra-orange"
                     />
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
-                    Proveedor
-                  </label>
-                  <select
-                    value={editMatProveedor}
-                    onChange={(e) => setEditMatProveedor(e.target.value)}
-                    className="w-full px-3 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
-                  >
-                    <option value="Easy">Easy</option>
-                    <option value="Dimaco">Dimaco</option>
-                    <option value="Imperial">Imperial</option>
-                    <option value="Construmart">Construmart</option>
-                    <option value="Sodimac">Sodimac Constructor</option>
-                    <option value="Red MTS">Red MTS</option>
-                    <option value="Barraca Local">Barraca Local</option>
-                  </select>
-                  <label className="mt-3 block text-xs font-semibold">Partida que requiere el material (opcional)<select value={editActividadMat} onChange={e=>setEditActividadMat(e.target.value)} className="mt-1 w-full rounded-xl border border-kraft-200 bg-kraft-50 px-3 py-2 text-sm"><option value="">Sin partida asociada</option>{actividades.map(row=><option key={row.id} value={row.id}>{row.nombre}</option>)}</select></label>
-                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200">
+              <div className="rounded-xl bg-[#FAF8F5] dark:bg-[#1A222D] border border-kraft-200/80 dark:border-[#263040] px-3 py-2 flex items-center justify-between text-xs">
+                <span className="text-gray-500 dark:text-gray-400">Subtotal calculado</span>
+                <strong className="font-bold text-gray-900 dark:text-white tabular-nums">
+                  {formatCLP(
+                    Math.round(
+                      (Number(editMatCantidad) || 0) * parseThousands(editMatPrecioUnit),
+                    ),
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="edit-mat-actividad"
+                  className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1"
+                >
+                  Partida asociada (opcional)
+                </label>
+                <select
+                  id="edit-mat-actividad"
+                  value={editActividadMat}
+                  onChange={(e) => setEditActividadMat(e.target.value)}
+                  className="w-full rounded-xl border border-kraft-200 dark:border-[#2C3748] bg-[#FAF8F5] dark:bg-[#0F141C] px-3 py-2 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-obra-orange"
+                >
+                  <option value="">Sin partida asociada</option>
+                  {actividades.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
+                <label className="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editMatComprado}
+                    onChange={(e) => {
+                      const patch = materialPurchasePaymentPatch(
+                        { comprado: editMatComprado, pagado: editMatPagado },
+                        'comprado',
+                        e.target.checked,
+                      );
+                      setEditMatComprado(patch.comprado);
+                      setEditMatPagado(patch.pagado ?? null);
+                    }}
+                    className="h-3.5 w-3.5 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Compra registrada</span>
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editMatPagado === true}
+                    onChange={(e) => {
+                      const patch = materialPurchasePaymentPatch(
+                        { comprado: editMatComprado, pagado: editMatPagado },
+                        'pagado',
+                        e.target.checked,
+                      );
+                      setEditMatComprado(patch.comprado);
+                      setEditMatPagado(patch.pagado ?? null);
+                    }}
+                    className="h-3.5 w-3.5 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>Pago confirmado</span>
+                </label>
+                {editMatPagado === false && (
+                  <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                    Por pagar
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-kraft-200 dark:border-[#263040]">
                 <button
                   type="button"
                   onClick={() => setEditingMaterial(null)}
-                  className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-900"
+                  className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
                 >
                   Cancelar
                 </button>

@@ -46,11 +46,16 @@ export async function loadAIContext(
   };
   const ids = tables.proyectos.map((p) => p.id);
   const names = options.projectsOnly ? (user.rol === "terreno" ? ["proyecto_trabajadores"] : []) : ["usuarios", "clientes", "agenda_eventos", ...projectTables];
+  const orderProjectQuery = (table: string, query: any) => {
+    if (table !== "materiales_proyecto" || typeof query?.order !== "function") return query;
+    const byCreated = query.order("created_at", { ascending: true });
+    return typeof byCreated?.order === "function" ? byCreated.order("id", { ascending: true }) : byCreated;
+  };
   const results = await Promise.all(
     names.map((table) =>
       projectTables.includes(table)
         ? ids.length
-          ? client.from(table).select("*").in("proyecto_id", ids)
+          ? orderProjectQuery(table, client.from(table).select("*").in("proyecto_id", ids))
           : Promise.resolve({ data: [] })
         : client.from(table).select("*").eq("empresa_id", user.empresa_id),
     ),
