@@ -11,7 +11,6 @@ import {
   Building,
   TrendingUp,
   AlertTriangle,
-  Calendar,
   DollarSign,
   Users,
   Sparkles,
@@ -37,14 +36,13 @@ import {
   Cell,
 } from 'recharts';
 import { dataService } from '@/lib/data-service';
-import { Proyecto, EventoAgenda, ReporteWhatsApp, Usuario } from '@/types/database';
+import { Proyecto, ReporteWhatsApp, Usuario } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
 import { aiHeaders } from '@/lib/ai/client';
 
 export default function DashboardPage() {
   const router = useRouter();
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
-  const [eventos, setEventos] = useState<EventoAgenda[]>([]);
   const [reportes, setReportes] = useState<ReporteWhatsApp[]>([]);
   const [whatsappPendingCount, setWhatsappPendingCount] = useState(0);
   const [activeUser, setActiveUser] = useState<Usuario | null>(null);
@@ -60,9 +58,6 @@ export default function DashboardPage() {
 
     const projs = dataService.getProyectos();
     setProyectos(projs);
-
-    const evts = dataService.getEventosAgenda();
-    setEventos(evts);
 
     const reps = dataService.getReportes();
     setReportes(reps);
@@ -89,7 +84,6 @@ export default function DashboardPage() {
     const onSync = () => {
       setActiveUser(dataService.getActiveUser());
       setProyectos(dataService.getProyectos());
-      setEventos(dataService.getEventosAgenda());
       setReportes(dataService.getReportes());
       void loadWhatsAppPending();
     };
@@ -120,8 +114,6 @@ export default function DashboardPage() {
   const totalReportesPorValidar = reportesPendientes.length + whatsappPendingCount;
 
   // Alertas de obras críticas (con plazo próximo o atrasadas)
-  const today = new Date();
-  const todayISO = chileToday();
   const alertas = obrasActivas
     .map((p) => {
       let diasRestantes = 99999;
@@ -164,15 +156,6 @@ export default function DashboardPage() {
       Cobrado: p.total_pagado || 0,
       Pendiente: Math.max(0, (p.monto_cotizado || 0) - (p.total_pagado || 0)),
     }));
-
-  // Eventos de agenda ordenados: próximos/hoy primero por fecha asc, luego vencidos no completados más recientes
-  const eventosOrdenados = [...eventos].sort((a, b) => {
-    const aFuture = a.fecha >= todayISO ? 0 : 1;
-    const bFuture = b.fecha >= todayISO ? 0 : 1;
-    if (aFuture !== bFuture) return aFuture - bFuture;
-    const cmp = `${a.fecha} ${a.hora || '23:59'}`.localeCompare(`${b.fecha} ${b.hora || '23:59'}`);
-    return aFuture === 0 ? cmp : -cmp;
-  });
 
   const pieDataRentabilidad = [
     { name: 'Cobrado', value: totalCobrado, color: '#6B8F72' },
@@ -369,10 +352,10 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Obras Activas y Agenda de Faena */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Obras en curso */}
+      <div>
         {/* Obras Activas con Semáforo */}
-        <div className="lg:col-span-2 p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4">
+        <div className="min-w-0 p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
@@ -456,60 +439,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Agenda Próxima de Terreno */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
-                Agenda de Faena
-              </h3>
-              <p className="text-xs text-gray-500 font-mono">
-                Próximas visitas y vaciados
-              </p>
-            </div>
-            <Calendar className="w-4 h-4 text-[#FF6A00]" />
-          </div>
-
-          <div className="space-y-2.5">
-            {eventosOrdenados.slice(0, 5).map((evt) => {
-              const isPast = evt.fecha < todayISO && !evt.completado;
-              return (
-                <div
-                  key={evt.id}
-                  className="p-3 rounded-xl bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] space-y-1"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-heading font-bold text-navy-900 dark:text-white truncate">
-                      {evt.titulo}
-                    </span>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {isPast && (
-                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                          Vencido
-                        </span>
-                      )}
-                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#FF6A00]/15 text-[#FF6A00]">
-                        {evt.hora || 'Por confirmar'}
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 line-clamp-1">{evt.descripcion}</p>
-                  <div className="flex items-center justify-between text-[10px] font-mono text-gray-400 pt-1">
-                    <span>{formatDate(evt.fecha)}</span>
-                    <span>{evt.comuna_lugar || 'En terreno'}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <Link
-            href="/cotizador?intent=agendar"
-            className="block text-center w-full py-2 rounded-xl bg-kraft-100 dark:bg-[#1E2530] text-xs font-heading font-bold text-navy-900 dark:text-gray-200 border border-kraft-200 dark:border-[#263040] hover:bg-kraft-200 transition-colors"
-          >
-            + Agendar con ObraBot
-          </Link>
-        </div>
       </div>
       {/* Sección Gráfica y Obras en Curso */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
