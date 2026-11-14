@@ -101,23 +101,138 @@ function deriveLogTitle(rawNote: unknown) {
   return firstClause.length > 70 ? `${firstClause.slice(0, 67).trimEnd()}...` : firstClause;
 }
 
+function stripEmptyOptionalFields(raw: Record<string, any>) {
+  const clearableContact =
+    raw.tipo === "actualizar_trabajador" || raw.tipo === "actualizar_cliente";
+  const cleaned: Record<string, any> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    if (typeof val === "string" && val.trim() === "") {
+      if (
+        clearableContact &&
+        ["email", "telefono", "rut", "direccion", "comuna"].includes(key)
+      ) {
+        cleaned[key] = "";
+      }
+      continue;
+    }
+    cleaned[key] = val;
+  }
+  return cleaned;
+}
+
 export function validateAction(raw: any): AIAction {
   if (!raw || typeof raw !== "object" || !ACTION_TYPES.includes(raw.tipo))
     fail("La IA propuso una acción que la plataforma no admite.");
-  const normalizedRaw =
-    raw.tipo === "crear_bitacora"
-      ? {
-          ...raw,
-          titulo: text(raw.titulo)
-            ? raw.titulo
-            : text(raw.nombre)
-              ? raw.nombre
-              : deriveLogTitle(raw.nota || raw.descripcion || raw.observacion || raw.resumen || raw.mensaje),
-          nota: text(raw.nota)
-            ? raw.nota
-            : raw.descripcion || raw.observacion || raw.resumen || raw.mensaje || raw.titulo || raw.nombre,
-        }
-      : raw;
+  let normalizedRaw = stripEmptyOptionalFields(raw);
+  if (
+    normalizedRaw.tipo === "registrar_imprevisto" &&
+    normalizedRaw.monto === undefined &&
+    !normalizedRaw.asistencia_id &&
+    !normalizedRaw.categoria_gasto
+  ) {
+    normalizedRaw = {
+      tipo: "crear_bitacora",
+      ...(normalizedRaw.proyecto_id ? { proyecto_id: normalizedRaw.proyecto_id } : {}),
+      ...(normalizedRaw.proyecto_nombre ? { proyecto_nombre: normalizedRaw.proyecto_nombre } : {}),
+      ...(text(normalizedRaw.titulo) ? { titulo: normalizedRaw.titulo } : {}),
+      nota:
+        normalizedRaw.descripcion ||
+        normalizedRaw.nota ||
+        normalizedRaw.observacion ||
+        normalizedRaw.titulo,
+      tipo_bitacora: "incidente",
+      ...(normalizedRaw.fecha ? { fecha: normalizedRaw.fecha } : {}),
+    };
+  }
+  if (
+    normalizedRaw.tipo === "actualizar_avance" &&
+    normalizedRaw.porcentaje_avance === undefined &&
+    (text(normalizedRaw.nota) ||
+      text(normalizedRaw.descripcion) ||
+      text(normalizedRaw.titulo) ||
+      text(normalizedRaw.observacion))
+  ) {
+    normalizedRaw = {
+      tipo: "crear_bitacora",
+      ...(normalizedRaw.proyecto_id ? { proyecto_id: normalizedRaw.proyecto_id } : {}),
+      ...(normalizedRaw.proyecto_nombre ? { proyecto_nombre: normalizedRaw.proyecto_nombre } : {}),
+      ...(text(normalizedRaw.titulo) ? { titulo: normalizedRaw.titulo } : {}),
+      nota:
+        normalizedRaw.nota ||
+        normalizedRaw.descripcion ||
+        normalizedRaw.observacion ||
+        normalizedRaw.titulo,
+      tipo_bitacora: "avance",
+      ...(normalizedRaw.fecha ? { fecha: normalizedRaw.fecha } : {}),
+    };
+  }
+  if (normalizedRaw.tipo === "crear_bitacora") {
+    normalizedRaw = {
+      ...normalizedRaw,
+      titulo: text(normalizedRaw.titulo)
+        ? normalizedRaw.titulo
+        : text(normalizedRaw.nombre)
+          ? normalizedRaw.nombre
+          : deriveLogTitle(
+              normalizedRaw.nota ||
+                normalizedRaw.descripcion ||
+                normalizedRaw.observacion ||
+                normalizedRaw.resumen ||
+                normalizedRaw.mensaje,
+            ),
+      nota: text(normalizedRaw.nota)
+        ? normalizedRaw.nota
+        : normalizedRaw.descripcion ||
+          normalizedRaw.observacion ||
+          normalizedRaw.resumen ||
+          normalizedRaw.mensaje ||
+          normalizedRaw.titulo ||
+          normalizedRaw.nombre,
+    };
+    if (
+      normalizedRaw.material_id &&
+      (normalizedRaw.cantidad_recibida === undefined ||
+        normalizedRaw.cantidad_recibida === null)
+    ) {
+      delete normalizedRaw.material_id;
+      delete normalizedRaw.cantidad_recibida;
+    }
+  }
+  if (normalizedRaw.tipo === "crear_solicitud_cambio") {
+    normalizedRaw = {
+      ...normalizedRaw,
+      titulo: text(normalizedRaw.titulo)
+        ? normalizedRaw.titulo
+        : deriveLogTitle(
+            normalizedRaw.descripcion ||
+              normalizedRaw.nota ||
+              normalizedRaw.observacion ||
+              normalizedRaw.subtipo ||
+              "Solicitud de cambio",
+          ),
+      descripcion: text(normalizedRaw.descripcion)
+        ? normalizedRaw.descripcion
+        : normalizedRaw.nota || normalizedRaw.observacion || normalizedRaw.titulo,
+    };
+  }
+  if (
+    normalizedRaw.tipo === "registrar_documento" &&
+    !["cierre_diario", "acta_recepcion"].includes(normalizedRaw.categoria)
+  ) {
+    normalizedRaw = {
+      ...normalizedRaw,
+      nombre: text(normalizedRaw.nombre)
+        ? normalizedRaw.nombre
+        : text(normalizedRaw.titulo)
+          ? normalizedRaw.titulo
+          : deriveLogTitle(
+              normalizedRaw.descripcion ||
+                normalizedRaw.nota ||
+                normalizedRaw.categoria ||
+                "Documento de obra",
+            ),
+    };
+  }
   const a: AIAction = relevantActionFields(JSON.parse(JSON.stringify(normalizedRaw)));
   if (a.tipo === 'registrar_documento' && a.categoria === 'acta_recepcion')
     fail('La sección de entrega y recepción del mandante ya no está disponible.');
@@ -178,9 +293,21 @@ export function validateAction(raw: any): AIAction {
     "fecha_inicio",
     "fecha_termino_estimada",
     "fecha_documento",
-  ])
-    if (a[field] !== undefined && !validDate(a[field]))
-      fail(`Revisa ${field.replaceAll("_", " ")}.`);
+  ]) {
+    if (typeof a[field] === "string" && /^\d{4}-\d{2}-\d{2}T/.test(a[field]))
+      a[field] = a[field].slice(0, 10);
+    if (a[field] !== undefined && !validDate(a[field])) {
+      if (
+        (a.tipo === "crear_bitacora" && field === "fecha") ||
+        (a.tipo === "registrar_documento" &&
+          ["fecha", "fecha_documento"].includes(field))
+      ) {
+        delete a[field];
+      } else {
+        fail(`Revisa ${field.replaceAll("_", " ")}.`);
+      }
+    }
+  }
   for (const field of ["hora", "hora_entrada", "hora_salida"])
     if (a[field] && !/^([01]\d|2[0-3]):[0-5]\d$/.test(a[field]))
       fail("Revisa las horas de entrada y salida.");

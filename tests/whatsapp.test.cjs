@@ -1356,3 +1356,71 @@ test('un borrador antiguo no duplica una obra si su cotización ya fue convertid
   assert.match(out.respuesta,state.proyecto_id?/ya tiene una obra/:/anulado/);assert.equal(captured.p_changed.proyectos.length,0);
  }
 });
+
+test('foto de incidencia tras pregunta previa se registra como incidente con título y descripción limpia aunque falle el análisis',async()=>{
+ const {AIError}=require('../lib/ai/errors.ts');
+ const sb=database();
+ sb.db.usuarios=[{...user,rol:'terreno'}];
+ sb.db.proyectos=[{id:'p-bano',empresa_id:user.empresa_id,nombre:'Baño'}];
+ sb.db.proyecto_trabajadores=[{usuario_id:user.id,proyecto_id:'p-bano'}];
+ sb.db.whatsapp_mensajes=[{
+  message_id:'prev-incident-q',
+  empresa_id:user.empresa_id,
+  actor_id:user.id,
+  texto:'Ocurrio una incidencia con la obra baño',
+  respuesta:'Entendido. ¿Qué tipo de incidencia ocurrió en la obra Baño?',
+  acciones:{proyecto_contexto_id:'p-bano'},
+ }];
+ let captured;const base=sb.rpc.bind(sb);sb.rpc=async(n,p)=>{captured=p;return base(n,p);};
+ await processPersonalMessage(
+  sb,
+  {id:'incident-photo-fail',from:'56912345678',type:'image',image:{id:'999',caption:'Se agrieto la pintura del techo por fuertes lluvias'}},
+  {
+   media:async()=>({mimeType:'image/jpeg',data:'aW1hZ2U='}),
+   store:async()=>({path:'empresa1/u/incident.jpg',mime_type:'image/jpeg',proyecto_id:null,origen_message_id:'incident-photo-fail'}),
+   chat:async()=>{throw new AIError('AI_TIMEOUT','timeout',503);},
+  },
+ );
+ const entry=captured.p_changed.bitacora_entradas[0];
+ assert.equal(entry.proyecto_id,'p-bano');
+ assert.equal(entry.tipo,'incidente');
+ assert.equal(entry.titulo,'Se agrieto la pintura del techo por fuertes lluvias');
+ assert.equal(entry.nota,'Se agrieto la pintura del techo por fuertes lluvias');
+ assert.doesNotMatch(entry.nota,/Foto original recibida|Análisis automático no disponible/);
+});
+
+test('foto con observación visual de IA y registrar_imprevisto sin costo conservan tipo incidente y detalles completos',async()=>{
+ const {flattenActions}=require('../lib/ai/protocol.ts');
+ const converted=flattenActions([
+  {tipo:'registrar_imprevisto',proyecto_id:'p1',descripcion:'Se agrietó el cielo por filtración'},
+  {tipo:'actualizar_avance',proyecto_id:'p1',nota:'Pintura aplicada en muro norte'},
+  {tipo:'crear_bitacora',proyecto_id:'p1',nota:'Revisión eléctrica',fecha:''},
+ ]);
+ assert.equal(converted[0].tipo,'crear_bitacora');assert.equal(converted[0].tipo_bitacora,'incidente');
+ assert.equal(converted[1].tipo,'crear_bitacora');assert.equal(converted[1].tipo_bitacora,'avance');
+ assert.equal(converted[2].fecha,undefined);
+
+ const sb=database();
+ sb.db.usuarios=[{...user,rol:'terreno'}];
+ sb.db.proyectos=[{id:'p-bano',empresa_id:user.empresa_id,nombre:'Baño'}];
+ sb.db.proyecto_trabajadores=[{usuario_id:user.id,proyecto_id:'p-bano'}];
+ let captured;const base=sb.rpc.bind(sb);sb.rpc=async(n,p)=>{captured=p;return base(n,p);};
+ await processPersonalMessage(
+  sb,
+  {id:'incident-photo-ok',from:'56912345678',type:'image',image:{id:'1000',caption:'Se agrieto la pintura del techo por fuertes lluvias'}},
+  {
+   media:async()=>({mimeType:'image/jpeg',data:'aW1hZ2U='}),
+   store:async()=>({path:'empresa1/u/incident-ok.jpg',mime_type:'image/jpeg',proyecto_id:null,origen_message_id:'incident-photo-ok'}),
+   chat:async()=>({
+    respuesta:'Se observa desprendimiento de pintura y humedad en la esquina del cielo.',
+    accion:{tipo:'registrar_imprevisto',proyecto_id:'p-bano',descripcion:'Fisura y humedad en techo',monto:0},
+    cotizacion:null,
+   }),
+  },
+ );
+ const entry=captured.p_changed.bitacora_entradas[0];
+ assert.equal(entry.tipo,'incidente');
+ assert.match(entry.nota,/Fisura y humedad en techo/);
+ assert.match(entry.nota,/Se agrieto la pintura del techo por fuertes lluvias/);
+ assert.match(entry.nota,/Observación visual: Se observa desprendimiento de pintura/);
+});

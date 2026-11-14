@@ -50,12 +50,62 @@ export async function storeEvidence(
   };
 }
 
+const norm = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+const INCIDENT_RE =
+  /\b(incidenc\w*|incident\w*|inconvenient\w*|problem\w*|accident\w*|imprevist\w*|dan[oa]\w*|averi\w*|falla\w*|rotur\w*|agriet\w*|griet\w*|fisur\w*|filtracion\w*|fuga\w*|gotera\w*|humedad\w*|inund\w*|desprend\w*|emergenc\w*|peligr\w*|riesg\w*|reclam\w*)\b/i;
+
+function isIncidentText(value: string): boolean {
+  return INCIDENT_RE.test(norm(value || ""));
+}
+
+function cleanAttachmentDescription(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  const chunks = raw
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter((part) => {
+      if (!part) return false;
+      if (part.endsWith("?")) return false;
+      const plain = norm(part).replace(/[.!]+$/, "").trim();
+      return ![
+        "foto original recibida",
+        "analisis automatico no disponible",
+        "foto recibida",
+        "recibida",
+        "recibido",
+        "recibi la foto",
+        "foto de obra adjunta",
+        "documento de obra adjunto",
+        "el analisis de la imagen no estuvo disponible",
+        "la foto quedo conservada; puedes reenviarla para volver a analizarla",
+      ].includes(plain);
+    });
+  return chunks.join(" ").trim();
+}
+
+function deriveEvidenceTitle(primary: string, secondary: string, isIncident: boolean): string {
+  const source = (primary || secondary || "").trim().replace(/\s+/g, " ");
+  if (!source) {
+    return isIncident ? "Inconveniente en obra" : "Registro fotográfico de obra";
+  }
+  const firstClause = source.split(/[\n.;]/)[0]?.trim() || source;
+  return firstClause.length > 70
+    ? `${firstClause.slice(0, 67).trimEnd()}...`
+    : firstClause;
+}
+
 // La asociación se resuelve con las obras autorizadas. Nunca se elige la primera de varias obras.
 export function evidenceActions(
   actions: any[],
   attachment: any,
   projects: any[],
   text: string,
+  history: any[] = [],
 ) {
   let project: any;
   if (attachment.proyecto_id)
@@ -67,11 +117,6 @@ export function evidenceActions(
     try {
       project = resolveEntity(projects, refs[0]);
     } catch {}
-  const norm = (s: string) =>
-    s
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
   if (!project) {
     const normText = norm(text);
     let matches = projects.filter((p) => normText.includes(norm(p.nombre)));
@@ -109,18 +154,93 @@ export function evidenceActions(
       linked: true,
     };
 
-  const isReceipt = /boleta|factura|comprobante|gasto/i.test(
-    text + " " + (attachment.descripcion || ""),
+  const trimmedText = (text || "").trim();
+  const isGenericPlaceholder = [
+    "Foto de obra adjunta.",
+    "Documento de obra adjunto.",
+  ].includes(trimmedText);
+  const userNote = isGenericPlaceholder ? "" : trimmedText;
+  const visualDesc = cleanAttachmentDescription(attachment.descripcion);
+  const recentTurn = history[0];
+  const recentUnresolvedIncident = Boolean(
+    recentTurn &&
+      !recentTurn.acciones?.tipo &&
+      (isIncidentText(recentTurn.texto || "") ||
+        isIncidentText(recentTurn.respuesta || "")),
   );
+  const isIncident =
+    isIncidentText(userNote) ||
+    isIncidentText(visualDesc) ||
+    recentUnresolvedIncident;
+
+  const isReceipt = /boleta|factura|comprobante|gasto/i.test(
+    `${userNote} ${visualDesc}`,
+  );
+  const historyNote =
+    !userNote && !visualDesc && recentUnresolvedIncident && recentTurn?.texto
+      ? String(recentTurn.texto).trim()
+      : "";
+  const combinedNote = [
+    userNote || historyNote,
+    visualDesc &&
+    (!userNote || !norm(visualDesc).includes(norm(userNote)))
+      ? userNote
+        ? `Observación visual: ${visualDesc}`
+        : visualDesc
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .trim()
+    .slice(0, 6000);
+
   let used = false;
   const updated = actions.map((a) => {
     if (
       a.tipo === "crear_bitacora" &&
       !used &&
-      (a.proyecto_id === project.id || a.proyecto_nombre === project.nombre)
+      (a.proyecto_id === project.id ||
+        a.proyecto_nombre === project.nombre ||
+        (!a.proyecto_id && !a.proyecto_nombre))
     ) {
       used = true;
-      return { ...a, ...(isPhoto ? { foto_url: photoUrl } : {}) };
+      const existingNota = cleanAttachmentDescription(a.nota || a.descripcion || "");
+      const normExisting = norm(existingNota);
+      const extraParts = [
+        userNote && !normExisting.includes(norm(userNote)) ? userNote : "",
+        visualDesc &&
+        !normExisting.includes(norm(visualDesc)) &&
+        (!userNote || !norm(visualDesc).includes(norm(userNote)))
+          ? `Observación visual: ${visualDesc}`
+          : "",
+      ].filter(Boolean);
+      const finalNota = [existingNota, ...extraParts]
+        .filter(Boolean)
+        .join("\n")
+        .trim()
+        .slice(0, 6000);
+      const genericTitle =
+        !a.titulo ||
+        /^(registro fotográfico( de obra)?|avance|incidente|foto)$/i.test(
+          String(a.titulo).trim(),
+        );
+      return {
+        ...a,
+        proyecto_id: a.proyecto_id || project.id,
+        ...(isIncident && !a.material_id && a.tipo_bitacora !== "clima"
+          ? {
+              tipo_bitacora: "incidente",
+              ...(a.subtipo && a.subtipo !== "entrega_material"
+                ? { subtipo: "incidente" }
+                : {}),
+            }
+          : {}),
+        ...(finalNota ? { nota: finalNota } : {}),
+        ...(genericTitle
+          ? { titulo: deriveEvidenceTitle(userNote, visualDesc || finalNota, isIncident) }
+          : {}),
+        ...(isPhoto ? { foto_url: photoUrl } : {}),
+      };
     }
     return a;
   });
@@ -128,13 +248,14 @@ export function evidenceActions(
     updated.push({
       tipo: "crear_bitacora",
       proyecto_id: project.id,
-      titulo: /incidente|inconveniente|problema|accidente/i.test(text)
-        ? "Inconveniente en obra"
-        : "Registro fotográfico de obra",
-      nota: `${text}\n${attachment.descripcion}`.trim().slice(0, 6000),
-      tipo_bitacora: /incidente|inconveniente|problema|accidente/i.test(text)
-        ? "incidente"
-        : "avance",
+      titulo: deriveEvidenceTitle(userNote, visualDesc || historyNote, isIncident),
+      nota: (
+        combinedNote ||
+        (isIncident
+          ? "Incidencia reportada con respaldo fotográfico."
+          : "Registro fotográfico de obra.")
+      ).slice(0, 6000),
+      tipo_bitacora: isIncident ? "incidente" : "avance",
       ...(isPhoto ? { foto_url: photoUrl } : {}),
     });
   if (!isPhoto || isReceipt) {

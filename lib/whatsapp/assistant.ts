@@ -360,7 +360,7 @@ export async function processPersonalMessage(
         },
         ...(image ? { foto_adjunta: true } : {}),
       },
-      { budgetMs: message.type === 'text' ? 45000 : 30000, timeoutMs: message.type === 'text' ? 40000 : 20000, ...(image ? { image } : {}) },
+      { budgetMs: message.type === 'text' || image ? 45000 : 30000, timeoutMs: message.type === 'text' || image ? 40000 : 20000, ...(image ? { image } : {}) },
     );
     if (image && attachment) attachment.descripcion = result.respuesta;
   } catch (error) {
@@ -385,14 +385,32 @@ export async function processPersonalMessage(
   let campaign: ReturnType<typeof prepareCampaign> | undefined;
   let response = result.respuesta;
   try {
-    if (activeProject && result.accion && typeof result.accion === 'object') {
-      const injectProjectScope = (act: any) => {
-        if (!act || typeof act !== 'object') return;
+    if (result.accion && typeof result.accion === 'object') {
+      const normalizeTurnAction = (act: any): any => {
+        if (!act || typeof act !== 'object') return act;
         if (act.tipo === 'lote_acciones' && Array.isArray(act.acciones)) {
-          act.acciones.forEach(injectProjectScope);
-          return;
+          return { ...act, acciones: act.acciones.map(normalizeTurnAction) };
         }
         if (
+          user.rol === 'terreno' &&
+          act.tipo === 'registrar_imprevisto' &&
+          !act.asistencia_id &&
+          !act.categoria_gasto &&
+          !(typeof act.monto === 'number' && act.monto > 0)
+        ) {
+          const detail = String(act.descripcion || act.nota || act.observacion || text || '').trim();
+          return {
+            tipo: 'crear_bitacora',
+            ...(act.proyecto_id ? { proyecto_id: act.proyecto_id } : {}),
+            ...(act.proyecto_nombre ? { proyecto_nombre: act.proyecto_nombre } : {}),
+            titulo: act.titulo || detail.slice(0, 70) || 'Inconveniente en obra',
+            nota: detail || 'Incidencia reportada desde terreno.',
+            tipo_bitacora: 'incidente',
+            ...(act.fecha ? { fecha: act.fecha } : {}),
+          };
+        }
+        if (
+          activeProject &&
           (act.tipo === 'enviar_mensaje_equipo' || act.tipo === 'generar_mensaje_whatsapp') &&
           !act.proyecto_id &&
           !act.proyecto_nombre &&
@@ -400,12 +418,17 @@ export async function processPersonalMessage(
           !act.trabajadores_nombres?.length &&
           !act.trabajador_nombre
         ) {
-          act.proyecto_id = activeProject;
-          act.roles_destino = ['terreno', 'supervisor'];
+          return {
+            ...act,
+            proyecto_id: activeProject,
+            roles_destino: ['terreno', 'supervisor'],
+          };
         }
+        return act;
       };
-      if (Array.isArray(result.accion)) result.accion.forEach(injectProjectScope);
-      else injectProjectScope(result.accion);
+      result.accion = Array.isArray(result.accion)
+        ? result.accion.map(normalizeTurnAction)
+        : normalizeTurnAction(result.accion);
     }
     let actions = checkActionPermissions(user, result.accion, text);
     const create = actions.find((a) =>
@@ -500,6 +523,7 @@ export async function processPersonalMessage(
         attachment,
         user.rol === 'terreno' && !activeProject ? [] : service.getProyectos(),
         text,
+        history,
       );
       actions = evidence.actions;
       attachment = evidence.attachment;
@@ -512,7 +536,7 @@ export async function processPersonalMessage(
     if (attachment && !intake?.question) {
       const created = (plan.changed.proyectos || []).filter(project => !tables.proyectos.some(previous => previous.id === project.id));
       if (created.length === 1) {
-        const evidence = evidenceActions([], { ...attachment, proyecto_id: created[0].id }, created, text);
+        const evidence = evidenceActions([], { ...attachment, proyecto_id: created[0].id }, created, text, history);
         attachment = evidence.attachment;
         plan = mergeWhatsAppPlans(plan, planWhatsAppActions(service,evidence.actions));
       }
@@ -530,7 +554,7 @@ export async function processPersonalMessage(
     campaign = undefined;
     // Una acción ajena al perfil no debe perder el archivo recibido en la obra autorizada.
     if (attachment && !readOnlyEvidence) {
-      const evidence = evidenceActions([], attachment, user.rol === 'terreno' && !activeProject ? [] : service.getProyectos(), text);
+      const evidence = evidenceActions([], attachment, user.rol === 'terreno' && !activeProject ? [] : service.getProyectos(), text, history);
       attachment = evidence.attachment;
       if (evidence.linked) {
         checkActionPermissions(user, evidence.actions, text);
@@ -607,7 +631,7 @@ export async function processPersonalMessage(
     let mediaPlan = { changed: {}, deleted: {}, result: null } as ReturnType<typeof planWhatsAppActions>;
     let mediaAttachment = attachment;
     if (attachment) {
-      const evidence = evidenceActions([],attachment,user.rol === 'terreno' && !activeProject ? [] : tables.proyectos,text);
+      const evidence = evidenceActions([],attachment,user.rol === 'terreno' && !activeProject ? [] : tables.proyectos,text,history);
       mediaAttachment = evidence.attachment;
       if (evidence.linked) {
         checkActionPermissions(user,evidence.actions,text);

@@ -96,13 +96,14 @@ export async function chatAsesorObrasGemini(
     : contextoDB.creacion_obra_whatsapp
       ? WHATSAPP_RESPONSE_SCHEMA
       : CHAT_RESPONSE_SCHEMA;
+  const extended = quote || Boolean(options.image);
   const result = parseChatResponse(
     await generateAI(pureSearchOnly || quote ? prompt : prompt + "\n" + CONSTRUCTION_WORKFLOW_RULES, {
       ...options,
       json: true,
       schema,
-      budgetMs: Math.min(options.budgetMs || (quote ? 45000 : 30000), quote ? 45000 : 30000),
-      timeoutMs: Math.min(options.timeoutMs || (quote ? 40000 : 30000), quote ? 40000 : 30000),
+      budgetMs: Math.min(options.budgetMs || (extended ? 45000 : 30000), extended ? 45000 : 30000),
+      timeoutMs: Math.min(options.timeoutMs || (extended ? 40000 : 30000), extended ? 40000 : 30000),
     }),
   );
   if (result.busqueda_materiales) {
