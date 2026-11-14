@@ -264,3 +264,24 @@ test("registro de persona natural permite omitir RUT y nombre comercial", async 
     .toBe("Constructor Independiente");
   expect(signup.data.rut || "").toBe("");
 });
+
+test("asistencia muestra acceso rápido a planilla por obra en lista sin desborde a 320px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await setup(page, {}, true);
+  await page.goto("/asistencia");
+  await expect(
+    page.getByRole("heading", { name: "Acceso Rápido a Planilla por Obra" }),
+  ).toBeVisible();
+  const rows = page.locator("ul > li");
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("presentes hoy");
+  await expect(
+    rows.first().getByRole("button", { name: /Pasar lista 1 clic/ }),
+  ).toBeVisible();
+  await expect(
+    rows.first().getByRole("link", { name: "Abrir planilla" }),
+  ).toHaveAttribute("href", "/proyectos/p-existing/asistencia");
+  await noOverflow(page);
+});

@@ -113,6 +113,14 @@ export default function ControlAsistenciaGlobalPage() {
   ).length;
   const totalHorasMes = asistencias.reduce((acc, a) => acc + (Number(a.horas_trabajadas) || 0), 0);
 
+  const activeProjects = proyectos.filter((p) => p.estado === 'activo');
+  const presentesPorProyecto = new Map<string, number>();
+  for (const a of asistencias) {
+    if (a.fecha === fechaFiltro && (a.estado === 'presente' || a.estado === 'atraso')) {
+      presentesPorProyecto.set(a.proyecto_id, (presentesPorProyecto.get(a.proyecto_id) || 0) + 1);
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#FAF8F5] dark:bg-[#0E131B] pb-16">
       {toastMessage && (
@@ -192,57 +200,77 @@ export default function ControlAsistenciaGlobalPage() {
           </div>
         </div></CompactSummary>
 
-        {/* Tarjetas Rápidas por Obra Activa */}
-        <div className="space-y-3">
-          <h3 className="text-sm font-heading font-bold text-navy-900 dark:text-white">
-            Acceso Rápido a Planilla por Obra
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {proyectos
-              .filter((p) => p.estado === 'activo')
-              .map((p) => {
-                const asisObraHoy = asistencias.filter(
-                  (a) =>
-                    a.proyecto_id === p.id &&
-                    a.fecha === fechaFiltro &&
-                    (a.estado === 'presente' || a.estado === 'atraso')
-                );
-                return (
-                  <div
-                    key={p.id}
-                    className="bg-white dark:bg-[#141A23] p-4 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm flex flex-col justify-between gap-3"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono font-bold uppercase text-[#6B8F72] bg-[#6B8F72]/15 px-2 py-0.5 rounded-full">
-                          {asisObraHoy.length} presentes hoy
-                        </span>
-                        <span className="text-[11px] text-gray-400">{p.comuna || 'Chile'}</span>
-                      </div>
-                      <h4 className="text-sm font-heading font-bold text-navy-900 dark:text-white mt-2">
-                        {p.nombre}
-                      </h4>
-                    </div>
+        {/* Acceso Rápido a Planilla por Obra (Vista en Lista) */}
+        <div className="space-y-2.5 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-heading font-bold text-navy-900 dark:text-white">
+              Acceso Rápido a Planilla por Obra
+            </h3>
+            <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
+              {activeProjects.length}{' '}
+              {activeProjects.length === 1 ? 'obra activa' : 'obras activas'}
+            </span>
+          </div>
 
-                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-kraft-100 dark:border-[#1E2530]">
-                      <button
-                        type="button"
-                        onClick={() => handleMarcarObraCompleta(p.id)}
-                        className="px-3 py-1.5 rounded-xl bg-[#6B8F72]/15 hover:bg-[#6B8F72] text-[#6B8F72] hover:text-white text-xs font-bold transition-colors"
+          <div className="bg-white dark:bg-[#141A23] rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm overflow-hidden">
+            <div className="hidden md:grid md:grid-cols-12 gap-3 items-center px-4 py-2.5 bg-[#FAF8F5] dark:bg-[#1A222D] border-b border-kraft-200 dark:border-[#263040] text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <div className="md:col-span-5">Obra</div>
+              <div className="md:col-span-3">Asistencia</div>
+              <div className="md:col-span-4 md:text-right">Acciones</div>
+            </div>
+
+            {activeProjects.length === 0 ? (
+              <div className="px-4 py-6 text-center text-xs text-gray-500 dark:text-gray-400">
+                No hay obras activas registradas para pasar asistencia.
+              </div>
+            ) : (
+              <ul className="divide-y divide-kraft-100 dark:divide-[#1E2530]">
+                {activeProjects.map((p) => {
+                  const asisObraHoy = presentesPorProyecto.get(p.id) || 0;
+
+                    return (
+                      <li
+                        key={p.id}
+                        className="px-3.5 sm:px-4 py-3 transition-colors hover:bg-[#FCFBF9] dark:hover:bg-[#19212C]"
                       >
-                        ✓ Pasar lista 1 clic
-                      </button>
-                      <Link
-                        href={`/proyectos/${p.id}/asistencia`}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-[#FF6A00] hover:underline"
-                      >
-                        <span>Abrir planilla</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
+                        <div className="flex flex-col gap-2.5 md:grid md:grid-cols-12 md:gap-3 md:items-center min-w-0">
+                          <div className="md:col-span-5 min-w-0">
+                            <h4 className="text-sm font-heading font-bold text-navy-900 dark:text-white break-words">
+                              {p.nombre}
+                            </h4>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 break-words">
+                              {p.comuna || 'Chile'}
+                            </p>
+                          </div>
+
+                          <div className="md:col-span-3 min-w-0">
+                            <span className="inline-flex items-center rounded-full bg-[#6B8F72]/15 px-2.5 py-0.5 text-[11px] font-mono font-bold text-[#6B8F72]">
+                              {asisObraHoy} presentes hoy
+                            </span>
+                          </div>
+
+                          <div className="md:col-span-4 flex flex-wrap items-center md:justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleMarcarObraCompleta(p.id)}
+                              className="px-3 py-1.5 rounded-xl bg-[#6B8F72]/15 hover:bg-[#6B8F72] text-[#6B8F72] hover:text-white text-xs font-bold transition-colors whitespace-nowrap"
+                            >
+                              ✓ Pasar lista 1 clic
+                            </button>
+                            <Link
+                              href={`/proyectos/${p.id}/asistencia`}
+                              className="inline-flex items-center gap-1 rounded-xl border border-kraft-200 dark:border-[#2C3748] px-2.5 py-1.5 text-xs font-bold text-[#FF6A00] hover:bg-[#FF6A00]/10 transition-colors whitespace-nowrap"
+                            >
+                              <span>Abrir planilla</span>
+                              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                            </Link>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
           </div>
         </div>
 
@@ -409,7 +437,7 @@ export default function ControlAsistenciaGlobalPage() {
                 Sin marcajes para los filtros seleccionados
               </h4>
               <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                No hay asistencias registradas para esta fecha o filtro. Puedes usar el botón &quot;✓ Pasar lista 1 clic&quot; en las tarjetas de arriba o entrar a la planilla de una obra.
+                No hay asistencias registradas para esta fecha o filtro. Puedes usar el botón &quot;✓ Pasar lista 1 clic&quot; en la lista de arriba o entrar a la planilla de una obra.
               </p>
             </div>
           ) : (
