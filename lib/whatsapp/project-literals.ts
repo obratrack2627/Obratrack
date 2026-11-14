@@ -11,7 +11,7 @@ export function requestsNewProject(message: string) {
   const value = norm(message);
   return /\b(crea\w*|crees?|registra\w*|agrega\w*|abre|inicia\w*)\s+(?:(?:una?|la|el|otra?|otro|nuev[oa])\s+){0,3}(obra|proyecto)\b|\b(obra|proyecto)\s+nuev[oa]\b/.test(value)
     && !/\bno\s+(?:(?:quiero|debes|necesito|que)\s+){0,3}(crea\w*|crees?|registra\w*|agrega\w*)/.test(value)
-    && !/^(?:como|explica|explicame)\b|\bcomo (?:puedo|se puede|crear)\b/.test(value);
+    && !/(?:^(?:como|explica|explicame)\b|\bcomo (?:puedo|se puede|crear)\b)/.test(value);
 }
 const rut = (value: string) => {
   const clean = value.replace(/[.\s-]/g, '').toUpperCase();

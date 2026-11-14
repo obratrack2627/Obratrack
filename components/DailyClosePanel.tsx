@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, type ReactNode } from "react";
 import {
   ClipboardCheck,
   Download,
@@ -30,7 +30,7 @@ export function DailyCloseSummary({ summary }: { summary: DailyClose }) {
   const section = (
     title: string,
     Icon: typeof Users,
-    rows: React.ReactNode[],
+    rows: ReactNode[],
   ) => (
     <section className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-[#263040] dark:bg-[#141A23]">
       <h4 className="flex items-center gap-2 text-sm font-bold">

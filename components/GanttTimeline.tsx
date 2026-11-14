@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeft, ChevronRight, User } from "lucide-react";
 import type { Actividad } from "@/types/database";
 import {
@@ -42,7 +42,7 @@ export default function GanttTimeline({
       "linear-gradient(to right,var(--g-grid) 1px,transparent 1px),repeating-linear-gradient(to right,transparent 0,transparent calc(500% / var(--days)),var(--g-weekend) calc(500% / var(--days)),var(--g-weekend) calc(700% / var(--days)))",
     backgroundSize: `${100 / days}% 100%,100% 100%`,
     "--days": days,
-  } as React.CSSProperties;
+  } as CSSProperties;
   const move = (day: number) => {
     setAnchor(monday(day));
     scroll.current?.scrollTo({ left: 0, behavior: "smooth" });

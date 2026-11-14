@@ -63,7 +63,7 @@ export default function GoogleMapsLocationPicker({
 
   // Sincronizar props entrantes si cambian desde el modal padre
   useEffect(() => {
-    if (direccion !== undefined) setCurrentDireccion(direccion);
+    setCurrentDireccion(direccion);
   }, [direccion]);
 
   useEffect(() => {

@@ -995,7 +995,7 @@ export class DataService {
     const list = this.getReclamosCambios();
     const newItem: ReclamoCambioObra = {
       ...data,
-      id: 'rc-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      id: 'rc-' + crypto.randomUUID(),
       empresa_id: data.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
       impacto_monto: Number(data.impacto_monto) || 0,
       impacto_dias: Number(data.impacto_dias) || 0,
@@ -1131,7 +1131,7 @@ export class DataService {
     const list = this.getDocumentosObra();
     const newDoc: DocumentoObra = {
       ...data,
-      id: 'doc-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      id: 'doc-' + crypto.randomUUID(),
       empresa_id: data.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
       subido_por_id: data.subido_por_id || active?.id,
       subido_por_nombre: data.subido_por_nombre || active?.nombre || 'Administrador',
@@ -1254,7 +1254,7 @@ export class DataService {
 
     const nuevo: AsistenciaObrero = {
       ...data,
-      id: data.id || 'asis-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      id: data.id || 'asis-' + crypto.randomUUID(),
       empresa_id: data.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
       horas_trabajadas: horas,
       registrado_por: active!.nombre,

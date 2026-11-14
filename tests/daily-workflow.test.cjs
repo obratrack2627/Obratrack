@@ -223,3 +223,26 @@ test("terminar una partida por ObraBot no envía un cierre manual de proyecto qu
   assert.equal(result.changed.actividades.length, 1);
   assert.equal(result.changed.proyectos.length, 0);
 });
+
+test('documentos, incidencias y asistencias conservan IDs únicos con registros simultáneos', () => {
+  const service = isolatedState(user, {usuarios:[user],proyectos:[project]}, 'pro_ia');
+  const previousNow = Date.now;
+  const previousRandom = Math.random;
+  Date.now = () => 1794657600000;
+  Math.random = () => 0;
+  try {
+    const docs = Array.from({length:10},(_,i)=>service.createDocumentoObra({proyecto_id:'p',nombre:'Documento '+i,categoria:'otro'}));
+    const changes = Array.from({length:10},(_,i)=>service.createReclamoCambio({proyecto_id:'p',tipo:'incidente',titulo:'Incidente '+i,descripcion:'Reporte independiente',estado:'pendiente',prioridad:'baja'}));
+    const attendance = Array.from({length:10},(_,i)=>service.upsertAsistenciaObrero({proyecto_id:'p',trabajador_nombre:'Trabajador '+i,fecha:'2026-11-14',estado:'presente'}));
+    for(const records of [docs,changes,attendance]) assert.equal(new Set(records.map(r=>r.id)).size,10);
+    assert.equal(service.getDocumentosObra('p').length,10);
+    assert.equal(service.getReclamosCambios('p').length,10);
+    assert.equal(service.getAsistencias('p','2026-11-14').length,10);
+    const updated=service.upsertAsistenciaObrero({proyecto_id:'p',trabajador_nombre:'Trabajador 0',fecha:'2026-11-14',estado:'ausente'});
+    assert.equal(updated.id,attendance[0].id,'corregir asistencia conserva su identidad');
+    assert.equal(service.getAsistencias('p','2026-11-14').length,10);
+  } finally {
+    Date.now = previousNow;
+    Math.random = previousRandom;
+  }
+});

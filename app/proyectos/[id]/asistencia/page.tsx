@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -192,7 +192,7 @@ export default function ProjectCrewPage() {
   };
   const saveAttendance = async (
     fields: Parameters<
-      React.ComponentProps<typeof CrewAttendanceEditor>["onSave"]
+      ComponentProps<typeof CrewAttendanceEditor>["onSave"]
     >[0],
   ) => {
     if (!editor) return;
