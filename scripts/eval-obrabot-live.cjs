@@ -25,10 +25,12 @@ function grade(item,result,mode){
  const draftOK=!item.response.obra_propuesta||!!result.obra_propuesta;
  return {mode:modeOK,payload:payloadOK,entities:entitiesOK,contract:contractOK,quote:quoteOK,draft:draftOK,pass:modeOK&&payloadOK&&entitiesOK&&contractOK&&quoteOK&&draftOK};
 }
-async function run({cases=dataset.cases,generate=generateOpenAI,output,enabled=!!process.env.OPENAI_API_KEY}={}){
+async function run({cases=dataset.cases,generate=generateOpenAI,output,enabled=!!process.env.OPENAI_API_KEY,maxRequests=5}={}){
  if(!enabled)return {skipped:true,reason:'OPENAI_API_KEY no configurada; no se realizaron llamadas de red.'};
- const rows=[];
+ if(!Number.isInteger(maxRequests)||maxRequests<1||maxRequests>80)throw new Error('EVAL_REQUEST_LIMIT_INVALID');
+ const rows=[];let requestsMade=0;let stoppedReason=null;
  for(const item of cases){
+  if(requestsMade>=maxRequests){stoppedReason='request_limit';break;}
   const context={...structuredClone(dataset.entities),...item.context,rol:item.role,acciones_habilitadas:item.plan==='pro_ia',...(item.selectedId?{chat_proyecto_id:item.selectedId,proyecto_actual:dataset.entities.proyectos.find(p=>p.id===item.selectedId)}:{})};
   if(item.role==='terreno'){
     const actor=dataset.entities.usuarios.find(u=>u.rol==='terreno');
@@ -43,16 +45,16 @@ async function run({cases=dataset.cases,generate=generateOpenAI,output,enabled=!
   const request=chatGenerationRequest([],item.message,context,image?{image}:{});
   let attempts=0;const started=Date.now();
   try{
-   const result=await generateValidatedChat(request.input,item.message,context,{...request.options,validateResult:r=>validateCandidate(item,{respuesta:r.respuesta,acciones:flattenActions(r.accion),cotizacion:r.cotizacion})},async(p,o)=>{attempts++;return generate(p,o);});
+   const result=await generateValidatedChat(request.input,item.message,context,{...request.options,validateResult:r=>validateCandidate(item,{respuesta:r.respuesta,acciones:flattenActions(r.accion),cotizacion:r.cotizacion})},async(p,o)=>{if(requestsMade>=maxRequests)throw new AIError('EVAL_BUDGET_REACHED','Se alcanzó el límite de solicitudes de la evaluación.',429);requestsMade++;attempts++;return generate(p,o);});
    rows.push({id:item.id,...grade(item,result,request.mode),observed:{mode:request.mode,action_types:flattenActions(result.accion).map(a=>a.tipo),actions:flattenActions(result.accion),has_quote:!!result.cotizacion,has_draft:!!result.obra_propuesta,clarification:result.accion?undefined:result.respuesta},attempts,duration_ms:Date.now()-started});
   }catch(e){
    rows.push({id:item.id,pass:false,mode:false,payload:e.code!=='AI_INVALID_ACTION',entities:false,code:e instanceof AIError?e.code:'EVAL_FAILED',attempts,duration_ms:Date.now()-started});
-   if(['AI_CREDENTIALS','AI_NOT_CONFIGURED','AI_RATE_LIMIT'].includes(e.code))break;
+   if(['AI_CREDENTIALS','AI_NOT_CONFIGURED','AI_RATE_LIMIT','EVAL_BUDGET_REACHED'].includes(e.code)){stoppedReason=e.code;break;}
   }
   if(require.main===module)console.log(JSON.stringify(rows.at(-1)));
  }
  const total=cases.length;const rates=Object.fromEntries(['pass','mode','payload','entities'].map(k=>[k,Number((rows.filter(r=>r[k]).length/total*100).toFixed(2))]));
- const report={version:2,dataset_version:dataset.version,synthetic:true,created_at:new Date().toISOString(),total,completed:rows.length,rates,threshold:98,passed:rows.length===total&&rates.pass>=98,rows};
+ const report={version:2,dataset_version:dataset.version,synthetic:true,created_at:new Date().toISOString(),total,completed:rows.length,requests_made:requestsMade,max_requests:maxRequests,stopped_reason:stoppedReason,rates,threshold:98,passed:rows.length===total&&rates.pass>=98,rows};
  if(output)fs.writeFileSync(output,JSON.stringify(report,null,2)+'\n',{mode:0o600});
  return report;
 }
@@ -60,6 +62,6 @@ if(require.main===module){
  const value=flag=>{const i=process.argv.indexOf(flag);return i>=0?process.argv[i+1]:undefined;};
  const limit=Number(value('--limit')||dataset.cases.length);
  const selected=value('--case')?dataset.cases.filter(c=>value('--case').split(',').includes(c.id)):dataset.cases.slice(0,limit);
- run({cases:selected,output:value('--output')}).then(r=>{console.log(JSON.stringify(r.skipped?r:{total:r.total,completed:r.completed,rates:r.rates,passed:r.passed}));if(!r.skipped&&!r.passed)process.exitCode=1;}).catch(()=>{console.error('EVAL_FAILED');process.exitCode=1;});
+ run({cases:selected,maxRequests:Number(value('--max-requests')||5),output:value('--output')}).then(r=>{console.log(JSON.stringify(r.skipped?r:{total:r.total,completed:r.completed,requests_made:r.requests_made,max_requests:r.max_requests,stopped_reason:r.stopped_reason,rates:r.rates,passed:r.passed}));if(!r.skipped&&!r.passed)process.exitCode=1;}).catch(()=>{console.error('EVAL_FAILED');process.exitCode=1;});
 }
 module.exports={run,grade};

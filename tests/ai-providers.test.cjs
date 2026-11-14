@@ -27,7 +27,7 @@ test('los cuatro contratos estrictos conservan campos requeridos y convierten op
 test('texto e imagen usan Responses con esquema, credencial solo en servidor y sin almacenar conversaciones',async()=>{
   const result=await generateOpenAI('Consulta sobre foto',{schema:CHAT_RESPONSE_SCHEMA,image:{mimeType:'image/png',data:'aGVsbG8='},fetcher:async(url,opts)=>{
     assert.equal(url,'https://api.openai.com/v1/responses');assert.equal(opts.headers.Authorization,'Bearer fixture-openai');
-    const body=JSON.parse(opts.body);assert.equal(body.store,false);assert.equal(body.model,'gpt-6.1-sol');assert.equal(body.reasoning.effort,'low');assert.ok(opts.signal);
+    const body=JSON.parse(opts.body);assert.equal(body.store,false);assert.equal(body.model,'gpt-6-luna');assert.equal(body.reasoning.effort,'low');assert.ok(opts.signal);
     assert.equal(body.text.format.strict,true);verifySchema(body.text.format.schema);
     assert.deepEqual(body.input[0].content[1],{type:'input_image',image_url:'data:image/png;base64,aGVsbG8=',detail:'auto'});
     return response(JSON.stringify({respuesta:'Se ve acopio; indica la obra.',acciones:[],cotizacion:null,busqueda_materiales:null}));

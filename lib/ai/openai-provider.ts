@@ -32,7 +32,7 @@ export async function generateOpenAI(prompt: string, options: GenerationOptions 
     form.append('model', modelName(process.env.OPENAI_TRANSCRIPTION_MODEL || 'gpt-transcribe'));
     body = form; path = '/audio/transcriptions';
   } else {
-    const model = modelName(process.env.OPENAI_MODEL || 'gpt-6.1-sol');
+    const model = modelName(process.env.OPENAI_MODEL || 'gpt-6-luna');
     const content: Record<string, any>[] = [{ type: 'input_text', text: prompt }];
     if (options.image) {
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(options.image.mimeType)) throw new AIError('AI_IMAGE_INVALID', 'La foto debe ser JPG, PNG o WebP.', 422);

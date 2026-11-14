@@ -8,7 +8,7 @@ La identidad pública es **ObraBot**. La interfaz, los mensajes de error y los p
 
 - `AI_PROVIDER=openai`: único proveedor activo. Una variable antigua con otro valor no reactiva Gemini.
 - `OPENAI_API_KEY`: clave privada obligatoria, solo en el servidor.
-- `OPENAI_MODEL`: predeterminado `gpt-6.1-sol`; debe estar disponible para la cuenta y admitir Structured Outputs e imágenes.
+- `OPENAI_MODEL`: predeterminado `gpt-6-luna`; debe estar disponible para la cuenta y admitir Structured Outputs e imágenes.
 - `OPENAI_REASONING_EFFORT`: predeterminado `low`; debe ser compatible con el modelo elegido.
 - `OPENAI_TRANSCRIPTION_MODEL`: predeterminado `gpt-transcribe`; debe estar disponible para la cuenta.
 - `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`: proyecto de autenticación.
@@ -304,10 +304,14 @@ prompts, esquemas y adaptador `openai-provider.ts`, sin consultas retail, escrit
 ni envíos de WhatsApp. Es una ejecución manual con costo de API:
 
 ```bash
-node scripts/eval-obrabot-live.cjs --output /tmp/obrabot-eval.json
+node scripts/eval-obrabot-live.cjs --limit 5 --max-requests 5 --output /tmp/obrabot-eval.json
+# Conjunto completo: requiere autorizar expresamente su límite de solicitudes.
+node scripts/eval-obrabot-live.cjs --max-requests 37 --output /tmp/obrabot-eval-completo.json
 # Diagnóstico acotado antes de ejecutar el conjunto completo:
 node scripts/eval-obrabot-live.cjs --limit 1 --output /tmp/obrabot-eval-first.json
 ```
+
+El límite predeterminado es de cinco llamadas, incluyendo reintentos. Al agotarlo, se detiene y reporta el conjunto incompleto; no oculta ese resultado como aprobado. `--max-requests` permite autorizar otro límite.
 
 Sin `OPENAI_API_KEY` termina con `skipped:true` y no usa red. El informe separa
 modo, contrato de acciones, payload, entidades, reintentos y duración por caso.
@@ -444,3 +448,31 @@ la copia local y se reintentan al volver la conexión o enfocar la aplicación.
 Reiniciar la conversación incrementa una versión: clientes atrasados no pueden
 restaurar mensajes borrados. Un reinicio sin conexión queda pendiente. Las
 respuestas en vuelo de otra cuenta o anteriores al reinicio se descartan.
+
+
+## Modelo económico de producción
+
+Desde el cambio de costo del 14 de noviembre de 2026, el modelo predeterminado es
+`gpt-6-luna`, con `OPENAI_REASONING_EFFORT=low`. OpenAI lo presenta para tareas
+sensibles al costo y alto volumen; admite Responses, entrada de imagen y salidas
+estructuradas. Se comprobó disponibilidad con la clave del proyecto y se realizó
+una validación acotada: **8/8 casos reales**, con máximo de ocho solicitudes. Esta
+muestra no equivale a repetir ni aprobar el Golden Set completo de 37 con Luna.
+
+Según la tarifa estándar publicada al momento de validar, por millón de tokens:
+
+| Modelo | Entrada | Salida | Entrada desde caché |
+|---|---:|---:|---:|
+| `gpt-6.1-sol` anterior | US$2,00 | US$10,00 | US$0,10 |
+| `gpt-6-luna` | US$0,10 | US$0,50 | US$0,01 |
+
+Fuentes: https://developers.openai.com/api/docs/pricing y
+https://developers.openai.com/api/docs/models/gpt-6-luna . Son tarifas por token,
+no un costo fijo por mensaje. La cuenta depende de longitud, imágenes, caché y
+salida. La prueba acotada registró 117.939 tokens de entrada (86.706 desde caché)
+y 2.466 de salida; no registra el importe monetario final de facturación.
+
+Los permisos, el cálculo determinista y el esquema de acciones siguen en el
+servidor. La identidad pública continúa siendo ObraBot. Audio conserva su modelo
+especializado de transcripción y embeddings conserva `text-embedding-3-small`.
+Cambiar de modelo no requiere crear otra API key.
