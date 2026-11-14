@@ -30,7 +30,7 @@ export async function loadAIContext(
   options: { projectsOnly?: boolean; includeBudgets?: boolean } = {},
 ) {
   const [companyResult, projectResult, budgetResult] = await Promise.all([
-    client.from('empresas').select('id,plan_id').eq('id', user.empresa_id),
+    client.from('empresas').select('id,nombre,rut,plan_id,logo_url,configuracion').eq('id', user.empresa_id),
     client.from('proyectos').select('*').eq('empresa_id', user.empresa_id),
     options.includeBudgets && !options.projectsOnly && user.rol !== "terreno"
       ? client.from("presupuestos").select("*").eq("empresa_id", user.empresa_id)

@@ -7,9 +7,10 @@ const INK = '#1E1E1E';
 const GRAY = '#666666';
 const MARGIN = 12;
 const WIDTH = 186;
+const LOGO_DATA_URL_RE = /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i;
 
 // Logo vectorial: conserva nitidez al ampliar, sin imágenes ni servicios externos.
-function logo(pdf: jsPDF, x: number, y: number) {
+function logo(pdf: jsPDF, x: number, y: number, subtitle?: string) {
   const s = 0.1;
   const line = (points: [number, number][], color: string, width: number) => {
     pdf.setDrawColor(color).setLineWidth(width * s);
@@ -26,7 +27,50 @@ function logo(pdf: jsPDF, x: number, y: number) {
   const wordWidth = pdf.getTextWidth('Obra');
   pdf.setTextColor(INK).text('Track', x + 15 + wordWidth, y + 8.7);
   pdf.setFont('helvetica', 'normal').setFontSize(4.9).setTextColor(GRAY);
-  pdf.text('CONTROL · COTIZACIONES · COSTOS · PAGOS · AVANCES', x + 15, y + 12);
+  const caption = pdf.splitTextToSize(subtitle || 'CONTROL · COTIZACIONES · COSTOS · PAGOS · AVANCES', 105)[0] || '';
+  pdf.text(caption, x + 15, y + 12);
+}
+
+function drawBrand(pdf: jsPDF, document: QuoteDocument, x: number, y: number, compact = false) {
+  const logoUrl = (document.emisor.logoUrl || '').trim();
+  const match = LOGO_DATA_URL_RE.exec(logoUrl);
+  if (match) {
+    try {
+      const format = match[1].toUpperCase() === 'JPG' ? 'JPEG' : match[1].toUpperCase();
+      const maxW = compact ? 32 : 44;
+      const maxH = compact ? 10 : 16;
+      const props = pdf.getImageProperties(logoUrl);
+      const ratio = props?.width && props?.height ? Math.min(maxW / props.width, maxH / props.height) : 1;
+      const w = props?.width && props?.height ? props.width * ratio : maxW;
+      const h = props?.width && props?.height ? props.height * ratio : maxH;
+      const imgY = y + Math.max(0, (maxH - h) / 2);
+      pdf.addImage(logoUrl, format, x, imgY, w, h, undefined, 'FAST');
+
+      const hasCompany = document.emisor.empresa && document.emisor.empresa !== 'Emitido con ObraTrack';
+      const textX = x + w + 4;
+      const textMaxW = Math.max(36, 138 - textX);
+      let textY = y + (compact ? 4.5 : 5.5);
+      if (hasCompany) {
+        pdf.setFont('helvetica', 'bold').setFontSize(compact ? 8.5 : 11).setTextColor(INK);
+        const titleLines = pdf.splitTextToSize(document.emisor.empresa, textMaxW).slice(0, compact ? 1 : 2) as string[];
+        pdf.text(titleLines, textX, textY);
+        textY += titleLines.length * (compact ? 3.5 : 4.2);
+      }
+      if (!compact) {
+        pdf.setFont('helvetica', 'normal').setFontSize(6.5).setTextColor(GRAY);
+        const subParts = [document.emisor.rut ? `RUT: ${document.emisor.rut}` : '', document.emisor.giro].filter(Boolean);
+        for (const part of subParts) {
+          const lines = pdf.splitTextToSize(part, textMaxW).slice(0, 1) as string[];
+          pdf.text(lines, textX, textY);
+          textY += 3.2;
+        }
+      }
+      return;
+    } catch {
+      // Si la imagen falla al decodificar en el navegador/entorno, respaldar con el logo vectorial.
+    }
+  }
+  logo(pdf, x, y, document.emisor.giro || undefined);
 }
 
 function section(pdf: jsPDF, title: string, x: number, y: number) {
@@ -36,7 +80,7 @@ function section(pdf: jsPDF, title: string, x: number, y: number) {
 export function createQuotePdf(document: QuoteDocument) {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
   pdf.setProperties({ title: `Cotización ${document.folio} · ${document.proyecto.nombre}`, author: document.emisor.empresa, creator: 'ObraTrack' });
-  logo(pdf, MARGIN, 11);
+  drawBrand(pdf, document, MARGIN, 11);
   pdf.setDrawColor(ORANGE).setLineWidth(0.3).line(141, 12, 141, 32);
   pdf.setFont('helvetica', 'bold').setFontSize(17).setTextColor(INK).text('COTIZACIÓN', 147, 18);
   pdf.setFontSize(8).text(`N.° ${document.folio}`, 147, 24);
@@ -89,7 +133,7 @@ export function createQuotePdf(document: QuoteDocument) {
     rowPageBreak: 'avoid',
     willDrawPage: (data) => {
       if (data.pageNumber > 1) {
-        logo(pdf, MARGIN, 8);
+        drawBrand(pdf, document, MARGIN, 8, true);
         pdf.setFont('helvetica', 'bold').setFontSize(8).setTextColor(INK).text(`COTIZACIÓN N.° ${document.folio}`, 198, 15, { align: 'right' });
       }
     },
@@ -99,7 +143,7 @@ export function createQuotePdf(document: QuoteDocument) {
   const observations = document.observaciones.flatMap((value) => pdf.splitTextToSize(value, 83) as string[]);
   const conditions = pdf.splitTextToSize(document.condiciones, 83) as string[];
   const closingHeight = Math.max(65, 19 + observations.length * 3.1 + conditions.length * 3.1);
-  if (y + Math.min(closingHeight, 230) > 273) { pdf.addPage(); y = 30; logo(pdf, MARGIN, 8); }
+  if (y + Math.min(closingHeight, 230) > 273) { pdf.addPage(); y = 30; drawBrand(pdf, document, MARGIN, 8, true); }
   const summaryY = y;
   // Totales y firma ocupan la derecha; el texto puede continuar en otra página.
   const tx = 111;
@@ -113,13 +157,14 @@ export function createQuotePdf(document: QuoteDocument) {
   pdf.text(quoteMoney(document.total), 194, y + 22.5, { align: 'right' });
   pdf.setDrawColor('#BBBBBB').setLineWidth(0.2).line(128, y + 49, 181, y + 49);
   pdf.setFont('helvetica', 'normal').setFontSize(7).setTextColor(GRAY).text('Firma y sello', 154.5, y + 53, { align: 'center' });
-  pdf.setFont('helvetica', 'bold').setTextColor(ORANGE).text('ObraTrack', 154.5, y + 57, { align: 'center' });
+  const firmaLabel = pdf.splitTextToSize(document.emisor.firma || 'ObraTrack', 54)[0] || 'ObraTrack';
+  pdf.setFont('helvetica', 'bold').setTextColor(ORANGE).text(firmaLabel, 154.5, y + 57, { align: 'center' });
 
   const paragraph = (value: string) => {
     pdf.setFont('helvetica', 'normal').setFontSize(7.6).setTextColor(INK);
     const lines: string[] = pdf.splitTextToSize(value, 83);
     for (const line of lines) {
-      if (y + 4 > 273) { pdf.addPage(); logo(pdf, MARGIN, 8); y = 32; section(pdf, 'OBSERVACIONES Y CONDICIONES (CONTINUACIÓN)', MARGIN, 27); pdf.setFont('helvetica', 'normal').setFontSize(7.6).setTextColor(INK); }
+      if (y + 4 > 273) { pdf.addPage(); drawBrand(pdf, document, MARGIN, 8, true); y = 32; section(pdf, 'OBSERVACIONES Y CONDICIONES (CONTINUACIÓN)', MARGIN, 27); pdf.setFont('helvetica', 'normal').setFontSize(7.6).setTextColor(INK); }
       pdf.text(line, MARGIN, y);
       y += 3.3;
     }
@@ -129,19 +174,32 @@ export function createQuotePdf(document: QuoteDocument) {
   y += 8;
   for (const value of document.observaciones) paragraph(value);
   y += 3;
-  if (y + 12 > 273) { pdf.addPage(); logo(pdf, MARGIN, 8); y = 32; }
+  if (y + 12 > 273) { pdf.addPage(); drawBrand(pdf, document, MARGIN, 8, true); y = 32; }
   section(pdf, 'CONDICIONES DE PAGO', MARGIN, y);
   y += 5;
   paragraph(document.condiciones);
 
   const pages = pdf.getNumberOfPages();
+  const companyFooter = [document.emisor.empresa, document.emisor.rut ? `RUT: ${document.emisor.rut}` : '']
+    .filter(Boolean)
+    .join(' · ');
+  const contactFooter = [
+    [document.emisor.nombre, document.emisor.cargo].filter(Boolean).join(' — '),
+    document.emisor.email,
+    document.emisor.telefono,
+    document.emisor.direccion,
+    document.emisor.sitioWeb,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   for (let page = 1; page <= pages; page++) {
     pdf.setPage(page);
     pdf.setDrawColor(ORANGE).setLineWidth(0.3).line(MARGIN, 282, 198, 282);
     pdf.setFont('helvetica', 'bold').setFontSize(6.5).setTextColor(INK);
-    pdf.text(pdf.splitTextToSize(document.emisor.empresa, 85).slice(0, 1), MARGIN, 286);
+    pdf.text(pdf.splitTextToSize(companyFooter, 145).slice(0, 1), MARGIN, 286);
     pdf.setFont('helvetica', 'normal').setTextColor(GRAY);
-    pdf.text(pdf.splitTextToSize([document.emisor.nombre, document.emisor.email, document.emisor.telefono].filter(Boolean).join(' · '), 150).slice(0, 2), MARGIN, 289.5);
+    pdf.text(pdf.splitTextToSize(contactFooter, 165).slice(0, 2), MARGIN, 289.5);
     pdf.text(`${page} / ${pages}`, 198, 289.5, { align: 'right' });
   }
   return pdf;

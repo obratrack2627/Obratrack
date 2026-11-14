@@ -26,7 +26,17 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
   const [current, setCurrent] = useState<CotizacionEstimacion | null>(null);
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState('');
+  const [profileTick, setProfileTick] = useState(0);
   const saveRevision = useRef(0);
+  useEffect(() => {
+    const refreshProfile = () => setProfileTick((n) => n + 1);
+    window.addEventListener('obratrack_profile_updated', refreshProfile);
+    window.addEventListener('obratrack_cloud_synced', refreshProfile);
+    return () => {
+      window.removeEventListener('obratrack_profile_updated', refreshProfile);
+      window.removeEventListener('obratrack_cloud_synced', refreshProfile);
+    };
+  }, []);
   useEffect(() => {
     setCurrent(cotizacion); setEditing(startEditing && !readOnly); setNotice('');
     if (readOnly || !isOpen || !cotizacion || !['admin', 'supervisor'].includes(dataService.getActiveUser()?.rol || '')) return;
@@ -45,7 +55,25 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
   }, [isOpen, cotizacion?.id, startEditing, readOnly]);
   if (!isOpen || !cotizacion) return null;
   const visibleQuote = current?.id === cotizacion.id ? current : cotizacion;
-  const emisor = dataService.getActiveUser();
+  void profileTick;
+  const activeUser = dataService.getActiveUser();
+  const activeCompany = dataService.getEmpresa();
+  const emisor = activeUser
+    ? {
+        ...activeUser,
+        empresa_nombre: activeCompany?.nombre || activeUser.empresa_nombre,
+        empresa_rut: activeCompany?.rut ?? activeUser.empresa_rut,
+        empresa_logo_url: activeCompany?.logo_url ?? activeUser.empresa_logo_url,
+        empresa_configuracion: activeCompany?.configuracion || activeUser.empresa_configuracion,
+      }
+    : activeCompany
+      ? {
+          empresa_nombre: activeCompany.nombre,
+          empresa_rut: activeCompany.rut,
+          empresa_logo_url: activeCompany.logo_url,
+          empresa_configuracion: activeCompany.configuracion,
+        }
+      : null;
   const savedClient = visibleQuote.cliente_id ? dataService.getClientes().find((c) => c.id === visibleQuote.cliente_id) : undefined;
   const document = buildQuoteDocument(visibleQuote, {
     ...client,
@@ -143,7 +171,7 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
       `}</style>
       <div className="quote-toolbar">
         {!editing && <>
-        {!readOnly && ['admin', 'supervisor'].includes(emisor?.rol || '') && <button onClick={() => setEditing(true)} className="bg-white/10 hover:bg-white/20" aria-label="Editar cotización"><Pencil size={16} /><span className="hidden sm:inline">Editar</span></button>}
+        {!readOnly && ['admin', 'supervisor'].includes(activeUser?.rol || '') && <button onClick={() => setEditing(true)} className="bg-white/10 hover:bg-white/20" aria-label="Editar cotización"><Pencil size={16} /><span className="hidden sm:inline">Editar</span></button>}
         <button onClick={handleShare} className="bg-[#178743] hover:bg-[#126c35]" aria-label="Compartir resumen por WhatsApp" title="Compartir resumen por WhatsApp"><MessageCircle size={16} /><span className="hidden sm:inline">Compartir resumen</span></button>
         <button onClick={handleDownload} disabled={downloading} className="bg-[#FF6A00] hover:bg-[#E55F00]" aria-label="Descargar PDF">{downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}<span>{downloading ? 'Generando…' : 'Descargar PDF'}</span></button>
         <button onClick={() => window.print()} className="bg-white/10 hover:bg-white/20" aria-label="Imprimir" title="Imprimir"><Printer size={16} /></button>
@@ -158,7 +186,32 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
         }} /> :
         <article id="obratrack-cotizacion-pdf" className="quote-paper">
           <header className="quote-header">
-            <div className="quote-brand"><Logo variant="horizontal" size="md" /><p className="text-[7px] text-gray-500 mt-1">CONTROL · COTIZACIONES · COSTOS · PAGOS · AVANCES</p></div>
+            <div className="quote-brand" style={{ width: 'auto', minWidth: '210px', maxWidth: '380px' }}>
+              {document.emisor.logoUrl ? (
+                <div className="flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={document.emisor.logoUrl}
+                    alt={document.emisor.empresa || 'Logo empresa'}
+                    className="max-h-14 max-w-[190px] w-auto object-contain shrink-0"
+                  />
+                  <div>
+                    {document.emisor.empresa !== 'Emitido con ObraTrack' && (
+                      <p className="text-[12px] font-extrabold text-[#1e1e1e] leading-tight">{document.emisor.empresa}</p>
+                    )}
+                    {document.emisor.rut && (
+                      <p className="text-[8px] font-mono text-gray-600 mt-0.5">RUT: {document.emisor.rut}</p>
+                    )}
+                    <p className="text-[7px] text-gray-500 mt-0.5">{document.emisor.giro || 'CONTROL · COTIZACIONES · COSTOS · PAGOS · AVANCES'}</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <Logo variant="horizontal" size="md" />
+                  <p className="text-[7px] text-gray-500 mt-1">{document.emisor.giro || 'CONTROL · COTIZACIONES · COSTOS · PAGOS · AVANCES'}</p>
+                </>
+              )}
+            </div>
             <div className="quote-heading"><h1>COTIZACIÓN</h1><p><strong><span className="text-[#FF6A00]">N.°</span> {document.folio}</strong></p>{document.fecha && <p>FECHA: <strong>{document.fecha}</strong></p>}<p>VÁLIDA HASTA: <strong>{document.validez}</strong></p></div>
           </header>
           <div className="quote-info">
@@ -173,9 +226,20 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
           </table>
           <div className="quote-closing">
             <div><section className="quote-notes"><h2 className="quote-section-title"><FileText />OBSERVACIONES</h2><ul>{document.observaciones.map((note) => <li key={note}>{note}</li>)}</ul></section><section><h2 className="quote-section-title"><DollarSign />CONDICIONES DE PAGO</h2><p className="quote-payment">{document.condiciones}</p></section></div>
-            <div><div className="quote-totals"><div><span>SUBTOTAL</span><strong>{quoteMoney(document.subtotal)}</strong></div><div><span>IVA (19%)</span><strong>{quoteMoney(document.iva)}</strong></div><div className="quote-total"><span>TOTAL</span><strong>{quoteMoney(document.total)}</strong></div></div><div className="quote-signature"><div>Firma y sello<strong>ObraTrack</strong></div></div></div>
+            <div><div className="quote-totals"><div><span>SUBTOTAL</span><strong>{quoteMoney(document.subtotal)}</strong></div><div><span>IVA (19%)</span><strong>{quoteMoney(document.iva)}</strong></div><div className="quote-total"><span>TOTAL</span><strong>{quoteMoney(document.total)}</strong></div></div><div className="quote-signature"><div>Firma y sello<strong>{document.emisor.firma || 'ObraTrack'}</strong></div></div></div>
           </div>
-          <footer className="quote-footer"><div><strong>{document.emisor.empresa}</strong><p>{document.emisor.nombre}</p></div><div>{document.emisor.email && <p>{document.emisor.email}</p>}{document.emisor.telefono && <p>{document.emisor.telefono}</p>}</div></footer>
+          <footer className="quote-footer">
+            <div>
+              <strong>{document.emisor.empresa}{document.emisor.rut ? ` · RUT: ${document.emisor.rut}` : ''}</strong>
+              <p>{[document.emisor.nombre, document.emisor.cargo].filter(Boolean).join(' — ')}</p>
+              {document.emisor.direccion && <p>{document.emisor.direccion}</p>}
+            </div>
+            <div className="text-right">
+              {document.emisor.email && <p>{document.emisor.email}</p>}
+              {document.emisor.telefono && <p>{document.emisor.telefono}</p>}
+              {document.emisor.sitioWeb && <p>{document.emisor.sitioWeb}</p>}
+            </div>
+          </footer>
         </article>
         }
       </div>

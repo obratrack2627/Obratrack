@@ -27,6 +27,7 @@ import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 import { signOutSupabase } from '@/lib/supabase/auth';
 import ActionMenu from '@/components/ActionMenu';
 import ChangePasswordModal from '@/components/ChangePasswordModal';
+import ProfileSettingsModal from '@/components/ProfileSettingsModal';
 import ThemeToggle from '@/components/ThemeToggle';
 
 interface SidebarProps {
@@ -38,6 +39,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeUser, setActiveUser] = useState<Usuario | null>(null);
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
@@ -80,9 +82,11 @@ export default function Sidebar() {
 
     window.addEventListener('obratrack_plan_changed', planChangeHandler);
     window.addEventListener('obratrack_cloud_synced', syncHandler);
+    window.addEventListener('obratrack_profile_updated', syncHandler);
     return () => {
       window.removeEventListener('obratrack_plan_changed', planChangeHandler);
       window.removeEventListener('obratrack_cloud_synced', syncHandler);
+      window.removeEventListener('obratrack_profile_updated', syncHandler);
     };
   }, [pathname]);
 
@@ -179,6 +183,11 @@ export default function Sidebar() {
       />
 
       <ChangePasswordModal isOpen={passwordOpen} onClose={() => setPasswordOpen(false)} userEmail={activeUser?.email_acceso || activeUser?.email} />
+      <ProfileSettingsModal
+        isOpen={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        onRequestChangePassword={() => setPasswordOpen(true)}
+      />
       {/* Mobile Top Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#1E1E1E] text-white z-50 flex items-center justify-between px-4 border-b border-[#2A2A2A] shadow-md print:hidden">
         <Link href="/dashboard">
@@ -302,6 +311,7 @@ export default function Sidebar() {
               </div>
               
               <ActionMenu label="Cuenta" above>
+                <button type="button" onClick={() => { setProfileOpen(true); setMobileOpen(false); }}>Editar perfil</button>
                 <Link href="/planes" onClick={() => setMobileOpen(false)}>Suscripción</Link>
                 <button type="button" onClick={() => { setPasswordOpen(true); setMobileOpen(false); }}>Cambiar contraseña</button>
                 <button type="button" onClick={handleLogout} className="text-red-600">Cerrar sesión</button>

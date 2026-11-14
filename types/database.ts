@@ -31,11 +31,26 @@ export interface PlanSuscripcion {
   popular?: boolean;
 }
 
+export interface EmpresaConfiguracion {
+  giro?: string;
+  direccion?: string;
+  comuna?: string;
+  telefono_comercial?: string;
+  email_comercial?: string;
+  sitio_web?: string;
+  firma_texto?: string;
+  condiciones_pago_defecto?: string;
+  datos_bancarios?: string;
+  mostrar_datos_bancarios?: boolean;
+}
+
 export interface Empresa {
   id: string;
   nombre: string;
   rut: string | null;
   plan_id?: SubscriptionPlanId;
+  logo_url?: string | null;
+  configuracion?: EmpresaConfiguracion;
   created_at?: string;
   updated_at?: string;
 }
@@ -53,6 +68,9 @@ export interface Usuario {
   especialidades?: string[];
   rut?: string;
   empresa_nombre?: string;
+  empresa_rut?: string | null;
+  empresa_logo_url?: string | null;
+  empresa_configuracion?: EmpresaConfiguracion;
   is_dev?: boolean;
   created_at?: string;
 }

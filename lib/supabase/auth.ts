@@ -114,7 +114,13 @@ async function ownProfile(): Promise<Usuario> {
   const profile = Array.isArray(data) ? data[0] : data;
   if (error || !profile?.id || !profile?.empresa_id) throw new Error('No se pudo completar el perfil de tu empresa. Revisa los datos de registro o contacta con administración.');
   const company = await supabaseService.getEmpresaById(profile.empresa_id);
-  return { ...profile, empresa_nombre: company?.nombre || '' } as Usuario;
+  return {
+    ...profile,
+    empresa_nombre: company?.nombre || '',
+    empresa_rut: company?.rut || null,
+    empresa_logo_url: company?.logo_url || null,
+    empresa_configuracion: company?.configuracion || {},
+  } as Usuario;
 }
 async function activateProfile(usuario: Usuario, token: string) {
   if (!canAccessWeb(usuario)) {

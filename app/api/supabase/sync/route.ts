@@ -135,7 +135,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     const { client, user } = await authorizeAI(request);
-    const { tables, service } = await loadAIContext(client, user);
+    const { company, tables, service } = await loadAIContext(client, user);
     const ids = tables.proyectos.map((p) => p.id);
     const reports = ids.length
       ? checkedRows(
@@ -190,6 +190,16 @@ export async function GET(request: NextRequest) {
       {
         success: true,
         empresaId: user.empresa_id,
+        empresa: company
+          ? {
+              id: company.id,
+              nombre: company.nombre || "",
+              rut: company.rut || null,
+              plan_id: service.getActivePlan(),
+              logo_url: company.logo_url || null,
+              configuracion: company.configuracion || {},
+            }
+          : null,
         plan_id: service.getActivePlan(),
         agenda: service.getEventosAgenda(),
         proyectos: service.getProyectos(),

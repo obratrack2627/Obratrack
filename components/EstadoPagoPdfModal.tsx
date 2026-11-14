@@ -53,6 +53,13 @@ export default function EstadoPagoPdfModal({
   const [downloadError, setDownloadError] = useState('');
 
   const emisor = typeof window !== 'undefined' ? dataService.getActiveUser() : null;
+  const empresa = typeof window !== 'undefined' ? dataService.getEmpresa() : null;
+  const empresaNombre = empresa?.nombre || emisor?.empresa_nombre || 'Constructora ObraTrack';
+  const empresaRut = empresa?.rut || emisor?.empresa_rut || emisor?.rut || '';
+  const empresaLogoUrl = empresa?.logo_url || emisor?.empresa_logo_url || '';
+  const empresaCfg = empresa?.configuracion || emisor?.empresa_configuracion || {};
+  const emailEmisor = empresaCfg.email_comercial || emisor?.email || '';
+  const telefonoEmisor = empresaCfg.telefono_comercial || emisor?.telefono_whatsapp || '';
 
   const resumen = useMemo(() => {
     const customAmount =
@@ -81,7 +88,24 @@ export default function EstadoPagoPdfModal({
     setDownloading(true); setDownloadError('');
     try {
       const { paymentPdf } = await import('@/lib/payments/pdf');
-      paymentPdf({ nombre: proyecto.nombre, cliente: cliente?.nombre || 'Por definir', fecha: fechaEmision, resumen, actividades, observacion: observacionEdp }).save(`ObraTrack_${resumen.folio}_${proyecto.id}.pdf`);
+      paymentPdf({
+        nombre: proyecto.nombre,
+        cliente: cliente?.nombre || 'Por definir',
+        fecha: fechaEmision,
+        resumen,
+        actividades,
+        observacion: observacionEdp,
+        emisor: {
+          empresa: empresaNombre,
+          rut: empresaRut,
+          nombre: emisor?.nombre || '',
+          logoUrl: empresaLogoUrl,
+          giro: empresaCfg.giro || '',
+          email: emailEmisor,
+          telefono: telefonoEmisor,
+          datosBancarios: empresaCfg.mostrar_datos_bancarios ? empresaCfg.datos_bancarios : '',
+        },
+      }).save(`ObraTrack_${resumen.folio}_${proyecto.id}.pdf`);
     } catch { setDownloadError('No se pudo descargar el PDF. Reintenta.'); }
     finally { setDownloading(false); }
   };
@@ -308,15 +332,27 @@ export default function EstadoPagoPdfModal({
             {/* Encabezado Documento */}
             <div className="flex flex-wrap items-start justify-between gap-4 pb-5 border-b-2 border-[#FF6A00]">
               <div className="space-y-1">
-                <Logo size="md" theme="light" />
-                <p className="text-xs font-bold text-gray-800 pt-1">
-                  {emisor?.empresa_nombre || 'Constructora ObraTrack'}
-                </p>
-                {emisor?.rut && (
-                  <p className="text-[11px] font-mono text-gray-600">RUT: {emisor.rut}</p>
+                {empresaLogoUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={empresaLogoUrl}
+                    alt={empresaNombre}
+                    className="max-h-14 max-w-[190px] w-auto object-contain"
+                  />
+                ) : (
+                  <Logo size="md" theme="light" />
                 )}
-                {emisor?.email && (
-                  <p className="text-[11px] text-gray-600">Contacto: {emisor.email}</p>
+                <p className="text-xs font-bold text-gray-800 pt-1">
+                  {empresaNombre}
+                </p>
+                {empresaCfg.giro && (
+                  <p className="text-[11px] text-gray-500">{empresaCfg.giro}</p>
+                )}
+                {empresaRut && (
+                  <p className="text-[11px] font-mono text-gray-600">RUT: {empresaRut}</p>
+                )}
+                {emailEmisor && (
+                  <p className="text-[11px] text-gray-600">Contacto: {emailEmisor}{telefonoEmisor ? ` · ${telefonoEmisor}` : ''}</p>
                 )}
               </div>
 
@@ -485,10 +521,20 @@ export default function EstadoPagoPdfModal({
               </div>
             </div>
 
-            {observacionEdp.trim() && (
-              <div className="text-xs bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <span className="font-mono font-bold uppercase text-gray-600">Observaciones: </span>
-                <span className="text-gray-800">{observacionEdp.trim()}</span>
+            {(observacionEdp.trim() || (empresaCfg.mostrar_datos_bancarios && empresaCfg.datos_bancarios?.trim())) && (
+              <div className="text-xs bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-1.5">
+                {observacionEdp.trim() && (
+                  <div>
+                    <span className="font-mono font-bold uppercase text-gray-600">Observaciones: </span>
+                    <span className="text-gray-800">{observacionEdp.trim()}</span>
+                  </div>
+                )}
+                {empresaCfg.mostrar_datos_bancarios && empresaCfg.datos_bancarios?.trim() && (
+                  <div>
+                    <span className="font-mono font-bold uppercase text-gray-600">Datos para transferencia: </span>
+                    <span className="text-gray-800 whitespace-pre-wrap">{empresaCfg.datos_bancarios.trim()}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -496,7 +542,7 @@ export default function EstadoPagoPdfModal({
             <div className="grid grid-cols-2 gap-8 pt-8 text-center text-xs text-gray-600">
               <div className="border-t border-gray-400 pt-2">
                 <p className="font-bold text-gray-900">
-                  {emisor?.empresa_nombre || 'Contratista / Constructora'}
+                  {empresaCfg.firma_texto || empresaNombre}
                 </p>
                 <p>Firma y Timbre Emisor</p>
               </div>

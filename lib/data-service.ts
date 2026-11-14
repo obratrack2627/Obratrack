@@ -9,6 +9,7 @@ import { normalizeSpecialties } from '@/lib/team-specialties';
 import { syncFailureMessage } from '@/lib/sync/failure';
 import { projectStatusLabel } from '@/lib/project-status';
 import {
+  Empresa,
   Proyecto,
   Actividad,
   Pago,
@@ -60,6 +61,7 @@ export const DATA_STORAGE_KEYS = {
   USUARIOS: 'obratrack_usuarios_v7',
   CLIENTES: 'obratrack_clientes_v7',
   ACTIVE_USER: 'obratrack_active_user_v7',
+  EMPRESA: 'obratrack_empresa_v7',
   COTIZACIONES: 'obratrack_cotizaciones_v7',
   PLAN: 'obratrack_active_plan_v7',
   MATERIALES_PROYECTO: 'obratrack_materiales_proyecto_v7',
@@ -295,6 +297,79 @@ export class DataService {
       this.clearChatSessionHistory();
     } catch (e) {
       console.error(e);
+    }
+  }
+
+  getEmpresa(): Empresa | null {
+    const active = this.getActiveUser();
+    const stored = this.getItem<Empresa | null>(this.getTenantKey(KEYS.EMPRESA), null);
+    if (stored) return stored;
+    if (!active?.empresa_id) return null;
+    return {
+      id: active.empresa_id,
+      nombre: active.empresa_nombre || '',
+      rut: active.empresa_rut || null,
+      plan_id: this.getActivePlan(),
+      logo_url: active.empresa_logo_url || null,
+      configuracion: active.empresa_configuracion || {},
+    };
+  }
+
+  setEmpresa(empresa: Empresa | null): void {
+    const active = this.getActiveUser();
+    const tenantKey = empresa?.id
+      ? `${KEYS.EMPRESA}_${empresa.id}`
+      : this.getTenantKey(KEYS.EMPRESA);
+    if (!empresa) {
+      if (this.isBrowser()) {
+        try { localStorage.removeItem(tenantKey); } catch {}
+      }
+      return;
+    }
+    this.setItem(tenantKey, empresa, false);
+    if (active && active.empresa_id === empresa.id) {
+      this.setItem(
+        KEYS.ACTIVE_USER,
+        {
+          ...active,
+          empresa_nombre: empresa.nombre || active.empresa_nombre || '',
+          empresa_rut: empresa.rut ?? active.empresa_rut ?? null,
+          empresa_logo_url: Object.hasOwn(empresa, 'logo_url') ? empresa.logo_url : active.empresa_logo_url,
+          empresa_configuracion: empresa.configuracion || active.empresa_configuracion || {},
+        },
+        false,
+      );
+    }
+  }
+
+  applyLocalProfileUpdate(updatedUser: Usuario, updatedEmpresa?: Empresa | null): void {
+    if (updatedEmpresa) {
+      this.setItem(`${KEYS.EMPRESA}_${updatedEmpresa.id}`, updatedEmpresa, false);
+    }
+    const mergedUser: Usuario = {
+      ...updatedUser,
+      ...(updatedEmpresa
+        ? {
+            empresa_nombre: updatedEmpresa.nombre || updatedUser.empresa_nombre || '',
+            empresa_rut: updatedEmpresa.rut ?? updatedUser.empresa_rut ?? null,
+            empresa_logo_url: Object.hasOwn(updatedEmpresa, 'logo_url')
+              ? updatedEmpresa.logo_url
+              : updatedUser.empresa_logo_url,
+            empresa_configuracion:
+              updatedEmpresa.configuracion || updatedUser.empresa_configuracion || {},
+          }
+        : {}),
+    };
+    this.setItem(KEYS.ACTIVE_USER, mergedUser, false);
+    const tenantUsersKey = `${KEYS.USUARIOS}_${mergedUser.empresa_id}`;
+    const currentUsers = this.getItem<Usuario[]>(tenantUsersKey, []);
+    const idx = currentUsers.findIndex((u) => u.id === mergedUser.id);
+    if (idx >= 0) {
+      const nextUsers = [...currentUsers];
+      nextUsers[idx] = { ...nextUsers[idx], ...mergedUser };
+      this.setItem(tenantUsersKey, nextUsers, false);
+    } else {
+      this.setItem(tenantUsersKey, [mergedUser, ...currentUsers], false);
     }
   }
 
@@ -2639,6 +2714,9 @@ export class DataService {
       this.isPullingCloud = true;
       try {
         if (['gratis','pro','pro_ia'].includes(cloud.plan_id)) this.setItem(this.getTenantKey(KEYS.PLAN),cloud.plan_id);
+        if (cloud.empresa && typeof cloud.empresa === 'object' && cloud.empresa.id === empresaId) {
+          this.setItem(this.getTenantKey(KEYS.EMPRESA), cloud.empresa, false);
+        }
         if (Array.isArray(cloud.agenda)) this.setItem(this.getTenantKey(KEYS.AGENDA),cloud.agenda);
         if (Array.isArray(cloud.proyectos)) {
           this.setItem(this.getTenantKey(KEYS.PROYECTOS), mergeById(localProjs, cloud.proyectos.map((row: Proyecto) => {
@@ -2652,8 +2730,26 @@ export class DataService {
         if (Array.isArray(cloud.usuarios)) {
           const usuarios = mergeById(this.getUsuarios(), cloud.usuarios, 'usuarios');
           const profile = usuarios.find(u => u.id === active.id && u.empresa_id === empresaId);
-          if (profile) this.setItem(KEYS.ACTIVE_USER, { ...active, ...profile });
+          const companyPatch = cloud.empresa && cloud.empresa.id === empresaId
+            ? {
+                empresa_nombre: cloud.empresa.nombre || '',
+                empresa_rut: cloud.empresa.rut ?? null,
+                empresa_logo_url: cloud.empresa.logo_url ?? null,
+                empresa_configuracion: cloud.empresa.configuracion || {},
+              }
+            : {};
+          if (profile || Object.keys(companyPatch).length > 0) {
+            this.setItem(KEYS.ACTIVE_USER, { ...active, ...(profile || {}), ...companyPatch });
+          }
           this.setItem(this.getTenantKey(KEYS.USUARIOS), usuarios);
+        } else if (cloud.empresa && cloud.empresa.id === empresaId) {
+          this.setItem(KEYS.ACTIVE_USER, {
+            ...active,
+            empresa_nombre: cloud.empresa.nombre || '',
+            empresa_rut: cloud.empresa.rut ?? null,
+            empresa_logo_url: cloud.empresa.logo_url ?? null,
+            empresa_configuracion: cloud.empresa.configuracion || {},
+          });
         }
         if (Array.isArray(cloud.actividades)) {
           this.setItem(this.getTenantKey(KEYS.ACTIVIDADES), mergeById(this.getActividades(), cloud.actividades, 'actividades'));

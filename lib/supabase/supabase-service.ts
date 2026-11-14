@@ -40,6 +40,8 @@ export class SupabaseService {
         nombre: data.nombre,
         rut: data.rut,
         plan_id: (data.plan_id as SubscriptionPlanId) || 'gratis',
+        logo_url: data.logo_url || null,
+        configuracion: (data.configuracion && typeof data.configuracion === 'object') ? data.configuracion : {},
         created_at: data.created_at,
         updated_at: data.updated_at,
       };
