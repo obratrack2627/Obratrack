@@ -659,8 +659,7 @@ test("crear una obra por WhatsApp no guarda nada hasta reunir los cinco campos o
     deps,
   );
   assert.match(first.respuesta, /Nombre del cliente/);
-  assert.match(first.respuesta, /Correo/);
-  assert.match(first.respuesta, /Teléfono/);
+  assert.doesNotMatch(first.respuesta, /Correo|Teléfono|RUT/);
   assert.equal(params.p_acciones.tipo, "solicitar_datos_obra");
   assert.equal(Object.values(params.p_changed).flat().length, 0);
   const second = await processPersonalMessage(
@@ -748,7 +747,8 @@ test("una petición expresa inicia el borrador aunque Gemini solo devuelva texto
   assert.equal(result.acciones.tipo, "solicitar_datos_obra");
   assert.equal(result.acciones.detalles.borrador.nombre, "Terraza");
   assert.equal(sb.db.proyectos.length, 0);
-  assert.match(result.respuesta, /Correo/);
+  assert.match(result.respuesta, /Nombre del cliente/);
+  assert.doesNotMatch(result.respuesta, /Correo|Teléfono|RUT/);
 });
 
 test("una consulta sobre el avance de una obra no inicia una creación", async () => {

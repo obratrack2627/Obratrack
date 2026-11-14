@@ -184,11 +184,12 @@ export function projectIntake(
     else draft.cliente_telefono = "+" + phone;
   }
   const missing: string[] = [];
+  const newClient = !client && text(draft.cliente_nombre);
   const literalRut = userText.match(/\b\d{7,8}-[\dkK]\b|\b\d{1,2}\.\d{3}\.\d{3}-[\dkK]\b/)?.[0];
   if (literalRut && validarRutChileno(literalRut)) draft.cliente_rut = literalRut;
   if (draft.cliente_rut && draft.cliente_rut !== previous?.cliente_rut && draft.cliente_rut !== client?.rut
     && !userText.replace(/[.\s-]/g,'').toLowerCase().includes(draft.cliente_rut.replace(/[.\s-]/g,'').toLowerCase())) delete draft.cliente_rut;
-  if (!client && (!draft.cliente_rut || !validarRutChileno(draft.cliente_rut))) missing.push('RUT válido del nuevo cliente');
+  if (newClient && (!draft.cliente_rut || !validarRutChileno(draft.cliente_rut))) missing.push('RUT válido del nuevo cliente');
   if (!text(draft.cliente_nombre)) missing.push("Nombre del cliente");
   if (!text(draft.nombre)) missing.push("Nombre de la obra");
   if (
@@ -197,19 +198,20 @@ export function projectIntake(
     draft.monto_cotizado <= 0
   )
     missing.push("Presupuesto de la obra en CLP");
-  if (!client && (
+  if (newClient && (
     !text(draft.cliente_email) ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.cliente_email)
   ))
     missing.push("Correo electrónico del cliente");
-  if (!client && !draft.cliente_telefono)
+  if (newClient && !draft.cliente_telefono)
     missing.push("Teléfono del cliente");
   if (missing.length) {
     const question =
       (client ? `Usaré al cliente ${client.nombre}, que ya está registrado.\n` : '') +
       "Para crear la obra falta:\n" +
       missing.map((s) => "• " + s).join("\n") +
-      "\nLos demás datos son opcionales. Puedes responderlos juntos o uno por uno.";
+      (!draft.cliente_nombre ? "\nSi el cliente ya existe, indica su nombre y usaré su ficha." : '') +
+      "\nPuedes responder estos datos juntos o uno por uno.";
     const result: AccionAsistenteIA = {
       tipo: "solicitar_datos_obra",
       titulo: "Datos pendientes para crear la obra",

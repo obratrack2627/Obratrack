@@ -286,8 +286,7 @@ test("la creación de obra pide los cinco datos, conserva el borrador y permite 
   );
   assert.match(step.question, /Nombre del cliente/);
   assert.match(step.question, /Presupuesto/);
-  assert.match(step.question, /Correo/);
-  assert.match(step.question, /Teléfono/);
+  assert.doesNotMatch(step.question, /Correo|Teléfono|RUT/);
   assert.equal(step.actions.length, 0);
   step = projectIntake(
     actor,
