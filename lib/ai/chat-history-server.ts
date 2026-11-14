@@ -4,6 +4,8 @@ export function historyMessages(input:unknown){
  if(!Array.isArray(input)||input.length>100)throw new AIError('CHAT_INVALID','La conversación supera el tamaño permitido.',422);
  return input.filter(m=>!m?.obra_contexto_id&&!String(m?.id||'').startsWith('m-init')).map(m=>{
   if(typeof m?.id!=='string'||m.id.length>200||!m.id||!['usuario','agente'].includes(m.remitente)||typeof m.texto!=='string'||!m.texto.trim()||m.texto.length>12000)throw new AIError('CHAT_INVALID','Revisa los mensajes de la conversación.',422);
+  const quoteId=m.cotizacion_generada?.id||m.cotizacion_id;
+  if(quoteId!==undefined&&(typeof quoteId!=='string'||!quoteId||quoteId.length>200))throw new AIError('CHAT_INVALID','La referencia del presupuesto no es válida.',422);
   const action=m.accion_ejecutada&&typeof m.accion_ejecutada==='object'?{...m.accion_ejecutada}:undefined;
   if(action?.link_destino&&(typeof action.link_destino!=='string'||!action.link_destino.startsWith('/')||action.link_destino.startsWith('//')))delete action.link_destino;
   const payload={id:m.id,remitente:m.remitente,texto:m.texto,timestamp:typeof m.timestamp==='string'?m.timestamp.slice(0,30):'',...(Number.isFinite(Date.parse(m.created_at))?{created_at:new Date(m.created_at).toISOString()}:{}),...(Array.isArray(m.sugerencias)?{sugerencias:m.sugerencias.filter((s:any)=>typeof s==='string').slice(0,6)}:{}),...(action?{accion_ejecutada:action}:{}),...(typeof m.cotizacion_generada?.id==='string'||typeof m.cotizacion_id==='string'?{cotizacion_id:m.cotizacion_generada?.id||m.cotizacion_id}:{})};
@@ -26,7 +28,7 @@ export async function readOlderChat(client:any,user:{empresa_id:string},before:s
 }
 async function hydrateHistory(client:any,user:{empresa_id:string},messages:any[]){
  const quotes=new Map<string,any>();
- for(const m of messages)if(m.cotizacion_id&&!quotes.has(m.cotizacion_id))quotes.set(m.cotizacion_id,null);
+ for(const m of messages)if(typeof m.cotizacion_id==='string'&&m.cotizacion_id.length<=200&&!quotes.has(m.cotizacion_id))quotes.set(m.cotizacion_id,null);
  // Solo IDs del historial privado; nunca usar la copia de presupuesto del navegador.
  await Promise.all(Array.from(quotes.keys()).map(async id=>{const budget=await findBudget(client,user.empresa_id,id);quotes.set(id,budget?.cotizacion||null);}));
  return {messages:messages.map((m:any)=>({...m,...(quotes.get(m.cotizacion_id)?{cotizacion_generada:quotes.get(m.cotizacion_id)}:{})}))};

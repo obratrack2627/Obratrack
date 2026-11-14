@@ -33,6 +33,7 @@ test('la nube conserva IDs de presupuestos y no persiste copias financieras ni c
  const result=historyMessages([{...message('q'),cotizacion_generada:{id:'cot-1',estructura_financiera:{precio_total_con_iva:1}},pendiente_sincronizacion:'no-repetir'}]);
  assert.equal(result[0].cotizacion_id,'cot-1');assert.equal(result[0].cotizacion_generada,undefined);assert.equal(result[0].pendiente_sincronizacion,undefined);
  assert.throws(()=>historyMessages([{...message('x'),texto:''}]),e=>e.code==='CHAT_INVALID');
+ assert.throws(()=>historyMessages([{...message('x'),cotizacion_id:'x'.repeat(201)}]),e=>e.code==='CHAT_INVALID');
 });
 test('hidratar presupuestos consulta la empresa del actor y no ejecuta acciones',async()=>{
  const calls=[];const chain={select:()=>chain,eq:(k,v)=>{calls.push([k,v]);return chain;},maybeSingle:async()=>({data:{cotizacion:{id:'cot-1'}}})};
