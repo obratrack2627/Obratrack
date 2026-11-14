@@ -11,6 +11,15 @@ import {
   Download,
   UserMinus,
   ArrowRight,
+  Check,
+  CheckCircle2,
+  CircleX,
+  Clock3,
+  CalendarDays,
+  History,
+  Lightbulb,
+  ChartNoAxesColumnIncreasing,
+  FileText,
 } from "lucide-react";
 import LabourFromAttendance from "@/components/LabourFromAttendance";
 import ProjectTabsHeader from "@/components/ProjectTabsHeader";
@@ -31,7 +40,12 @@ import {
 } from "@/lib/crew";
 import { chileToday } from "@/lib/ai/project-deadlines";
 import { formatDate } from "@/lib/utils";
-import type { Proyecto, Usuario, AsistenciaObrero } from "@/types/database";
+import type {
+  Proyecto,
+  Usuario,
+  AsistenciaObrero,
+  EstadoAsistencia,
+} from "@/types/database";
 
 type View = "crew" | "daily" | "history";
 type Editor = {
@@ -40,9 +54,10 @@ type Editor = {
   record?: AsistenciaObrero;
   bulk?: boolean;
   date: string;
+  initialStatus?: EstadoAsistencia;
 };
 const panel =
-  "rounded-2xl border border-kraft-200 bg-white dark:border-[#263040] dark:bg-[#141A23]";
+  "rounded-2xl border border-kraft-200 bg-white shadow-[0_4px_18px_rgba(30,30,30,0.035)] dark:border-[#263040] dark:bg-[#141A23]";
 const statusStyle: Record<string, string> = {
   presente:
     "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
@@ -56,8 +71,17 @@ const statusStyle: Record<string, string> = {
 function Status({ record }: { record?: AsistenciaObrero }) {
   return (
     <span
-      className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold ${record ? statusStyle[record.estado] : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"}`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${record ? statusStyle[record.estado] : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"}`}
     >
+      {!record ? (
+        <Clock3 size={14} />
+      ) : record.estado === "ausente" ? (
+        <CircleX size={14} />
+      ) : ["presente", "atraso"].includes(record.estado) ? (
+        <CheckCircle2 size={14} />
+      ) : (
+        <FileText size={14} />
+      )}
       {record ? attendanceLabels[record.estado] : "Sin registro"}
     </span>
   );
@@ -107,6 +131,9 @@ export default function ProjectCrewPage() {
     ["presente", "atraso"].includes(attendance(user)?.estado || ""),
   ).length;
   const pending = crew.filter((user) => !attendance(user)).length;
+  const absent = crew.filter(
+    (user) => attendance(user)?.estado === "ausente",
+  ).length;
   const query = crewText(search);
   const matches = (user: Usuario) =>
     crewText(
@@ -115,9 +142,7 @@ export default function ProjectCrewPage() {
   const visibleCrew = crew.filter(
     (user) =>
       matches(user) &&
-      (view !== "daily" ||
-        filter === "all" ||
-        (attendance(user)?.estado || "none") === filter),
+      (filter === "all" || (attendance(user)?.estado || "none") === filter),
   );
   const candidates = users.filter(
     (user) =>
@@ -138,6 +163,7 @@ export default function ProjectCrewPage() {
     .filter(
       (row) =>
         (!historyDate || row.fecha === historyDate) &&
+        (filter === "all" || row.estado === filter) &&
         crewText(
           [
             row.trabajador_nombre,
@@ -269,7 +295,6 @@ export default function ProjectCrewPage() {
         }
         onOpenMaps={() => setMaps(true)}
       />
-      <div className="px-4 sm:px-6 pt-4"><LabourFromAttendance projectId={projectId} onChanged={refresh}/></div>
       <div className="mx-auto max-w-7xl space-y-5 p-4 pb-28 sm:p-6 sm:pb-28">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -302,40 +327,94 @@ export default function ProjectCrewPage() {
             </button>
           </div>
         )}
-        <section aria-label="Resumen de cuadrilla" className="summary-overview">
-          <div
-            className="workspace-metrics grid gap-2 sm:gap-4"
-            style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
-          >
+        <section
+          aria-label="Resumen de cuadrilla"
+          className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"
+        >
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {[
-              ["Asignados", crew.length],
-              ["Presentes", present],
-              ["Sin registro", pending],
-            ].map(([label, value]) => (
-              <div key={label} className={`${panel} min-w-0 p-3 sm:p-5`}>
-                <p className="text-xs text-gray-500 sm:text-sm">{label}</p>
-                <p className="mt-1 text-2xl font-bold sm:text-3xl">{value}</p>
+              {
+                label: "Asignados",
+                value: crew.length,
+                Icon: Users,
+                color: "text-[#FF6A00] bg-orange-50 dark:bg-orange-950/30",
+              },
+              {
+                label: "Presentes",
+                value: present,
+                Icon: Check,
+                color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
+              },
+              {
+                label: "Sin registro",
+                value: pending,
+                Icon: Clock3,
+                color: "text-slate-500 bg-slate-100 dark:bg-slate-800",
+              },
+              {
+                label: "Ausentes",
+                value: absent,
+                Icon: CircleX,
+                color: "text-red-500 bg-red-50 dark:bg-red-950/30",
+              },
+            ].map(({ label, value, Icon, color }) => (
+              <div
+                key={label}
+                className={`${panel} flex min-w-0 items-center gap-3 p-3 sm:p-4`}
+              >
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${color}`}
+                >
+                  <Icon size={21} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {label}
+                  </p>
+                  <p className="mt-1 text-2xl font-bold leading-none">
+                    {value}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
-          <label className="mt-3 inline-flex max-w-full items-center gap-2 text-xs text-gray-500">
-            Fecha de referencia
-            <input
-              aria-label="Fecha de asistencia"
-              type="date"
-              className="min-w-0 rounded-lg border border-kraft-200 bg-transparent p-2 text-sm dark:border-gray-700"
-              value={date}
-              max={chileToday()}
-              onChange={(event) => {
-                if (event.target.value) setDate(event.target.value);
-              }}
-            />
-          </label>
+          <div className="grid min-w-0 grid-cols-2 gap-3 xl:border-l xl:border-kraft-200 xl:pl-4 dark:xl:border-[#263040]">
+            <label className="min-w-0 space-y-1.5 text-xs text-gray-500">
+              Fecha de referencia
+              <input
+                aria-label="Fecha de asistencia"
+                type="date"
+                className={`${crewInput} mt-1.5 !p-2.5 !text-xs`}
+                value={date}
+                max={chileToday()}
+                onChange={(event) => {
+                  if (event.target.value) setDate(event.target.value);
+                }}
+              />
+            </label>
+            <label className="min-w-0 space-y-1.5 text-xs text-gray-500">
+              Filtrar por estado
+              <select
+                aria-label="Filtrar asistencia"
+                className={`${crewInput} mt-1.5 !p-2.5 !text-xs`}
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+              >
+                <option value="all">Todos los estados</option>
+                <option value="none">Sin registro</option>
+                {Object.entries(attendanceLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </section>
         <div
           role="tablist"
           aria-label="Gestión de cuadrilla"
-          className="flex gap-1 rounded-xl bg-kraft-100 p-1 dark:bg-gray-900"
+          className="flex gap-1 border-b border-kraft-200 dark:border-[#263040]"
         >
           {(
             [
@@ -349,346 +428,508 @@ export default function ProjectCrewPage() {
               type="button"
               role="tab"
               aria-selected={view === id}
-              className={`min-w-0 flex-1 rounded-lg px-2 py-3 text-xs font-semibold sm:flex-none sm:px-6 sm:text-sm ${view === id ? "bg-white text-[#FF6A00] shadow-sm dark:bg-[#1E2530]" : "text-gray-500 dark:text-gray-400"}`}
+              className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-t-xl border-b-2 px-2 py-3 text-xs font-semibold sm:flex-none sm:px-6 sm:text-sm ${view === id ? "border-[#FF6A00] bg-orange-50 text-[#FF6A00] dark:bg-orange-950/20" : "border-transparent text-gray-500 dark:text-gray-400"}`}
               onClick={() => {
                 setView(id);
                 setSearch("");
                 setFilter("all");
               }}
             >
+              {id === "crew" ? (
+                <Users size={18} className="shrink-0" />
+              ) : id === "daily" ? (
+                <CalendarDays size={18} className="shrink-0" />
+              ) : (
+                <History size={18} className="shrink-0" />
+              )}
               {label}
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="relative min-w-0 flex-1 basis-52">
-            <span className="sr-only">Buscar trabajador o especialidad</span>
-            <Search
-              size={17}
-              className="absolute left-3 top-3.5 text-gray-400"
-            />
-            <input
-              className={`${crewInput} pl-9`}
-              placeholder="Nombre o especialidad"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </label>
-          {view === "daily" && (
-            <>
-              <label className="min-w-0">
-                <span className="sr-only">Filtrar asistencia</span>
-                <select
-                  className={crewInput}
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value)}
-                >
-                  <option value="all">Todos los estados</option>
-                  <option value="none">Sin registro</option>
-                  {Object.entries(attendanceLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className={crewSecondary}
-                disabled={!pending}
-                onClick={() =>
-                  setEditor({
-                    name: `${pending} ${pending === 1 ? "persona sin registro" : "personas sin registro"}`,
-                    date,
-                    bulk: true,
-                  })
-                }
-              >
-                Marcar cuadrilla
-              </button>
-            </>
-          )}
-          {view === "history" && (
-            <>
-              <label className="text-xs text-gray-500">
-                Filtrar fecha
+        <div
+          className={`grid items-start gap-5 ${view !== "history" ? "xl:grid-cols-[minmax(0,1fr)_340px]" : ""}`}
+        >
+          <div className="min-w-0 space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="relative min-w-0 flex-1 basis-52">
+                <span className="sr-only">
+                  Buscar trabajador o especialidad
+                </span>
+                <Search
+                  size={17}
+                  className="absolute left-3 top-3.5 text-gray-400"
+                />
                 <input
-                  aria-label="Fecha del historial"
-                  type="date"
-                  className={`${crewInput} mt-1`}
-                  value={historyDate}
-                  onChange={(event) => setHistoryDate(event.target.value)}
+                  className={`${crewInput} pl-9`}
+                  placeholder="Nombre o especialidad"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
                 />
               </label>
-              {historyDate && (
-                <button
-                  type="button"
-                  className={crewSecondary}
-                  onClick={() => setHistoryDate("")}
-                >
-                  Ver todas
-                </button>
-              )}
-              <button
-                type="button"
-                className={crewSecondary}
-                onClick={exportHistory}
-                disabled={!history.length}
-              >
-                <Download size={16} />
-                Exportar historial
-              </button>
-            </>
-          )}
-        </div>
-        {view !== "history" && (
-          <>
-            {!crew.length ? (
-              <section className={`${panel} py-10 px-5 text-center`}>
-                <Users className="mx-auto mb-3 h-9 w-9 text-[#FF6A00]" />
-                <h3 className="text-lg font-bold">
-                  Esta obra todavía no tiene cuadrilla
-                </h3>
-                <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
-                  Asigna personas de tu equipo para gestionar su asistencia en
-                  esta obra.
-                </p>
-                <button
-                  type="button"
-                  className={`${crewSecondary} mt-5`}
-                  onClick={() => openAssign()}
-                >
-                  Asignar trabajadores
-                </button>
-                <p className="mt-4 text-xs text-gray-500">
-                  ¿Es una persona nueva?{" "}
-                  <Link
-                    href="/equipo"
-                    className="font-semibold text-[#FF6A00] underline"
+              {view === "daily" && (
+                <>
+                  <button
+                    type="button"
+                    className={crewSecondary}
+                    disabled={!pending}
+                    onClick={() =>
+                      setEditor({
+                        name: `${pending} ${pending === 1 ? "persona sin registro" : "personas sin registro"}`,
+                        date,
+                        bulk: true,
+                      })
+                    }
                   >
-                    Registrar en Equipo
-                  </Link>
+                    Marcar cuadrilla
+                  </button>
+                </>
+              )}
+              {view === "history" && (
+                <>
+                  <label className="text-xs text-gray-500">
+                    Filtrar fecha
+                    <input
+                      aria-label="Fecha del historial"
+                      type="date"
+                      className={`${crewInput} mt-1`}
+                      value={historyDate}
+                      onChange={(event) => setHistoryDate(event.target.value)}
+                    />
+                  </label>
+                  {historyDate && (
+                    <button
+                      type="button"
+                      className={crewSecondary}
+                      onClick={() => setHistoryDate("")}
+                    >
+                      Ver todas
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={crewSecondary}
+                    onClick={exportHistory}
+                    disabled={!history.length}
+                  >
+                    <Download size={16} />
+                    Exportar historial
+                  </button>
+                </>
+              )}
+            </div>
+            {view !== "history" && (
+              <>
+                {!crew.length ? (
+                  <section className={`${panel} py-10 px-5 text-center`}>
+                    <Users className="mx-auto mb-3 h-9 w-9 text-[#FF6A00]" />
+                    <h3 className="text-lg font-bold">
+                      Esta obra todavía no tiene cuadrilla
+                    </h3>
+                    <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
+                      Asigna personas de tu equipo para gestionar su asistencia
+                      en esta obra.
+                    </p>
+                    <button
+                      type="button"
+                      className={`${crewSecondary} mt-5`}
+                      onClick={() => openAssign()}
+                    >
+                      Asignar trabajadores
+                    </button>
+                    <p className="mt-4 text-xs text-gray-500">
+                      ¿Es una persona nueva?{" "}
+                      <Link
+                        href="/equipo"
+                        className="font-semibold text-[#FF6A00] underline"
+                      >
+                        Registrar en Equipo
+                      </Link>
+                    </p>
+                  </section>
+                ) : !visibleCrew.length ? (
+                  <p className={`${panel} p-6 text-sm text-gray-500`}>
+                    No hay personas que coincidan con la búsqueda.
+                  </p>
+                ) : (
+                  <section
+                    className={`${panel} min-w-0 space-y-4 p-3 sm:p-5 xl:min-h-[360px]`}
+                  >
+                    <h3 className="px-1 text-base font-bold">
+                      Trabajadores asignados ({visibleCrew.length})
+                    </h3>
+                    <div className="grid min-w-0 gap-3">
+                      {visibleCrew.map((user) => {
+                        const record = attendance(user);
+                        return (
+                          <article
+                            key={user.id}
+                            data-crew-member={user.id}
+                            className={`${panel} min-w-0 p-4 sm:p-5`}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="flex min-w-0 flex-1 basis-40 items-start gap-3">
+                                <span
+                                  aria-hidden="true"
+                                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-orange-50 font-bold text-[#FF6A00] dark:bg-orange-950/30"
+                                >
+                                  {user.nombre
+                                    .split(/\s+/)
+                                    .filter(Boolean)
+                                    .slice(0, 2)
+                                    .map((part) => part[0])
+                                    .join("")}
+                                </span>
+                                <div className="min-w-0">
+                                  <h3 className="break-words font-bold">
+                                    {user.nombre}
+                                  </h3>
+                                  <p className="mt-1 text-xs text-gray-500">
+                                    {role(user)}
+                                  </p>
+                                </div>
+                              </div>
+                              <Status record={record} />
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {user.especialidades?.length ? (
+                                user.especialidades.map((skill) => (
+                                  <span
+                                    key={skill}
+                                    className="max-w-full break-words rounded-md bg-kraft-100 px-2 py-1 text-xs dark:bg-gray-800"
+                                  >
+                                    {skill}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-xs text-gray-400">
+                                  Sin especialidad registrada
+                                </span>
+                              )}
+                            </div>
+                            {view === "daily" && (
+                              <div className="mt-4 rounded-xl bg-kraft-50 p-3 text-sm dark:bg-gray-900">
+                                <div className="flex flex-wrap gap-x-5 gap-y-1">
+                                  <span>
+                                    Entrada:{" "}
+                                    {record?.hora_entrada?.slice(0, 5) || "—"}
+                                  </span>
+                                  <span>
+                                    Salida:{" "}
+                                    {record?.hora_salida?.slice(0, 5) || "—"}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  {record?.hora_entrada && record?.hora_salida
+                                    ? `${record.horas_trabajadas ?? 0} h registradas`
+                                    : "Horas pendientes de confirmar"}
+                                </p>
+                                {record?.observacion && (
+                                  <p className="mt-2 break-words text-xs">
+                                    {record.observacion}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-kraft-100 pt-4 dark:border-[#263040]">
+                              <button
+                                type="button"
+                                className={`${crewPrimary} w-full sm:w-auto`}
+                                onClick={() =>
+                                  setEditor({
+                                    name: user.nombre,
+                                    user,
+                                    record,
+                                    date,
+                                  })
+                                }
+                              >
+                                <CalendarDays size={17} />
+                                {record
+                                  ? "Editar asistencia"
+                                  : "Registrar asistencia"}
+                              </button>
+                              {view === "crew" &&
+                                (
+                                  [
+                                    {
+                                      status: "presente",
+                                      label: "Presente",
+                                      Icon: Check,
+                                      color: "text-emerald-600",
+                                    },
+                                    {
+                                      status: "ausente",
+                                      label: "Ausente",
+                                      Icon: X,
+                                      color: "text-red-500",
+                                    },
+                                    {
+                                      status: "licencia",
+                                      label: "Licencia",
+                                      Icon: FileText,
+                                      color: "text-slate-500",
+                                    },
+                                  ] as const
+                                ).map(({ status, label, Icon, color }) => (
+                                  <button
+                                    key={status}
+                                    type="button"
+                                    aria-label={`${label}: ${user.nombre}`}
+                                    className="inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border border-kraft-200 px-2 text-xs dark:border-[#263040] sm:flex-none sm:px-3"
+                                    onClick={() =>
+                                      setEditor({
+                                        name: user.nombre,
+                                        user,
+                                        record,
+                                        date,
+                                        initialStatus: status,
+                                      })
+                                    }
+                                  >
+                                    <Icon size={16} className={color} />
+                                    {label}
+                                  </button>
+                                ))}
+                              {view === "crew" && (
+                                <button
+                                  type="button"
+                                  aria-label={`Retirar a ${user.nombre}`}
+                                  className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 py-2 text-xs text-gray-500 hover:text-red-600 sm:ml-auto sm:border-l sm:border-kraft-200 sm:pl-4 dark:sm:border-[#263040]"
+                                  onClick={() => {
+                                    setError("");
+                                    setRemove(user);
+                                  }}
+                                >
+                                  <UserMinus size={15} />
+                                  Retirar
+                                </button>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+            {view === "history" && (
+              <section className="space-y-3">
+                <p className="text-sm text-gray-500">
+                  {history.length} registros. Incluye personas que ya no están
+                  asignadas a esta obra.
                 </p>
-              </section>
-            ) : !visibleCrew.length ? (
-              <p className={`${panel} p-6 text-sm text-gray-500`}>
-                No hay personas que coincidan con la búsqueda.
-              </p>
-            ) : (
-              <div className="grid min-w-0 gap-3 lg:grid-cols-2">
-                {visibleCrew.map((user) => {
-                  const record = attendance(user);
+                {!history.length && (
+                  <p className={`${panel} p-6 text-sm text-gray-500`}>
+                    No hay registros para estos filtros.
+                  </p>
+                )}
+                {history.map((record) => {
+                  const member = crew.some((user) =>
+                    crewAttendance(user, [record], users),
+                  );
                   return (
                     <article
-                      key={user.id}
-                      data-crew-member={user.id}
-                      className={`${panel} min-w-0 p-4 sm:p-5`}
+                      key={record.id}
+                      className={`${panel} flex min-w-0 flex-wrap items-start justify-between gap-3 p-4`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h3 className="break-words font-bold">
-                            {user.nombre}
-                          </h3>
-                          <p className="mt-1 text-xs text-gray-500">
-                            {role(user)}
+                      <div className="min-w-0 flex-1 basis-48">
+                        <p className="text-xs text-gray-500">
+                          {formatDate(record.fecha)}
+                        </p>
+                        <h3 className="mt-1 break-words font-bold">
+                          {record.trabajador_nombre}
+                        </h3>
+                        {!member && (
+                          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                            {record.usuario_id
+                              ? "Fuera de la cuadrilla actual"
+                              : "Registro anterior sin ficha vinculada"}
                           </p>
-                        </div>
-                        <Status record={record} />
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {user.especialidades?.length ? (
-                          user.especialidades.map((skill) => (
-                            <span
-                              key={skill}
-                              className="max-w-full break-words rounded-md bg-kraft-100 px-2 py-1 text-xs dark:bg-gray-800"
-                            >
-                              {skill}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-xs text-gray-400">
-                            Sin especialidad registrada
-                          </span>
                         )}
-                      </div>
-                      {view === "daily" && (
-                        <div className="mt-4 rounded-xl bg-kraft-50 p-3 text-sm dark:bg-gray-900">
-                          <div className="flex flex-wrap gap-x-5 gap-y-1">
-                            <span>
-                              Entrada:{" "}
-                              {record?.hora_entrada?.slice(0, 5) || "—"}
-                            </span>
-                            <span>
-                              Salida: {record?.hora_salida?.slice(0, 5) || "—"}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-xs text-gray-500">
-                            {record?.hora_entrada && record?.hora_salida
-                              ? `${record.horas_trabajadas ?? 0} h registradas`
-                              : "Horas pendientes de confirmar"}
+                        <p className="mt-2 text-sm">
+                          {record.hora_entrada?.slice(0, 5) || "—"} →{" "}
+                          {record.hora_salida?.slice(0, 5) || "—"} ·{" "}
+                          {record.horas_trabajadas ?? 0} h
+                        </p>
+                        {record.observacion && (
+                          <p className="mt-1 break-words text-sm text-gray-500">
+                            {record.observacion}
                           </p>
-                          {record?.observacion && (
-                            <p className="mt-2 break-words text-xs">
-                              {record.observacion}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                        )}
+                        <p className="mt-1 text-xs text-gray-500">
+                          Registrado por {record.registrado_por || "jefatura"} ·{" "}
+                          {record.origen === "web" ? "Web" : "WhatsApp"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Status record={record} />
                         <button
                           type="button"
                           className={crewSecondary}
+                          aria-label={`Editar registro de ${record.trabajador_nombre} del ${record.fecha}`}
                           onClick={() =>
-                            setEditor({ name: user.nombre, user, record, date })
+                            setEditor({
+                              name: record.trabajador_nombre,
+                              record,
+                              date: record.fecha,
+                            })
                           }
                         >
-                          {record
-                            ? "Editar asistencia"
-                            : "Registrar asistencia"}
+                          Editar
                         </button>
-                        {view === "crew" && (
-                          <button
-                            type="button"
-                            aria-label={`Retirar a ${user.nombre}`}
-                            className="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-xs text-gray-500 hover:text-red-600"
-                            onClick={() => {
-                              setError("");
-                              setRemove(user);
-                            }}
-                          >
-                            <UserMinus size={15} />
-                            Retirar
-                          </button>
-                        )}
                       </div>
                     </article>
                   );
                 })}
-              </div>
+              </section>
             )}
-            {view === "crew" && (
-              <section className="space-y-3">
-                <div>
-                  <h3 className="font-bold">Sugerencias para esta obra</h3>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Por especialidades registradas y próximas faenas. La
-                    disponibilidad se confirma con cada persona.
-                  </p>
-                </div>
-                {suggestions.length ? (
-                  <div className="grid gap-3 md:grid-cols-3">
-                    {suggestions.map(
-                      ({ user, matched, reason, otherProjects }) => (
-                        <article
-                          key={user.id}
-                          className={`${panel} min-w-0 p-4`}
-                        >
-                          <h4 className="break-words font-bold">
-                            {user.nombre}
-                          </h4>
-                          <p className="mt-1 break-words text-xs text-[#FF6A00]">
-                            {matched.join(" · ")}
-                          </p>
-                          <p className="mt-3 break-words text-sm">{reason}</p>
-                          <p className="mt-2 break-words text-xs text-gray-500">
-                            {otherProjects.length
-                              ? `También asignado a: ${otherProjects.map((row) => row.nombre).join(", ")}.`
-                              : "Sin otras obras en curso o pausadas registradas."}
-                          </p>
-                          <button
-                            type="button"
-                            className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#FF6A00]"
-                            onClick={() => openAssign(user.id)}
-                          >
-                            Revisar asignación
-                            <ArrowRight size={15} />
-                          </button>
-                        </article>
-                      ),
-                    )}
+          </div>
+          {view !== "history" && (
+            <aside
+              aria-label="Información de la cuadrilla"
+              className="min-w-0 space-y-3"
+            >
+              <section className={`${panel} space-y-3 p-4`}>
+                <h3 className="flex items-center gap-2 font-bold">
+                  <ChartNoAxesColumnIncreasing
+                    size={20}
+                    className="text-[#FF6A00]"
+                  />
+                  Resumen del día
+                </h3>
+                {[
+                  {
+                    Icon: CheckCircle2,
+                    count: present,
+                    label: "presentes",
+                    color: "text-emerald-600",
+                  },
+                  {
+                    Icon: Clock3,
+                    count: pending,
+                    label: pending === 1 ? "pendiente" : "pendientes",
+                    color: "text-slate-500",
+                  },
+                  {
+                    Icon: CircleX,
+                    count: absent,
+                    label: "ausentes",
+                    color: "text-red-500",
+                  },
+                ].map(({ Icon, count, label, color }) => (
+                  <div
+                    key={label}
+                    className="flex items-center gap-3 rounded-lg bg-kraft-50 px-3 py-2 text-sm dark:bg-[#0F141C]"
+                  >
+                    <Icon size={17} className={color} />
+                    <span>
+                      <strong>{count}</strong> {label}
+                    </span>
                   </div>
+                ))}
+              </section>
+              {view === "crew" && (
+                <section className={`${panel} space-y-3 p-4`}>
+                  <div>
+                    <h3 className="flex items-center gap-2 font-bold">
+                      <Lightbulb
+                        size={20}
+                        className="shrink-0 text-[#FF6A00]"
+                      />
+                      Sugerencias para esta obra
+                    </h3>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Por especialidades registradas y próximas faenas. La
+                      disponibilidad se confirma con cada persona.
+                    </p>
+                  </div>
+                  {suggestions.length ? (
+                    <div className="grid gap-3">
+                      {suggestions.map(
+                        ({ user, matched, reason, otherProjects }) => (
+                          <article
+                            key={user.id}
+                            className={`${panel} min-w-0 p-4`}
+                          >
+                            <h4 className="break-words font-bold">
+                              {user.nombre}
+                            </h4>
+                            <p className="mt-1 break-words text-xs text-[#FF6A00]">
+                              {matched.join(" · ")}
+                            </p>
+                            <p className="mt-3 break-words text-sm">{reason}</p>
+                            <p className="mt-2 break-words text-xs text-gray-500">
+                              {otherProjects.length
+                                ? `También asignado a: ${otherProjects.map((row) => row.nombre).join(", ")}.`
+                                : "Sin otras obras en curso o pausadas registradas."}
+                            </p>
+                            <button
+                              type="button"
+                              className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#FF6A00]"
+                              onClick={() => openAssign(user.id)}
+                            >
+                              Revisar asignación
+                              <ArrowRight size={15} />
+                            </button>
+                          </article>
+                        ),
+                      )}
+                    </div>
+                  ) : (
+                    <p className="rounded-xl bg-orange-50/70 p-3 text-xs leading-relaxed text-gray-500 dark:bg-orange-950/20">
+                      No hay coincidencias suficientes para sugerir personas.
+                      Puedes asignar desde el equipo o completar sus
+                      especialidades.
+                    </p>
+                  )}
+                </section>
+              )}
+              <section className={`${panel} space-y-3 p-4`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 font-bold">
+                    <Clock3 size={20} className="text-[#FF6A00]" />
+                    Últimos registros
+                  </h3>
+                  <button
+                    type="button"
+                    className="flex min-h-10 items-center gap-1 text-xs font-medium text-[#FF6A00]"
+                    onClick={() => {
+                      setView("history");
+                      setSearch("");
+                      setHistoryDate(date);
+                    }}
+                  >
+                    Ver historial <ArrowRight size={14} />
+                  </button>
+                </div>
+                {daily.length ? (
+                  daily
+                    .slice(-3)
+                    .reverse()
+                    .map((record) => (
+                      <div
+                        key={record.id}
+                        className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-kraft-50 p-3 dark:bg-[#0F141C]"
+                      >
+                        <p className="min-w-0 break-words text-xs font-medium">
+                          {record.trabajador_nombre}
+                        </p>
+                        <Status record={record} />
+                      </div>
+                    ))
                 ) : (
-                  <p className={`${panel} p-4 text-sm text-gray-500`}>
-                    No hay coincidencias suficientes para sugerir personas.
-                    Puedes asignar desde el equipo o completar sus
-                    especialidades.
+                  <p className="flex items-start gap-3 rounded-xl bg-kraft-50 p-3 text-xs leading-relaxed text-gray-500 dark:bg-[#0F141C]">
+                    <CalendarDays size={22} className="shrink-0" />
+                    Aún no hay registros de asistencia para la fecha{" "}
+                    {formatDate(date)}.
                   </p>
                 )}
               </section>
-            )}
-          </>
-        )}
-        {view === "history" && (
-          <section className="space-y-3">
-            <p className="text-sm text-gray-500">
-              {history.length} registros. Incluye personas que ya no están
-              asignadas a esta obra.
-            </p>
-            {!history.length && (
-              <p className={`${panel} p-6 text-sm text-gray-500`}>
-                No hay registros para estos filtros.
-              </p>
-            )}
-            {history.map((record) => {
-              const member = crew.some((user) =>
-                crewAttendance(user, [record], users),
-              );
-              return (
-                <article
-                  key={record.id}
-                  className={`${panel} flex min-w-0 flex-wrap items-start justify-between gap-3 p-4`}
-                >
-                  <div className="min-w-0 flex-1 basis-48">
-                    <p className="text-xs text-gray-500">
-                      {formatDate(record.fecha)}
-                    </p>
-                    <h3 className="mt-1 break-words font-bold">
-                      {record.trabajador_nombre}
-                    </h3>
-                    {!member && (
-                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                        {record.usuario_id
-                          ? "Fuera de la cuadrilla actual"
-                          : "Registro anterior sin ficha vinculada"}
-                      </p>
-                    )}
-                    <p className="mt-2 text-sm">
-                      {record.hora_entrada?.slice(0, 5) || "—"} →{" "}
-                      {record.hora_salida?.slice(0, 5) || "—"} ·{" "}
-                      {record.horas_trabajadas ?? 0} h
-                    </p>
-                    {record.observacion && (
-                      <p className="mt-1 break-words text-sm text-gray-500">
-                        {record.observacion}
-                      </p>
-                    )}
-                    <p className="mt-1 text-xs text-gray-500">
-                      Registrado por {record.registrado_por || "jefatura"} ·{" "}
-                      {record.origen === "web" ? "Web" : "WhatsApp"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Status record={record} />
-                    <button
-                      type="button"
-                      className={crewSecondary}
-                      aria-label={`Editar registro de ${record.trabajador_nombre} del ${record.fecha}`}
-                      onClick={() =>
-                        setEditor({
-                          name: record.trabajador_nombre,
-                          record,
-                          date: record.fecha,
-                        })
-                      }
-                    >
-                      Editar
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-        )}
+            </aside>
+          )}
+        </div>
+        <LabourFromAttendance projectId={projectId} onChanged={refresh} />
       </div>
       {editor && (
         <CrewAttendanceEditor

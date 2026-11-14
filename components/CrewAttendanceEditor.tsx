@@ -24,6 +24,7 @@ export default function CrewAttendanceEditor({
   name,
   date,
   record,
+  initialStatus,
   bulk = false,
   onClose,
   onSave,
@@ -31,6 +32,7 @@ export default function CrewAttendanceEditor({
   name: string;
   date: string;
   record?: AsistenciaObrero;
+  initialStatus?: EstadoAsistencia;
   bulk?: boolean;
   onClose: () => void;
   onSave: (
@@ -45,7 +47,7 @@ export default function CrewAttendanceEditor({
   ) => Promise<void>;
 }) {
   const [status, setStatus] = useState<EstadoAsistencia>(
-    record?.estado || "presente",
+    initialStatus || record?.estado || "presente",
   );
   const [start, setStart] = useState(record?.hora_entrada?.slice(0, 5) || "");
   const [end, setEnd] = useState(record?.hora_salida?.slice(0, 5) || "");
@@ -149,6 +151,7 @@ export default function CrewAttendanceEditor({
           <label className="block text-sm font-semibold">
             Estado
             <select
+              aria-label="Estado"
               className={`${crewInput} mt-1`}
               value={status}
               onChange={(event) =>

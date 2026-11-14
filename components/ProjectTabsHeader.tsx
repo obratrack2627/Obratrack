@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -36,6 +36,19 @@ export default function ProjectTabsHeader({
 }: ProjectTabsHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const tabsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const revealActiveTab = () => {
+      const container = tabsRef.current;
+      const active = container?.querySelector<HTMLElement>('[aria-current="page"]');
+      if (!container || !active || container.scrollWidth <= container.clientWidth) return;
+      const left = container.scrollLeft + active.getBoundingClientRect().left - container.getBoundingClientRect().left - 16;
+      container.scrollTo({ left: Math.max(0, left), behavior: 'instant' });
+    };
+    revealActiveTab();
+    window.addEventListener('resize', revealActiveTab);
+    return () => window.removeEventListener('resize', revealActiveTab);
+  }, [pathname, proyecto?.id]);
   const [cambiosPendientes, setCambiosPendientes] = useState(0);
   const [estado, setEstado] = useState(proyecto?.estado || 'activo');
   const [guardandoEstado, setGuardandoEstado] = useState(false);
@@ -85,6 +98,13 @@ export default function ProjectTabsHeader({
       icon: Wallet,
       badge: formatCLP(proyecto.monto_cotizado || 0),
     },
+    {
+      id: 'asistencia',
+      label: 'Cuadrilla',
+      href: `/proyectos/${proyecto.id}/asistencia`,
+      icon: ClipboardCheck,
+      badge: presentesHoy > 0 ? `${presentesHoy} hoy` : undefined,
+    },
     {id:'presupuestos',label:'Presupuestos',href:`/proyectos/${proyecto.id}/presupuestos`,icon:FileText},
     {
       id: 'cambios',
@@ -100,13 +120,6 @@ export default function ProjectTabsHeader({
       href: `/proyectos/${proyecto.id}/documentos`,
       icon: FolderOpen,
       badge: docsCount > 0 ? String(docsCount) : undefined,
-    },
-    {
-      id: 'asistencia',
-      label: 'Cuadrilla',
-      href: `/proyectos/${proyecto.id}/asistencia`,
-      icon: ClipboardCheck,
-      badge: presentesHoy > 0 ? `${presentesHoy} hoy` : undefined,
     },
     {
       id: 'ia',
@@ -208,7 +221,7 @@ export default function ProjectTabsHeader({
       </div>
 
       {/* Fila Inferior: Pestañas de Navegación Rápida por Obra (Responsiva con scroll limpio en móvil y web) */}
-      <div className="flex px-4 sm:px-6 items-center gap-1 overflow-x-auto no-scrollbar border-t border-kraft-100 dark:border-[#1E2530] pt-1">
+      <div ref={tabsRef} className="flex px-4 sm:px-6 items-center gap-1 overflow-x-auto no-scrollbar border-t border-kraft-100 dark:border-[#1E2530] pt-1">
         {tabs.filter(tab=>tab.id!=='presupuestos'||['admin','supervisor'].includes(dataService.getActiveUser()?.rol||'')).map((tab) => {
           const Icon = tab.icon;
           const isActive = pathname?.startsWith(tab.href);
@@ -217,6 +230,7 @@ export default function ProjectTabsHeader({
             <Link
               key={tab.id}
               href={tab.href}
+              aria-current={isActive ? 'page' : undefined}
               className={`flex items-center gap-2 px-3 sm:px-3.5 py-2.5 text-xs sm:text-sm font-heading font-bold border-b-2 transition-all whitespace-nowrap ${
                 isActive
                   ? 'border-[#FF6A00] text-[#FF6A00] bg-[#FF6A00]/5 dark:bg-[#FF6A00]/10'
