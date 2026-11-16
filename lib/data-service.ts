@@ -132,6 +132,41 @@ export class DataService {
 
   private dirtyKey() { return `obratrack_dirty_v1_${this.getActiveUser()?.empresa_id || ''}`; }
   private deletedKey() { return `obratrack_deleted_v1_${this.getActiveUser()?.empresa_id || ''}`; }
+  private versionsKey() { return `obratrack_sync_versions_v1_${this.getActiveUser()?.empresa_id || ''}`; }
+  private conflictKey() { return `obratrack_sync_conflict_v1_${this.getActiveUser()?.empresa_id || ''}`; }
+  private requestKey() { return `obratrack_sync_request_v1_${this.getActiveUser()?.empresa_id || ''}`; }
+  private conflictSnapshot: Record<string, any[]> | null = null;
+  hasSyncConflict() { return this.isBrowser() && localStorage.getItem(this.conflictKey()) === 'true'; }
+  syncConflictRows() {
+    const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
+    const deleted=this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{});
+    const rows: {name:string;local:any;remote:any;deleting:boolean}[]=[];
+    for(const table of Array.from(new Set([...Object.keys(pending),...Object.keys(deleted)])))
+      for(const id of Array.from(new Set([...Object.keys(pending[table]||{}),...Object.keys(deleted[table]||{})]))) {
+        const local=pending[table]?.[id];const remote=this.conflictSnapshot?.[table]?.find(row=>row.id===id);
+        rows.push({name:local?.nombre||local?.titulo||remote?.nombre||remote?.titulo||'Registro pendiente',local,remote,deleting:!!deleted[table]?.[id]});
+      }
+    return rows;
+  }
+  async resolveSyncConflict(keep: 'local'|'remote') {
+    if(!this.conflictSnapshot) throw new Error('No se pudo consultar la versión actual. Reintenta cuando tengas conexión.');
+    if(keep==='remote') {
+      localStorage.setItem(this.dirtyKey(),'{}');localStorage.setItem(this.deletedKey(),'{}');localStorage.setItem(this.versionsKey(),'{}');
+    } else {
+      const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
+      const deleted=this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{});
+      const versions:Record<string,Record<string,number|null>>={};
+      for(const table of Array.from(new Set([...Object.keys(pending),...Object.keys(deleted)]))) {
+        versions[table]={};
+        for(const id of Array.from(new Set([...Object.keys(pending[table]||{}),...Object.keys(deleted[table]||{})])))
+          versions[table][id]=this.conflictSnapshot[table]?.find(row=>row.id===id)?.sync_version??null;
+      }
+      localStorage.setItem(this.versionsKey(),JSON.stringify(versions));
+    }
+    localStorage.removeItem(this.conflictKey());localStorage.removeItem(this.requestKey());
+    if(keep==='local') {const saved=await this.pushToCloudServer();if(!saved.success)throw new Error(saved.message);}
+    await this.pullFromCloudServer();window.dispatchEvent(new Event('obratrack_pending_changed'));
+  }
   pendingCloudChanges() {
     return [this.dirtyKey(),this.deletedKey()].reduce((count,key)=>count+Object.values(this.getItem<Record<string,Record<string,unknown>>>(key,{})).reduce((sum,rows)=>sum+Object.keys(rows||{}).length,0),0);
   }
@@ -157,9 +192,14 @@ export class DataService {
         const empresa=this.getActiveUser()?.empresa_id;
         const base=Object.keys(this.syncNames).find(base=>key===`${base}_${empresa}`);
         if(base) {
-          const previous=new Map(this.getItem<any[]>(key,[]).map(row=>[row.id,JSON.stringify(row)]));
+          const previousRows=this.getItem<any[]>(key,[]);
+          const previous=new Map(previousRows.map(row=>[row.id,JSON.stringify(row)]));
+          const versions=this.getItem<Record<string,Record<string,number|null>>>(this.versionsKey(),{});
+
           const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
-          const name=this.syncNames[base]; pending[name] ||= {};
+          const name=this.syncNames[base]; pending[name] ||= {};versions[name] ||= {};
+          for(const id of Array.from(new Set([...Array.from(previous.keys()),...value.map(row=>row.id)])))
+            if(!pending[name]?.[id] && !this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{})[name]?.[id])versions[name][id]=previousRows.find(row=>row.id===id)?.sync_version??null;
           const retained=new Set(value.map(row=>row.id));
           const deleted=this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{});
           deleted[name] ||= {};
@@ -169,6 +209,7 @@ export class DataService {
           for(const id of Object.keys(pending[name])) if(!retained.has(id)) delete pending[name][id];
           for(const row of value) if(row.id && previous.get(row.id)!==JSON.stringify(row)) pending[name][row.id]=row;
           localStorage.setItem(this.dirtyKey(),JSON.stringify(pending));
+          localStorage.setItem(this.versionsKey(),JSON.stringify(versions));
         }
       }
       (this.isolatedStorage || localStorage).setItem(key, JSON.stringify(value));
@@ -296,7 +337,9 @@ export class DataService {
     if (!this.isBrowser()) return;
     try {
       this.clearChatSessionHistory();
-      localStorage.removeItem(KEYS.ACTIVE_USER);
+      for(const key of Object.keys(localStorage))if(key.startsWith('obratrack_') && key!=='obratrack_theme')localStorage.removeItem(key);
+      this.conflictSnapshot=null;
+      if(this.cloudSyncTimeout)clearTimeout(this.cloudSyncTimeout);
     } catch (e) {
       console.error(e);
     }
@@ -2642,6 +2685,7 @@ export class DataService {
       if(!active?.empresa_id) return {success:false,message:'Inicia sesión para sincronizar.'};
       const dirtyKey=this.dirtyKey();
       const sameSession=()=>this.getActiveUser()?.id===active.id && this.getActiveUser()?.empresa_id===empresaId;
+      if(this.hasSyncConflict())return {success:false,message:'Revisa los cambios más recientes antes de volver a guardar.'};
       const pending=this.getItem<Record<string,Record<string,any>>>(dirtyKey,{});
       const captured=JSON.parse(JSON.stringify(pending));
       const capturedDeleted=this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{});
@@ -2651,11 +2695,18 @@ export class DataService {
       const {data,error}=await supabase.auth.getSession();
       if(error||!data.session?.access_token) return {success:false,message:'Inicia sesión para sincronizar.'};
       if(!sameSession()) return {success:false,message:'La sesión cambió durante la sincronización.'};
+      const versions=this.getItem<Record<string,Record<string,number|null>>>(this.versionsKey(),{});
+      const capturedVersions=Object.fromEntries(Object.entries(cambios).map(([table,rows])=>[table,Object.fromEntries((rows as any[]).map(row=>[row.id,versions[table]?.[row.id]??null]))]));
+      for(const [table,ids] of Object.entries(eliminados))for(const id of ids as string[]){capturedVersions[table]||={};capturedVersions[table][id]=versions[table]?.[id]??null;}
+      const requestBody=JSON.stringify({cambios,eliminados,versiones:capturedVersions});
+      const previousRequest=this.getItem<{body:string;id:string}|null>(this.requestKey(),null);
+      const requestId=previousRequest?.body===requestBody?previousRequest.id:crypto.randomUUID();
+      localStorage.setItem(this.requestKey(),JSON.stringify({body:requestBody,id:requestId}));
       const send = (token: string) => fetch('/api/supabase/sync', {
         method: 'POST',
         signal: AbortSignal.timeout(20000),
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({cambios,eliminados}),
+        body: JSON.stringify({...JSON.parse(requestBody),request_id:requestId}),
       });
       let res = await send(data.session.access_token);
       if (res.status === 401) {
@@ -2667,9 +2718,11 @@ export class DataService {
       }
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
+        if(res.status===409 && payload?.code==='SYNC_CONFLICT'){localStorage.setItem(this.conflictKey(),'true');window.dispatchEvent(new Event('obratrack_sync_conflict'));}
         return {success:false,message:syncFailureMessage(res.status, payload)};
       }
       if(!sameSession()) return {success:false,message:'La sesión cambió durante la sincronización.'};
+      const confirmed=await res.json();
       const remaining=this.getItem<Record<string,Record<string,any>>>(dirtyKey,{});
       for(const [key,rows] of Object.entries(captured) as [string,Record<string,any>][]) for(const [id,row] of Object.entries(rows)) {
         if(JSON.stringify(remaining[key]?.[id])===JSON.stringify(row)) delete remaining[key][id];
@@ -2680,6 +2733,15 @@ export class DataService {
         if(remainingDeleted[table]?.[id]===version) delete remainingDeleted[table][id];
       }
       localStorage.setItem(this.deletedKey(),JSON.stringify(remainingDeleted));
+      const currentVersions=this.getItem<Record<string,Record<string,number|null>>>(this.versionsKey(),{});
+      const aliases:Record<string,string>={materiales_proyecto:'materiales',bitacora_entradas:'bitacora',reclamos_cambios_obra:'reclamos_cambios',documentos_obra:'documentos',asistencia_obreros:'asistencias'};
+      for(const [dbTable,rows] of Object.entries(confirmed.versiones||{}) as [string,Record<string,number|null>][]) {
+        const table=aliases[dbTable]||dbTable;currentVersions[table]||={};
+        const base=Object.keys(this.syncNames).find(key=>this.syncNames[key]===table);
+        for(const [id,version] of Object.entries(rows))currentVersions[table][id]=version;
+        if(base){const key=this.getTenantKey(base);const local=this.getItem<any[]>(key,[]).map(row=>Object.hasOwn(rows,row.id)?{...row,sync_version:rows[row.id]}:row);localStorage.setItem(key,JSON.stringify(local));}
+      }
+      localStorage.setItem(this.versionsKey(),JSON.stringify(currentVersions));localStorage.removeItem(this.requestKey());
       window.dispatchEvent(new Event('obratrack_pending_changed'));
       return { success: true, message: 'Sincronizado en vivo con Supabase Cloud.' };
     } catch (err: any) {
@@ -2728,6 +2790,7 @@ export class DataService {
       const cloud = await res.json();
       if(!sameSession()) return {success:false,message:'La sesión cambió durante la actualización.'};
       if(cloud.empresaId !== empresaId) return {success:false,message:'La cuenta cambió. Vuelve a iniciar sesión para actualizar tus obras.'};
+      this.conflictSnapshot=cloud;
       const localProjs = this.getProyectos();
 
       const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});

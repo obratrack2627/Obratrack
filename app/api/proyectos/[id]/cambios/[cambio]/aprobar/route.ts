@@ -4,8 +4,9 @@ import { AIError } from "@/lib/ai/errors";
 import { notifyPushOnChangeApproval } from "@/lib/push/events";
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; cambio: string } },
+  { params: parameters }: { params: Promise<{ id: string; cambio: string }> },
 ) {
+  const params = await parameters;
   try {
     const { client, user } = await authorizeAI(request);
     const body = await request.json();

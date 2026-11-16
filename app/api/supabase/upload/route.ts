@@ -1,5 +1,6 @@
+import { validateFileContent } from '@/lib/supabase/file-validation';
 import { NextRequest, NextResponse } from "next/server";
-import { uploadBufferToSupabaseStorage } from "@/lib/supabase/admin";
+import { uploadBufferToSupabaseStorage, getSupabaseAdmin } from "@/lib/supabase/admin";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 
@@ -17,10 +18,10 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    if (file.size > 10 * 1024 * 1024)
+    if (file.size > 4 * 1024 * 1024)
       throw new AIError(
         "FILE_SIZE",
-        "El archivo debe ocupar hasta 10 MB.",
+        "El archivo debe ocupar hasta 4 MB.",
         413,
       );
     const { data: project, error: projectError } = await client
@@ -70,10 +71,13 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const mimeType = file.type || "application/octet-stream";
+    await validateFileContent(buffer,mimeType,bucket==='bitacora-fotos');
 
+    const uploader=getSupabaseAdmin();
+    if(!uploader)throw new AIError('FILE_UNAVAILABLE','No se pudo habilitar la carga del archivo. Intenta más tarde.',503);
     const { publicUrl, error } = await uploadBufferToSupabaseStorage({
       bucket,
-      client,
+      client:uploader,
       filePath,
       buffer,
       contentType: mimeType,

@@ -76,16 +76,16 @@ test('mapSupabaseAuthError y validateSignUpFields traducen errores de base de da
   assert.match(mapSupabaseAuthError('CONTACT_DUPLICATE'),/RUT, número de teléfono o correo/);
   assert.match(mapSupabaseAuthError('CONTACT_INVALID_PHONE'),/teléfono ingresado no es válido/);
   assert.match(mapSupabaseAuthError('REGISTRATION_DETAILS_REQUIRED'),/Completa tu nombre completo y RUT personal/);
-  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),null);
-  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-9',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),/RUT ingresado no es válido/);
-  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 ',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),/número de teléfono válido/);
-  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),null);
+  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),null);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-9',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/RUT ingresado no es válido/);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 ',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/número de teléfono válido/);
+  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),null);
   assert.match(mapContactDatabaseError({code:'23505',message:'duplicate key value violates unique constraint "usuarios_rut_key"'}),/RUT ya está registrado/);
 });
 test('sanitiza correos vigentes y distingue correo no autorizado por SMTP de correo mal formado',async()=>{
   assert.equal(sanitizeEmail(' \u200Bjorge.castro@gmail.com '), 'jorge.castro@gmail.com');
   assert.equal(isValidEmail('\u200Bjorge.castro+obra@constructorachile.cl '), true);
-  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:' \u200Bjorge.castro@gmail.com ',telefono:'+56 9 48743041',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),null);
+  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:' \u200Bjorge.castro@gmail.com ',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),null);
   const smtpMsg=mapSupabaseAuthError('Email address not authorized','email_address_not_authorized');
   assert.match(smtpMsg,/SMTP personalizado/);
   assert.doesNotMatch(smtpMsg,/no es válido/);
@@ -95,3 +95,5 @@ test('sanitiza correos vigentes y distingue correo no autorizado por SMTP de cor
   assert.equal(dup.success,false);
   assert.match(dup.error,/ya está registrado/);
 });
+
+test('el alta nueva rechaza claves menores a doce caracteres',()=>{assert.match(validateSignUpFields({nombre:'QA Admin',rut:'',email:'qa@example.test',telefono:'+56912345678',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),/12 caracteres/);});

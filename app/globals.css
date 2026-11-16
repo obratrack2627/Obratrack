@@ -390,3 +390,38 @@ html[data-mobile-nav-open] #obrabot-widget { visibility: hidden; pointer-events:
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Accessible text/action tones; the original orange/green remain in decorative accents. */
+@layer utilities {
+  html:not(.dark) :is(.text-obra-orange, .text-brand-orange, [class~="text-[#FF6A00]"]) { color: #b44500; }
+  html.dark :is(.text-obra-orange, .text-brand-orange, [class~="text-[#FF6A00]"]) { color: #ff9b55; }
+  html:not(.dark) :is(.text-obra-green, .text-brand-green, [class~="text-[#6B8F72]"]) { color: #3f6848; }
+  html.dark :is(.text-obra-green, .text-brand-green, [class~="text-[#6B8F72]"]) { color: #a2c9ac; }
+  html:not(.dark) :is(.text-obra-red, [class~="text-[#D94336]"]) { color: #b83229; }
+  html.dark :is(.text-obra-red, [class~="text-[#D94336]"]) { color: #ff9c94; }
+  html:not(.dark) :is(.text-gray-400, [class~="text-[#9A9A9A]"]) { color: #606a79; }
+  html:not(.dark) .text-gray-500 { color: #596270; }
+  :is(.bg-obra-orange, .bg-brand-orange, [class~="bg-[#FF6A00]"]).text-white { background-color: #b44500; }
+  :is(.bg-obra-green, .bg-brand-green, [class~="bg-[#6B8F72]"]).text-white { background-color: #3f6848; }
+  :is(.bg-obra-red, [class~="bg-[#D94336]"]).text-white { background-color: #b83229; }
+  .bg-emerald-600.text-white { background-color: #047857; }
+}
+
+/* App boot screen: only the installed PWA, before the first interactive frame. */
+.pwa-splash { display:none; }
+ .pwa-installed .pwa-splash { position:fixed; inset:0; z-index:10000; display:grid; place-items:center; overflow:hidden; background:radial-gradient(ellipse at -12% -8%,#a33f08 0,transparent 38%),radial-gradient(ellipse at 108% 110%,#4b2b1b 0,transparent 34%),#07151e; color:#fff; padding:env(safe-area-inset-top) 20px env(safe-area-inset-bottom); }
+ .pwa-splash::before,.pwa-splash::after { content:''; position:absolute; width:95%; height:38%; border:2px solid #ee690a; border-radius:50%; opacity:.38; transform:rotate(-32deg); pointer-events:none; }
+ .pwa-splash::before { left:-52%; top:-22%; }
+ .pwa-splash::after { right:-48%; bottom:-21%; }
+ .pwa-splash-brand { z-index:1; text-align:center; transform:translateY(-7vh); }
+ .pwa-splash-icon { width:clamp(110px,32vw,180px); height:auto; margin:0 auto 12px; }
+ .pwa-splash-name { font-size:clamp(36px,10vw,58px); font-weight:750; letter-spacing:-.055em; line-height:1.2; }
+ .pwa-splash-name span { color:#ff6a00; }
+ .pwa-splash-brand p { margin-top:10px; font-size:clamp(17px,4.5vw,23px); color:#b7c5d0; }
+ .pwa-splash-dots { display:flex; justify-content:center; gap:12px; margin-top:38px; }
+ .pwa-splash-dots i { width:14px; height:14px; border-radius:50%; background:#354855; animation:pwa-dot 1.2s ease-in-out infinite; }
+ .pwa-splash-dots i:nth-child(2) { animation-delay:.2s; }
+ .pwa-splash-dots i:nth-child(3) { animation-delay:.4s; }
+ .pwa-splash-blueprint { position:absolute; bottom:10%; left:4%; width:92%; color:#849ba9; opacity:.32; }
+@keyframes pwa-dot { 0%,65%,100% { background:#354855; transform:translateY(0); } 30% { background:#ff6a00; transform:translateY(-5px); } }
+@media(prefers-reduced-motion:reduce) { .pwa-splash-dots i { animation:none; } .pwa-splash-dots i:nth-child(2) { background:#ff6a00; } }

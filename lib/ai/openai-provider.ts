@@ -1,3 +1,4 @@
+import { reserveAIUsage } from './usage';
 import { AIError } from './errors';
 import { serverFetch } from '@/lib/server-fetch';
 import type { GenerationOptions } from './provider-types';
@@ -18,6 +19,13 @@ function providerFailure(status: number): never {
   throw new AIError('AI_UNAVAILABLE', 'El asistente no está disponible en este momento. Intenta nuevamente.', 503);
 }
 export async function generateOpenAI(prompt: string, options: GenerationOptions = {}): Promise<string> {
+  const audio=options.image?.mimeType.startsWith('audio/');
+  const settle=options.fetcher || !getServerOpenAIKey() ? async(_actual?:number)=>{} : await reserveAIUsage(Buffer.byteLength(prompt,'utf8')+8192+(options.image?50000:0),audio?'audio':'generation');
+  let actual:number|undefined;
+  try{return await generateOpenAIResponse(prompt,options,units=>{actual=units;});}
+  finally{await settle(actual);}
+}
+async function generateOpenAIResponse(prompt: string, options: GenerationOptions, onUsage:(units:number)=>void): Promise<string> {
   const key = getServerOpenAIKey();
   if (!key) throw new AIError('AI_NOT_CONFIGURED', 'El asistente necesita completar su configuración en el servidor.', 503);
   const fetcher = options.fetcher || serverFetch;
@@ -67,6 +75,7 @@ export async function generateOpenAI(prompt: string, options: GenerationOptions 
   let payload: any;
   try { payload = await response.json(); }
   catch { throw new AIError('AI_INVALID_RESPONSE', 'El asistente devolvió una respuesta no válida. Intenta nuevamente.'); }
+  if(typeof payload.usage?.input_tokens==='number' && typeof payload.usage?.output_tokens==='number')onUsage(payload.usage.input_tokens+payload.usage.output_tokens);
   if (audio) {
     if (typeof payload.text !== 'string' || !payload.text.trim()) throw new AIError('AI_EMPTY', 'No se pudo entender la nota de voz por ruido o silencio. Envía el mensaje como texto o graba más cerca del micrófono.', 422);
     return payload.text.trim();

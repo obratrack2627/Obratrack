@@ -1,3 +1,4 @@
+import { completeRows, completeProjectRows } from '@/lib/supabase/pagination';
 import { AIError } from "./errors";
 import { isolatedState } from "@/lib/whatsapp/state";
 import { summarizeBudgets } from "./operations-context";
@@ -31,7 +32,7 @@ export async function loadAIContext(
 ) {
   const [companyResult, projectResult, budgetResult] = await Promise.all([
     client.from('empresas').select('id,nombre,rut,plan_id,logo_url,configuracion').eq('id', user.empresa_id),
-    client.from('proyectos').select('*').eq('empresa_id', user.empresa_id),
+    completeRows(() => client.from('proyectos').select('*').eq('empresa_id', user.empresa_id)),
     options.includeBudgets && !options.projectsOnly && user.rol !== "terreno"
       ? client.from("presupuestos").select("id,empresa_id,proyecto_id,estado,nombre_alternativa,cotizacion,created_at,updated_at").eq("empresa_id", user.empresa_id).order("updated_at", {ascending:false}).limit(8)
       : Promise.resolve({ data: [], error: null }),
@@ -46,20 +47,11 @@ export async function loadAIContext(
   };
   const ids = tables.proyectos.map((p) => p.id);
   const names = options.projectsOnly ? (user.rol === "terreno" ? ["proyecto_trabajadores"] : []) : ["usuarios", "clientes", "agenda_eventos", ...projectTables];
-  const orderProjectQuery = (table: string, query: any) => {
-    if (table !== "materiales_proyecto" || typeof query?.order !== "function") return query;
-    const byCreated = query.order("created_at", { ascending: true });
-    return typeof byCreated?.order === "function" ? byCreated.order("id", { ascending: true }) : byCreated;
-  };
-  const results = await Promise.all(
-    names.map((table) =>
-      projectTables.includes(table)
-        ? ids.length
-          ? orderProjectQuery(table, client.from(table).select("*").in("proyecto_id", ids))
-          : Promise.resolve({ data: [] })
-        : client.from(table).select("*").eq("empresa_id", user.empresa_id),
-    ),
-  );
+  const results = await Promise.all(names.map(table =>
+    projectTables.includes(table)
+      ? ids.length ? completeProjectRows(client, table, ids, table === 'proyecto_trabajadores' ? ['proyecto_id', 'usuario_id'] : table === 'materiales_proyecto' ? ['created_at','id'] : ['id']) : Promise.resolve({ data: [], error: null })
+      : completeRows(() => client.from(table).select('*').eq('empresa_id', user.empresa_id))
+  ));
   names.forEach((table, i) => {
     tables[table] = checkedRows(results[i]);
   });

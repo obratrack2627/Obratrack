@@ -66,13 +66,15 @@ export default function Sidebar() {
   };
 
   const handleLogout = async () => {
+    const pending = dataService.pendingCloudChanges();
+    if(pending && !window.confirm(`Hay ${pending} cambios sin guardar en este dispositivo. Cerrar sesión los descartará. ¿Quieres cerrar sesión de todos modos?`))return;
     try {
-      await signOutSupabase();
+      await signOutSupabase(pending>0);
     } catch (e) {
       console.error(e);
     }
     dataService.clearActiveUser();
-    window.location.href = '/login';
+    window.location.href = '/login?logout=1';
   };
 
   useEffect(() => {
@@ -201,7 +203,7 @@ export default function Sidebar() {
           <ThemeToggle />
           <button
             aria-label="Ver mi cuenta" onClick={() => setIsPlanModalOpen(true)}
-            className="px-2 py-1 rounded bg-[#FF6A00]/20 text-[#FF6A00] border border-[#FF6A00]/40 text-[10px] font-bold font-mono"
+            className="px-2 py-1 rounded bg-[#FF6A00]/20 text-[#FF9B55] border border-[#FF6A00]/40 text-[10px] font-bold font-mono"
           >
             Cuenta
           </button>
@@ -275,7 +277,7 @@ export default function Sidebar() {
                         activePlan === 'pro_ia'
                           ? 'bg-[#6B8F72]/20 text-[#85C492] border border-[#6B8F72]/50'
                           : activePlan === 'pro'
-                          ? 'bg-[#FF6A00]/20 text-[#FF6A00] border border-[#FF6A00]/50'
+                          ? 'bg-[#FF6A00]/20 text-[#FF9B55] border border-[#FF6A00]/50'
                           : 'bg-gray-800 text-gray-400 border border-gray-700'
                       }`}
                     >

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AIError } from '@/lib/ai/errors';
 import { getPlanPricing, isPaidPlanId } from '@/lib/plans';
@@ -311,85 +311,12 @@ async function activatePaidSubscription(params: {
   periodStartIso?: string | null;
   periodEndIso?: string | null;
 }): Promise<void> {
-  const { admin } = params;
-  const nowIso = new Date().toISOString();
-  const pricing = getPlanPricing(params.planId, params.ciclo);
-
-  const [{ data: empresa }, { data: existingSub }] = await Promise.all([
-    admin.from('empresas').select('id,plan_id').eq('id', params.empresaId).maybeSingle(),
-    admin.from('suscripciones').select('*').eq('empresa_id', params.empresaId).maybeSingle(),
-  ]);
-
-  if (!empresa) {
-    throw new AIError('BILLING_COMPANY_NOT_FOUND', 'Empresa asociada al pago no existe.', 404);
-  }
-
-  const extendSamePlan =
-    existingSub?.estado === 'active' &&
-    existingSub.plan_id === params.planId &&
-    params.modalidad === 'prepago';
-  const periodStart = params.periodStartIso || nowIso;
-  const periodEnd =
-    params.periodEndIso ||
-    computeNextPeriodEnd(
-      nowIso,
-      pricing.duracionDias,
-      existingSub?.current_period_end,
-      extendSamePlan,
-    );
-
-  const subPayload = {
-    empresa_id: params.empresaId,
-    plan_id: params.planId,
-    ciclo: params.ciclo,
-    modalidad: params.modalidad,
-    estado: 'active',
-    pasarela: 'flow',
-    gateway_customer_id: params.gatewayCustomerId ?? existingSub?.gateway_customer_id ?? null,
-    gateway_subscription_id:
-      params.gatewaySubscriptionId ??
-      (params.modalidad === 'prepago' ? null : existingSub?.gateway_subscription_id ?? null),
-    card_brand: params.cardBrand ?? existingSub?.card_brand ?? null,
-    card_last4: params.cardLast4 ?? existingSub?.card_last4 ?? null,
-    current_period_start: periodStart,
-    current_period_end: periodEnd,
-    cancel_at_period_end: false,
-    updated_at: nowIso,
-  };
-
-  const { data: savedSub, error: subError } = await admin
-    .from('suscripciones')
-    .upsert(subPayload, { onConflict: 'empresa_id' })
-    .select('id')
-    .single();
-
-  if (subError || !savedSub) {
-    throw new AIError('BILLING_DB_ERROR', 'No se pudo activar la suscripción.', 503);
-  }
-
-  if (params.pagoId) {
-    await admin
-      .from('pagos_suscripcion')
-      .update({
-        suscripcion_id: savedSub.id,
-        gateway_payment_id: params.gatewayPaymentId ?? null,
-        estado: 'paid',
-        metodo_pago: params.metodoPago ?? null,
-        paid_at: nowIso,
-        updated_at: nowIso,
-      })
-      .eq('id', params.pagoId);
-  }
-
-  if (empresa.plan_id !== 'ilimitado') {
-    const { error: compErr } = await admin
-      .from('empresas')
-      .update({ plan_id: params.planId, updated_at: nowIso })
-      .eq('id', params.empresaId);
-    if (compErr) {
-      throw new AIError('BILLING_DB_ERROR', 'No se pudo actualizar el plan de la empresa.', 503);
-    }
-  }
+  const { admin, ...input } = params;
+  const pricing = getPlanPricing(input.planId, input.ciclo);
+  const { error } = await admin.rpc('billing_activar_suscripcion', {
+    p_datos: { ...input, duracionDias: pricing.duracionDias },
+  });
+  if (error) throw new AIError('BILLING_DB_ERROR', 'No se pudo confirmar la activación. El pago se conserva para reintentar.', 503);
 }
 
 function resolveFlowPeriodBounds(sub: FlowSubscription, duracionDias: number): {
@@ -438,13 +365,14 @@ export async function handleFlowRegisterReturn(params: {
     return { outcome: 'canceled', order: pago.commerce_order };
   }
 
-  const locked = await acquireIdempotencyKey(admin, `flow:register:${token}`, 'customer.register', {
+  const savedRegistration = pago.registro_flow_resultado as FlowSubscription | null;
+  const locked = savedRegistration || await acquireIdempotencyKey(admin, `flow:register:${createHash('sha256').update(token).digest('hex')}`, 'customer.register', {
     empresa_id: pago.empresa_id,
     commerce_order: pago.commerce_order,
     customer_id: reg.customerId,
   });
   if (!locked) {
-    return { outcome: pago.estado === 'paid' ? 'success' : 'pending', order: pago.commerce_order };
+    throw new AIError('BILLING_RECONCILIATION_REQUIRED', 'El enrolamiento está pendiente de confirmación. No vuelvas a contratarlo; contacta con soporte para comprobar su estado.', 503);
   }
 
   const { data: currentSub } = await admin
@@ -453,7 +381,7 @@ export async function handleFlowRegisterReturn(params: {
     .eq('empresa_id', pago.empresa_id)
     .maybeSingle();
 
-  if (currentSub?.gateway_subscription_id) {
+  if (!savedRegistration && currentSub?.gateway_subscription_id) {
     try {
       await flow.cancelSubscription({
         subscriptionId: currentSub.gateway_subscription_id,
@@ -462,17 +390,21 @@ export async function handleFlowRegisterReturn(params: {
     } catch (error) {
       console.warn('flow_previous_subscription_cancel_warn', {
         empresa_id: pago.empresa_id,
-        message: (error as Error).message,
+        code: 'PREVIOUS_SUBSCRIPTION_CANCEL_FAILED',
       });
     }
   }
 
   const planId = pago.plan_id as PaidPlanId;
   const pricing = getPlanPricing(planId, 'mensual');
-  const flowSub = await flow.createSubscription({
+  const flowSub = savedRegistration || await flow.createSubscription({
     planId: buildFlowPlanId(planId, pricing.montoCobroCLP),
     customerId: reg.customerId,
   });
+  if (!savedRegistration) {
+    const {error:snapshotError}=await admin.from('pagos_suscripcion').update({registro_flow_resultado:flowSub}).eq('id',pago.id);
+    if(snapshotError)throw new AIError('BILLING_RECONCILIATION_REQUIRED','No se pudo confirmar el enrolamiento. No vuelvas a contratarlo; solicita revisar su estado.',503);
+  }
 
   const { startIso, endIso } = resolveFlowPeriodBounds(flowSub, pricing.duracionDias);
   const firstInvoice = Array.isArray(flowSub.invoices) ? flowSub.invoices[0] : undefined;
@@ -498,7 +430,7 @@ export async function handleFlowRegisterReturn(params: {
     return { outcome: 'success', order: pago.commerce_order };
   }
 
-  await admin
+  const {error:pendingError}=await admin
     .from('suscripciones')
     .update({
       gateway_customer_id: reg.customerId,
@@ -509,6 +441,7 @@ export async function handleFlowRegisterReturn(params: {
     })
     .eq('empresa_id', pago.empresa_id);
 
+  if(pendingError)throw new AIError('BILLING_DB_ERROR','No se pudo confirmar el estado de la suscripción. Puedes reintentar.',503);
   return { outcome: 'pending', order: pago.commerce_order };
 }
 
@@ -626,90 +559,22 @@ export async function handleFlowPaymentCallback(params: {
     return { ok: true, status: payment.status, outcome: 'unmatched' };
   }
 
-  const eventKey = `flow:payment:${payment.flowOrder}:${payment.status}`;
-  const locked = await acquireIdempotencyKey(admin, eventKey, 'payment.status', {
-    empresa_id: target.empresaId,
-    flow_order: payment.flowOrder,
-    commerce_order: payment.commerceOrder,
-    status: payment.status,
-    amount: Number(payment.amount),
+  const paidAmount = Number(payment.amount);
+  if (payment.status === 2 && (!Number.isSafeInteger(paidAmount) || paidAmount !== target.expectedAmount))
+    throw new AIError('BILLING_AMOUNT_MISMATCH', 'El monto informado por la pasarela no coincide.', 422);
+  const pricing = getPlanPricing(target.planId, target.ciclo);
+  const { data, error } = await admin.rpc('billing_aplicar_estado_flow', {
+    p_evento: `flow:payment:${payment.flowOrder}:${payment.status}`,
+    p_datos: {
+      ...target, status: payment.status, amount: paidAmount,
+      gatewayPaymentId: String(payment.flowOrder), gatewayToken: token,
+      commerceOrder: payment.commerceOrder || generateCommerceOrder(target.empresaId),
+      metodoPago: payment.paymentData?.media || 'Flow', duracionDias: pricing.duracionDias,
+    },
   });
-  if (!locked) {
-    return { ok: true, idempotent: true, status: payment.status, outcome: 'duplicate' };
-  }
-
-  const paidAmount = Math.round(Number(payment.amount));
-  if (payment.status === 2) {
-    if (paidAmount !== Math.round(target.expectedAmount)) {
-      console.error('flow_amount_mismatch', {
-        empresa_id: target.empresaId,
-        expected: target.expectedAmount,
-        received: paidAmount,
-        flowOrder: payment.flowOrder,
-      });
-      throw new AIError('BILLING_AMOUNT_MISMATCH', 'El monto informado por la pasarela no coincide.', 422);
-    }
-
-    let pagoId = target.pagoId;
-    if (!pagoId) {
-      const renewalOrder = payment.commerceOrder || generateCommerceOrder(target.empresaId);
-      const { data: inserted } = await admin
-        .from('pagos_suscripcion')
-        .insert({
-          empresa_id: target.empresaId,
-          commerce_order: renewalOrder,
-          gateway_payment_id: String(payment.flowOrder),
-          gateway_token: token,
-          pasarela: 'flow',
-          plan_id: target.planId,
-          ciclo: target.ciclo,
-          modalidad: target.modalidad,
-          monto_clp: paidAmount,
-          estado: 'pending',
-        })
-        .select('id')
-        .single();
-      pagoId = inserted?.id ?? null;
-    }
-
-    await activatePaidSubscription({
-      admin,
-      empresaId: target.empresaId,
-      planId: target.planId,
-      ciclo: target.ciclo,
-      modalidad: target.modalidad,
-      pagoId,
-      gatewayPaymentId: String(payment.flowOrder),
-      metodoPago: payment.paymentData?.media || 'Flow',
-    });
-
-    return { ok: true, status: payment.status, outcome: 'paid' };
-  }
-
-  if (payment.status === 3 || payment.status === 4) {
-    const nowIso = new Date().toISOString();
-    const mappedState = payment.status === 3 ? 'failed' : 'canceled';
-    if (target.pagoId) {
-      await admin
-        .from('pagos_suscripcion')
-        .update({
-          estado: mappedState,
-          gateway_payment_id: String(payment.flowOrder),
-          updated_at: nowIso,
-        })
-        .eq('id', target.pagoId);
-    }
-    if (target.isRenewal && payment.status === 3) {
-      await admin
-        .from('suscripciones')
-        .update({ estado: 'past_due', updated_at: nowIso })
-        .eq('empresa_id', target.empresaId)
-        .eq('estado', 'active');
-    }
-    return { ok: true, status: payment.status, outcome: mappedState };
-  }
-
-  return { ok: true, status: payment.status, outcome: 'pending' };
+  if (error || !data?.outcome)
+    throw new AIError('BILLING_DB_ERROR', 'No se pudo confirmar el pago. Se reintentará sin duplicar la activación.', 503);
+  return { ok: true, status: payment.status, ...data };
 }
 
 /** Cancela la renovación automática al final del período vigente conservando días pagados. */

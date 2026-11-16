@@ -112,8 +112,8 @@ export function DailyCloseSummary({ summary }: { summary: DailyClose }) {
       {section(
         "Asistencia confirmada",
         Users,
-        summary.personas.map((row) => (
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        summary.personas.map((row, index) => (
+          <div key={index} className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-medium">{row.nombre}</span>
             <span className="rounded-md bg-kraft-50 px-2 py-1 text-xs capitalize text-gray-500 dark:bg-gray-900">
               {row.estado} · {row.horas} h
@@ -124,8 +124,8 @@ export function DailyCloseSummary({ summary }: { summary: DailyClose }) {
       {section(
         "Avances y evidencias",
         Camera,
-        summary.avances.map((row) => (
-          <div>
+        summary.avances.map((row, index) => (
+          <div key={index}>
             <p className="font-semibold">{row.titulo}</p>
             <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-gray-500 dark:text-gray-400">
               {row.nota}
@@ -143,8 +143,8 @@ export function DailyCloseSummary({ summary }: { summary: DailyClose }) {
         {section(
           "Materiales recibidos",
           Package,
-          summary.recepciones.map((row) => (
-            <span>
+          summary.recepciones.map((row, index) => (
+            <span key={index}>
               {row.material}
               <strong className="ml-2">
                 {row.cantidad} {row.unidad}

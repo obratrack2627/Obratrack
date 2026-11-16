@@ -1,3 +1,4 @@
+import { reserveAIUsage } from './usage';
 import { serverFetch } from '@/lib/server-fetch';
 import { getServerOpenAIKey } from './openai-provider';
 import {
@@ -15,6 +16,8 @@ const REFERENCE_USE =
 export async function embedReference(text: string, fetcher: typeof fetch = serverFetch): Promise<number[]> {
   const key = getServerOpenAIKey();
   if (!key) throw new Error('EMBEDDING_NOT_CONFIGURED');
+  const settle=fetcher===serverFetch?await reserveAIUsage(Buffer.byteLength(text.slice(0,20000),'utf8'),'embedding'):async()=>{};
+  try {
   const response = await fetcher('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
@@ -35,6 +38,7 @@ export async function embedReference(text: string, fetcher: typeof fetch = serve
     throw new Error('EMBEDDING_INVALID');
   }
   return vector;
+  } finally { await settle(); }
 }
 
 export function ragEligible(

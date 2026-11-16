@@ -87,7 +87,7 @@ function database() {
     },
     from(table) {
       let predicates = [],
-        max = Infinity, single = false;
+        max = Infinity, offset = 0, single = false;
       const q = {
         select() {
           return q;
@@ -107,9 +107,10 @@ function database() {
           max = n;
           return q;
         },
+        range(start,end) {offset=start;max=end-start+1;return q;},
         maybeSingle() { single = true; return q; },
         then(resolve, reject) {
-          const rows = (db[table] || []).filter((x) => predicates.every((p) => p(x))).slice(0, max);
+          const rows = (db[table] || []).filter((x) => predicates.every((p) => p(x))).slice(offset, offset+max);
           return Promise.resolve({ data: single ? rows[0] || null : rows }).then(resolve, reject);
         },
       };
@@ -1807,4 +1808,17 @@ test('WhatsApp conecta RAG con referencias de empresa y responde "Buscalos" cons
   } finally {
     globalThis.fetch = origFetch;
   }
+});
+
+test('conflicto de versión en WhatsApp no publica notificaciones de cambios rechazados',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'qa-conflict',empresa_id:'empresa1',nombre:'Obra Norte',estado:'activo',monto_cotizado:100000,sync_version:1}];
+ const push=require('../lib/push/events.ts');const original=push.notifyPushOnWhatsAppChanges;const events=[];
+ push.notifyPushOnWhatsAppChanges=(_client,event)=>events.push(event);
+ const rpc=sb.rpc.bind(sb);let rejected=false;
+ sb.rpc=async(name,p)=>{if(name==='aplicar_lote_copiloto'&&p.p_changed.proyectos?.length){rejected=true;return {data:null,error:{message:'SYNC_CONFLICT'}};}return rpc(name,p);};
+ try{
+  const result=await processPersonalMessage(sb,{id:'qa-rejected-change',from:'56912345678',type:'text',text:{body:'Cancela la obra Obra Norte'}},{chat:async()=>{throw Error('No debe llamar al modelo');}});
+  assert.equal(rejected,true);assert.match(result.respuesta,/No apliqué los cambios/);assert.equal(sb.db.proyectos[0].estado,'activo');
+  for(const event of events){assert.deepEqual(event.changed,{});assert.equal(event.result,null);assert.equal(event.campaign,undefined);}
+ }finally{push.notifyPushOnWhatsAppChanges=original;}
 });

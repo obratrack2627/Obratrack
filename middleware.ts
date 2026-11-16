@@ -1,3 +1,4 @@
+import { contentSecurityPolicy } from '@/lib/security-csp';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyWebSession } from '@/lib/auth/web-session';
@@ -12,6 +13,7 @@ const PUBLIC_PAGES = [
   '/manifest.webmanifest',
   '/icon.svg',
   '/favicon.ico',
+  '/sw.js',
 ];
 
 // Endpoints de API específicamente públicos (ej. webhooks externos de Meta o Flow)
@@ -41,7 +43,7 @@ export function sanitizeRedirectPath(path: string | null): string {
   return '/dashboard';
 }
 
-export async function middleware(request: NextRequest) {
+async function handleRequest(request: NextRequest, forwardedHeaders: Headers) {
   const { pathname } = request.nextUrl;
 
   // Permitir la landing/página raíz si corresponde o activos estáticos/PWA
@@ -50,17 +52,17 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/app-icons/') ||
     PUBLIC_PAGES.some((route) => pathname === route || pathname.startsWith('/_next/'))
   ) {
-    return NextResponse.next();
+    return NextResponse.next({request:{headers:forwardedHeaders}});
   }
 
   // Permitir solo las rutas de API expresamente públicas
   if (PUBLIC_API_ROUTES.some((route) => pathname === route)) {
-    return NextResponse.next();
+    return NextResponse.next({request:{headers:forwardedHeaders}});
   }
 
   // Verificar estructura de token / identificador de sesión de ObraTrack
   // Cada API valida Auth y el rol mediante authorizeAI; también admite Bearer para móviles.
-  if (pathname.startsWith('/api/')) return NextResponse.next();
+  if (pathname.startsWith('/api/')) return NextResponse.next({request:{headers:forwardedHeaders}});
   const authToken = request.cookies.get('obratrack_auth_token')?.value;
   const isAuthorized = isValidAuthToken(authToken);
 
@@ -80,7 +82,7 @@ export async function middleware(request: NextRequest) {
 
   try {
     const session = await verifyWebSession(authToken!);
-    if (session?.allowed) return NextResponse.next();
+    if (session?.allowed) return NextResponse.next({request:{headers:forwardedHeaders}});
     const login = new URL('/login', request.url);
     if (session) login.searchParams.set('error', 'acceso_whatsapp');
     const response = NextResponse.redirect(login);
@@ -89,6 +91,17 @@ export async function middleware(request: NextRequest) {
   } catch {
     return NextResponse.redirect(new URL('/login', request.url));
   }
+}
+
+export async function middleware(request: NextRequest) {
+  const nonce=btoa(crypto.randomUUID());
+  const policy=contentSecurityPolicy(nonce,process.env.NODE_ENV!=='production');
+  const forwarded=new Headers(request.headers);
+  forwarded.set('x-nonce',nonce);forwarded.set('Content-Security-Policy',policy);
+  const response=await handleRequest(request,forwarded);
+  if(request.nextUrl.pathname==='/login' && request.nextUrl.searchParams.get('logout')==='1')response.cookies.delete('obratrack_auth_token');
+  response.headers.set('Content-Security-Policy',policy);
+  return response;
 }
 
 export const config = {

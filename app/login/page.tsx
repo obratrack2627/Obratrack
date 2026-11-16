@@ -482,8 +482,8 @@ function SignUpView(props: SignUpViewProps) {
                 type={props.showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
                 required
-                minLength={6}
-                placeholder="Mín. 6 caracteres"
+                minLength={12}
+                placeholder="Mín. 12 caracteres"
                 value={props.signupPassword}
                 onChange={(e) => props.onPasswordChange(e.target.value)}
                 className={`${INPUT_CLASS} pr-10`}
@@ -505,7 +505,7 @@ function SignUpView(props: SignUpViewProps) {
               type={props.showPassword ? 'text' : 'password'}
               autoComplete="new-password"
               required
-              minLength={6}
+              minLength={12}
               placeholder="Repetir clave"
               value={props.signupConfirmPassword}
               onChange={(e) => props.onConfirmPasswordChange(e.target.value)}

@@ -45,8 +45,8 @@ export default function ChangePasswordModal({
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    if (newPassword.length < 6) {
-      setErrorMsg('La contraseña debe tener al menos 6 caracteres.');
+    if (newPassword.length < 12) {
+      setErrorMsg('La contraseña debe tener al menos 12 caracteres.');
       return;
     }
 
@@ -167,8 +167,8 @@ export default function ChangePasswordModal({
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
-                minLength={6}
-                placeholder="Mínimo 6 caracteres"
+                minLength={12}
+                placeholder="Mínimo 12 caracteres"
                 className="w-full pl-9 pr-10 py-2.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] font-sans"
               />
               <button
@@ -192,7 +192,7 @@ export default function ChangePasswordModal({
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={12}
                 placeholder="Repetir nueva contraseña"
                 className="w-full pl-9 pr-10 py-2.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] font-sans"
               />

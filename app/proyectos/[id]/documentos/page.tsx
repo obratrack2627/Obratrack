@@ -692,9 +692,9 @@ export default function ProyectoDocumentosPage() {
                       : 'Haz clic para seleccionar archivo (PDF, Plano, Imagen, Excel, Word)'}
                   </span>
                   <span className="text-[11px] text-gray-500">
-                    PDF, imágenes, Word o Excel. Máximo 10 MB.
+                    PDF, imágenes, Word o Excel. Máximo 4 MB.
                   </span>
-                  <input type="file" onChange={handleFileUpload} className="hidden" />
+                  <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.docx,.xlsx" onChange={handleFileUpload} className="hidden" />
                 </label>
               </div>
 

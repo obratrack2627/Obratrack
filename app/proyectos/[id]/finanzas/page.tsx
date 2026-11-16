@@ -719,7 +719,7 @@ export default function ProyectoFinanzasPage() {
               <MoneyAmount value={saldoTrasCostos} />
             </h3>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
-              Materiales previstos y gastos registrados. Completa los jornales de la obra.
+              Materiales previstos y gastos registrados. Registra los gastos de mano de obra.
             </p>
           </div>
         </div></CompactSummary><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-gray-700 dark:bg-[#141A23]"><p className="text-xs text-gray-500">Mano de obra registrada</p><strong className="mt-1 block text-xl"><MoneyAmount value={totalJornales}/></strong></div><div className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-gray-700 dark:bg-[#141A23]"><p className="text-xs text-gray-500">Flujo registrado de la obra</p><strong className="mt-1 block text-xl"><MoneyAmount value={flujoRegistrado}/></strong><p className="mt-1 text-xs text-gray-500">Cobros menos pagos confirmados de gastos y materiales. No equivale al saldo bancario.</p></div></div>
@@ -738,8 +738,8 @@ export default function ProyectoFinanzasPage() {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
+                  <PieChart aria-hidden="true" accessibilityLayer={false} tabIndex={-1}>
+                    <Pie rootTabIndex={-1}
                       data={chartData}
                       cx="50%"
                       cy="50%"

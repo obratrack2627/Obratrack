@@ -475,7 +475,7 @@ export default function DashboardPage() {
           <div className="max-w-full overflow-x-auto" role="region" aria-label="Gráfico de flujo financiero por obra" tabIndex={0}>
             <div className="h-72" style={{ minWidth: Math.max(330, chartDataFinanzas.length * 170) }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartDataFinanzas} margin={{ top: 30, right: 16, left: 4, bottom: 15 }} barGap={6}>
+              <BarChart aria-hidden="true" accessibilityLayer={false} tabIndex={-1} data={chartDataFinanzas} margin={{ top: 30, right: 16, left: 4, bottom: 15 }} barGap={6}>
                 <CartesianGrid vertical={false} stroke="#94a3b8" strokeOpacity={0.18}/>
                 <XAxis dataKey="nombre" stroke="#888888" fontSize={11} tickLine={false} interval={0} tickFormatter={name => name.length > 20 ? name.slice(0,19) + '…' : name}/>
                 <YAxis width={72} stroke="#888888" fontSize={10} tickLine={false} axisLine={false} tickFormatter={compactCLP}/>
@@ -523,8 +523,8 @@ export default function DashboardPage() {
 
           <div className="h-52 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
+              <PieChart aria-hidden="true" accessibilityLayer={false} tabIndex={-1}>
+                <Pie rootTabIndex={-1}
                   data={pieDataRentabilidad}
                   cx="50%"
                   cy="50%"

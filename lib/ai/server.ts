@@ -1,3 +1,4 @@
+import { setAIUsageActor } from './usage';
 import { scheduleKnowledgeIndex } from './rag-index';
 import { retrieveReferences,ragEligible } from './rag';
 import { learnApuCommand } from './apu-learning';
@@ -70,6 +71,7 @@ export async function authorizeAI(request: NextRequest) {
       403,
     );
   if (!canAccessWeb(user)) throw new AIError('WEB_ROLE_FORBIDDEN', WEB_ACCESS_ERROR, 403);
+  setAIUsageActor(user);
   return { client, user: { ...user, rol: user.is_dev === true ? 'admin' : user.rol } };
 }
 

@@ -46,8 +46,13 @@ export default function ProjectTabsHeader({
       container.scrollTo({ left: Math.max(0, left), behavior: 'instant' });
     };
     revealActiveTab();
+    const observer=new ResizeObserver(revealActiveTab);
+    const container=tabsRef.current;
+    const active=container?.querySelector<HTMLElement>('[aria-current="page"]');
+    if(container)observer.observe(container);
+    if(active)observer.observe(active);
     window.addEventListener('resize', revealActiveTab);
-    return () => window.removeEventListener('resize', revealActiveTab);
+    return () => {observer.disconnect();window.removeEventListener('resize', revealActiveTab);};
   }, [pathname, proyecto?.id]);
   const [cambiosPendientes, setCambiosPendientes] = useState(0);
   const [estado, setEstado] = useState(proyecto?.estado || 'activo');

@@ -102,15 +102,17 @@ async function assign(
     return errorJSON(error);
   }
 }
-export function POST(
+export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params: parameters }: { params: Promise<{ id: string }> },
 ) {
+  const params = await parameters;
   return assign(request, params.id, true);
 }
-export function DELETE(
+export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params: parameters }: { params: Promise<{ id: string }> },
 ) {
+  const params = await parameters;
   return assign(request, params.id, false);
 }
