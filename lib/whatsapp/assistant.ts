@@ -20,6 +20,7 @@ import { isAlternativeRequest, isQuoteRequest, isQuoteRevision } from '@/lib/ai/
 import { ragEligible, retrieveReferences } from '@/lib/ai/rag';
 import { scheduleKnowledgeIndex } from '@/lib/ai/rag-index';
 import { learnApuCommand } from '@/lib/ai/apu-learning';
+import { notifyPushOnWhatsAppChanges } from '@/lib/push/events';
 import { AIError } from "@/lib/ai/errors";
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateAI } from "@/lib/ai/provider";
@@ -853,6 +854,14 @@ export async function processPersonalMessage(
       503,
     );
   await finalizeBatch(true, data.message_id);
+  notifyPushOnWhatsAppChanges(sb, {
+    empresaId: user.empresa_id,
+    actor: user,
+    result: plan.result,
+    changed: plan.changed,
+    projects: [...(tables.proyectos || []), ...(plan.changed.proyectos || [])],
+    campaign,
+  });
   return { ...data, persistido: true };
   } catch (batchError) {
     await finalizeBatch(false);

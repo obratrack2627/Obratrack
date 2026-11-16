@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
+import { notifyPushOnCrewChange } from "@/lib/push/events";
 
 async function assign(
   request: NextRequest,
@@ -24,7 +25,7 @@ async function assign(
     const [project, member] = await Promise.all([
       client
         .from("proyectos")
-        .select("id")
+        .select("id,nombre")
         .eq("id", projectId)
         .eq("empresa_id", user.empresa_id)
         .maybeSingle(),
@@ -87,6 +88,15 @@ async function assign(
         "No se pudo verificar la cuadrilla guardada. Reintenta.",
         503,
       );
+    if (adding) {
+      notifyPushOnCrewChange(client, {
+        empresaId: user.empresa_id,
+        projectId,
+        projectName: project.data.nombre,
+        assignedUserId: input.usuario_id,
+        actorId: user.id,
+      });
+    }
     return NextResponse.json({ proyecto_id: projectId, trabajadores_ids: ids });
   } catch (error) {
     return errorJSON(error);

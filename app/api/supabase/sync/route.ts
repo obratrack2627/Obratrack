@@ -9,6 +9,7 @@ import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 import { loadAIContext, checkedRows } from "@/lib/ai/context";
 import { persistentFile, signRows } from "@/lib/supabase/private-files";
+import { notifyPushOnSyncChanges } from "@/lib/push/events";
 const mapping: Record<string, string> = {
   proyectos: "proyectos",
   clientes: "clientes",
@@ -629,6 +630,12 @@ export async function POST(request: NextRequest) {
         : query.in('proyecto_id',tables.proyectos.map((p:any)=>p.id));
       await checked(query,'la eliminación solicitada');
     }
+    notifyPushOnSyncChanges(sb, {
+      empresaId,
+      user,
+      body,
+      previousTables: tables,
+    });
     return NextResponse.json({
       success: true,
       updated_at: new Date().toISOString(),

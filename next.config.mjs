@@ -6,6 +6,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   `img-src 'self' data: blob: https: ${supabaseOrigin}`,
   "font-src 'self' data: https://fonts.gstatic.com",
+  "worker-src 'self'",
   `connect-src 'self' ws: wss: https://*.supabase.co https://*.googleapis.com ${supabaseOrigin}`,
   `frame-src 'self' https://www.google.com https://maps.google.com https://*.google.com ${supabaseOrigin}`,
   "frame-ancestors 'self'",
@@ -35,6 +36,23 @@ const nextConfig = {
   },
   async headers() {
     return [
+      {
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/javascript; charset=utf-8',
+          },
+          {
+            key: 'Cache-Control',
+            value: 'no-cache, no-store, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+        ],
+      },
       {
         source: '/(.*)',
         headers: [

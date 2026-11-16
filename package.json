@@ -32,13 +32,15 @@
     "recharts": "^2.12.7",
     "tailwind-merge": "^2.5.2",
     "twilio": "^5.2.2",
-    "undici": "^6.29.1"
+    "undici": "^6.29.1",
+    "web-push": "^4.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.41",
     "tailwindcss": "^3.4.10",
