@@ -11,5 +11,6 @@ test('la PWA muestra su marca y tres puntos animados sin texto de preparación',
  await expect(splash.locator('.pwa-splash-dots i')).toHaveCount(3);await expect(splash).not.toContainText('Preparando');
  expect(await splash.locator('i').first().evaluate(el=>getComputedStyle(el).animationName)).toBe('pwa-dot');
  await page.screenshot({path:'/tmp/obratrack-pwa-startup.png'});
- await page.clock.fastForward(1500);await expect(splash).toHaveCount(0);
+ await expect(page.getByRole('heading',{name:'Centro de Mando',exact:true})).toBeVisible();
+ await page.clock.runFor(2000);await expect(splash).toHaveCount(0);
 });
