@@ -1740,3 +1740,71 @@ test('al aceptar una cotización por WhatsApp el webhook genera y envía el PDF 
   assert.equal(sent[0].type, 'text');
   assert.equal(sent[1].type, 'pdf');
 });
+
+test('WhatsApp conecta RAG con referencias de empresa y responde "Buscalos" consultando tiendas de la cotización', async () => {
+  setup();
+  process.env.OBRABOT_RAG_ENABLED = 'true';
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const q = normalizeQuote({
+    titulo_proyecto: 'Pintura habitación',
+    comuna_region: 'La Florida',
+    materiales: [{ nombre: 'Esmalte al agua blanco', cantidad: 2, unidad: 'un', precio_unitario_estimado: 15000 }],
+    mano_de_obra: [],
+  });
+
+  // 1) Verifica que al cotizar por WhatsApp se invoca retrieveReferences con companyId y llega al modelo.
+  const sbRag = database();
+  let seenContext = null;
+  await processPersonalMessage(
+    sbRag,
+    { id: 'wa-rag-1', from: '56912345678', type: 'text', text: { body: 'Cotiza pintar una pieza de 25 m2' } },
+    {
+      retrieveReferences: async (_sb, _q, _role, opts) => {
+        assert.equal(opts.companyId, user.empresa_id);
+        return [{ source_type: 'apu', source_id: 'apu-pintura', referencia: { nombre: 'Pintura', rendimiento: 25 }, uso: 'Referencia histórica aprobada de tu empresa' }];
+      },
+      chat: async (_h, _t, ctx) => {
+        seenContext = ctx;
+        return { respuesta: 'Cotización lista.', accion: null, cotizacion: q };
+      },
+    },
+  );
+  assert.equal(seenContext.referencias_semanticas.length, 1);
+  assert.equal(seenContext.referencias_semanticas[0].source_id, 'apu-pintura');
+
+  // 2) Verifica que al responder "Buscalos" tras ofrecer búsqueda de tiendas consulta compareQuoteMaterials.
+  const sbSearch = database();
+  sbSearch.db.whatsapp_mensajes = [{
+    message_id: 'prev-quote',
+    empresa_id: user.empresa_id,
+    actor_id: user.id,
+    cotizacion: q,
+    respuesta: 'Puedo comparar ahora el esmalte al agua en tiendas disponibles. ¿Quieres que los busque?',
+    texto: 'Por qué no fueron consultados',
+    acciones: { rol_actor: 'admin' },
+  }];
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('easycl.')) {
+      return new Response(JSON.stringify([{
+        productName: 'Esmalte al Agua Blanco 1 Galón',
+        brand: 'Ceresita',
+        link: 'https://www.easy.cl/esmalte-agua/p',
+        items: [{ itemId: 'esm-1', nameComplete: 'Esmalte al Agua Blanco 1 Galón', measurementUnit: 'un', unitMultiplier: 1, sellers: [{ sellerDefault: true, commertialOffer: { Price: 18990, AvailableQuantity: 8 } }] }],
+      }]));
+    }
+    return new Response('[]');
+  };
+  try {
+    const out = await processPersonalMessage(
+      sbSearch,
+      { id: 'wa-buscalos', from: '56912345678', type: 'text', text: { body: 'Buscalos' } },
+    );
+    assert.match(out.respuesta, /\*Precios de materiales\*/);
+    assert.match(out.respuesta, /Esmalte al Agua Blanco 1 Galón/);
+    assert.match(out.respuesta, /\$18\.990/);
+    assert.match(out.respuesta, /https:\/\/www\.easy\.cl\/esmalte-agua\/p/);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});

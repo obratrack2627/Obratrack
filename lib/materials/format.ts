@@ -42,3 +42,25 @@ export function formatMaterialComparison(data: ComparacionMateriales) {
     `Precios publicados en CLP; confirma IVA, stock local, promociones y despacho${data.consulta.ubicacion ? " para " + data.consulta.ubicacion : ""} en la tienda antes de comprar.`,
   ].join("\n\n");
 }
+
+export function formatBatchMaterialComparison(
+  items: Array<{ label: string; comparison: ComparacionMateriales }>,
+  ubicacion?: string,
+) {
+  const blocks = items.map(({ label, comparison }, idx) => {
+    const top = comparison.ofertas.slice(0, 3);
+    if (!top.length) {
+      return `${idx + 1}. ${label}\nSin coincidencias exactas en los catálogos consultados (${comparison.proveedores.filter((p) => p.estado === "no_disponible").map((p) => p.nombre).join(", ") || "tiendas sin stock publicado"}).`;
+    }
+    const lines = top.map(
+      (o) =>
+        `• ${o.tienda}: ${o.nombre} — ${clp(o.precio)}${o.total_solicitado != null ? ` (${comparison.consulta.cantidad} u.: ${clp(o.total_solicitado)})` : ""}\n  ${o.url}`,
+    );
+    return `${idx + 1}. ${label}\n${lines.join("\n")}`;
+  });
+  return [
+    `Precios reales consultados en tiendas para ${items.length} ${items.length === 1 ? "material" : "materiales"}:`,
+    ...blocks,
+    `Precios publicados en CLP; confirma formato, IVA, stock local y despacho${ubicacion && ubicacion !== "Por definir" ? " en " + ubicacion : ""} antes de comprar o ajustar la cotización.`,
+  ].join("\n\n");
+}

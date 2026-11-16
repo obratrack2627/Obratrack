@@ -160,6 +160,48 @@ export function materialComparisonWhatsApp(data: ComparacionMateriales) {
   return whatsappCard("Precios de materiales", sections.filter(Boolean).join("\n\n"));
 }
 
+export function materialBatchComparisonWhatsApp(
+  items: Array<{ label: string; comparison: ComparacionMateriales }>,
+  ubicacion?: string,
+) {
+  const blocks = items.map(({ label, comparison }, idx) => {
+    const top = comparison.ofertas.slice(0, 3);
+    if (!top.length) {
+      return `*${idx + 1}. ${line(label)}*\nSin coincidencias exactas en las tiendas consultadas.`;
+    }
+    const offersText = top.map(
+      (o) =>
+        `• *${line(o.tienda)}* · ${line(o.nombre)}\n  Precio publicado: *${formatCLP(o.precio)}*` +
+        (o.total_solicitado != null ? ` (${comparison.consulta.cantidad} u.: *${formatCLP(o.total_solicitado)}*)` : "") +
+        `\n  ${o.url}`,
+    );
+    return `*${idx + 1}. ${line(label)}*\n${offersText.join("\n")}`;
+  });
+  const providerStates = new Map<string, "consultado" | "sin_resultados" | "no_disponible">();
+  for (const item of items) {
+    for (const p of item.comparison.proveedores) {
+      const prev = providerStates.get(p.nombre);
+      if (p.estado === "consultado" || !prev || (prev === "no_disponible" && p.estado === "sin_resultados")) {
+        providerStates.set(p.nombre, p.estado);
+      }
+    }
+  }
+  const providersList = Array.from(providerStates.entries())
+    .map(([nombre, estado]) => `${nombre}: ${estado === "consultado" ? "consultado" : estado === "sin_resultados" ? "sin coincidencias" : "no disponible"}`)
+    .join(" · ");
+  return whatsappCard(
+    "Precios de materiales",
+    [
+      `Consulté en tiendas reales ${items.length} ${items.length === 1 ? "material" : "materiales"} de la cotización:`,
+      ...blocks,
+      providersList ? `*FERRETERÍAS CONSULTADAS*\n${providersList}` : "",
+      `Precios publicados en CLP; confirma formato exacto, IVA, stock local y despacho${ubicacion && ubicacion !== "Por definir" ? " para " + ubicacion : ""} antes de comprar.`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  );
+}
+
 export function splitWhatsAppMessage(text: string) {
   const parts: string[] = [];
   let rest = text.trim();

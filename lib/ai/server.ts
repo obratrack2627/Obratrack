@@ -1,5 +1,6 @@
 import { scheduleKnowledgeIndex } from './rag-index';
 import { retrieveReferences,ragEligible } from './rag';
+import { learnApuCommand } from './apu-learning';
 import { scheduleQualityEvent } from './quality-server';
 import { turnQualityEvent } from './quality';
 import { conversationPreferences, withPreferences } from './preferences';
@@ -291,6 +292,8 @@ export function createChatHandler(
         );
       if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
       if (preferences.respuesta) return NextResponse.json(withPreferences(withNameEditContext(withPersonContext({respuesta:preferences.respuesta,accion:null,cotizacion:null,sugerencias:[]},registrationDraft),pendingNameEdit),preferences.state));
+      const apuLesson = await learnApuCommand(client, user, body.mensaje, 'web');
+      if (apuLesson.handled) return NextResponse.json(withPreferences(withNameEditContext(withPersonContext({respuesta:apuLesson.respuesta || 'Rendimiento guardado.',accion:null,cotizacion:null,sugerencias:[]},registrationDraft),pendingNameEdit),preferences.state));
       if(nameCommand?.handled) {
         const result={respuesta:nameCommand.question || 'Voy a corregir el nombre de la ficha.',accion:nameCommand.action || null,cotizacion:null,sugerencias:[]};
         await finish(result,projectId);

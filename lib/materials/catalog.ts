@@ -193,6 +193,18 @@ export function parseCatalogProducts(
       const full = normalize(
         `${product.productName} ${name} ${product.brand || ""}`,
       );
+      const wantedLatex =
+        tokens.includes("latex") &&
+        !tokens.some((t) =>
+          ["globo", "globos", "guante", "guantes", "cotillon", "fiesta"].includes(t),
+        );
+      if (
+        wantedLatex &&
+        /\b(?:globos?|guantes?|cotillon|cumpleanos|fiesta|preservativos?|disfraz|mascota)\b/.test(
+          full,
+        )
+      )
+        continue;
       if (tokens.length === 1 && ['cemento','yeso','arena','grava','taladro','martillo','clavo','tornillo','pintura','mortero','ladrillo','bloque','sierra'].includes(tokens[0])) {
         const prefixes = new Set(['de','del','el','la','saco','sacos','bolsa','bolsas','caja','cajas','pack','paquete', ...normalize(product.brand || '').split(' ')]);
         const validLead = (rawTitle: string) => {
@@ -443,4 +455,83 @@ export async function compareMaterialPrices(
     proveedores: providers,
     mejores_ids: best,
   };
+}
+
+const COUNTABLE_QUOTE_UNITS = new Set([
+  "un", "unidad", "unidades", "saco", "sacos", "bolsa", "bolsas",
+  "caja", "cajas", "tarro", "tarros", "lata", "latas", "balde", "baldes",
+  "galon", "galones", "tineta", "tinetas", "rollo", "rollos",
+  "plancha", "planchas", "paquete", "paquetes",
+]);
+
+function splitMaterialCandidates(rawName: string): string[] {
+  const cleaned = rawName
+    .replace(/^(?:conjunto|kit|pack|juego|provisi[oó]n(?:es)?|material(?:es)?)\s+de\s+/i, "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return [];
+  const parts = cleaned
+    .split(/\s*,\s*|\s+y\s+/i)
+    .map((p) => p.trim())
+    .filter((p) => p.length >= 3 && !/^(?:protecci[oó]n|accesorios?|insumos?|otros?|varios?)$/i.test(p));
+  return parts.length > 1 ? parts.slice(0, 3) : [cleaned];
+}
+
+export interface BatchMaterialComparisonItem {
+  label: string;
+  comparison: ComparacionMateriales;
+}
+
+export async function compareQuoteMaterials(
+  materials: Array<{ nombre?: string; cantidad?: number; unidad?: string }>,
+  options: { ubicacion?: string; tiendas?: string[] } = {},
+  fetcher: typeof fetch = serverFetch,
+): Promise<BatchMaterialComparisonItem[]> {
+  const queries: Array<{ label: string; input: ConsultaMaterial }> = [];
+  const seen = new Set<string>();
+  for (const item of Array.isArray(materials) ? materials : []) {
+    if (queries.length >= 5) break;
+    const rawName = String(item?.nombre || "").trim();
+    if (!rawName) continue;
+    const candidates = splitMaterialCandidates(rawName);
+    const unitNorm = normalize(String(item?.unidad || ""));
+    const countable = COUNTABLE_QUOTE_UNITS.has(unitNorm);
+    for (const candidate of candidates) {
+      if (queries.length >= 5) break;
+      const key = normalize(candidate);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      queries.push({
+        label: candidate,
+        input: {
+          producto: candidate.slice(0, 120),
+          ...(countable && typeof item?.cantidad === "number" && item.cantidad > 0 && candidates.length === 1
+            ? { cantidad: item.cantidad, unidad_cantidad: String(item.unidad).trim() }
+            : {}),
+          ...(options.ubicacion && options.ubicacion !== "Por definir" ? { ubicacion: options.ubicacion } : {}),
+          ...(options.tiendas?.length ? { tiendas: options.tiendas } : {}),
+        },
+      });
+    }
+  }
+  if (!queries.length) return [];
+  const results = await Promise.allSettled(
+    queries.map((q) => compareMaterialPrices(q.input, fetcher)),
+  );
+  return queries.map((q, index) => {
+    const res = results[index];
+    if (res.status === "fulfilled") return { label: q.label, comparison: res.value };
+    return {
+      label: q.label,
+      comparison: {
+        consulta: q.input,
+        consultado_en: new Date().toISOString(),
+        resumen: "No pude consultar ese material en las tiendas en este momento.",
+        ofertas: [],
+        proveedores: catalogProviders.map((p) => ({ nombre: p.nombre, url: p.url, estado: "no_disponible" as const })),
+        mejores_ids: [],
+      },
+    };
+  });
 }
