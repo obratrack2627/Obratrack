@@ -6,7 +6,7 @@ test('el service worker es público y devuelve JavaScript sin sesión',async({re
 test('la PWA muestra su marca y tres puntos animados sin texto de preparación',async({page})=>{
  await setup(page,{},true);await page.setViewportSize({width:390,height:844});
  await page.addInitScript(()=>{const native=window.matchMedia.bind(window);window.matchMedia=(query)=>{const media=native(query);if(query.includes('display-mode'))Object.defineProperty(media,'matches',{value:true});return media;};});
- await page.clock.install();await page.goto('/dashboard',{waitUntil:'domcontentloaded'});
+ await page.clock.install();await page.clock.pauseAt(new Date());await page.goto('/dashboard',{waitUntil:'domcontentloaded'});
  const splash=page.getByRole('status',{name:'Cargando ObraTrack'});await expect(splash).toBeVisible();
  await expect(splash.locator('.pwa-splash-dots i')).toHaveCount(3);await expect(splash).not.toContainText('Preparando');
  expect(await splash.locator('i').first().evaluate(el=>getComputedStyle(el).animationName)).toBe('pwa-dot');
