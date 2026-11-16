@@ -4,7 +4,7 @@ SUPABASE_PROJECT_REF and SUPABASE_ACCESS_TOKEN must be set explicitly.
 Default is a read-only status check; --apply is required for changes.
 """
 import argparse,hashlib,json,os,pathlib,re,urllib.request
-MIGRATIONS=[('20261116000100','20261116_billing_atomic'),('20261116000200','20261116_sync_atomic'),('20261116000300','20261116_ai_usage'),('20261116000400','20261116_storage_limits'),('20261116000500','20261116_registration_guard'),('20261116000600','20261116_whatsapp_versions'),('20261116000700','20261116_sync_row_locks')]
+MIGRATIONS=[('20261116000100','20261116_billing_atomic'),('20261116000200','20261116_sync_atomic'),('20261116000300','20261116_ai_usage'),('20261116000400','20261116_storage_limits'),('20261116000500','20261116_registration_guard'),('20261116000600','20261116_whatsapp_versions'),('20261116000700','20261116_sync_row_locks'),('20261116000800','whatsapp_debounce_concurrencia')]
 def main():
  parser=argparse.ArgumentParser();parser.add_argument('--apply',action='store_true');parser.add_argument('--phase',choices=['before-deploy','after-deploy']);args=parser.parse_args()
  ref=os.environ['SUPABASE_PROJECT_REF'];token=os.environ['SUPABASE_ACCESS_TOKEN']

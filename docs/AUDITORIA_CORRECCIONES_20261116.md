@@ -33,7 +33,7 @@ No ejecutar `schema.sql` en producción: reconstruye tablas. El script de prueba
 2. `SUPABASE_PROJECT_REF=<ref> python scripts/migrate-supabase.py` muestra el estado sin escribir.
 3. Aplicar migraciones previas al despliegue con `--apply --phase before-deploy`. El script registra versión y checksum en `supabase_migrations.schema_migrations`. Cada migración es transaccional.
 4. Publicar el código y comprobar los checks y los flujos esenciales.
-5. Aplicar `--apply --phase after-deploy`: cierra las cargas directas de Storage cuando el servidor validado ya está publicado.
+5. Aplicar `--apply --phase after-deploy`: cierra las cargas directas de Storage y activa la comparación de versiones de WhatsApp cuando el servidor validado ya está publicado.
 6. Verificar Auth y contraseñas con la misma política que la interfaz. No crear cobros, correos o mensajes reales como prueba sin un entorno/usuario de prueba autorizado.
 
 Las restricciones financieras se añaden `NOT VALID` para no reescribir ni eliminar datos históricos; se comprobaron los datos existentes antes de aplicar. Nuevos registros y ediciones sí deben cumplirlas. Una validación histórica posterior se realiza solo después de resolver cualquier registro incompatible.
@@ -86,4 +86,12 @@ No se contrató un plan de infraestructura ni se habilitó una función pagada p
 
 ## Validación
 
-Los resultados de la entrega se registran después de ejecutar checks sobre el código final. No se utilizaron claves reales de IA, mensajes WhatsApp, correos ni pagos reales durante las pruebas.
+- Unitarias sobre la integración final: **530/530 aprobadas**, sin evaluaciones pagadas.
+- SQL nativo: **16 archivos aprobados** en PostgreSQL 17/pgvector, reconstruyendo migraciones desde el repositorio; fixtures revertidos y base efímera eliminada.
+- Navegador: **78/79 pruebas funcionales aprobadas en la ejecución completa**. El fallo de navegación móvil pasó al repetirse aisladamente; se conserva esa distinción, sin afirmar una ejecución completa limpia.
+- Barridos adicionales: **57 visitas en claro y 19 en oscuro**, sin desbordamiento horizontal ni errores JavaScript capturados. El contraste pasó en las pantallas analizadas. Se ajustó después el foco de los gráficos circulares; esto no acredita una certificación de accesibilidad.
+- Compilación de producción con Next 15.5.29 y `tsc --noEmit`: **aprobados**.
+- Lint: **0 errores y 18 advertencias** heredadas de hooks/imágenes.
+- Dependencias de producción: **0 avisos altos/críticos**, 2 moderados pendientes en la cadena ExcelJS/uuid.
+
+No se enviaron mensajes WhatsApp, correos ni pagos reales durante las pruebas. La compilación, tipos y comprobación del despliegue se registran en los checks del commit.
