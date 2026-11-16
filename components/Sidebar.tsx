@@ -17,6 +17,7 @@ import {
   Zap,
   LogOut,
   ClipboardCheck,
+  Bell,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { dataService } from '@/lib/data-service';
@@ -289,14 +290,7 @@ export default function Sidebar() {
 
         {/* Footer: Subscription Plan Widget & User Role Selector */}
         <div className="p-3.5 border-t border-[#2A2A2A] bg-black/30 space-y-3">
-          <PushNotificationsControl
-            compact
-            onOpenSettings={() => {
-              setProfileInitialTab('notificaciones');
-              setProfileOpen(true);
-              setMobileOpen(false);
-            }}
-          />
+          <PushNotificationsControl headless />
           {activeUser?.is_dev === true && <button type="button" onClick={() => setIsPlanModalOpen(true)} aria-label="Cambiar plan de desarrollo" className="text-xs text-obra-orange hover:underline">Plan de desarrollo</button>}
 
           {/* Active User info & Logout */}
@@ -320,12 +314,15 @@ export default function Sidebar() {
                 </div>
               </div>
               
-              <ActionMenu label="Cuenta" above>
+              <ActionMenu label="Cuenta" above darkSurface>
                 <button type="button" onClick={() => { setProfileInitialTab('perfil'); setProfileOpen(true); setMobileOpen(false); }}>Editar perfil</button>
-                <button type="button" onClick={() => { setProfileInitialTab('notificaciones'); setProfileOpen(true); setMobileOpen(false); }}>Notificaciones Push</button>
+                <button type="button" onClick={() => { setProfileInitialTab('notificaciones'); setProfileOpen(true); setMobileOpen(false); }} className="flex items-center gap-2 font-medium !text-[#FF9248]">
+                  <Bell size={15} className="shrink-0 text-[#FF6A00]" />
+                  <span>Notificaciones Push</span>
+                </button>
                 <Link href="/planes" onClick={() => setMobileOpen(false)}>Suscripción</Link>
                 <button type="button" onClick={() => { setPasswordOpen(true); setMobileOpen(false); }}>Cambiar contraseña</button>
-                <button type="button" onClick={handleLogout} className="text-red-600">Cerrar sesión</button>
+                <button type="button" onClick={handleLogout} className="!text-red-400 hover:!text-red-300">Cerrar sesión</button>
               </ActionMenu>
             </div>
           </div>

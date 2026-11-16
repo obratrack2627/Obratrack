@@ -5,6 +5,7 @@ import { requireSupabaseAdmin } from "@/lib/supabase/admin";
 import { runScheduledPushReminders } from "@/lib/push/events";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 async function runReminders(request: NextRequest) {
   if (!isAuthorizedCronSecret(request)) {

@@ -14,6 +14,7 @@ import {
 } from "@/lib/push/server";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 async function authorizePushActor(request: NextRequest) {
   const authorization = (request.headers.get("authorization") || "").trim().split(/\s+/);
@@ -82,11 +83,24 @@ export async function GET(request: NextRequest) {
 
     const endpoint = request.nextUrl.searchParams.get("endpoint");
     const current = endpoint ? subs.find((s) => s.endpoint === endpoint) : subs[0];
+    const hasEnvVapid = Boolean(
+      (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "").trim() &&
+        (process.env.VAPID_PRIVATE_KEY || "").trim(),
+    );
+    const diagnostic = !schemaReady
+      ? "missing_migration"
+      : !vapid?.publicKey && !admin && !hasEnvVapid
+        ? "missing_service_role"
+        : !vapid?.publicKey
+          ? "vapid_unavailable"
+          : null;
 
     return NextResponse.json(
       {
         configured: Boolean(vapid?.publicKey) && schemaReady,
         schema_ready: schemaReady,
+        admin_ready: Boolean(admin),
+        diagnostic,
         publicKey: vapid?.publicKey || null,
         subscribed: endpoint ? Boolean(current) : subs.length > 0,
         activeCount: subs.length,

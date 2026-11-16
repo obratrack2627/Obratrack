@@ -1,3 +1,4 @@
+import { createECDH } from "node:crypto";
 import webPush from "web-push";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -67,6 +68,20 @@ export function buildPushPayload(input: PushPayloadInput) {
   };
 }
 
+function generateVapidKeysPair(): { publicKey: string; privateKey: string } {
+  const ecdh = createECDH("prime256v1");
+  ecdh.generateKeys();
+  const rawPriv = ecdh.getPrivateKey();
+  const paddedPriv =
+    rawPriv.length >= 32
+      ? rawPriv.subarray(rawPriv.length - 32)
+      : Buffer.concat([Buffer.alloc(32 - rawPriv.length), rawPriv]);
+  return {
+    publicKey: ecdh.getPublicKey().toString("base64url"),
+    privateKey: paddedPriv.toString("base64url"),
+  };
+}
+
 export async function getVapidConfig(sb?: any): Promise<VapidConfig | null> {
   const envPublic = (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "").trim();
   const envPrivate = (process.env.VAPID_PRIVATE_KEY || "").trim();
@@ -99,7 +114,7 @@ export async function getVapidConfig(sb?: any): Promise<VapidConfig | null> {
       };
       return cachedVapid;
     }
-    const keys = webPush.generateVAPIDKeys();
+    const keys = generateVapidKeysPair();
     const inserted = await admin
       .from("push_vapid_config")
       .upsert(
@@ -136,7 +151,10 @@ export async function getVapidConfig(sb?: any): Promise<VapidConfig | null> {
     }
     cachedVapid = { subject: envSubject, publicKey: keys.publicKey, privateKey: keys.privateKey };
     return cachedVapid;
-  } catch {
+  } catch (err) {
+    console.error("push_vapid_config_error", {
+      message: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }

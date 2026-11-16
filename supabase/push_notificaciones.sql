@@ -80,4 +80,6 @@ ALTER TABLE public.notificaciones_push_enviadas ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.notificaciones_push_enviadas FROM PUBLIC, anon, authenticated;
 GRANT ALL ON public.notificaciones_push_enviadas TO service_role;
 
+NOTIFY pgrst, 'reload schema';
+
 COMMIT;

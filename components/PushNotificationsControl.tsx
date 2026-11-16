@@ -1,7 +1,16 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Bell, BellOff, BellRing, Check, Loader2, Send, ShieldAlert } from 'lucide-react';
+import {
+  Bell,
+  BellOff,
+  BellRing,
+  Check,
+  CheckCircle2,
+  Loader2,
+  Send,
+  ShieldAlert,
+} from 'lucide-react';
 import { aiHeaders } from '@/lib/ai/client';
 import { dataService } from '@/lib/data-service';
 
@@ -14,6 +23,7 @@ type CategoryKey =
   | 'cierre_diario';
 
 type Preferences = Record<CategoryKey, boolean>;
+type DiagnosticCode = 'missing_migration' | 'missing_service_role' | 'vapid_unavailable' | null;
 
 const DEFAULT_PREFS: Preferences = {
   inicio_plazos: true,
@@ -27,189 +37,360 @@ const DEFAULT_PREFS: Preferences = {
 const CATEGORY_OPTIONS: Array<{ key: CategoryKey; label: string; desc: string }> = [
   {
     key: 'inicio_plazos',
-    label: 'Inicio de obra, agenda y plazos',
-    desc: 'Recordatorios el día antes y el mismo día en la mañana, además de vencimientos críticos.',
+    label: 'Inicio y plazos de obra',
+    desc: 'Avisos el día anterior, la mañana de inicio y recordatorios de entrega.',
   },
   {
     key: 'incidentes_bitacora',
-    label: 'Incidentes y reportes de terreno',
-    desc: 'Alertas inmediatas cuando un trabajador reporta fallas, atrasos o reclamos.',
+    label: 'Incidentes y bitácora',
+    desc: 'Novedades críticas en terreno y solicitudes de cambio de obra.',
   },
   {
     key: 'asignaciones_tareas',
-    label: 'Asignaciones y reprogramaciones',
-    desc: 'Avisos al asignar operarios a una obra, reprogramar Carta Gantt o aprobar cambios.',
+    label: 'Tareas y partidas',
+    desc: 'Notificaciones cuando se asignan o actualizan actividades al equipo.',
   },
   {
     key: 'materiales',
     label: 'Materiales y entregas',
-    desc: 'Confirmación de compras realizadas y recepciones registradas en faena.',
+    desc: 'Confirmación de insumos recibidos en bodega o pedidos registrados.',
   },
   {
     key: 'seguridad_clima',
-    label: 'Avisos al equipo y seguridad',
-    desc: 'Mensajes operativos, clima y recordatorios de EPP para la cuadrilla.',
+    label: 'Seguridad, planos y clima',
+    desc: 'Alertas preventivas en faena, cambios de plano y avisos meteorológicos.',
   },
   {
     key: 'cierre_diario',
     label: 'Cierre diario de jornada',
-    desc: 'Notificación al confirmar el cierre del día en una obra.',
+    desc: 'Recordatorios de fin de día para completar el parte y asistencia.',
   },
 ];
+
+const OPT_OUT_KEY = 'obratrack_push_opt_out';
+const PROMPTED_SESSION_KEY = 'obratrack_push_prompted';
+const PUSH_SYNC_EVENT = 'obratrack:push-updated';
+
+let autoActivatePromise: Promise<{ ok: boolean; error?: string }> | null = null;
+let gestureListenerAttached = false;
+
+interface PushStatusResponse {
+  configured?: boolean;
+  schema_ready?: boolean;
+  admin_ready?: boolean;
+  diagnostic?: DiagnosticCode;
+  publicKey?: string | null;
+  subscribed?: boolean;
+  activeCount?: number;
+  preferences?: Partial<Preferences>;
+  error?: string;
+}
+
+function isPushSupported(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    'serviceWorker' in navigator &&
+    'PushManager' in window
+  );
+}
 
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
-  const bytes = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i++) {
-    bytes[i] = rawData.charCodeAt(i);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
   }
-  return bytes.buffer;
+  return outputArray.buffer;
 }
 
-export default function PushNotificationsControl({
-  compact = false,
-  onOpenSettings,
-}: {
-  compact?: boolean;
-  onOpenSettings?: () => void;
-}) {
+function resolveConfigError(diagnostic: DiagnosticCode | undefined, fallbackError?: string | null): string {
+  if (diagnostic === 'missing_migration') {
+    return 'Ejecuta la migración supabase/push_notificaciones.sql en Supabase (ya incluye recarga de caché) y recarga la página.';
+  }
+  if (diagnostic === 'missing_service_role') {
+    return 'Falta SUPABASE_SERVICE_ROLE_KEY (o NEXT_PUBLIC_VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY) en las variables de entorno de Vercel.';
+  }
+  if (diagnostic === 'vapid_unavailable') {
+    return fallbackError || 'No se pudieron inicializar las claves VAPID en el servidor. Revisa los logs de Vercel.';
+  }
+  return fallbackError || 'Falta configurar las claves VAPID o aplicar la migración supabase/push_notificaciones.sql.';
+}
+
+async function performDeviceSubscribe(options: {
+  allowPrompt: boolean;
+  prefsOverride?: Preferences;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!isPushSupported()) {
+    return { ok: false, error: 'Este navegador no soporta notificaciones push.' };
+  }
+  const user = dataService.getActiveUser();
+  if (!user?.id) {
+    return { ok: false, error: 'Inicia sesión para activar las alertas en este dispositivo.' };
+  }
+
+  let perm = Notification.permission;
+  if (perm === 'default' && options.allowPrompt) {
+    // Solicitar permiso inmediatamente dentro del gesto del usuario antes de cualquier await de red.
+    perm = await Notification.requestPermission();
+  }
+  if (perm !== 'granted') {
+    if (perm === 'denied') {
+      return {
+        ok: false,
+        error: 'Permiso denegado en el navegador. Habilita las notificaciones para ObraTrack en la configuración de Chrome.',
+      };
+    }
+    return { ok: false, error: 'Permiso pendiente de aceptar en el navegador.' };
+  }
+
+  await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  const reg = await navigator.serviceWorker.ready;
+  const headers = await aiHeaders();
+
+  const existingSub = await reg.pushManager.getSubscription();
+  const query = existingSub?.endpoint ? `?endpoint=${encodeURIComponent(existingSub.endpoint)}` : '';
+  const infoRes = await fetch(`/api/notificaciones/push${query}`, { headers, cache: 'no-store' });
+  const info = (await infoRes.json().catch(() => null)) as PushStatusResponse | null;
+
+  if (!infoRes.ok || !info?.publicKey) {
+    return {
+      ok: false,
+      error: resolveConfigError(info?.diagnostic, info?.error),
+    };
+  }
+
+  if (!info.schema_ready) {
+    return {
+      ok: false,
+      error: resolveConfigError(info.diagnostic || 'missing_migration', info.error),
+    };
+  }
+
+  const sub =
+    existingSub ||
+    (await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(info.publicKey),
+    }));
+
+  const mergedPrefs: Preferences = {
+    ...DEFAULT_PREFS,
+    ...(info.preferences || {}),
+    ...(options.prefsOverride || {}),
+  };
+
+  const saveRes = await fetch('/api/notificaciones/push', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      subscription: sub.toJSON(),
+      preferencias: mergedPrefs,
+      userAgent: navigator.userAgent,
+    }),
+  });
+  const saveBody = (await saveRes.json().catch(() => null)) as { error?: string } | null;
+  if (!saveRes.ok) {
+    return { ok: false, error: saveBody?.error || 'No se pudo guardar la suscripción en el servidor.' };
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(PUSH_SYNC_EVENT));
+  }
+  return { ok: true };
+}
+
+function runAutoActivate(allowPrompt: boolean): Promise<{ ok: boolean; error?: string }> {
+  if (autoActivatePromise) return autoActivatePromise;
+  autoActivatePromise = performDeviceSubscribe({ allowPrompt }).finally(() => {
+    autoActivatePromise = null;
+  });
+  return autoActivatePromise;
+}
+
+export interface PushNotificationsControlProps {
+  headless?: boolean;
+}
+
+export default function PushNotificationsControl({ headless = false }: PushNotificationsControlProps) {
   const [supported, setSupported] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
-  const [subscribed, setSubscribed] = useState(false);
   const [configured, setConfigured] = useState(true);
   const [schemaReady, setSchemaReady] = useState(true);
-  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<DiagnosticCode>(null);
+  const [subscribed, setSubscribed] = useState(false);
+  const [activeCount, setActiveCount] = useState(0);
   const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFS);
+  const [loading, setLoading] = useState(!headless);
   const [busy, setBusy] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [statusMsg, setStatusMsg] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const syncStatus = useCallback(async () => {
-    if (typeof window === 'undefined') return;
-    const isSupported =
-      'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-    setSupported(isSupported);
-    if (!isSupported) return;
+    if (!isPushSupported()) {
+      setSupported(false);
+      setLoading(false);
+      return;
+    }
 
-    setPermission(Notification.permission);
+    setSupported(true);
+    const currentPerm = Notification.permission;
+    setPermission(currentPerm);
+
+    const user = dataService.getActiveUser();
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+
     try {
-      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-      const existingSub = await reg.pushManager.getSubscription();
-      const user = dataService.getActiveUser();
-      if (!user) return;
+      await navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => null);
+      const reg = await navigator.serviceWorker.ready.catch(() => null);
+      const existingSub = await reg?.pushManager.getSubscription();
+      const query = existingSub?.endpoint ? `?endpoint=${encodeURIComponent(existingSub.endpoint)}` : '';
 
-      const query = existingSub?.endpoint
-        ? `?endpoint=${encodeURIComponent(existingSub.endpoint)}`
-        : '';
       const res = await fetch(`/api/notificaciones/push${query}`, {
         headers: await aiHeaders(),
         cache: 'no-store',
       });
-      if (!res.ok) return;
-      const body = await res.json();
-      setConfigured(Boolean(body.configured));
-      setSchemaReady(body.schema_ready !== false);
-      setPublicKey(body.publicKey || null);
-      setSubscribed(Boolean(existingSub && body.subscribed));
-      if (body.preferences) setPrefs({ ...DEFAULT_PREFS, ...body.preferences });
+      const body = (await res.json().catch(() => null)) as PushStatusResponse | null;
+
+      if (!res.ok) {
+        if (!headless) {
+          setErrorMsg(resolveConfigError(body?.diagnostic, body?.error));
+        }
+        return;
+      }
+
+      if (body) {
+        const isConfigured = Boolean(body.configured);
+        const isSchemaReady = Boolean(body.schema_ready);
+        setConfigured(isConfigured);
+        setSchemaReady(isSchemaReady);
+        setDiagnostic(body.diagnostic ?? null);
+        setSubscribed(Boolean(body.subscribed));
+        setActiveCount(Number(body.activeCount || 0));
+        if (body.preferences) {
+          setPrefs({ ...DEFAULT_PREFS, ...body.preferences });
+        }
+
+        if (!isConfigured || !isSchemaReady) {
+          if (!headless) {
+            setErrorMsg(resolveConfigError(body.diagnostic, body.error));
+          }
+          return;
+        }
+
+        if (!headless) {
+          setErrorMsg((prev) =>
+            prev && /VAPID|migración|SUPABASE_SERVICE_ROLE_KEY/i.test(prev) ? null : prev,
+          );
+        }
+
+        // Activación automática por defecto si el navegador ya concedió permiso y no hubo opt-out manual.
+        const optedOut = window.localStorage.getItem(OPT_OUT_KEY) === '1';
+        if (currentPerm === 'granted' && !optedOut && (!existingSub || !body.subscribed)) {
+          const autoResult = await runAutoActivate(false);
+          if (autoResult.ok) {
+            setSubscribed(true);
+          }
+        }
+      }
     } catch {
-      // Ignorar silenciosamente si aún está iniciando sesión o sin conexión.
+      // Mantiene la interfaz limpia ante microcortes de red.
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [headless]);
 
   useEffect(() => {
     void syncStatus();
-    const onSync = () => void syncStatus();
-    window.addEventListener('obratrack_cloud_synced', onSync);
-    return () => window.removeEventListener('obratrack_cloud_synced', onSync);
   }, [syncStatus]);
 
+  useEffect(() => {
+    if (!isPushSupported()) return;
+
+    const handleSyncEvent = () => {
+      void syncStatus();
+    };
+    window.addEventListener(PUSH_SYNC_EVENT, handleSyncEvent);
+
+    const optedOut = window.localStorage.getItem(OPT_OUT_KEY) === '1';
+    const alreadyPrompted = window.sessionStorage.getItem(PROMPTED_SESSION_KEY) === '1';
+    if (Notification.permission === 'default' && !optedOut && !alreadyPrompted && !gestureListenerAttached) {
+      gestureListenerAttached = true;
+      const onFirstGesture = () => {
+        if (window.localStorage.getItem(OPT_OUT_KEY) === '1') return;
+        if (!dataService.getActiveUser()?.id) {
+          gestureListenerAttached = false;
+          return;
+        }
+        window.sessionStorage.setItem(PROMPTED_SESSION_KEY, '1');
+        void runAutoActivate(true).then(() => {
+          void syncStatus();
+        });
+      };
+      document.addEventListener('pointerdown', onFirstGesture, { once: true, passive: true });
+    }
+
+    return () => {
+      window.removeEventListener(PUSH_SYNC_EVENT, handleSyncEvent);
+    };
+  }, [syncStatus]);
+
+  if (headless) {
+    return null;
+  }
+
   const handleEnable = async () => {
-    if (!supported || busy) return;
+    setErrorMsg(null);
+    setStatusMsg(null);
     setBusy(true);
-    setErrorMsg('');
-    setStatusMsg('');
     try {
-      const perm =
-        Notification.permission === 'granted'
-          ? 'granted'
-          : await Notification.requestPermission();
-      setPermission(perm);
-      if (perm !== 'granted') {
-        throw new Error(
-          'Permiso denegado en el navegador. Habilita las notificaciones en la configuración del sitio en Chrome.',
-        );
-      }
-
-      const headers = await aiHeaders();
-      let key = publicKey;
-      if (!key) {
-        const infoRes = await fetch('/api/notificaciones/push', { headers, cache: 'no-store' });
-        const info = await infoRes.json();
-        key = info.publicKey;
-        setSchemaReady(info.schema_ready !== false);
-      }
-      if (!key) {
-        throw new Error(
-          'Falta configurar las claves VAPID o aplicar la migración supabase/push_notificaciones.sql.',
-        );
-      }
-
-      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-      await navigator.serviceWorker.ready;
-      const existing = await reg.pushManager.getSubscription();
-      const sub =
-        existing ||
-        (await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(key),
-        }));
-
-      const res = await fetch('/api/notificaciones/push', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          subscription: sub.toJSON(),
-          preferencias: prefs,
-        }),
+      window.localStorage.removeItem(OPT_OUT_KEY);
+      const result = await performDeviceSubscribe({
+        allowPrompt: true,
+        prefsOverride: prefs,
       });
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.error || 'No se pudo activar la suscripción push.');
+      setPermission(Notification.permission);
+      if (!result.ok) {
+        setErrorMsg(result.error || 'No se pudieron activar las notificaciones.');
+        return;
       }
-
-      setSubscribed(true);
-      setStatusMsg('Notificaciones push activadas en este dispositivo.');
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'No se pudieron activar las notificaciones.');
+      setStatusMsg('Notificaciones push activadas con el logo de ObraTrack en este dispositivo.');
+      await syncStatus();
+    } catch (err) {
+      setErrorMsg((err as Error).message || 'No se pudieron activar las notificaciones.');
     } finally {
       setBusy(false);
     }
   };
 
   const handleDisable = async () => {
-    if (!supported || busy) return;
+    setErrorMsg(null);
+    setStatusMsg(null);
     setBusy(true);
-    setErrorMsg('');
-    setStatusMsg('');
     try {
-      const reg = await navigator.serviceWorker.getRegistration('/');
+      window.localStorage.setItem(OPT_OUT_KEY, '1');
+      const reg = await navigator.serviceWorker.ready.catch(() => null);
       const sub = await reg?.pushManager.getSubscription();
       const endpoint = sub?.endpoint;
-      if (sub) await sub.unsubscribe().catch(() => {});
+      if (sub) await sub.unsubscribe();
 
       await fetch('/api/notificaciones/push', {
         method: 'DELETE',
         headers: await aiHeaders(),
         body: JSON.stringify({ endpoint }),
       });
-      setSubscribed(false);
-      setStatusMsg('Notificaciones desactivadas en este dispositivo.');
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'No se pudo desactivar.');
+
+      setStatusMsg('Alertas push desactivadas en este dispositivo.');
+      window.dispatchEvent(new CustomEvent(PUSH_SYNC_EVENT));
+      await syncStatus();
+    } catch (err) {
+      setErrorMsg((err as Error).message || 'No se pudo desactivar el dispositivo.');
     } finally {
       setBusy(false);
     }
@@ -218,8 +399,8 @@ export default function PushNotificationsControl({
   const handleToggleCategory = async (key: CategoryKey) => {
     const next = { ...prefs, [key]: !prefs[key] };
     setPrefs(next);
-    if (!subscribed) return;
-    setErrorMsg('');
+    setSavingPrefs(true);
+    setErrorMsg(null);
     try {
       const res = await fetch('/api/notificaciones/push', {
         method: 'POST',
@@ -227,191 +408,234 @@ export default function PushNotificationsControl({
         body: JSON.stringify({ action: 'preferences', preferencias: next }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || 'No se pudieron actualizar las preferencias.');
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || 'Error al actualizar preferencias.');
       }
-      setStatusMsg('Preferencias actualizadas.');
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Error guardando preferencias.');
+      setStatusMsg('Preferencias guardadas.');
+    } catch (err) {
+      setPrefs(prefs);
+      setErrorMsg((err as Error).message || 'Error guardando preferencia.');
+    } finally {
+      setSavingPrefs(false);
     }
   };
 
   const handleTest = async () => {
-    if (testing || !subscribed) return;
-    setTesting(true);
-    setErrorMsg('');
-    setStatusMsg('');
+    setErrorMsg(null);
+    setStatusMsg(null);
+    setBusy(true);
     try {
       const res = await fetch('/api/notificaciones/push', {
         method: 'POST',
         headers: await aiHeaders(),
         body: JSON.stringify({ action: 'test' }),
       });
-      const body = await res.json();
+      const body = (await res.json().catch(() => null)) as { error?: string; sent?: number } | null;
       if (!res.ok) {
-        throw new Error(body.error || 'No se pudo enviar la notificación de prueba.');
+        throw new Error(body?.error || 'No se pudo enviar la notificación de prueba.');
       }
-      setStatusMsg('Notificación enviada. Deberías verla arriba con el logo de ObraTrack.');
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Error enviando prueba.');
+      setStatusMsg(
+        body?.sent
+          ? 'Notificación de prueba enviada. Revisa la barra superior de tu dispositivo.'
+          : 'No se encontró suscripción activa para recibir la prueba.',
+      );
+    } catch (err) {
+      setErrorMsg((err as Error).message || 'Error enviando notificación de prueba.');
     } finally {
-      setTesting(false);
+      setBusy(false);
     }
   };
 
-  if (compact) {
-    if (!supported) return null;
-    if (subscribed) {
-      return (
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 text-xs font-medium transition-colors"
-        >
-          <span className="flex items-center gap-2 truncate">
-            <BellRing className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">Alertas Push activas</span>
-          </span>
-          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-        </button>
-      );
-    }
-    return (
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => (permission === 'denied' && onOpenSettings ? onOpenSettings() : void handleEnable())}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#FF6A00]/15 hover:bg-[#FF6A00]/25 border border-[#FF6A00]/35 text-orange-200 text-xs font-semibold transition-colors disabled:opacity-60"
-      >
-        <span className="flex items-center gap-2 truncate">
-          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Bell className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />}
-          <span className="truncate">
-            {permission === 'denied' ? 'Push bloqueadas' : 'Activar notificaciones'}
-          </span>
-        </span>
-      </button>
-    );
-  }
+  const serverReady = configured && schemaReady;
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-[#0D1117]/70 p-4 space-y-3">
+      <div className="rounded-2xl border border-[#263040] bg-gradient-to-br from-[#141A23] via-[#17202D] to-[#10151E] p-4 sm:p-5 text-gray-100 shadow-lg">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <BellRing className="w-4 h-4 text-[#FF6A00]" />
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                Notificaciones Push en celular y navegador
-              </h3>
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#FF6A00]/30 bg-[#FF6A00]/15 text-[#FF6A00]">
+              {permission === 'denied' ? (
+                <ShieldAlert className="h-5 w-5 text-red-400" />
+              ) : subscribed ? (
+                <BellRing className="h-5 w-5" />
+              ) : (
+                <Bell className="h-5 w-5" />
+              )}
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Recibe avisos en la barra superior y pantalla de bloqueo con el logo de ObraTrack, sin depender de WhatsApp.
-            </p>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-white tracking-tight">
+                Notificaciones Push de ObraTrack
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Avisos nativos en Chrome y celular PWA con el logo oficial de ObraTrack, sin depender de WhatsApp.
+              </p>
+            </div>
           </div>
+
           <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
               subscribed
-                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
                 : permission === 'denied'
-                  ? 'bg-red-500/15 text-red-700 dark:text-red-300'
-                  : 'bg-amber-500/15 text-amber-800 dark:text-amber-300'
+                  ? 'border-red-500/40 bg-red-500/15 text-red-300'
+                  : 'border-[#FF6A00]/40 bg-[#FF6A00]/15 text-[#FFA15C]'
             }`}
           >
-            {subscribed ? 'Activas aquí' : permission === 'denied' ? 'Bloqueadas en Chrome' : 'Desactivadas'}
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                subscribed
+                  ? 'bg-emerald-400'
+                  : permission === 'denied'
+                    ? 'bg-red-400'
+                    : 'bg-[#FF6A00]'
+              }`}
+            />
+            {loading
+              ? 'Verificando...'
+              : subscribed
+                ? 'Activas en este dispositivo'
+                : permission === 'denied'
+                  ? 'Bloqueadas en Chrome'
+                  : 'Pendiente de activar'}
           </span>
         </div>
 
         {!supported && (
-          <div className="flex items-start gap-2 rounded-xl border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-200">
-            <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              Este navegador no admite Web Push aquí. En Android instala ObraTrack desde Chrome; en iPhone primero usa «Compartir → Agregar a inicio».
-            </span>
-          </div>
+          <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            Este navegador no soporta Web Push. Usa Google Chrome en escritorio o la PWA instalada en Android.
+          </p>
         )}
 
-        {supported && !schemaReady && (
-          <div className="flex items-start gap-2 rounded-xl border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-200">
-            <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              Falta ejecutar la migración <code>supabase/push_notificaciones.sql</code> en Supabase para guardar suscripciones de dispositivos.
-            </span>
-          </div>
+        {supported && permission === 'denied' && (
+          <p className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            Las notificaciones están bloqueadas en este navegador. Habilítalas desde el ícono de candado junto a la URL en Chrome y luego presiona Reintentar.
+          </p>
+        )}
+
+        {!serverReady && (
+          <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            {resolveConfigError(diagnostic)}
+          </p>
         )}
 
         {supported && (
-          <div className="flex flex-wrap items-center gap-2 pt-1">
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
             {!subscribed ? (
               <button
                 type="button"
-                disabled={busy || permission === 'denied' || (!configured && !schemaReady)}
+                disabled={busy || loading}
                 onClick={handleEnable}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#FF6A00] hover:bg-[#e55f00] px-4 py-2 text-xs font-bold text-white disabled:opacity-60 transition-colors"
+                className="inline-flex min-h-9 items-center gap-2 rounded-xl bg-gradient-to-r from-[#FF6A00] to-[#FF8533] px-4 py-2 text-xs font-semibold text-white shadow-md shadow-[#FF6A00]/20 hover:from-[#e65f00] hover:to-[#ff7417] active:scale-[0.99] transition-all disabled:opacity-50"
               >
-                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
-                <span>Activar notificaciones push</span>
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BellRing className="h-3.5 w-3.5" />}
+                <span>{permission === 'denied' ? 'Reintentar activación' : 'Activar notificaciones push'}</span>
               </button>
             ) : (
               <>
                 <button
                   type="button"
-                  disabled={testing}
+                  disabled={busy}
                   onClick={handleTest}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#FF6A00] hover:bg-[#e55f00] px-4 py-2 text-xs font-bold text-white disabled:opacity-60 transition-colors"
+                  className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-[#FF6A00]/45 bg-[#FF6A00]/15 px-3.5 py-2 text-xs font-semibold text-[#FFA15C] hover:bg-[#FF6A00]/25 hover:border-[#FF6A00] transition-all disabled:opacity-50"
                 >
-                  {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                  <span>Enviar notificación de prueba</span>
+                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  <span>Enviar prueba</span>
                 </button>
                 <button
                   type="button"
                   disabled={busy}
                   onClick={handleDisable}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#141A23] px-3.5 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:border-red-500 hover:text-red-500 transition-colors"
+                  className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-[#2F3B4E] bg-[#1C2432] px-3.5 py-2 text-xs font-semibold text-gray-200 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-300 transition-all disabled:opacity-50"
                 >
-                  <BellOff className="w-3.5 h-3.5" />
+                  <BellOff className="h-3.5 w-3.5" />
                   <span>Desactivar en este dispositivo</span>
                 </button>
               </>
+            )}
+
+            {activeCount > 0 && (
+              <span className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[#263040] bg-[#10151E] px-2.5 py-1 text-[11px] font-medium text-gray-300">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                <span>
+                  {activeCount} {activeCount === 1 ? 'dispositivo conectado' : 'dispositivos conectados'}
+                </span>
+              </span>
             )}
           </div>
         )}
       </div>
 
-      {/* Categorías */}
-      <div className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300">
-          Qué notificaciones recibir
-        </p>
-        <div className="divide-y divide-gray-200 dark:divide-gray-800 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#141A23]">
-          {CATEGORY_OPTIONS.map((item) => (
-            <label
-              key={item.key}
-              className="flex items-start justify-between gap-4 p-3.5 cursor-pointer hover:bg-gray-50/70 dark:hover:bg-[#1A2230]/50 transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">{item.label}</p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{item.desc}</p>
+      <div className="overflow-hidden rounded-2xl border border-[#263040] bg-[#141A23] text-gray-100 shadow-md">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#222B3A] bg-[#10151E]/90 px-4 py-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-200">
+              Categorías de alerta
+            </p>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              Vienen activadas por defecto para que nadie pierda avisos críticos en obra o terreno.
+            </p>
+          </div>
+          {savingPrefs && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#FFA15C]">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Guardando...
+            </span>
+          )}
+        </div>
+
+        <div className="divide-y divide-[#222B3A]">
+          {CATEGORY_OPTIONS.map((item) => {
+            const enabled = prefs[item.key];
+            return (
+              <div
+                key={item.key}
+                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-[#19212E]/70 transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-white">{item.label}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">{item.desc}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={enabled}
+                  aria-label={item.label}
+                  disabled={savingPrefs}
+                  onClick={() => void handleToggleCategory(item.key)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#FF6A00] disabled:opacity-60 ${
+                    enabled
+                      ? 'border-[#FF6A00] bg-[#FF6A00]'
+                      : 'border-[#334055] bg-[#242E3F]'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      enabled ? 'translate-x-5' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
-              <input
-                type="checkbox"
-                checked={prefs[item.key]}
-                onChange={() => void handleToggleCategory(item.key)}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#FF6A00] focus:ring-[#FF6A00] shrink-0"
-              />
-            </label>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       {statusMsg && (
-        <p role="status" className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-          <Check className="w-3.5 h-3.5 shrink-0" />
+        <p
+          role="status"
+          className="flex items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-950/60 px-3.5 py-2.5 text-xs font-medium text-emerald-300"
+        >
+          <Check className="h-4 w-4 shrink-0" />
           <span>{statusMsg}</span>
         </p>
       )}
+
       {errorMsg && (
-        <p role="alert" className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
-          <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+        <p
+          role="alert"
+          className="flex items-center gap-2 rounded-xl border border-red-500/35 bg-red-950/60 px-3.5 py-2.5 text-xs font-medium text-red-300"
+        >
+          <ShieldAlert className="h-4 w-4 shrink-0" />
           <span>{errorMsg}</span>
         </p>
       )}
