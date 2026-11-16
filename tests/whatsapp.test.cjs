@@ -1513,3 +1513,186 @@ test('el webhook adjunta el PDF del cierre nativo a su jefatura antes de confirm
  const out=await handler(request(event([{id:'closed-pdf',from:'56912345678',type:'text',text:{body:'Cierra la jornada'}}])));
  assert.equal(out.status,200);assert.deepEqual(sent,['text','pdf']);assert.equal(marked,true);
 });
+
+test('ráfaga de mensajes separados espera mientras el trabajador sigue escribiendo y combina texto, foto y audio en un solo registro', async () => {
+  const { seemsIncompleteWhatsAppMessage } = require('../lib/whatsapp/burst.ts');
+  assert.equal(seemsIncompleteWhatsAppMessage({ type: 'text', text: { body: 'Hola' } }), true);
+  assert.equal(seemsIncompleteWhatsAppMessage({ type: 'text', text: { body: 'En la obra Baño' } }), true);
+  assert.equal(seemsIncompleteWhatsAppMessage({ type: 'image', image: { id: '1' } }), true);
+  assert.equal(seemsIncompleteWhatsAppMessage({ type: 'text', text: { body: 'Avanzamos el radier al 80% en Baño' } }), false);
+
+  const sb = database();
+  sb.db.usuarios = [{ ...user, rol: 'terreno' }];
+  sb.db.proyectos = [{ id: 'p-bano', empresa_id: user.empresa_id, nombre: 'Baño' }];
+  sb.db.proyecto_trabajadores = [{ usuario_id: user.id, proyecto_id: 'p-bano' }];
+  sb.db.whatsapp_cola_entrada = [];
+
+  let pollCount = 0;
+  let capturedLote;
+  let aiCalls = 0;
+  const baseRpc = sb.rpc.bind(sb);
+  sb.rpc = async (name, p) => {
+    if (name === 'whatsapp_encolar_mensaje') {
+      const dup = sb.db.whatsapp_mensajes.some((m) => m.message_id === p.p_id) ||
+        sb.db.whatsapp_cola_entrada.some((q) => q.message_id === p.p_id);
+      if (dup) return { data: { status: 'duplicate' } };
+      const earlier = sb.db.whatsapp_cola_entrada.some((q) => q.actor_id === p.p_actor && q.estado === 'pendiente');
+      sb.db.whatsapp_cola_entrada.push({
+        message_id: p.p_id,
+        empresa_id: p.p_empresa,
+        actor_id: p.p_actor,
+        payload: p.p_payload,
+        estado: 'pendiente',
+        batch_id: null,
+      });
+      return { data: { status: earlier ? 'queued_for_leader' : 'leader' } };
+    }
+    if (name === 'whatsapp_estado_cola_actor') {
+      pollCount++;
+      const pending = sb.db.whatsapp_cola_entrada.filter((q) => q.actor_id === p.p_actor && q.estado === 'pendiente');
+      // Mientras llegan los mensajes siguientes simulamos que aún sigue escribiendo en los 2 primeros checks
+      if (pollCount < 3 && !p.p_claim) {
+        return { data: { ready: false, busy: false, preview: pending.map((q) => q.payload) } };
+      }
+      pending.forEach((q) => { q.estado = 'procesando'; q.batch_id = p.p_batch_id; });
+      const items = sb.db.whatsapp_cola_entrada.filter((q) => q.batch_id === p.p_batch_id).map((q) => q.payload);
+      return { data: { ready: true, items } };
+    }
+    if (name === 'whatsapp_finalizar_cola_lote') {
+      for (const q of sb.db.whatsapp_cola_entrada) {
+        if (q.batch_id !== p.p_batch_id) continue;
+        q.estado = p.p_completed ? 'completado' : 'pendiente';
+        if (p.p_completed && p.p_lead_id && q.message_id !== p.p_lead_id) {
+          sb.db.whatsapp_mensajes.unshift({
+            message_id: q.message_id,
+            sender_phone: p.p_phone,
+            empresa_id: p.p_empresa,
+            actor_id: p.p_actor,
+            acciones: { tipo: 'agrupado_en_lote', lote_lider_id: p.p_lead_id, rol_actor: p.p_rol },
+          });
+        }
+      }
+      return { data: null };
+    }
+    capturedLote = p;
+    return baseRpc(name, p);
+  };
+
+  const deps = {
+    burst: {
+      enabled: true,
+      standardMs: 10,
+      incompleteMs: 20,
+      maxWaitMs: 120,
+      pollMs: 10,
+      sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+    },
+    media: async (id) => id === 'img-1' ? { mimeType: 'image/jpeg', data: 'YQ==' } : { mimeType: 'audio/ogg', data: 'YXVkaW8=' },
+    store: async (_, __, msgId) => ({ path: `empresa1/${user.id}/${msgId}.jpg`, mime_type: 'image/jpeg', proyecto_id: null, origen_message_id: msgId }),
+    transcribe: async () => 'se rompió una cañería en el muro sur',
+    chat: async (_h, combinedText, ctx) => {
+      aiCalls++;
+      assert.match(combinedText, /Hola en la obra Baño/);
+      assert.match(combinedText, /se rompió una cañería en el muro sur/);
+      assert.equal(ctx.foto_adjunta, true);
+      return {
+        respuesta: 'Se ve filtración en cañería.',
+        accion: { tipo: 'crear_bitacora', proyecto_id: 'p-bano', titulo: 'Rotura de cañería', nota: combinedText, tipo_bitacora: 'incidente' },
+        cotizacion: null,
+      };
+    },
+  };
+
+  const p1 = processPersonalMessage(sb, { id: 'burst-1', from: '56912345678', type: 'text', text: { body: 'Hola en la obra Baño' } }, deps);
+  await new Promise((r) => setImmediate(r));
+  const p2 = processPersonalMessage(sb, { id: 'burst-2', from: '56912345678', type: 'image', image: { id: 'img-1' } }, deps);
+  const p3 = processPersonalMessage(sb, { id: 'burst-3', from: '56912345678', type: 'audio', audio: { id: 'aud-1' } }, deps);
+
+  const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+  assert.equal(r1.persistido, true);
+  assert.equal(r2.ignorado, true);
+  assert.equal(r3.ignorado, true);
+  assert.equal(aiCalls, 1);
+  assert.equal(sb.commits, 1);
+  assert.equal(capturedLote.p_changed.bitacora_entradas.length, 1);
+  assert.equal(capturedLote.p_changed.bitacora_entradas[0].proyecto_id, 'p-bano');
+  assert.equal(capturedLote.p_changed.bitacora_entradas[0].tipo, 'incidente');
+  assert.equal(capturedLote.p_adjunto.proyecto_id, 'p-bano');
+
+  // Un reintento tardío del mensaje agrupado se ignora sin duplicar
+  const retrySecondary = await processPersonalMessage(sb, { id: 'burst-2', from: '56912345678', type: 'image', image: { id: 'img-1' } }, deps);
+  assert.equal(retrySecondary.ignorado, true);
+  assert.equal(aiCalls, 1);
+});
+
+test('saludo introductorio o audio inaudible responde con claridad sin dejar en visto ni inventar acciones', async () => {
+  const sb = database();
+  sb.db.proyectos = [{ id: 'p-terraza', empresa_id: user.empresa_id, nombre: 'Terraza' }];
+  let aiCalls = 0;
+
+  const intro = await processPersonalMessage(
+    sb,
+    { id: 'intro-only', from: '56912345678', type: 'text', text: { body: 'En obra Terraza' } },
+    { chat: async () => { aiCalls++; return {}; } },
+  );
+  assert.equal(intro.persistido, true);
+  assert.equal(aiCalls, 0);
+  assert.match(intro.respuesta, /Aquí estoy.*Terraza/);
+  assert.equal(sb.db.whatsapp_mensajes[0].acciones.proyecto_contexto_id, 'p-terraza');
+
+  const { AIError } = require('../lib/ai/errors.ts');
+  const noisyAudio = await processPersonalMessage(
+    sb,
+    { id: 'noisy-audio', from: '56912345678', type: 'audio', audio: { id: 'aud-noise' } },
+    {
+      media: async () => ({ mimeType: 'audio/ogg', data: 'YXVkaW8=' }),
+      transcribe: async () => { throw new AIError('AI_EMPTY', 'No se pudo entender la nota de voz por ruido o silencio.', 422); },
+      chat: async () => { aiCalls++; return {}; },
+    },
+  );
+  assert.equal(noisyAudio.persistido, false);
+  assert.match(noisyAudio.respuesta, /ruido o silencio/);
+  assert.equal(aiCalls, 0);
+});
+
+test('borradores antiguos con más de 12 horas caducan y si falla PDF tras enviar texto no se duplica la respuesta', async () => {
+  const sb = database();
+  const oldIso = new Date(Date.now() - 15 * 3600 * 1000).toISOString();
+  sb.db.whatsapp_mensajes = [{
+    message_id: 'old-draft',
+    empresa_id: user.empresa_id,
+    actor_id: user.id,
+    sender_phone: '56912345678',
+    texto: 'Crea obra Vieja',
+    respuesta: '¿Monto?',
+    borrador_obra: { nombre: 'Obra Vieja' },
+    acciones: { rol_actor: 'admin' },
+    created_at: oldIso,
+  }];
+  let sawDraft;
+  const fresh = await processPersonalMessage(
+    sb,
+    { id: 'fresh-turn', from: '56912345678', type: 'text', text: { body: '¿Cómo vamos con las revisiones?' } },
+    { chat: async (_h, _t, ctx) => { sawDraft = ctx.creacion_obra_whatsapp.borrador; return { respuesta: 'Todo al día.', accion: null, cotizacion: null }; } },
+  );
+  assert.equal(fresh.persistido, true);
+  assert.equal(sawDraft, null);
+
+  setup();
+  const sent = [];
+  let marked = false;
+  const handler = createWhatsAppWebhook({
+    client: () => ({
+      from: () => ({ update: () => ({ eq: async () => { marked = true; return { error: null }; } }) }),
+    }),
+    process: async () => ({ persistido: true, actor_id: user.id, empresa_id: user.empresa_id, respuesta: 'Cierre OK', acciones: { tipo: 'registrar_documento', detalles: { id: 'x', categoria: 'cierre_diario' } } }),
+    send: async (_to, text) => { sent.push(text); },
+    sendDocument: async () => { throw new Error('PDF upload error'); },
+  });
+  const res = await handler(request(event([{ id: 'close-pdf-fail', from: '56912345678', type: 'text', text: { body: 'Cierra hoy' } }])));
+  assert.equal(res.status, 200);
+  assert.equal(marked, true);
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0], 'Cierre OK');
+  assert.match(sent[1], /no pude enviar el PDF/);
+});

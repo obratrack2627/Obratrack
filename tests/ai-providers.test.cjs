@@ -86,3 +86,17 @@ test('los imports históricos tampoco pueden llamar al proveedor anterior',async
   assert.equal(getServerGeminiKey(),'fixture-openai');
   assert.equal(await generateGemini('Hola',{fetcher:async(url)=>{assert.equal(url,'https://api.openai.com/v1/responses');return response('Hola');}}),'Hola');
 });
+
+test('audio vacío desde transcripción OpenAI devuelve error 422 amigable y limpia ruido STT', async () => {
+  const media = { mimeType: 'audio/ogg', data: fs.readFileSync(__dirname + '/fixtures/voice-tone.ogg').toString('base64') };
+  await assert.rejects(
+    () => generateOpenAI('Transcribe', {
+      image: media,
+      fetcher: async () => new Response(JSON.stringify({ text: '   ' }), { status: 200 }),
+    }),
+    (error) => error.code === 'AI_EMPTY' && error.status === 422,
+  );
+  const { sanitizeSttNoiseTranscript } = require('../lib/whatsapp/burst.ts');
+  assert.equal(sanitizeSttNoiseTranscript('Subtítulos realizados por la comunidad de Amara.org'), '');
+  assert.equal(sanitizeSttNoiseTranscript('Avanzamos el radier al 80%'), 'Avanzamos el radier al 80%');
+});

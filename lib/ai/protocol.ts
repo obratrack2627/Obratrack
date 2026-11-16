@@ -449,7 +449,7 @@ export function validateAction(raw: any): AIAction {
   }
   if (a.tipo === "registrar_imprevisto") {
     required("descripcion");
-    if (!a.asistencia_id) amount(a.monto, "el costo del imprevisto");
+    if (!a.asistencia_id) amount(a.monto, "el costo del imprevisto", true);
   }
   if (a.tipo === "crear_bitacora") {
     required("titulo");

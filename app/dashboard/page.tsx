@@ -524,7 +524,7 @@ export default function DashboardPage() {
           <div className="h-52 w-full flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart aria-hidden="true" accessibilityLayer={false} tabIndex={-1}>
-                <Pie
+                <Pie rootTabIndex={-1}
                   data={pieDataRentabilidad}
                   cx="50%"
                   cy="50%"
