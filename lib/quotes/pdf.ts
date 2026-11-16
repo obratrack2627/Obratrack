@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { drawObraTrackWordmarkPdf } from '@/lib/brand-pdf';
 import { quoteMoney, type QuoteDocument } from './document';
 
 const ORANGE = '#FF6A00';
@@ -11,24 +12,7 @@ const LOGO_DATA_URL_RE = /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]
 
 // Logo vectorial: conserva nitidez al ampliar, sin imágenes ni servicios externos.
 function logo(pdf: jsPDF, x: number, y: number, subtitle?: string) {
-  const s = 0.1;
-  const line = (points: [number, number][], color: string, width: number) => {
-    pdf.setDrawColor(color).setLineWidth(width * s);
-    for (let i = 1; i < points.length; i++) pdf.line(x + points[i - 1][0] * s, y + points[i - 1][1] * s, x + points[i][0] * s, y + points[i][1] * s);
-  };
-  pdf.setDrawColor(ORANGE).setLineWidth(0.6).circle(x + 1.6, y + 10.6, 0.65);
-  line([[22.5, 106], [58, 106]], ORANGE, 7);
-  line([[23, 100], [23, 44], [68, 12], [112, 44], [112, 68]], ORANGE, 7.5);
-  pdf.setFillColor(INK);
-  for (const [rx, ry, rw, rh] of [[36, 52, 13, 46], [53, 32, 15, 66], [72, 46, 13, 52]]) pdf.rect(x + rx * s, y + ry * s, rw * s, rh * s, 'F');
-  line([[52, 98], [74, 116], [126, 62]], '#6B8F72', 9);
-  pdf.setFont('helvetica', 'bold').setFontSize(19).setTextColor(ORANGE);
-  pdf.text('Obra', x + 15, y + 8.7);
-  const wordWidth = pdf.getTextWidth('Obra');
-  pdf.setTextColor(INK).text('Track', x + 15 + wordWidth, y + 8.7);
-  pdf.setFont('helvetica', 'normal').setFontSize(4.9).setTextColor(GRAY);
-  const caption = pdf.splitTextToSize(subtitle || 'CONTROL · COTIZACIONES · COSTOS · PAGOS · AVANCES', 105)[0] || '';
-  pdf.text(caption, x + 15, y + 12);
+  drawObraTrackWordmarkPdf(pdf, x, y, subtitle);
 }
 
 function drawBrand(pdf: jsPDF, document: QuoteDocument, x: number, y: number, compact = false) {

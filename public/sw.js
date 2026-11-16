@@ -20,8 +20,8 @@ self.addEventListener('push', (event) => {
     ? payload.title.trim()
     : 'ObraTrack';
   const body = typeof payload.body === 'string' ? payload.body : '';
-  const icon = payload.icon || '/app-icons/obratrack-mobile-v3-192.png';
-  const badge = payload.badge || '/app-icons/obratrack-mobile-v3-192.png';
+  const icon = payload.icon || '/app-icons/obratrack-mobile-v3-192.png?v=4';
+  const badge = payload.badge || '/app-icons/obratrack-mobile-v3-192.png?v=4';
   const url = typeof payload.url === 'string' && payload.url.startsWith('/')
     ? payload.url
     : '/dashboard';

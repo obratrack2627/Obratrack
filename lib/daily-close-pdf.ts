@@ -1,4 +1,5 @@
 import type { DailyClose } from "./daily-close";
+import { drawObraTrackMark } from "./brand-pdf";
 import { formatCLP, formatDate } from "./utils";
 
 export function dailyCloseFilename(summary: DailyClose) {
@@ -21,6 +22,7 @@ export async function createDailyClosePDF(summary: DailyClose) {
   const orange: [number, number, number] = [255, 106, 0];
   pdf.setFillColor(...navy);
   pdf.rect(0, 0, 210, 49, "F");
+  drawObraTrackMark(pdf, 181, 8, 0.11, "dark", "#141A23");
   pdf.setTextColor(...orange);
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(10);

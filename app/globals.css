@@ -163,7 +163,11 @@ html[data-mobile-nav-open] .obrabot-launcher {
 }
 
 .pdf-paper .logo-carbon-bar {
-  fill: #1E1E1E !important;
+  fill: #222A37 !important;
+}
+
+.pdf-paper .logo-carbon-text {
+  color: #222A37 !important;
 }
 
 /* Soporte Dark Mode automático para elementos estándar (excluyendo .pdf-paper) */

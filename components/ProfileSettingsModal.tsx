@@ -659,7 +659,7 @@ export default function ProfileSettingsModal({
                   </div>
 
                   {/* Vista previa membrete blanco (como en A4/PDF) */}
-                  <div className="rounded-xl border border-gray-200 bg-white p-4 text-gray-900 shadow-xs">
+                  <div className="pdf-paper rounded-xl border border-gray-200 bg-white p-4 text-gray-900 shadow-xs">
                     <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       Vista previa en encabezado de cotización
                     </p>

@@ -2,7 +2,7 @@ import { createECDH } from "node:crypto";
 import webPush from "web-push";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-export const PUSH_ICON_PATH = "/app-icons/obratrack-mobile-v3-192.png";
+export const PUSH_ICON_PATH = "/app-icons/obratrack-mobile-v3-192.png?v=4";
 
 export const PUSH_CATEGORIES = [
   "inicio_plazos",
