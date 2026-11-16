@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
+import { notifyPushOnScheduleChange } from "@/lib/push/events";
 export async function POST(
   request: NextRequest,
   { params: parameters }: { params: Promise<{ id: string }> },
@@ -23,7 +24,7 @@ export async function POST(
       );
     const project = await client
       .from("proyectos")
-      .select("id")
+      .select("id,nombre")
       .eq("id", params.id)
       .eq("empresa_id", user.empresa_id)
       .maybeSingle();
@@ -81,6 +82,15 @@ export async function POST(
             ? "Completa las partidas antes de registrar la recepción."
             : "No se pudo confirmar el registro. Revisa los datos y reintenta.";
       throw new AIError("GESTION_SAVE", message, 409);
+    }
+    if (body.operacion === "reprogramar") {
+      notifyPushOnScheduleChange(client, {
+        empresaId: user.empresa_id,
+        projectId: params.id,
+        projectName: project.data.nombre,
+        motivo: typeof body.motivo === "string" ? body.motivo : undefined,
+        actorId: user.id,
+      });
     }
     return NextResponse.json({ registro: result.data });
   } catch (error) {

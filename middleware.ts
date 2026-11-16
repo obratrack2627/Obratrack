@@ -13,6 +13,7 @@ const PUBLIC_PAGES = [
   '/manifest.webmanifest',
   '/icon.svg',
   '/favicon.ico',
+  '/sw.js',
 ];
 
 // Endpoints de API específicamente públicos (ej. webhooks externos de Meta o Flow)

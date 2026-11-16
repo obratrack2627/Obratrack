@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import PwaSplash from './PwaSplash';
 import { usePathname } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import CloudSync from '@/components/CloudSync';
@@ -27,6 +28,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeProvider>
+      <PwaSplash />
       <InstalledAppTheme />
       <AppNavigation />
       {isAuthPage ? (

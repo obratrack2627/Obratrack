@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import {
   AlertCircle,
+  Bell,
   Building2,
   Check,
   FileText,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import ModalOverlay from '@/components/ModalOverlay';
 import Logo from '@/components/Logo';
+import PushNotificationsControl from '@/components/PushNotificationsControl';
 import { dataService } from '@/lib/data-service';
 import { aiHeaders } from '@/lib/ai/client';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
@@ -24,11 +26,12 @@ import type { Empresa, EmpresaConfiguracion, Usuario } from '@/types/database';
 
 interface ProfileSettingsModalProps {
   isOpen: boolean;
+  initialTab?: ProfileTab;
   onClose: () => void;
   onRequestChangePassword?: () => void;
 }
 
-type ProfileTab = 'perfil' | 'empresa' | 'cotizaciones';
+type ProfileTab = 'perfil' | 'empresa' | 'cotizaciones' | 'notificaciones';
 
 const MAX_RAW_LOGO_BYTES = 5 * 1024 * 1024;
 const MAX_LOGO_WIDTH = 420;
@@ -92,10 +95,11 @@ async function resizeLogoToDataUrl(file: File): Promise<string> {
 
 export default function ProfileSettingsModal({
   isOpen,
+  initialTab = 'perfil',
   onClose,
   onRequestChangePassword,
 }: ProfileSettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<ProfileTab>('perfil');
+  const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab);
   const [loadingRemote, setLoadingRemote] = useState(false);
   const [saving, setSaving] = useState(false);
   const [processingLogo, setProcessingLogo] = useState(false);
@@ -167,7 +171,7 @@ export default function ProfileSettingsModal({
     if (!isOpen) return;
     let active = true;
     dirtyRef.current = false;
-    setActiveTab('perfil');
+    setActiveTab(initialTab);
     setError('');
     setSuccessMsg('');
     if (closeTimerRef.current) {
@@ -207,7 +211,7 @@ export default function ProfileSettingsModal({
         closeTimerRef.current = null;
       }
     };
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
 
   if (!isOpen) return null;
 
@@ -363,6 +367,7 @@ export default function ProfileSettingsModal({
     { id: 'perfil', label: 'Mi Perfil', icon: User },
     { id: 'empresa', label: 'Empresa y Logo', icon: Building2 },
     { id: 'cotizaciones', label: 'Cotizaciones y Cobros', icon: FileText },
+    { id: 'notificaciones', label: 'Notificaciones', icon: Bell },
   ];
 
   const inputClass =
@@ -402,7 +407,7 @@ export default function ProfileSettingsModal({
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-[#0D1117]/60 px-6 pt-2.5">
+        <div className="flex gap-1 overflow-x-auto border-b border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-[#0D1117]/60 px-6 pt-2.5">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const selected = activeTab === tab.id;
@@ -654,7 +659,7 @@ export default function ProfileSettingsModal({
                   </div>
 
                   {/* Vista previa membrete blanco (como en A4/PDF) */}
-                  <div className="rounded-xl border border-gray-200 bg-white p-4 text-gray-900 shadow-xs">
+                  <div className="pdf-paper rounded-xl border border-gray-200 bg-white p-4 text-gray-900 shadow-xs">
                     <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
                       Vista previa en encabezado de cotización
                     </p>
@@ -926,9 +931,11 @@ export default function ProfileSettingsModal({
                 </p>
               </div>
             )}
+
+            {activeTab === 'notificaciones' && <PushNotificationsControl />}
           </div>
 
-          {/* Footer / Feedback */}
+          {activeTab !== 'notificaciones' && (
           <div className="border-t border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-[#0D1117]/60 px-6 py-4 space-y-3">
             {error && (
               <div
@@ -968,6 +975,7 @@ export default function ProfileSettingsModal({
               </button>
             </div>
           </div>
+          )}
         </form>
       </div>
     </ModalOverlay>

@@ -9,13 +9,13 @@ import type { Presupuesto } from '@/lib/presupuestos';
 
 export default function QuoteProjectProposal({ quote, projectId }: { quote: CotizacionEstimacion; projectId?: string | null }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [dismissed, setDismissed] = useState(false);
-  const [created, setCreated] = useState<{ id: string; nombre: string } | null>(null);
+  const [created, setCreated] = useState<{ id: string; nombre: string; whatsappSent?: boolean } | null>(null);
   const [gantt, setGantt] = useState(true), [materials, setMaterials] = useState(true);
   if (!['admin', 'supervisor'].includes(dataService.getActiveUser()?.rol || '') || dismissed) return null;
   if (projectId) return <p className="mt-3 text-xs text-gray-500">Presupuesto asociado a una obra. <Link className="text-obra-orange underline" href={`/proyectos/${projectId}/gantt`}>Abrir Carta Gantt</Link></p>;
   const phases = quote.actividades_gantt.length ? quote.actividades_gantt : [{ nombre: 'Ejecutar alcance presupuestado', dias: quote.duracion_dias_estimada }];
   return <section aria-label="Crear obra desde cotización" className="mt-3 rounded-xl border border-orange-200 dark:border-orange-900 bg-orange-50/50 dark:bg-orange-950/20 p-3 space-y-3 text-sm">
-    {created ? <><p className="font-semibold">Obra guardada: {created.nombre}</p><Link className="text-obra-orange underline font-semibold" href={`/proyectos/${created.id}/gantt`}>Abrir obra y Carta Gantt</Link></> : <>
+    {created ? <><p className="font-semibold">Obra guardada: {created.nombre}</p>{created.whatsappSent && <p className="text-xs text-emerald-700 dark:text-emerald-400">También enviamos la cotización en PDF a tu WhatsApp.</p>}<Link className="text-obra-orange underline font-semibold" href={`/proyectos/${created.id}/gantt`}>Abrir obra y Carta Gantt</Link></> : <>
       <p className="font-semibold">¿Quieres crear la obra con esta cotización?</p>
       <div className="flex flex-wrap gap-3 text-xs"><label className="flex gap-2 items-center"><input type="checkbox" checked={gantt} onChange={(e) => setGantt(e.target.checked)} disabled={busy} />Usar Gantt sugerido</label><label className="flex gap-2 items-center"><input type="checkbox" checked={materials} onChange={(e) => setMaterials(e.target.checked)} disabled={busy} />Añadir materiales ({quote.materiales.length})</label></div>
       <details className="text-xs"><summary className="cursor-pointer">Revisar Gantt sugerido</summary><ol className="list-decimal ml-5 mt-2 space-y-1">{phases.map((phase, i) => <li key={i}>{phase.nombre} · {phase.dias} día(s)</li>)}</ol><p className="mt-2 text-gray-500">Podrás ajustar las fechas y partidas en la obra.</p></details>
@@ -31,7 +31,7 @@ export default function QuoteProjectProposal({ quote, projectId }: { quote: Coti
           const response = await fetch('/api/presupuestos/convertir', { method: 'POST', headers, body: JSON.stringify({ id: row.id, updated_at: row.updated_at, incluir_gantt: gantt, incluir_materiales: materials }) });
           const result = await response.json();
           if (!response.ok) throw new Error(result.error || 'No se pudo crear la obra. Puedes reintentar.');
-          setCreated(result.proyecto);
+          setCreated({ ...result.proyecto, whatsappSent: Boolean(result.whatsapp_pdf_enviado) });
           const refresh = await dataService.pullFromCloudServer();
           if (!refresh.success) setError('La obra está guardada en la nube. Actualiza la página para cargarla.');
         } catch (e) { setError((e as Error).message); } finally { setBusy(false); }

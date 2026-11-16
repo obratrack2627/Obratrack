@@ -16,19 +16,19 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ['business', 'productivity', 'finance'],
     icons: [
       {
-        src: '/app-icons/obratrack-mobile-v3-192.png',
+        src: '/app-icons/obratrack-mobile-v3-192.png?v=4',
         sizes: '192x192',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/app-icons/obratrack-mobile-v3-512.png',
+        src: '/app-icons/obratrack-mobile-v3-512.png?v=4',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/app-icons/obratrack-mobile-v3-512.png',
+        src: '/app-icons/obratrack-mobile-v3-512.png?v=4',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',

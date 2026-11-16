@@ -333,3 +333,39 @@ test('buscar cemento no mezcla jabón ni tapas color cemento con el material de 
   const offers=parseCatalogProducts(rows,p,{producto:'cemento'});
   assert.equal(offers.length,1); assert.equal(offers[0].nombre,'Cemento especial 25kg');
 });
+
+test('buscar látex blanco descarta globos/guantes y compareQuoteMaterials consulta los materiales de la cotización', async () => {
+  const { compareQuoteMaterials } = require('../lib/materials/catalog.ts');
+  const { materialBatchComparisonWhatsApp } = require('../lib/whatsapp/format.ts');
+  const p = catalogProviders[0];
+  const rows = [
+    product(p, { product: { productName: 'Globos De Látex Blanco Mate' }, item: { itemId: 'globo', nameComplete: 'Globos De Látex Blanco Mate' } }),
+    product(p, { product: { productName: 'Pintura Látex Blanco Interior' }, item: { itemId: 'pintura', nameComplete: 'Pintura Látex Blanco Interior' } }),
+  ];
+  const filtered = parseCatalogProducts(rows, p, { producto: 'látex blanco' });
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].id, `${p.cuenta}:pintura`);
+
+  const batch = await compareQuoteMaterials(
+    [
+      { nombre: 'Látex blanco', cantidad: 30, unidad: 'm2' },
+      { nombre: 'Conjunto de lija y cinta', cantidad: 1, unidad: 'gl' },
+    ],
+    { ubicacion: 'La Florida', tiendas: ['Easy'] },
+    async (url) => {
+      const ft = (new URL(url).searchParams.get('ft') || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const name = ft.includes('latex')
+        ? 'Pintura Látex Blanco Galón'
+        : ft.includes('lija')
+          ? 'Lija al agua Grano 120'
+          : 'Cinta Enmascarar 24mm';
+      return new Response(JSON.stringify([product(p, { product: { productName: name }, item: { itemId: ft, nameComplete: name } })]));
+    },
+  );
+  assert.equal(batch.length, 3);
+  const waText = materialBatchComparisonWhatsApp(batch, 'La Florida');
+  assert.match(waText, /Pintura Látex Blanco Galón/);
+  assert.match(waText, /Lija al agua Grano 120/);
+  assert.match(waText, /Cinta Enmascarar 24mm/);
+  assert.match(waText, /La Florida/);
+});

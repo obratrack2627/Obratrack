@@ -1696,3 +1696,129 @@ test('borradores antiguos con más de 12 horas caducan y si falla PDF tras envia
   assert.equal(sent[0], 'Cierre OK');
   assert.match(sent[1], /no pude enviar el PDF/);
 });
+
+test('al aceptar una cotización por WhatsApp el webhook genera y envía el PDF oficial al usuario', async () => {
+  setup();
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const q = normalizeQuote({
+    id: 'quote-accepted-pdf',
+    titulo_proyecto: 'Cobertizo Acceso Norte',
+    comuna_region: 'Providencia',
+    cliente_nombre: 'Inmobiliaria Sur',
+    cliente_email: 'contacto@inmosur.test',
+    materiales: [{ nombre: 'Perfil 100x50', cantidad: 6, unidad: 'un', precio_unitario_estimado: 18500 }],
+    mano_de_obra: [{ rol: 'Maestro soldador', cantidad_personas: 1, dias_estimados: 2, valor_jornal_diario: 50000 }],
+  });
+  const sb = database();
+  sb.db.empresas = [{ id: user.empresa_id, plan_id: 'pro_ia', nombre: 'Constructora Norte SpA', rut: '76.111.222-3' }];
+  sb.db.presupuestos = [{ id: 'wa:accept-pdf', empresa_id: user.empresa_id, cotizacion: q, proyecto_id: 'obra-1', estado: 'aprobada' }];
+  let marked = false;
+  const from = sb.from.bind(sb);
+  sb.from = (table) => { const query = from(table); query.update = () => { marked = true; return query; }; return query; };
+  const sent = [];
+  const handler = createWhatsAppWebhook({
+    client: () => sb,
+    process: async () => ({
+      persistido: true,
+      actor_id: user.id,
+      empresa_id: user.empresa_id,
+      respuesta: 'Obra creada desde cotización.',
+      acciones: { tipo: 'crear_proyecto_completo', presupuesto_cotizacion_id: 'wa:accept-pdf' },
+    }),
+    send: async (_to, text) => { sent.push({ type: 'text', text }); },
+    sendDocument: async (to, bytes, filename, caption) => {
+      assert.equal(to, '56912345678');
+      assert.equal(Buffer.from(bytes).subarray(0, 5).toString(), '%PDF-');
+      assert.match(filename, /Cobertizo_Acceso_Norte\.pdf$/);
+      assert.match(caption, /Cotización aprobada · Cobertizo Acceso Norte/);
+      sent.push({ type: 'pdf', filename });
+    },
+  });
+  const res = await handler(request(event([{ id: 'accept-quote-1', from: '56912345678', type: 'text', text: { body: '1' } }])));
+  assert.equal(res.status, 200);
+  assert.equal(marked, true);
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0].type, 'text');
+  assert.equal(sent[1].type, 'pdf');
+});
+
+test('WhatsApp conecta RAG con referencias de empresa y responde "Buscalos" consultando tiendas de la cotización', async () => {
+  setup();
+  process.env.OBRABOT_RAG_ENABLED = 'true';
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const q = normalizeQuote({
+    titulo_proyecto: 'Pintura habitación',
+    comuna_region: 'La Florida',
+    materiales: [{ nombre: 'Esmalte al agua blanco', cantidad: 2, unidad: 'un', precio_unitario_estimado: 15000 }],
+    mano_de_obra: [],
+  });
+
+  // 1) Verifica que al cotizar por WhatsApp se invoca retrieveReferences con companyId y llega al modelo.
+  const sbRag = database();
+  let seenContext = null;
+  await processPersonalMessage(
+    sbRag,
+    { id: 'wa-rag-1', from: '56912345678', type: 'text', text: { body: 'Cotiza pintar una pieza de 25 m2' } },
+    {
+      retrieveReferences: async (_sb, _q, _role, opts) => {
+        assert.equal(opts.companyId, user.empresa_id);
+        return [{ source_type: 'apu', source_id: 'apu-pintura', referencia: { nombre: 'Pintura', rendimiento: 25 }, uso: 'Referencia histórica aprobada de tu empresa' }];
+      },
+      chat: async (_h, _t, ctx) => {
+        seenContext = ctx;
+        return { respuesta: 'Cotización lista.', accion: null, cotizacion: q };
+      },
+    },
+  );
+  assert.equal(seenContext.referencias_semanticas.length, 1);
+  assert.equal(seenContext.referencias_semanticas[0].source_id, 'apu-pintura');
+
+  // 2) Verifica que al responder "Buscalos" tras ofrecer búsqueda de tiendas consulta compareQuoteMaterials.
+  const sbSearch = database();
+  sbSearch.db.whatsapp_mensajes = [{
+    message_id: 'prev-quote',
+    empresa_id: user.empresa_id,
+    actor_id: user.id,
+    cotizacion: q,
+    respuesta: 'Puedo comparar ahora el esmalte al agua en tiendas disponibles. ¿Quieres que los busque?',
+    texto: 'Por qué no fueron consultados',
+    acciones: { rol_actor: 'admin' },
+  }];
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('easycl.')) {
+      return new Response(JSON.stringify([{
+        productName: 'Esmalte al Agua Blanco 1 Galón',
+        brand: 'Ceresita',
+        link: 'https://www.easy.cl/esmalte-agua/p',
+        items: [{ itemId: 'esm-1', nameComplete: 'Esmalte al Agua Blanco 1 Galón', measurementUnit: 'un', unitMultiplier: 1, sellers: [{ sellerDefault: true, commertialOffer: { Price: 18990, AvailableQuantity: 8 } }] }],
+      }]));
+    }
+    return new Response('[]');
+  };
+  try {
+    const out = await processPersonalMessage(
+      sbSearch,
+      { id: 'wa-buscalos', from: '56912345678', type: 'text', text: { body: 'Buscalos' } },
+    );
+    assert.match(out.respuesta, /\*Precios de materiales\*/);
+    assert.match(out.respuesta, /Esmalte al Agua Blanco 1 Galón/);
+    assert.match(out.respuesta, /\$18\.990/);
+    assert.match(out.respuesta, /https:\/\/www\.easy\.cl\/esmalte-agua\/p/);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test('conflicto de versión en WhatsApp no publica notificaciones de cambios rechazados',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'qa-conflict',empresa_id:'empresa1',nombre:'Obra Norte',estado:'activo',monto_cotizado:100000,sync_version:1}];
+ const push=require('../lib/push/events.ts');const original=push.notifyPushOnWhatsAppChanges;const events=[];
+ push.notifyPushOnWhatsAppChanges=(_client,event)=>events.push(event);
+ const rpc=sb.rpc.bind(sb);let rejected=false;
+ sb.rpc=async(name,p)=>{if(name==='aplicar_lote_copiloto'&&p.p_changed.proyectos?.length){rejected=true;return {data:null,error:{message:'SYNC_CONFLICT'}};}return rpc(name,p);};
+ try{
+  const result=await processPersonalMessage(sb,{id:'qa-rejected-change',from:'56912345678',type:'text',text:{body:'Cancela la obra Obra Norte'}},{chat:async()=>{throw Error('No debe llamar al modelo');}});
+  assert.equal(rejected,true);assert.match(result.respuesta,/No apliqué los cambios/);assert.equal(sb.db.proyectos[0].estado,'activo');
+  for(const event of events){assert.deepEqual(event.changed,{});assert.equal(event.result,null);assert.equal(event.campaign,undefined);}
+ }finally{push.notifyPushOnWhatsAppChanges=original;}
+});

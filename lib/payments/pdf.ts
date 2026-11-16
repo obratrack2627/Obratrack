@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { ResumenEstadoPago } from '@/lib/edp-calculator';
 import type { Actividad } from '@/types/database';
+import { drawObraTrackWordmarkPdf } from '@/lib/brand-pdf';
 import { quoteMoney } from '@/lib/quotes/document';
 
 const LOGO_DATA_URL_RE = /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i;
@@ -55,7 +56,11 @@ export function paymentPdf(input: {
     }
   }
   if (!drewCustomLogo) {
-    pdf.setFont('helvetica', 'bold').setFontSize(22).setTextColor('#FF6A00').text(input.emisor?.empresa || 'ObraTrack', 14, 21);
+    if (!input.emisor?.empresa || input.emisor.empresa === 'ObraTrack' || input.emisor.empresa === 'Emitido con ObraTrack') {
+      drawObraTrackWordmarkPdf(pdf, 14, 11, input.emisor?.giro || undefined);
+    } else {
+      pdf.setFont('helvetica', 'bold').setFontSize(22).setTextColor('#FF6A00').text(input.emisor.empresa, 14, 21);
+    }
   }
   pdf.setFont('helvetica', 'bold').setFontSize(13).setTextColor('#1E1E1E').text('ESTADO DE PAGO ' + input.resumen.folio, 14, headerStartY);
   autoTable(pdf, { startY: headerStartY + 5, head: [['OBRA', 'CLIENTE', 'FECHA']], body: [[input.nombre, input.cliente, input.fecha]], theme: 'grid', headStyles: { fillColor: '#1E1E1E' }, styles: { fontSize: 9 } });

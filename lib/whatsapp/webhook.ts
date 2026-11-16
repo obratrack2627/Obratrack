@@ -7,6 +7,7 @@ import { processPersonalMessage } from "@/lib/whatsapp/assistant";
 import { DEFAULT_WHATSAPP_BURST, type WhatsAppBurstConfig } from "@/lib/whatsapp/burst";
 import { sendMetaText, sendMetaDocument, validMetaSignature } from "@/lib/whatsapp/meta";
 import { dailyCloseDocument } from './daily-close-document';
+import { quotePdfDocument } from './quote-document';
 import { receiveDeliveryStatus } from "./outbox";
 
 export function whatsappConfigured() {
@@ -140,6 +141,22 @@ export function createWhatsAppWebhook(
                     .send(
                       message.from,
                       "El cierre quedó guardado en ObraTrack, pero no pude enviar el PDF aquí. Descárgalo desde Documentos.",
+                    )
+                    .catch(() => {});
+                }
+                stage = 'quote_pdf';
+                try {
+                  const document = await quotePdfDocument(sb, result, message.from);
+                  if (document) await deps.sendDocument(message.from, document.bytes, document.filename, document.caption);
+                } catch (docError) {
+                  console.error("whatsapp_document_send_failure", {
+                    stage,
+                    code: aiErrorResponse(docError).code,
+                  });
+                  await deps
+                    .send(
+                      message.from,
+                      "La cotización quedó aprobada en ObraTrack, pero no pude enviar el PDF aquí. Descárgalo desde ObraTrack → Presupuestos.",
                     )
                     .catch(() => {});
                 }

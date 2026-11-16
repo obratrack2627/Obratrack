@@ -3,10 +3,12 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { AIError } from './errors';
 
 type Actor = {id:string;empresa_id:string};
-type Scope = {actor?:Actor;channel:'web'|'whatsapp'};
+type Scope = {actor?:Actor;channel:'web'|'whatsapp';background?:Array<()=>void>};
 const scope=new AsyncLocalStorage<Scope>();
 export function withAIRequest<H extends (...args:any[])=>any>(handler:H,channel:'web'|'whatsapp'='web'):H {
- return ((...args:Parameters<H>)=>scope.run({channel},()=>handler(...args))) as H;
+ return ((...args:Parameters<H>)=>scope.run({channel,background:[]},async()=>{
+  try{return await handler(...args);}finally{for(const work of scope.getStore()?.background||[])try{work();}catch{console.warn('obrabot_background_failed');}}
+ })) as H;
 }
 export function setAIUsageActor(actor:Actor){const current=scope.getStore();if(current)current.actor={id:actor.id,empresa_id:actor.empresa_id};}
 
@@ -40,3 +42,5 @@ export async function reserveAIUsage(units:number,kind:'generation'|'audio'|'emb
   }catch{console.warn('obrabot_usage_settlement_failed');}
  };
 }
+
+export function afterAIResponse(work:()=>void){const current=scope.getStore();if(current)current.background?.push(work);else work();}

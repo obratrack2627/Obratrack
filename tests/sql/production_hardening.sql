@@ -16,7 +16,7 @@ BEGIN
  result:=public.sincronizar_lote_web('80000000-0000-4000-a000-000000000010',ops,'{}');
  IF NOT (result->>'success')::boolean OR NOT EXISTS(SELECT 1 FROM public.proyecto_trabajadores WHERE proyecto_id='qa-hard-p' AND usuario_id='qa-hard-worker') THEN RAISE EXCEPTION 'SYNC_CREATE_FAILED'; END IF;
  replay:=public.sincronizar_lote_web('80000000-0000-4000-a000-000000000010',ops,'{}');
- IF replay<>result THEN RAISE EXCEPTION 'REPLAY_CHANGED_RESULT'; END IF;
+ IF (replay-'replayed')<>result OR replay->>'replayed'<>'true' THEN RAISE EXCEPTION 'REPLAY_CHANGED_RESULT'; END IF;
  SELECT sync_version INTO revision FROM public.proyectos WHERE id='qa-hard-p';
  versions:=jsonb_build_object('proyectos',jsonb_build_object('qa-hard-p',revision));
  ops:='[{"table":"proyectos","kind":"update","filters":[{"column":"id","values":["qa-hard-p"]}],"row":{"nombre":"No debe quedar"}},{"table":"proyecto_trabajadores","kind":"delete","filters":[{"column":"proyecto_id","values":["qa-hard-p"]}]},{"table":"proyecto_trabajadores","kind":"upsert","filters":[],"row":{"proyecto_id":"qa-hard-p","usuario_id":"qa-hard-foreign"}}]';

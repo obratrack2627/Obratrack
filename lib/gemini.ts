@@ -13,6 +13,7 @@ import {
   isQuoteRequest,
   isQuoteRevision,
   isMaterialPriceRequest,
+  isFollowUpMaterialSearch,
   materialSearchPrompt,
   isAlternativeRequest,
   hasNonSearchTask,
@@ -26,9 +27,11 @@ import {
 } from "@/lib/ai/schema";
 import {
   compareMaterialPrices,
+  compareQuoteMaterials,
   completePurchaseQuantity,
 } from "@/lib/materials/catalog";
-import { formatMaterialComparison } from "@/lib/materials/format";
+import { formatMaterialComparison, formatBatchMaterialComparison } from "@/lib/materials/format";
+import { isMaterialComparison } from "@/lib/materials/types";
 import { quoteSummaryText } from "@/lib/ai/quote-format";
 
 // Alias histórico para los imports existentes; el único motor es OpenAI.
@@ -64,13 +67,20 @@ export function chatGenerationRequest(
   historial: { rol: "user" | "model"; texto: string }[], mensajeUsuario: string,
   contextoDB: Record<string, any> = {}, options: ChatGenerationOptions = {},
 ) {
+  const followUpSearch = isFollowUpMaterialSearch(
+    mensajeUsuario,
+    historial,
+    Boolean(contextoDB.cotizacion_actual),
+  );
   const quote =
     !requestsPlatformAction(mensajeUsuario) &&
     !isMaterialPriceRequest(mensajeUsuario) &&
+    !followUpSearch &&
     (isQuoteRequest(mensajeUsuario) ||
       Boolean(contextoDB.cotizacion_actual && (isQuoteRevision(mensajeUsuario) || isAlternativeRequest(mensajeUsuario))));
   const priceSearch =
     isMaterialPriceRequest(mensajeUsuario) ||
+    followUpSearch ||
     (/^(?:y |ahora (?:el|la|los|las) |(?:el|la|los|las) de )/i.test(
       mensajeUsuario,
     ) &&
@@ -112,6 +122,46 @@ export async function chatAsesorObrasGemini(
   contextoDB: Record<string, any> = {},
   options: ChatGenerationOptions = {},
 ) {
+  const quoteContext = contextoDB.cotizacion_actual;
+  const followUpQuoteSearch =
+    quoteContext?.materiales?.length &&
+    !hasNonSearchTask(mensajeUsuario) &&
+    !requestsPlatformAction(mensajeUsuario) &&
+    isFollowUpMaterialSearch(mensajeUsuario, historial, true);
+  if (followUpQuoteSearch) {
+    const items = await compareQuoteMaterials(quoteContext.materiales, {
+      ubicacion: quoteContext.comuna_region,
+      tiendas: contextoDB.preferencias_conversacion?.tiendas,
+    });
+    if (items.length) {
+      const responseText = formatBatchMaterialComparison(items, quoteContext.comuna_region);
+      const flatOffers = items.flatMap((it) => it.comparison.ofertas.slice(0, 3)).slice(0, 12);
+      const consolidated = {
+        consulta: {
+          producto: items.map((it) => it.label).join(", ").slice(0, 150),
+          ...(quoteContext.comuna_region && quoteContext.comuna_region !== "Por definir"
+            ? { ubicacion: quoteContext.comuna_region }
+            : {}),
+        },
+        consultado_en: items[0].comparison.consultado_en,
+        resumen: `Precios reales consultados en tiendas para ${items.length} ${items.length === 1 ? "material" : "materiales"} de «${quoteContext.titulo_proyecto}».`,
+        ofertas: flatOffers,
+        proveedores: items[0].comparison.proveedores.slice(0, 7),
+        mejores_ids: items.flatMap((it) => it.comparison.mejores_ids).slice(0, 12),
+      };
+      return {
+        respuesta: responseText,
+        accion: null,
+        cotizacion: null,
+        comparaciones_materiales: items,
+        ...(isMaterialComparison(consolidated) ? { comparacion_materiales: consolidated } : {}),
+        sugerencias: [
+          "Cotiza otra alternativa con estos materiales",
+          "Crea la obra con la cotización",
+        ],
+      };
+    }
+  }
   const request = chatGenerationRequest(historial, mensajeUsuario, contextoDB, options);
   const pureSearchOnly = request.pureSearchOnly;
   const result = await generateValidatedChat(request.input, mensajeUsuario, contextoDB, request.options);

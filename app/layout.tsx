@@ -41,9 +41,12 @@ export const metadata: Metadata = {
     'Control, Cotizaciones, Costos, Pagos, Avances y Georreferenciación con ObraBot, Google Maps y WhatsApp para constructoras en Chile.',
   manifest: '/manifest.webmanifest',
   icons: {
-    icon: [{ url: '/icon.svg?v=original-dark', type: 'image/svg+xml' }],
+    icon: [
+      { url: '/icon.svg?v=20261116', type: 'image/svg+xml' },
+      { url: '/app-icons/obratrack-mobile-v3-192.png?v=4', sizes: '192x192', type: 'image/png' },
+    ],
     apple: [
-      { url: '/app-icons/obratrack-mobile-v3-180.png', sizes: '180x180', type: 'image/png' },
+      { url: '/app-icons/obratrack-mobile-v3-180.png?v=4', sizes: '180x180', type: 'image/png' },
     ],
   },
   appleWebApp: {
@@ -61,6 +64,7 @@ export const metadata: Metadata = {
 
 const themeInitScript = `
 (function() {
+  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) document.documentElement.classList.add('pwa-installed');
   try {
     var saved = localStorage.getItem('obratrack_theme');
     if (saved === 'dark') {

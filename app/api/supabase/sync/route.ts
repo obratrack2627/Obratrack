@@ -11,6 +11,7 @@ import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 import { loadAIContext, checkedRows } from "@/lib/ai/context";
 import { persistentFile, signRows } from "@/lib/supabase/private-files";
+import { notifyPushOnSyncChanges } from "@/lib/push/events";
 const mapping: Record<string, string> = {
   proyectos: "proyectos",
   clientes: "clientes",
@@ -635,7 +636,9 @@ export async function POST(request: NextRequest) {
       await checked(query,'la eliminación solicitada');
     }
     const requestId = typeof input.request_id === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(input.request_id) ? input.request_id : crypto.randomUUID();
-    return NextResponse.json(await transaction.commit(requestId, Object.fromEntries(Object.entries(input.versiones || {}).map(([key, value]) => [mapping[key] || key, value]))));
+    const confirmed = await transaction.commit(requestId, Object.fromEntries(Object.entries(input.versiones || {}).map(([key, value]) => [mapping[key] || key, value])));
+    if(!confirmed.replayed) notifyPushOnSyncChanges(client,{empresaId,user,body,previousTables:tables});
+    return NextResponse.json(confirmed);
   } catch (err: any) {
     return errorJSON(err);
   }

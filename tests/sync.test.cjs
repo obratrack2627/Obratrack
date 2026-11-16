@@ -621,3 +621,15 @@ test('toggle de compra y pago sincroniza solo el material editado y conserva el 
     [['created_at', true], ['id', true]],
   );
 });
+
+test('push de Sync solo se prepara después del commit y no ante fallo ni replay',async()=>{
+ const push=require('../lib/push/events.ts');const original=push.notifyPushOnSyncChanges;const notices=[];
+ push.notifyPushOnSyncChanges=(_client,args)=>{assert.equal(fixture.tables.get('pagos')?.length,1);notices.push(args);};
+ const payload={cambios:{pagos:[{id:'pay-notice',proyecto_id:'p1',monto:1000,fecha:'2026-11-16',estado:'pagado'}]}};
+ try{
+  fixture.fail('pagos',1,'upsert');assert.notEqual((await POST(request(payload))).status,200);assert.equal(notices.length,0);
+  assert.equal((await POST(request(payload))).status,200);assert.equal(notices.length,1);
+  fixture.handleRPC('sincronizar_lote_web',async()=>({data:{success:true,replayed:true},error:null}));
+  assert.equal((await POST(request(payload))).status,200);assert.equal(notices.length,1);
+ }finally{push.notifyPushOnSyncChanges=original;}
+});

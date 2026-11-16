@@ -50,3 +50,9 @@ test('si la comprobación de cuota falla por red se detiene antes de generar',as
  admin.getSupabaseAdmin=()=>({rpc:()=>Promise.reject(new Error('private connection details'))});
  await assert.rejects(withAIRequest(async()=>{setAIUsageActor({id:'a',empresa_id:'c'});await reserveAIUsage(10,'generation');})(),e=>e.status===503&&!e.message.includes('private'));
 });
+
+test('indexación auxiliar espera el término de la respuesta y no compite con la generación',async()=>{
+ const {afterAIResponse}=require('../lib/ai/usage.ts');const order=[];
+ await withAIRequest(async()=>{afterAIResponse(()=>order.push('index'));order.push('answer');assert.deepEqual(order,['answer']);})();
+ assert.deepEqual(order,['answer','index']);
+});

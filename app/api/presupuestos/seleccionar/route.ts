@@ -4,6 +4,7 @@ import { AIError } from '@/lib/ai/errors';
 import { findBudget, budgetGroup, budgetRPCError } from '@/lib/presupuestos';
 import { loadAIContext } from '@/lib/ai/context';
 import { budgetApplication } from '@/lib/quotes/application';
+import { sendAcceptedQuotePdfToWhatsApp } from '@/lib/whatsapp/quote-document';
 export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
     const payload = budgetApplication(row.cotizacion, project, service.getActividades(), group, body);
     const { data, error } = await client.rpc('seleccionar_presupuesto', { p_id: row.id, p_version: body.updated_at, p_payload: payload, p_tipo: body.tipo || 'principal' });
     if (error) budgetRPCError(error);
-    return NextResponse.json(data);
+    const whatsappPdfSent = await sendAcceptedQuotePdfToWhatsApp(client, { user, cotizacion: row.cotizacion });
+    return NextResponse.json({ ...data, whatsapp_pdf_enviado: whatsappPdfSent });
   } catch (error) { return errorJSON(error); }
 }

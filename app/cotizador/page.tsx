@@ -50,6 +50,7 @@ import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 import { CloudChatHistory } from '@/lib/ai/cloud-chat-history';
 import { aiContext, aiHeaders, requestAI, applyAIResponse } from '@/lib/ai/client';
 import AIMessageTools from '@/components/AIMessageTools';
+import { quoteIntroText } from '@/lib/ai/quote-format';
 
 
 const INITIAL_CHAT_MESSAGE: MensajeChatCotizador = {
@@ -362,10 +363,15 @@ export default function CopilotoObreroPage() {
                       </div>
 
                       {/* Texto del Mensaje con Formato Profesional */}
-                      <ChatMessageFormatter
-                        content={m.comparacion_materiales?.resumen || (m.cotizacion_generada?m.cotizacion_generada.resumen_ejecutivo:m.texto)}
-                        isUser={m.remitente === 'usuario'}
-                      />
+                      {(() => {
+                        const content = m.comparacion_materiales?.resumen || quoteIntroText(m.texto, m.cotizacion_generada);
+                        return content ? (
+                          <ChatMessageFormatter
+                            content={content}
+                            isUser={m.remitente === 'usuario'}
+                          />
+                        ) : null;
+                      })()}
 
                       {/* ============================================================= */}
                       {/* TARJETA INTERACTIVA DE ACCIÓN EJECUTADA POR LA IA */}

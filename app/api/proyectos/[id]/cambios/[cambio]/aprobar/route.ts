@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
+import { notifyPushOnChangeApproval } from "@/lib/push/events";
 export async function POST(
   request: NextRequest,
   { params: parameters }: { params: Promise<{ id: string; cambio: string }> },
@@ -11,7 +12,7 @@ export async function POST(
     const body = await request.json();
     const current = await client
       .from("reclamos_cambios_obra")
-      .select("id")
+      .select("id,titulo")
       .eq("id", params.cambio)
       .eq("proyecto_id", params.id)
       .eq("empresa_id", user.empresa_id)
@@ -35,6 +36,13 @@ export async function POST(
         "No se pudo confirmar la resolución. Reintenta; no se duplicarán los materiales.",
         409,
       );
+    notifyPushOnChangeApproval(client, {
+      empresaId: user.empresa_id,
+      projectId: params.id,
+      projectName: result.data?.nombre,
+      titulo: current.data.titulo,
+      actorId: user.id,
+    });
     return NextResponse.json({ proyecto: result.data });
   } catch (error) {
     return errorJSON(error);

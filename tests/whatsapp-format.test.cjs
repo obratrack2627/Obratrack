@@ -65,3 +65,21 @@ test('una respuesta extensa conserva cada partida y enlace, con continuaciones b
   const restored = chunks.map((c, i) => i === 0 ? c : c.replace(/^_Continuación \d+\/\d+_\n\n/, '')).join('\n\n');
   assert.equal(restored, text);
 });
+
+test('quoteIntroText elimina el resumen duplicado del chatbot web pero conserva consultas previas', () => {
+  const { quoteSummaryText, quoteIntroText } = require('../lib/ai/quote-format.ts');
+  const q = normalizeQuote({
+    titulo_proyecto: 'Ampliación cocina',
+    resumen_ejecutivo: 'Radier e impermeabilización base.',
+    materiales: [{ nombre: 'Cemento', cantidad: 10, unidad: 'saco', precio_unitario_estimado: 4500 }],
+    mano_de_obra: [],
+  });
+  const summary = quoteSummaryText(q);
+  assert.equal(quoteIntroText(summary, q), '');
+  assert.equal(quoteIntroText(q.resumen_ejecutivo, q), '');
+  assert.equal(
+    quoteIntroText('El cemento rinde aprox. 8 sacos por m3.\n\n' + summary, q),
+    'El cemento rinde aprox. 8 sacos por m3.',
+  );
+  assert.equal(quoteIntroText('Respuesta normal sin cotización', null), 'Respuesta normal sin cotización');
+});

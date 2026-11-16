@@ -120,7 +120,8 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
         .quote-paper { box-sizing: border-box; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 12mm; background: white; color: #1e1e1e; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.45; box-shadow: 0 16px 50px #0003; color-scheme: light; }
         .quote-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 18px; }
         .quote-brand { width: 210px; flex-shrink: 0; }
-        .quote-brand .logo-carbon-bar { fill: #1e1e1e !important; }
+        .quote-brand .logo-carbon-bar { fill: #222A37 !important; }
+        .quote-brand .logo-carbon-text { color: #222A37 !important; }
         .quote-brand svg { width: 40px; height: 40px; }
         .quote-brand [class*="text-2xl"] { font-size: 26px; }
         .quote-heading { border-left: 1px solid #ff6a00; padding-left: 20px; min-width: 186px; }

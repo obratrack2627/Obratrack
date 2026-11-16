@@ -1,7 +1,8 @@
+import {afterAIResponse} from './usage';
 import {waitUntil} from '@vercel/functions';
 import {getSupabaseAdmin} from '@/lib/supabase/admin';
 import {embedReference} from './rag';
-export async function indexKnowledge(client:any,company:string,embed=embedReference,limit=3){
+export async function indexKnowledge(client: any, company: string, embed = embedReference, limit = 5) {
  const {data,error}=await client.from('obrabot_knowledge').select('id,content,content_hash').eq('empresa_id',company).is('embedding',null).limit(Math.min(limit,10));
  if(error)throw new Error('RAG_INDEX_READ');let indexed=0;
  for(const row of data||[]){
@@ -13,7 +14,9 @@ export async function indexKnowledge(client:any,company:string,embed=embedRefere
 }
 export function scheduleKnowledgeIndex(company:string){
  if(process.env.OBRABOT_RAG_ENABLED!=='true')return;
- const client=getSupabaseAdmin();if(!client)return;
- const task=indexKnowledge(client,company).catch(()=>0);
- try{waitUntil(task);}catch{/* El índice no bloquea la conversación. */}
+ afterAIResponse(()=>{try{
+  const client=getSupabaseAdmin();if(!client)return;
+  const task=indexKnowledge(client,company,embedReference,1).catch(()=>0);
+  waitUntil(task);
+ }catch{/* El índice no bloquea ni falla la conversación si no hay configuración admin. */}});
 }

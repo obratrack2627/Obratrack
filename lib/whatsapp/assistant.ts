@@ -19,14 +19,18 @@ import { acceptsQuotedProject, requestsQuotedProject, cancelsProjectDraft, resum
 import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib/presupuestos";
 import { budgetApplication } from '@/lib/quotes/application';
 import { chooseBudgetOption } from './budget-options';
-import { isAlternativeRequest } from '@/lib/ai/prompt';
+import { isAlternativeRequest, isQuoteRequest, isQuoteRevision } from '@/lib/ai/prompt';
+import { ragEligible, retrieveReferences } from '@/lib/ai/rag';
+import { scheduleKnowledgeIndex } from '@/lib/ai/rag-index';
+import { learnApuCommand } from '@/lib/ai/apu-learning';
+import { notifyPushOnWhatsAppChanges } from '@/lib/push/events';
 import { AIError } from "@/lib/ai/errors";
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateAI } from "@/lib/ai/provider";
 import { canonicalPhone, downloadMetaMedia } from "./meta";
 import { isolatedState, planWhatsAppActions, mergeWhatsAppPlans } from "./state";
 import { checkActionPermissions } from "@/lib/ai/permissions";
-import { WHATSAPP_BRAND, whatsappCard, whatsappText, quoteWhatsApp, quoteMenuChoice, materialComparisonWhatsApp, photoReceiptWhatsApp, dailyCloseWhatsApp } from "./format";
+import { WHATSAPP_BRAND, whatsappCard, whatsappText, quoteWhatsApp, quoteMenuChoice, materialComparisonWhatsApp, materialBatchComparisonWhatsApp, photoReceiptWhatsApp, dailyCloseWhatsApp } from "./format";
 export { quoteWhatsApp } from "./format";
 import { storeEvidence, evidenceActions } from "./evidence";
 import { projectIntake } from "./project-intake";
@@ -69,6 +73,7 @@ export async function processPersonalMessage(
     transcribe?: typeof generateAI;
     store?: typeof storeEvidence;
     burst?: WhatsAppBurstConfig;
+    retrieveReferences?: typeof retrieveReferences;
   } = {
     chat: chatAsesorObrasGemini,
     media: downloadMetaMedia,
@@ -402,7 +407,7 @@ export async function processPersonalMessage(
   if (menuChoice === 2)
     confirmationResponse = '¿Qué deseas modificar de la cotización? Indica el material, cantidad, precio o margen que quieres cambiar. No se creará una obra con esta opción.';
   if (menuChoice === 3)
-    confirmationResponse = '¿Qué material quieres comparar? Indica presentación y cantidad si las conoces.\n\nPor ejemplo: «Busca el mejor precio de 20 sacos de cemento de 25 kg en Maipú». La búsqueda no compra ni agrega materiales a la obra.';
+    confirmationResponse = '¿Qué material quieres comparar? Indica presentación y cantidad si las conoces.\n\nPor ejemplo: «Busca el mejor precio de 20 sacos de cemento de 25 kg en Maipú», o responde *«búscalos»* para consultar en tiendas los materiales de esta cotización.';
   if (!pendingProject && (chosenBudget || (lastQuoteMessage?.cotizacion && !confirmationResponse && ((history[0]?.cotizacion && (menuChoice === 1 || acceptsQuotedProject(text))) || explicitQuoteCreation)))) {
     const budget = chosenBudget || nativeBudget || await findBudget(sb, user.empresa_id, lastQuoteMessage.cotizacion.id);
     if (!budget) confirmationResponse = 'No se pudo recuperar el presupuesto guardado. Ábrelo en ObraTrack para revisarlo.';
@@ -459,8 +464,38 @@ export async function processPersonalMessage(
         : null;
     localRegistration = !attachment && user.rol !== 'terreno' ? personIntake([], null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios) : null;
     registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
+    const apuLesson = !attachment ? await learnApuCommand(sb, user, text, 'whatsapp') : { handled: false };
+    const apuReply = apuLesson.handled ? { respuesta: apuLesson.respuesta || 'Rendimiento guardado.', accion: null, cotizacion: null, sugerencias: [] } : null;
     const simpleCreation = creationRequest && !attachment && !/[,;\n]|\b(?:y registra|y envia|y asigna)\b/i.test(text) && /(?:obra|proyecto)[.!?]*$/i.test(text.trim());
-    result = projectListing || projectRefusal || (introPause ? { respuesta: introPause.reply, accion: null, cotizacion: null, sugerencias: [] } : acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || await chatFn(
+    const directWhatsAppReply = projectListing || projectRefusal || (introPause ? { respuesta: introPause.reply, accion: null, cotizacion: null, sugerencias: [] } : acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || apuReply);
+    let semanticReferences: any[] = [];
+    let savedBudgetsContext: any[] = [];
+    if (!directWhatsAppReply) {
+      if (ragEligible(text, user.rol)) {
+        scheduleKnowledgeIndex(user.empresa_id);
+        semanticReferences = await (deps.retrieveReferences || retrieveReferences)(sb, text, user.rol, { companyId: user.empresa_id });
+      }
+      if (['admin', 'supervisor'].includes(user.rol) && (isQuoteRequest(text) || isQuoteRevision(text) || isAlternativeRequest(text))) {
+        try {
+          const budgetQuery = sb.from('presupuestos').select('id,proyecto_id,estado,nombre_alternativa,cotizacion').eq('empresa_id', user.empresa_id);
+          const ordered = typeof budgetQuery?.order === 'function' ? budgetQuery.order('created_at', { ascending: false }) : budgetQuery;
+          const limited = typeof ordered?.limit === 'function' ? ordered.limit(8) : ordered;
+          const budgetRes = await limited;
+          if (Array.isArray(budgetRes?.data)) {
+            savedBudgetsContext = budgetRes.data.slice(0, 8).map((b: any) => ({
+              id: b.id,
+              proyecto_id: b.proyecto_id,
+              estado: b.estado,
+              titulo_proyecto: b.cotizacion?.titulo_proyecto || b.nombre_alternativa,
+              total_con_iva: b.cotizacion?.estructura_financiera?.precio_total_con_iva,
+            }));
+          }
+        } catch {
+          // Mantener lista vacía si no se pudo consultar presupuestos en este entorno.
+        }
+      }
+    }
+    result = directWhatsAppReply || await chatFn(
       conversationRows
         .slice()
         .reverse()
@@ -470,6 +505,8 @@ export async function processPersonalMessage(
         ]),
       text,
       {
+        referencias_semanticas: semanticReferences,
+        ...(savedBudgetsContext.length ? { presupuestos_guardados: savedBudgetsContext } : {}),
         preferencias_conversacion: preferences.state.valores,
         operacion_obra: operationsContext(tables, undefined, user.rol, text),
         proyectos: projectContextForRole(service.getProyectos(), user.rol),
@@ -496,7 +533,7 @@ export async function processPersonalMessage(
         ...(image ? { foto_adjunta: true } : {}),
       },
       { onQualityEvent: event => scheduleQualityEvent(sb,user,event,'whatsapp'), budgetMs: !image && batchItems.every((i: any) => i.type === 'text') ? 30000 : 45000, timeoutMs: !image && batchItems.every((i: any) => i.type === 'text') ? 20000 : 40000, ...(image ? { image } : {}) },
-    ));
+    );
     if (image && attachment) attachment.descripcion = result.respuesta;
   } catch (error) {
     if (!attachment) {
@@ -725,8 +762,21 @@ export async function processPersonalMessage(
     response = plan.result
       ? response + `\n\n${quoteWhatsApp(result.cotizacion, user.rol !== "terreno")}`
       : quoteWhatsApp(result.cotizacion, user.rol !== "terreno");
+  const batchComparisons =
+    "comparaciones_materiales" in result &&
+    Array.isArray((result as any).comparaciones_materiales) &&
+    (result as any).comparaciones_materiales.length
+      ? (result as any).comparaciones_materiales
+      : null;
   const comparison = "comparacion_materiales" in result ? result.comparacion_materiales : null;
-  if (isMaterialComparison(comparison)) response = materialComparisonWhatsApp(comparison);
+  if (batchComparisons) {
+    response = materialBatchComparisonWhatsApp(
+      batchComparisons,
+      nativeBudget?.cotizacion?.comuna_region || history.find((m: any) => m.cotizacion)?.cotizacion?.comuna_region,
+    );
+  } else if (isMaterialComparison(comparison)) {
+    response = materialComparisonWhatsApp(comparison);
+  }
   if (attachment && !photoReceipt)
     response += attachment.proyecto_id
       ? `\n\n${photoAttachment ? 'Foto guardada' : 'Archivo guardado'} en la obra y su bitácora.`
@@ -769,6 +819,8 @@ export async function processPersonalMessage(
     p_deleted: versioned.deleted,
     p_adjunto: attachment,
   };
+  let confirmedPlan=plan;
+  let confirmedCampaign=campaign;
   let { data, error } = await sb.rpc("aplicar_lote_copiloto", {
     ...params,
     p_borrador: nextDraft,
@@ -781,6 +833,7 @@ export async function processPersonalMessage(
       : null,
   });
   if(error?.message?.includes('SYNC_CONFLICT')) {
+    confirmedPlan={changed:{},deleted:{},result:null} as typeof plan;confirmedCampaign=undefined;
     const conflict=await sb.rpc('aplicar_lote_copiloto',{...params,p_respuesta:whatsappCard('Cambios pendientes','La obra cambió mientras preparaba tu solicitud. No apliqué los cambios. Revisa el estado actual y vuelve a indicarme qué quieres modificar.'),p_changed:{},p_deleted:{},p_acciones:{rol_actor:user.rol,proyecto_contexto_id:activeProject||null},p_cotizacion:null,p_borrador:pendingProject||null,p_aviso:null});
     data=conflict.data;error=conflict.error;
   }
@@ -805,6 +858,7 @@ export async function processPersonalMessage(
     const fallbackActions = mediaPlan.result || candidatePerson || nameCommand?.action || preferences.respuesta || Object.keys(preferences.state.valores).length ? { ...(mediaPlan.result || {}), borrador_registro:candidatePerson || null, preferencias_conversacion:preferences.state, edicion_nombre_pendiente:nameCommand?.action ? {nuevo_nombre:nameCommand.action.nuevo_nombre,usuario_id:nameCommand.action.usuario_id} : nameCommand?.pending || null, rol_actor:user.rol, proyecto_contexto_id:mediaAttachment?.proyecto_id || activeProject || null } : null;
     const fallback = await sb.rpc('aplicar_lote_copiloto', { ...params, p_respuesta: whatsappCard(contactError || registrationError ? 'Registro pendiente' : 'Presupuesto pendiente', reason), p_cotizacion: null, p_acciones:fallbackActions, p_changed:withSnapshotVersions(mediaPlan,tables).changed, p_deleted:withSnapshotVersions(mediaPlan,tables).deleted, p_adjunto:mediaAttachment, p_borrador: pendingProject || null, p_aviso: null });
     data = fallback.data; error = fallback.error;
+    confirmedPlan=mediaPlan;confirmedCampaign=undefined;
   }
   if (error || !data?.message_id)
     throw new AIError(
@@ -813,6 +867,14 @@ export async function processPersonalMessage(
       503,
     );
   await finalizeBatch(true, data.message_id);
+  notifyPushOnWhatsAppChanges(sb, {
+    empresaId: user.empresa_id,
+    actor: user,
+    result: confirmedPlan.result,
+    changed: confirmedPlan.changed,
+    projects: [...(tables.proyectos || []), ...(confirmedPlan.changed.proyectos || [])],
+    campaign:confirmedCampaign,
+  });
   return { ...data, persistido: true };
   } catch (batchError) {
     await finalizeBatch(false);

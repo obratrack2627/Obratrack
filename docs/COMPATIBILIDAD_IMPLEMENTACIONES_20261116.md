@@ -29,3 +29,9 @@ Las migraciones de RAG y push nuevas se deben incluir en la reconstrucción de p
 5. Publicar solo después de comprobar la combinación. Aplicar restricciones de Storage/CAS WhatsApp posteriores al despliegue y coordinar la política de Auth.
 
 Las migraciones preparatorias de la auditoría ya aplicadas son aditivas. La tanda de código permanece en la PR #2 en borrador; la configuración posterior de Storage/CAS WhatsApp y Auth no se adelantó a su despliegue.
+
+## Resolución integrada
+
+Los cruces se resolvieron conservando main hasta `ba1332c`: push web después del commit con señal de replay; WhatsApp notifica el plan realmente confirmado; RAG por empresa conserva reservas y posterga indexación auxiliar hasta terminar la respuesta (un documento por turno). Next 15 externaliza audio y web-push, mantiene nonce y worker público. Se conserva la marca oficial y se añade inicio PWA con tres puntos animados, sin texto inferior. La pantalla animada corresponde a la interfaz web de la PWA; el splash nativo previo lo controla Android/iOS.
+
+Comprobaciones integradas: 543/543 unitarias, 16 archivos SQL, compilación y tipos aprobados. El navegador y la publicación se comprueban sobre el commit final. Las notificaciones siguen siendo auxiliares: una interrupción de proceso tras guardar puede impedir su entrega; no se promete entrega exactamente una vez ni se usa el push como confirmación de guardado.

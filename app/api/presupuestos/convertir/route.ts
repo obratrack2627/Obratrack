@@ -6,6 +6,7 @@ import { budgetApplication } from '@/lib/quotes/application';
 import { loadAIContext } from '@/lib/ai/context';
 import { snapshot, changesBetween } from '@/lib/ai/rows';
 import { convertirPresupuestoEnObra } from '@/lib/presupuestos-to-obra';
+import { sendAcceptedQuotePdfToWhatsApp } from '@/lib/whatsapp/quote-document';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export async function POST(request: NextRequest) {
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
       if (code) throw new AIError(code, code === 'PLAN_LIMIT' ? 'El Plan Gratis admite una obra en curso. Cierra la obra actual o cambia de plan.' : 'El presupuesto cambió o no está disponible. Actualiza el listado.', code === 'BUDGET_FORBIDDEN' ? 403 : 409);
       throw new AIError('BUDGET_CONVERSION', 'No se pudo convertir el presupuesto. No se guardaron cambios parciales; puedes reintentar.', 503);
     }
-    return NextResponse.json(data);
+    const whatsappPdfSent = await sendAcceptedQuotePdfToWhatsApp(client, { user, cotizacion: budget.cotizacion });
+    return NextResponse.json({ ...data, whatsapp_pdf_enviado: whatsappPdfSent });
   } catch (error) { return errorJSON(error); }
 }
