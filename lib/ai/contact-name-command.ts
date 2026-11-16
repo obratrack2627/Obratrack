@@ -1,5 +1,5 @@
 import { explicitPersonName, isPersonName } from "./person-name";
-import { validarRutChileno } from "@/lib/utils";
+import { validarRutChileno } from "../utils";
 
 export interface NameEdit {
   nuevo_nombre: string;

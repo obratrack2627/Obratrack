@@ -1,5 +1,5 @@
 import type { ProjectStatus } from '@/types/database';
-import { projectStatusLabel } from '@/lib/project-status';
+import { projectStatusLabel } from '../project-status';
 import type { ConversationTurn } from './conversation';
 import { projectMentions, referenceText, type ProjectReference } from './project-reference';
 
