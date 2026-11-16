@@ -27,8 +27,7 @@ const mapping: Record<string, string> = {
   reportes_whatsapp: "reportes_whatsapp",
 };
 async function checked(query: any, record = "el registro") {
-  if(typeof query.record==='function')query.record(record);
-  const result = await query;
+  const result = await (typeof query.record==='function'?query.record(record):query);
   if (result.error) throw syncWriteFailure(result.error, record);
   return result.data;
 }

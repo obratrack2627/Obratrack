@@ -16,11 +16,11 @@ export function syncTransaction(client: any) {
       eq(column: string, value: unknown) { mutation.filters.push({ column, values: [value] }); return query; },
       in(column: string, values: unknown[]) { mutation.filters.push({ column, values }); return query; },
       select() { return query; },
-      record(value: string) { mutation.record=value; return query; },
-      then(resolve: any, reject: any) {
+      record(value: string) {
+        mutation.record=value;
         operations.push(mutation);
         const id = mutation.row?.id || mutation.filters.find(f => f.column === 'id')?.values[0];
-        return Promise.resolve({ data: id ? [{ id }] : [], error: null }).then(resolve, reject);
+        return Promise.resolve({ data: id ? [{ id }] : [], error: null });
       },
     };
     return query;

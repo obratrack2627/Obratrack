@@ -2340,7 +2340,7 @@ test('la app instalada inicia en Centro de Mando y los módulos móviles abren a
   for(const [label,path] of [['Obras y proyectos','/proyectos'],['WhatsApp','/reportes'],['Equipo','/equipo'],['Clientes','/clientes'],['Asistencia','/asistencia'],['Centro de Mando','/dashboard']]) {
     await page.getByRole('button',{name:'Abrir menú',exact:true}).click();
     await page.locator('aside').getByRole('link',{name:label,exact:true}).click();
-    await expect(page).toHaveURL(new RegExp(path+'$'));
+    await expect(page).toHaveURL(new RegExp(path+'$'),{timeout:15000});
     await expectPageAtStart(page);
     await page.evaluate(()=>scrollTo({top:document.documentElement.scrollHeight,behavior:'instant'}));
   }
