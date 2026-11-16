@@ -68,7 +68,7 @@ export async function generateOpenAI(prompt: string, options: GenerationOptions 
   try { payload = await response.json(); }
   catch { throw new AIError('AI_INVALID_RESPONSE', 'El asistente devolvió una respuesta no válida. Intenta nuevamente.'); }
   if (audio) {
-    if (typeof payload.text !== 'string' || !payload.text.trim()) throw new AIError('AI_EMPTY', 'No se pudo transcribir la nota de voz. Envía el mensaje como texto.');
+    if (typeof payload.text !== 'string' || !payload.text.trim()) throw new AIError('AI_EMPTY', 'No se pudo entender la nota de voz por ruido o silencio. Envía el mensaje como texto o graba más cerca del micrófono.', 422);
     return payload.text.trim();
   }
   if (payload.status === 'incomplete') throw new AIError('AI_INCOMPLETE', 'El asistente no completó la respuesta. Divide la solicitud en pasos más pequeños.');

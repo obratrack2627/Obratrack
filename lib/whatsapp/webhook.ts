@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { serverFetch } from "@/lib/server-fetch";
 import { processPersonalMessage } from "@/lib/whatsapp/assistant";
+import { DEFAULT_WHATSAPP_BURST, type WhatsAppBurstConfig } from "@/lib/whatsapp/burst";
 import { sendMetaText, sendMetaDocument, validMetaSignature } from "@/lib/whatsapp/meta";
 import { dailyCloseDocument } from './daily-close-document';
 import { receiveDeliveryStatus } from "./outbox";
@@ -49,10 +50,12 @@ export function createWhatsAppWebhook(
     send: typeof sendMetaText;
     sendDocument?: typeof sendMetaDocument;
     client: () => any;
+    burst?: WhatsAppBurstConfig;
   } = {
     process: processPersonalMessage,
     send: sendMetaText,
     sendDocument: sendMetaDocument,
+    burst: DEFAULT_WHATSAPP_BURST,
     client: () =>
       createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -112,15 +115,34 @@ export function createWhatsAppWebhook(
             if (Date.now() > deadline)
               throw new Error("El lote continuará en el siguiente intento.");
             stage = "process";
-            const result = await deps.process(sb, message);
+            const processOptions =
+              deps.burst || deps.process === processPersonalMessage
+                ? { burst: deps.burst ?? DEFAULT_WHATSAPP_BURST }
+                : undefined;
+            const result = processOptions
+              ? await deps.process(sb, message, processOptions as any)
+              : await deps.process(sb, message);
             if ('ignorado' in result && result.ignorado) continue;
             if (!result.sent_at) {
               stage = "send";
               await deps.send(message.from, result.respuesta);
               if (deps.sendDocument) {
                 stage = 'daily_close_pdf';
-                const document = await dailyCloseDocument(sb, result, message.from);
-                if (document) await deps.sendDocument(message.from, document.bytes, document.filename, document.caption);
+                try {
+                  const document = await dailyCloseDocument(sb, result, message.from);
+                  if (document) await deps.sendDocument(message.from, document.bytes, document.filename, document.caption);
+                } catch (docError) {
+                  console.error("whatsapp_document_send_failure", {
+                    stage,
+                    code: aiErrorResponse(docError).code,
+                  });
+                  await deps
+                    .send(
+                      message.from,
+                      "El cierre quedó guardado en ObraTrack, pero no pude enviar el PDF aquí. Descárgalo desde Documentos.",
+                    )
+                    .catch(() => {});
+                }
               }
               if (result.persistido) {
                 stage = "confirm_delivery";
@@ -128,7 +150,11 @@ export function createWhatsAppWebhook(
                   .from("whatsapp_mensajes")
                   .update({ sent_at: new Date().toISOString() })
                   .eq("message_id", message.id);
-                if (error) throw new Error("No se confirmó el envío.");
+                if (error) {
+                  console.error("whatsapp_confirm_delivery_failure", {
+                    messageId: message.id,
+                  });
+                }
               }
             }
           }

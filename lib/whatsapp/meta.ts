@@ -294,10 +294,13 @@ export async function downloadMetaMedia(id: string) {
   };
   const metadata = await serverFetch(
     `https://graph.facebook.com/${version()}/${id}`,
-    { headers },
+    { headers, signal: AbortSignal.timeout(6000) },
   );
-  if (!metadata.ok) throw new Error("No se pudo consultar el adjunto.");
-  const data = await metadata.json();
+  if (!metadata.ok) throw new AIError('MEDIA_METADATA', 'No se pudo consultar el archivo en WhatsApp. Intenta reenviarlo.', 503);
+  const data = await metadata.json().catch(() => null);
+  if (typeof data?.url !== 'string' || !data.url) {
+    throw new AIError('MEDIA_INVALID', 'El archivo ya no está disponible en WhatsApp. Reenvíalo por favor.', 422);
+  }
   const url = new URL(data.url);
   if (
     url.protocol !== "https:" ||
@@ -307,14 +310,14 @@ export async function downloadMetaMedia(id: string) {
       url.hostname === "graph.facebook.com"
     )
   )
-    throw new Error("Origen de adjunto no permitido.");
+    throw new AIError('MEDIA_INVALID', 'Origen de adjunto no permitido.', 422);
   if (
     data.file_size > 10 * 1024 * 1024 ||
     (!/^(audio|image)\//.test(data.mime_type || '') && !['application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(data.mime_type))
   )
     throw new AIError('MEDIA_FORMAT', 'Envía JPG, PNG, WebP, PDF, Word o Excel de hasta 10 MB. También se admiten notas de voz.', 422);
-  const res = await serverFetch(url, { headers });
-  if (!res.ok) throw new Error("No se pudo descargar el adjunto.");
+  const res = await serverFetch(url, { headers, signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw new AIError('MEDIA_DOWNLOAD', 'No se pudo descargar el adjunto. Intenta reenviarlo.', 503);
   const chunks: Uint8Array[] = [];
   let size = 0;
   if (!res.body) throw new Error("Adjunto vacío.");

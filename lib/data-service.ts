@@ -2314,7 +2314,7 @@ export class DataService {
           transcripcion: accion.titulo || `Informe de Avance: ${proj?.nombre || 'Faena'}`,
           extraccion_ia: {
             actividad_detectada: accion.actividad || 'Seguimiento general',
-            avance_porcentaje: proj?.porcentaje_avance_ponderado ?? 50,
+            avance_porcentaje: proj?.porcentaje_avance_ponderado ?? 0,
             tiene_imprevisto: false,
           },
           estado: 'aprobado',

@@ -1,6 +1,7 @@
 import { AIError } from './errors';
 
 const maxBytes = 24 * 1024 * 1024;
+const maxDurationSeconds = 120;
 const invalidAudio = () => new AIError('AI_AUDIO_INVALID', 'No se pudo leer la nota de voz. Prueba con una grabación más corta o envía el texto.', 422);
 
 // Meta entrega Opus en Ogg. Se decodifica localmente a WAV mono de 16 kHz para
@@ -11,6 +12,7 @@ async function opusToWav(bytes: Uint8Array, deadline: number): Promise<Uint8Arra
   const decoder = new OggOpusDecoder({ forceStereo: false, ...{ sampleRate: 16000 } });
   const chunks: Buffer[] = [];
   let size = 0;
+  let peak = 0;
   const append = (decoded: { channelData: Float32Array[]; samplesDecoded: number; errors: unknown[] }) => {
     if (decoded.errors.length) throw invalidAudio();
     if (!decoded.samplesDecoded) return;
@@ -18,11 +20,16 @@ async function opusToWav(bytes: Uint8Array, deadline: number): Promise<Uint8Arra
     const samples = decoded.samplesDecoded;
     size += samples * 2;
     if (!channels.length || size > maxBytes) throw invalidAudio();
+    if (size / (16000 * 2) > maxDurationSeconds) {
+      throw new AIError('AI_AUDIO_TOO_LONG', 'La nota de voz supera los 2 minutos. Envía una grabación más corta o escríbelo en texto.', 422);
+    }
     const chunk = Buffer.alloc(samples * 2);
     for (let i = 0; i < samples; i++) {
       let value = 0;
       for (const channel of channels) value += channel[i];
       value = Math.max(-1, Math.min(1, value / channels.length));
+      const abs = Math.abs(value);
+      if (abs > peak) peak = abs;
       chunk.writeInt16LE(Math.round(value * (value < 0 ? 32768 : 32767)), i * 2);
     }
     chunks.push(chunk);
@@ -35,6 +42,9 @@ async function opusToWav(bytes: Uint8Array, deadline: number): Promise<Uint8Arra
     }
     append(await decoder.flush());
     if (!size) throw invalidAudio();
+    if (peak < 0.0001) {
+      throw new AIError('AI_AUDIO_SILENT', 'La nota de voz llegó en silencio. Revisa el micrófono o envíanos el mensaje como texto.', 422);
+    }
     const header = Buffer.alloc(44);
     header.write('RIFF', 0); header.writeUInt32LE(36 + size, 4); header.write('WAVEfmt ', 8);
     header.writeUInt32LE(16, 16); header.writeUInt16LE(1, 20); header.writeUInt16LE(1, 22);
