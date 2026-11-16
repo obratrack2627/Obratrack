@@ -1,6 +1,18 @@
 import type { CotizacionEstimacion } from "@/types/database";
 import { formatCLP } from "@/lib/utils";
 
+export function quoteIntroText(texto: string, quote?: CotizacionEstimacion | null): string {
+  const raw = (texto || "").trim();
+  if (!quote) return raw;
+  const summary = quoteSummaryText(quote).trim();
+  if (raw === summary || raw === (quote.resumen_ejecutivo || "").trim()) return "";
+  if (summary && raw.endsWith(summary)) {
+    const prefix = raw.slice(0, raw.length - summary.length).trim();
+    return prefix === (quote.resumen_ejecutivo || "").trim() ? "" : prefix;
+  }
+  return raw;
+}
+
 export function profitLabel(q: CotizacionEstimacion) {
   const f = q.estructura_financiera;
   return `${f.tipo_utilidad === "margen_venta" ? "Margen sobre venta" : "Utilidad sobre costos e indirectos"} (${f.margen_utilidad_porcentaje}%)`;

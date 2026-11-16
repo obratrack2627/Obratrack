@@ -1695,3 +1695,48 @@ test('borradores antiguos con más de 12 horas caducan y si falla PDF tras envia
   assert.equal(sent[0], 'Cierre OK');
   assert.match(sent[1], /no pude enviar el PDF/);
 });
+
+test('al aceptar una cotización por WhatsApp el webhook genera y envía el PDF oficial al usuario', async () => {
+  setup();
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const q = normalizeQuote({
+    id: 'quote-accepted-pdf',
+    titulo_proyecto: 'Cobertizo Acceso Norte',
+    comuna_region: 'Providencia',
+    cliente_nombre: 'Inmobiliaria Sur',
+    cliente_email: 'contacto@inmosur.test',
+    materiales: [{ nombre: 'Perfil 100x50', cantidad: 6, unidad: 'un', precio_unitario_estimado: 18500 }],
+    mano_de_obra: [{ rol: 'Maestro soldador', cantidad_personas: 1, dias_estimados: 2, valor_jornal_diario: 50000 }],
+  });
+  const sb = database();
+  sb.db.empresas = [{ id: user.empresa_id, plan_id: 'pro_ia', nombre: 'Constructora Norte SpA', rut: '76.111.222-3' }];
+  sb.db.presupuestos = [{ id: 'wa:accept-pdf', empresa_id: user.empresa_id, cotizacion: q, proyecto_id: 'obra-1', estado: 'aprobada' }];
+  let marked = false;
+  const from = sb.from.bind(sb);
+  sb.from = (table) => { const query = from(table); query.update = () => { marked = true; return query; }; return query; };
+  const sent = [];
+  const handler = createWhatsAppWebhook({
+    client: () => sb,
+    process: async () => ({
+      persistido: true,
+      actor_id: user.id,
+      empresa_id: user.empresa_id,
+      respuesta: 'Obra creada desde cotización.',
+      acciones: { tipo: 'crear_proyecto_completo', presupuesto_cotizacion_id: 'wa:accept-pdf' },
+    }),
+    send: async (_to, text) => { sent.push({ type: 'text', text }); },
+    sendDocument: async (to, bytes, filename, caption) => {
+      assert.equal(to, '56912345678');
+      assert.equal(Buffer.from(bytes).subarray(0, 5).toString(), '%PDF-');
+      assert.match(filename, /Cobertizo_Acceso_Norte\.pdf$/);
+      assert.match(caption, /Cotización aprobada · Cobertizo Acceso Norte/);
+      sent.push({ type: 'pdf', filename });
+    },
+  });
+  const res = await handler(request(event([{ id: 'accept-quote-1', from: '56912345678', type: 'text', text: { body: '1' } }])));
+  assert.equal(res.status, 200);
+  assert.equal(marked, true);
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0].type, 'text');
+  assert.equal(sent[1].type, 'pdf');
+});

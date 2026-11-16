@@ -67,38 +67,69 @@ export function dailyCloseWhatsApp(result: any): string | null {
 export function quoteWhatsApp(q: CotizacionEstimacion, canCreate = true) {
   if (q.alternativas?.length) {
     const options = [q, ...q.alternativas];
+    const baseTotal = options[0].estructura_financiera.precio_total_con_iva;
     return whatsappCard(`Alternativas · ${q.titulo_proyecto}`, [
-      '*ALTERNATIVAS*', ...options.map((a, i) => [`*${i + 1}* · *${line(a.nombre_alternativa || `Opción ${i + 1}`)}*`,
-        a.resumen_ejecutivo,
-        ...(a.partidas_venta || []).map((p) => `• ${line(p.nombre)}: ${formatCLP(p.subtotal)}`),
-        ...a.materiales.map((m) => `• ${line(m.nombre)}: ${m.cantidad} ${m.unidad}`),
-        `*TOTAL: ${formatCLP(a.estructura_financiera.precio_total_con_iva)}*`,
-      ].filter(Boolean).join('\n')),
+      '*ALTERNATIVAS*',
+      ...options.map((a, i) => {
+        const f = a.estructura_financiera;
+        const delta = f.precio_total_con_iva - baseTotal;
+        const deltaText = i === 0 || delta === 0 ? '' : ` _(${delta > 0 ? '+' : '−'}${formatCLP(Math.abs(delta))} vs opción 1)_`;
+        return [
+          `*${i + 1}* · *${line(a.nombre_alternativa || `Opción ${i + 1}`)}*`,
+          a.resumen_ejecutivo,
+          ...(a.partidas_venta || []).map((p) => `• ${line(p.nombre)}: ${formatCLP(p.subtotal)}`),
+          ...a.materiales.map((m) =>
+            `• ${line(m.nombre)}: ${m.cantidad.toLocaleString("es-CL")} ${m.unidad}` +
+            (a.modo_presupuesto === 'precio_acordado' ? '' : ` · ${formatCLP(m.subtotal)}`)
+          ),
+          ...(a.mano_de_obra || []).map((m) => `• Mano de obra (${line(m.rol)}): ${count(m.cantidad_personas, "persona", "personas")} × ${count(m.dias_estimados, "día", "días")} · ${formatCLP(m.subtotal)}`),
+          a.modo_presupuesto === 'precio_acordado' && a.tratamiento_iva === 'incluido'
+            ? `*TOTAL: ${formatCLP(f.precio_total_con_iva)}* (IVA incluido)${deltaText}`
+            : `Neto: ${formatCLP(f.precio_sugerido_neto)} · IVA (19%): ${formatCLP(f.iva_19)}\n*TOTAL: ${formatCLP(f.precio_total_con_iva)}*${deltaText}`,
+        ].filter(Boolean).join('\n');
+      }),
       'Estas propuestas son alternativas completas para la misma obra. Sus totales no se suman.',
-      canCreate ? 'Responde con el número o nombre de la alternativa que quieres elegir. Si falta información del cliente, te pediré los datos necesarios.' : 'Puedes revisar las propuestas en ObraTrack.',
+      canCreate
+        ? 'Responde con el *número* o *nombre* de la alternativa que quieres elegir. Al aprobarla, te enviaré el PDF oficial aquí mismo y crearé o actualizaré la obra.'
+        : 'Puedes revisar las propuestas en ObraTrack → Presupuestos.',
       'Para editar o comparar un material, indica la alternativa y el cambio que necesitas.',
     ].join('\n\n'));
   }
   const f = q.estructura_financiera;
+  const meta = [
+    q.comuna_region ? `📍 ${q.comuna_region}` : "",
+    q.metros_cuadrados ? `📐 ${q.metros_cuadrados.toLocaleString("es-CL")} m²` : "",
+    q.duracion_dias_estimada ? `⏱️ Plazo sugerido: ${count(q.duracion_dias_estimada, "día", "días")}` : "",
+  ].filter(Boolean).join(" · ");
   const sections = [
-    [q.comuna_region ? `${q.comuna_region}` : "", q.metros_cuadrados ? `Superficie: ${q.metros_cuadrados.toLocaleString("es-CL")} m²` : ""].filter(Boolean).join(" · "),
+    meta,
     q.resumen_ejecutivo,
-    q.modo_presupuesto === 'precio_acordado' ? ['*PRECIOS ACORDADOS*', ...(q.partidas_venta || []).map((p) => `• ${line(p.nombre)}: ${formatCLP(p.subtotal)}`)].join('\n') : ["*DETALLE*", `• Materiales: ${formatCLP(f.costo_materiales_total)}`, `• Mano de obra: ${formatCLP(f.costo_mano_obra_total)}`,
-      `• Gastos generales: ${formatCLP(f.gastos_generales_monto)}`, `• Imprevistos: ${formatCLP(f.imprevistos_monto)}`,
-      `• ${profitLabel(q)}: ${formatCLP(f.margen_utilidad_monto)}`].join("\n"),
-    [`Neto: ${formatCLP(f.precio_sugerido_neto)}`, `IVA (19%): ${formatCLP(f.iva_19)}`, `*TOTAL: ${formatCLP(f.precio_total_con_iva)}*`].join("\n"),
-    q.materiales.length ? "*MATERIALES COTIZADOS · NETO*\n" + q.materiales.map((m) =>
-      `• ${line(m.nombre)}\n  ${m.cantidad.toLocaleString("es-CL")} ${m.unidad} × ${formatCLP(m.precio_unitario_estimado)} · ${formatCLP(m.subtotal)}`).join("\n\n") : "",
-    q.mano_de_obra.length ? "*MANO DE OBRA*\n" + q.mano_de_obra.map((m) =>
-      `• ${line(m.rol)}\n  ${count(m.cantidad_personas, "persona", "personas")} × ${count(m.dias_estimados, "día", "días")} · ${formatCLP(m.subtotal)}`).join("\n\n") : "",
-    q.duracion_dias_estimada ? `*Plazo sugerido: ${count(q.duracion_dias_estimada, "día", "días")}*` : "",
+    q.modo_presupuesto === 'precio_acordado'
+      ? ['*PRECIOS ACORDADOS*', ...(q.partidas_venta || []).map((p) => `• ${line(p.nombre)}: ${formatCLP(p.subtotal)}`)].join('\n')
+      : [
+          "*RESUMEN FINANCIERO*",
+          `• Materiales: ${formatCLP(f.costo_materiales_total)}`,
+          `• Mano de obra: ${formatCLP(f.costo_mano_obra_total)}`,
+          `• Gastos generales: ${formatCLP(f.gastos_generales_monto)}`,
+          `• Imprevistos: ${formatCLP(f.imprevistos_monto)}`,
+          `• ${profitLabel(q)}: ${formatCLP(f.margen_utilidad_monto)}`,
+        ].join("\n"),
+    ["──────────────", `Neto: ${formatCLP(f.precio_sugerido_neto)}`, `IVA (19%): ${formatCLP(f.iva_19)}`, `*TOTAL: ${formatCLP(f.precio_total_con_iva)}*`, "──────────────"].join("\n"),
+    q.materiales.length
+      ? `*MATERIALES COTIZADOS (${q.materiales.length}) · NETO*\n` + q.materiales.map((m) =>
+          `• *${line(m.nombre)}*\n  ${m.cantidad.toLocaleString("es-CL")} ${m.unidad} × ${formatCLP(m.precio_unitario_estimado)} = ${formatCLP(m.subtotal)}`).join("\n")
+      : "",
+    q.mano_de_obra.length
+      ? `*MANO DE OBRA (${q.mano_de_obra.length})*\n` + q.mano_de_obra.map((m) =>
+          `• *${line(m.rol)}*\n  ${count(m.cantidad_personas, "persona", "personas")} × ${count(m.dias_estimados, "día", "días")} = ${formatCLP(m.subtotal)}`).join("\n")
+      : "",
     q.actividades_gantt?.length ? "*GANTT SUGERIDO*\n" + q.actividades_gantt.map((a, i) => `${i + 1}. ${line(a.nombre)} — ${count(a.dias, "día", "días")}`).join("\n") : "",
     q.observaciones ? `*OBSERVACIONES*\n${q.observaciones}` : "",
     q.condiciones_pago ? `*CONDICIONES DE PAGO*\n${q.condiciones_pago}` : "",
     q.hitos_pago?.length ? '*PLAN DE COBRO*\n' + q.hitos_pago.map((h) => `• ${h.nombre} (${h.porcentaje}%): ${formatCLP(h.monto)}`).join('\n') : '',
-    (q.modo_presupuesto === 'precio_acordado' ? 'Precios proporcionados para esta propuesta.' : 'Precios estimados, sujetos a confirmación.') + '\nPDF disponible en ObraTrack → Reportes WhatsApp.',
+    (q.modo_presupuesto === 'precio_acordado' ? 'Precios proporcionados para esta propuesta.' : 'Precios estimados, sujetos a confirmación.') + '\nPDF disponible en ObraTrack → WhatsApp / Presupuestos.',
     ["*¿Cómo seguimos?*", ...(canCreate ? [createOption] : []), modifyOption, compareOption,
-      ...(canCreate ? ["", "Para crearla responde *1* o *sí*. Se incorporarán el Gantt sugerido y sus materiales; te pediré los datos del cliente que falten."] : [])].join("\n"),
+      ...(canCreate ? ["", "Para aprobarla y crear la obra responde *1* o *sí*. Se incorporarán el Gantt sugerido y sus materiales, y al confirmar recibirás aquí el *PDF oficial*."] : [])].join("\n"),
   ];
   return whatsappCard(`Cotización · ${q.titulo_proyecto}`, sections.filter(Boolean).join("\n\n"));
 }

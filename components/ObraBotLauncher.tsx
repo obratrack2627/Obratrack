@@ -9,6 +9,7 @@ import { requestAI, applyAIResponse } from '@/lib/ai/client';
 import { conversationRequest } from '@/lib/ai/conversation';
 import { canAccessWeb } from '@/lib/auth/access';
 import type { MensajeChatCotizador, Proyecto } from '@/types/database';
+import { quoteIntroText } from '@/lib/ai/quote-format';
 import ChatMessageFormatter from './ChatMessageFormatter';
 import AIMessageTools from './AIMessageTools';
 
@@ -138,9 +139,13 @@ export default function ObraBotLauncher() {
       </div>
       <div ref={feed} role="log" aria-label="Conversación" aria-live="polite" className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-2 text-sm">
         {!messages.length && <p className="p-2 text-gray-500">¿Qué necesitas gestionar en tu obra?</p>}
-        {messages.map(item => <article key={item.id} className={`rounded-xl p-3 ${item.remitente === 'usuario' ? 'ml-5 bg-[#FF6A00]/10' : 'mr-2 border border-gray-300/30'}`}>
-          <ChatMessageFormatter content={item.texto} /><AIMessageTools message={item} />
-        </article>)}
+        {messages.map(item => {
+          const content = item.comparacion_materiales?.resumen || quoteIntroText(item.texto, item.cotizacion_generada);
+          return <article key={item.id} className={`rounded-xl p-3 space-y-2 ${item.remitente === 'usuario' ? 'ml-5 bg-[#FF6A00]/10' : 'mr-2 border border-gray-300/30'}`}>
+            {content && <ChatMessageFormatter content={content} isUser={item.remitente === 'usuario'} />}
+            <AIMessageTools message={item} />
+          </article>;
+        })}
         {busy && <p role="status" className="text-xs text-gray-500">ObraBot está respondiendo…</p>}
       </div>
       {['pro','pro_ia'].includes(plan) ? <form onSubmit={event => { event.preventDefault(); void send(); }} className="flex items-end gap-2 border-t border-gray-300/30 p-3">

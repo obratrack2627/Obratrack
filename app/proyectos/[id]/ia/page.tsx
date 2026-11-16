@@ -51,6 +51,7 @@ import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
 import AIMessageTools from '@/components/AIMessageTools';
+import { quoteIntroText } from '@/lib/ai/quote-format';
 
 
 export default function ProyectoIAPage() {
@@ -495,10 +496,15 @@ export default function ProyectoIAPage() {
                           : 'bg-gray-100 dark:bg-[#1A2230] text-navy-900 dark:text-gray-100 rounded-tl-none border border-gray-200 dark:border-[#263040]'
                       }`}
                     >
-                      <ChatMessageFormatter
-                        content={m.comparacion_materiales?.resumen || (m.cotizacion_generada?m.cotizacion_generada.resumen_ejecutivo:m.texto)}
-                        isUser={m.remitente === 'usuario'}
-                      />
+                      {(() => {
+                        const content = m.comparacion_materiales?.resumen || quoteIntroText(m.texto, m.cotizacion_generada);
+                        return content ? (
+                          <ChatMessageFormatter
+                            content={content}
+                            isUser={m.remitente === 'usuario'}
+                          />
+                        ) : null;
+                      })()}
                       <AIMessageTools message={m} />
                       <span
                         className={`block text-[9px] mt-1.5 text-right ${
