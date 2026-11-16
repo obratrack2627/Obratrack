@@ -19,7 +19,7 @@ BEGIN
    FOR r IN SELECT value FROM jsonb_array_elements(coalesce(p_changed->t,'[]')||coalesce(p_deleted->t,'[]')) LOOP
     -- Compatibility for legacy service integrations; the serving channel always attaches a revision.
     IF NOT(r ? 'sync_version') THEN CONTINUE; END IF;
-    EXECUTE format('SELECT sync_version FROM public.%I WHERE id=$1',t) INTO actual USING r->>'id';
+    EXECUTE format('SELECT sync_version FROM public.%I WHERE id=$1 FOR UPDATE',t) INTO actual USING r->>'id';
     expected:=(r->>'sync_version')::bigint;
     IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'SYNC_CONFLICT'; END IF;
    END LOOP;
