@@ -203,7 +203,7 @@ export default function Sidebar() {
           <ThemeToggle />
           <button
             aria-label="Ver mi cuenta" onClick={() => setIsPlanModalOpen(true)}
-            className="px-2 py-1 rounded bg-[#FF6A00]/20 text-[#FF9B55] border border-[#FF6A00]/40 text-[10px] font-bold font-mono"
+            className="px-2 py-1 rounded bg-[#FF6A00]/20 text-[#FF6A00] border border-[#FF6A00]/40 text-[10px] font-bold font-mono"
           >
             Cuenta
           </button>
@@ -277,7 +277,7 @@ export default function Sidebar() {
                         activePlan === 'pro_ia'
                           ? 'bg-[#6B8F72]/20 text-[#85C492] border border-[#6B8F72]/50'
                           : activePlan === 'pro'
-                          ? 'bg-[#FF6A00]/20 text-[#FF9B55] border border-[#FF6A00]/50'
+                          ? 'bg-[#FF6A00]/20 text-[#FF6A00] border border-[#FF6A00]/50'
                           : 'bg-gray-800 text-gray-400 border border-gray-700'
                       }`}
                     >
@@ -318,7 +318,7 @@ export default function Sidebar() {
               
               <ActionMenu label="Cuenta" above darkSurface>
                 <button type="button" onClick={() => { setProfileInitialTab('perfil'); setProfileOpen(true); setMobileOpen(false); }}>Editar perfil</button>
-                <button type="button" onClick={() => { setProfileInitialTab('notificaciones'); setProfileOpen(true); setMobileOpen(false); }} className="flex items-center gap-2 font-medium !text-[#FF9248]">
+                <button type="button" onClick={() => { setProfileInitialTab('notificaciones'); setProfileOpen(true); setMobileOpen(false); }} className="flex items-center gap-2 font-medium !text-[#FF6A00]">
                   <Bell size={15} className="shrink-0 text-[#FF6A00]" />
                   <span>Notificaciones Push</span>
                 </button>

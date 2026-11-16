@@ -63,3 +63,5 @@
 - Los límites por plan, importes y pertenencia se comprueban en BD. Las lecturas completas paginan y acotan las listas de IDs.
 - Las rutas IA crean un contexto de consumo; cuotas y reservas se verifican antes de cada llamada pagada. La liberación de cuota es exclusiva del servidor. Nunca desactivar cuotas para resolver un error de configuración.
 - Scripts SQL de prueba crean una BD efímera; no ejecutar fixtures con escrituras contra producción. Claves de respaldo y copias con datos personales quedan fuera de Git.
+
+- Preferencia visual del usuario: mantener el naranjo original `#FF6A00` en botones, texto de marca y acentos. No sustituirlo por tonos marrones ni naranjos aclarados durante ajustes de accesibilidad.

@@ -36,7 +36,7 @@ export default function SyncConflictDialog({onClose,onResolved}:{onClose:()=>voi
    {error&&<p role="alert" className="mb-3 text-sm text-red-700 dark:text-red-300">{error}</p>}
    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
     <button disabled={busy} onClick={()=>void resolve('remote')} className="min-h-11 rounded-xl border border-kraft-300 px-4 py-2 font-semibold disabled:opacity-50 dark:border-gray-600">Conservar datos de la nube</button>
-    <button disabled={busy} onClick={()=>void resolve('local')} className="min-h-11 rounded-xl bg-orange-700 px-4 py-2 font-semibold text-white disabled:opacity-50">Guardar mis cambios</button>
+    <button disabled={busy} onClick={()=>void resolve('local')} className="min-h-11 rounded-xl bg-obra-orange px-4 py-2 font-semibold text-white disabled:opacity-50">Guardar mis cambios</button>
     <button disabled={busy} onClick={onClose} className="min-h-11 px-3 py-2 underline disabled:opacity-50">Revisar después</button>
    </div>
   </div>

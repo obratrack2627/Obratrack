@@ -1,6 +1,6 @@
 .root {
   --g-surface: #fff;
-  --g-accent-ink: #b44500;
+  --g-accent-ink: #FF6A00;
   --g-muted: #faf8f5;
   --g-border: #e5dfc9;
   --g-ink: #1e1e1e;
@@ -13,7 +13,7 @@
 }
 :global(.dark) .root {
   --g-surface: #141a23;
-  --g-accent-ink: #ff9b55;
+  --g-accent-ink: #FF6A00;
   --g-muted: #0b0f14;
   --g-border: #263040;
   --g-ink: #f3f4f6;
@@ -48,13 +48,13 @@
   min-height: 44px;
   padding: 10px 16px;
   border-radius: 12px;
-  background: #b44500;
+  background: #FF6A00;
   color: #fff;
   font-size: 13px;
   font-weight: 650;
 }
 .primary:hover {
-  background: #923700;
+  background: #E55F00;
 }
 .summary {
   display: flex;
@@ -91,7 +91,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #b44500;
+  background: #FF6A00;
 }
 .counts {
   display: flex;
@@ -327,7 +327,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: #b44500;
+  background: #FF6A00;
   pointer-events: none;
   z-index: 2;
 }
@@ -339,7 +339,7 @@
   border-radius: 7px;
   padding: 4px 7px;
   color: white;
-  background: #b44500;
+  background: #FF6A00;
   font-size: 10px;
   white-space: nowrap;
 }
