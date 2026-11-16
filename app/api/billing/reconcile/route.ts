@@ -13,6 +13,8 @@ async function runReconcile(request: NextRequest) {
   try {
     const admin = requireSupabaseAdmin();
     const result = await reconcileExpiredSubscriptions(admin);
+    const cleanup=await admin.rpc('limpiar_datos_operativos');
+    if(cleanup.error)console.warn('operational_cleanup_failed');
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     return errorJSON(error);

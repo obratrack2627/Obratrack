@@ -58,7 +58,7 @@ export function mapSupabaseAuthError(message: string, code?: string): string {
     return 'Tu correo aún no ha sido confirmado. Revisa tu bandeja de entrada o solicita un nuevo correo de activación.';
   }
   if (lower.includes('password should be at least')) {
-    return 'La contraseña debe tener al menos 6 caracteres.';
+    return 'La contraseña debe tener al menos 12 caracteres.';
   }
   if (
     normalizedCode === 'same_password' ||
@@ -72,7 +72,7 @@ export function mapSupabaseAuthError(message: string, code?: string): string {
     lower.includes('weak_password') ||
     lower.includes('weak password')
   ) {
-    return 'La contraseña es muy débil. Usa al menos 6 caracteres combinando letras y números.';
+    return 'La contraseña es muy débil. Usa al menos 12 caracteres combinando letras y números.';
   }
   if (
     normalizedCode === 'email_address_not_authorized' ||
@@ -130,6 +130,7 @@ async function activateProfile(usuario: Usuario, token: string) {
     throw new Error(WEB_ACCESS_ERROR);
   }
   await establishWebSession(token);
+  supabase.auth.startAutoRefresh?.();
   const previous = dataService.getActiveUser();
   if (!previous || previous.id !== usuario.id || previous.empresa_id !== usuario.empresa_id) dataService.clearChatSessionHistory();
   dataService.setActiveUser(usuario);
@@ -323,14 +324,17 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
 /**
  * Cerrar sesión en Supabase Auth y limpiar almacenamiento local
  */
-export async function signOutSupabase(): Promise<void> {
+export async function signOutSupabase(discardPending = false): Promise<void> {
+  if(!discardPending && dataService.pendingCloudChanges()>0)throw new Error('Hay cambios sin guardar. Sincronízalos antes de cerrar sesión.');
+  supabase.auth.stopAutoRefresh?.();
   try {
     await supabase.auth.signOut();
   } catch (err) {
     console.warn('Error cerrando sesión en Supabase:', err);
   } finally {
     dataService.clearActiveUser();
-    await clearWebSession();
+    for(const key of Object.keys(localStorage))if(/^sb-.*-auth-token/.test(key))localStorage.removeItem(key);
+    try {await clearWebSession();}catch{/* El retorno a login vuelve a expirar la cookie al recuperar conexión. */}
   }
 }
 
@@ -371,10 +375,10 @@ export async function resetPasswordWithSupabase(email: string): Promise<AuthResu
  */
 export async function updatePasswordWithSupabase(newPassword: string): Promise<AuthResult> {
   try {
-    if (!newPassword || newPassword.length < 6) {
+    if (!newPassword || newPassword.length < 12) {
       return {
         success: false,
-        error: 'La nueva contraseña debe tener al menos 6 caracteres.',
+        error: 'La nueva contraseña debe tener al menos 12 caracteres.',
       };
     }
 

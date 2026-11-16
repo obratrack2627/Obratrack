@@ -34,7 +34,7 @@ export function syncWriteFailure(
 }
 
 const publicCodes = new Set([
-  "SYNC_SAVE",
+  "SYNC_SAVE", "SYNC_CONFLICT", "PLAN_LIMIT",
   "SYNC_INVALID",
   "SYNC_FORBIDDEN",
   "PROJECT_FORBIDDEN",

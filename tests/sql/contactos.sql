@@ -59,9 +59,9 @@ SET LOCAL ROLE service_role;
 -- WhatsApp persiste la ficha con mensaje en una sola transacción.
 SELECT public.aplicar_lote_copiloto('qa-contactos-msg','qa-contactos-a','qa-contactos-admin','56980000001','Cambia mi teléfono','Contacto actualizado',null,null,
  jsonb_build_object('usuarios',jsonb_build_array(pg_temp.fila('qa-contactos-admin')||'{"telefono_whatsapp":"+56980000006","rut":"12345678-5"}')),'{}');
--- Repetir el evento con un lote distinto no vuelve a aplicar cambios.
-SELECT public.aplicar_lote_copiloto('qa-contactos-msg','qa-contactos-a','qa-contactos-admin','56980000001','Cambia mi teléfono','Contacto actualizado',null,null,
- jsonb_build_object('usuarios',jsonb_build_array(pg_temp.fila('qa-contactos-admin')||'{"telefono_whatsapp":"+56980000007"}')),'{}');
+-- El RPC no acepta volver a usar el teléfono antiguo. La confirmación repetida se valida en el canal.
+SELECT pg_temp.falla($q$SELECT public.aplicar_lote_copiloto('qa-contactos-msg','qa-contactos-a','qa-contactos-admin','56980000001','Cambia mi teléfono','Contacto actualizado',null,null,
+ jsonb_build_object('usuarios',jsonb_build_array(pg_temp.fila('qa-contactos-admin')||'{"telefono_whatsapp":"+56980000007"}')),'{}')$q$,'WHATSAPP_IDENTITY_FORBIDDEN');
 DO $$ BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.usuarios WHERE id='qa-contactos-admin' AND telefono_whatsapp='+56980000006' AND rut='12345678-5') THEN RAISE EXCEPTION 'Reintento no idempotente'; END IF;
  IF (SELECT count(*) FROM public.whatsapp_mensajes WHERE message_id='qa-contactos-msg')<>1 THEN RAISE EXCEPTION 'Mensaje duplicado'; END IF;

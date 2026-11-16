@@ -1,4 +1,5 @@
 "use client";
+import SyncConflictDialog from './SyncConflictDialog';
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -9,6 +10,8 @@ export default function CloudSync() {
   const pathname = usePathname();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [conflict,setConflict]=useState(false);
+  const [review,setReview]=useState(false);
   const retry = useRef(() => {});
   const lastSyncRef = useRef<{ identity: string; at: number }>({ identity: "", at: 0 });
 
@@ -60,6 +63,7 @@ export default function CloudSync() {
           if (pulled.success && pushed.success) {
             lastSyncRef.current = { identity, at: Date.now() };
           }
+          setConflict(dataService.hasSyncConflict());
           setError(
             !pulled.success
               ? pulled.message
@@ -118,13 +122,15 @@ export default function CloudSync() {
     };
   }, [pathname]);
 
-  if (!error) return null;
-  return (
+  if (!error && !conflict) return null;
+  return (<>
+    {review&&<SyncConflictDialog onClose={()=>setReview(false)} onResolved={()=>{setConflict(false);setError('');retry.current();}}/>}
     <div
       role="status"
       className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
     >
-      <span>{error}</span>
+      <span>{error || 'Hay cambios más recientes que debes revisar antes de guardar.'}</span>
+      {conflict&&<button type="button" disabled={busy} onClick={()=>setReview(true)} className="min-h-11 font-semibold underline disabled:opacity-50">Revisar cambios</button>}
       <button
         type="button"
         disabled={busy}
@@ -133,6 +139,6 @@ export default function CloudSync() {
       >
         {busy ? "Actualizando…" : "Reintentar sincronización"}
       </button>
-    </div>
+    </div></>
   );
 }

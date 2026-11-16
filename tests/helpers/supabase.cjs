@@ -193,6 +193,17 @@ class Query {
 const supabase = {
   rpc: async (name, params) => {
     rpcCalls.push({ name, params });
+    if (name === 'sincronizar_lote_web' && !rpcHandlers.has(name)) {
+      const before = new Map(Array.from(tables, ([table,rows])=>[table,structuredClone(rows)]));
+      for (const operation of params.p_operaciones) {
+        let query = new Query(operation.table);
+        query = operation.kind==='upsert' ? query.upsert(operation.row) : operation.kind==='update' ? query.update(operation.row) : query.delete();
+        for(const filter of operation.filters) query=query.in(filter.column,filter.values);
+        const result=await query;
+        if(result.error){tables.clear();for(const [key,value] of before)tables.set(key,value);return {...result,error:{...result.error,details:JSON.stringify({table:operation.table,id:operation.row?.id,record:operation.record})}};}
+      }
+      return {data:{success:true,versiones:{}},error:null};
+    }
     return rpcHandlers.has(name)
       ? await rpcHandlers.get(name)(params)
       : { data: null, error: { code: "NOT_CONFIGURED" } };

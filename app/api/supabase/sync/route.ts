@@ -1,3 +1,5 @@
+import { syncTransaction } from '@/lib/sync/transaction';
+import { completeProjectRows } from '@/lib/supabase/pagination';
 import { chileToday } from '@/lib/ai/project-deadlines';
 import { assertAttendanceManager } from '@/lib/attendance-access';
 
@@ -24,6 +26,7 @@ const mapping: Record<string, string> = {
   reportes_whatsapp: "reportes_whatsapp",
 };
 async function checked(query: any, record = "el registro") {
+  if(typeof query.record==='function')query.record(record);
   const result = await query;
   if (result.error) throw syncWriteFailure(result.error, record);
   return result.data;
@@ -97,6 +100,12 @@ async function validateSync(client: any, user: any, body: any) {
             "El trabajador no pertenece a tu empresa.",
             403,
           );
+      const money = key === 'pagos' ? [['monto', true]] : key === 'proyectos' ? [['monto_cotizado', false]] : key === 'materiales' ? [['precio_unitario', false]] : key === 'imprevistos' ? [['monto', false], ['monto_adicional', false]] : [];
+      for (const [field, positive] of money) {
+        const value = row[String(field)];
+        if (value != null && (!Number.isFinite(Number(value)) || Number(value) < 0 || (positive && Number(value) <= 0) || Number(value) > 9999999999))
+          throw new AIError('SYNC_INVALID', 'Revisa los montos: deben ser válidos y no negativos; los pagos deben ser mayores que cero.', 422);
+      }
       if(key==='materiales' && (!Number.isFinite(Number(row.cantidad)) || Number(row.cantidad)<=0)) throw new AIError('SYNC_INVALID','La cantidad de material debe ser mayor que cero.',422);
       if(key==='bitacora' && row.material_id && (!Number.isFinite(Number(row.cantidad_recibida)) || Number(row.cantidad_recibida)<=0)) throw new AIError('SYNC_INVALID','Revisa la cantidad recibida.',422);
       if(key==='imprevistos' && row.categoria_gasto && !['imprevisto','mano_obra','gasto_general'].includes(row.categoria_gasto)) throw new AIError('SYNC_INVALID','Revisa la categoría del gasto.',422);
@@ -139,10 +148,7 @@ export async function GET(request: NextRequest) {
     const ids = tables.proyectos.map((p) => p.id);
     const reports = ids.length
       ? checkedRows(
-          await client
-            .from("reportes_whatsapp")
-            .select("*")
-            .in("proyecto_id", ids),
+          await completeProjectRows(client, 'reportes_whatsapp', ids),
         )
       : [];
     const mediaClient = client;
@@ -224,7 +230,7 @@ export async function GET(request: NextRequest) {
 }
 export async function POST(request: NextRequest) {
   try {
-    const { client: sb, user } = await authorizeAI(request);
+    const { client, user } = await authorizeAI(request);
     const input = await request.json();
     if (!input.cambios || typeof input.cambios !== "object")
       throw new AIError(
@@ -234,7 +240,9 @@ export async function POST(request: NextRequest) {
       );
     const empresaId = user.empresa_id;
     const body = input.cambios;
-    const tables = await validateSync(sb, user, body);
+    const tables = await validateSync(client, user, body);
+    const transaction = syncTransaction(client);
+    const sb = transaction.writer;
     if(body.documentos?.some((row:any)=>['cierre_diario','acta_recepcion'].includes(row.categoria)))throw new AIError('DOCUMENT_RPC','Confirma el cierre o la recepción desde el formulario correspondiente.',422);
     if(body.materiales?.some((row:any)=>row.actividad_id&&!tables.actividades.some((activity:any)=>activity.id===row.actividad_id&&activity.proyecto_id===row.proyecto_id)))throw new AIError('MATERIAL_ACTIVITY','La partida no pertenece a esta obra.',422);
 
@@ -402,10 +410,7 @@ export async function POST(request: NextRequest) {
               cantidad: Number(m.cantidad) || 1,
               unidad: m.unidad || "unidad",
               precio_unitario: Number(m.precio_unitario) || 0,
-              subtotal:
-                Number(
-                  m.subtotal ?? Number(m.cantidad) * Number(m.precio_unitario),
-                ) || 0,
+              subtotal: Math.round(Number(m.cantidad) * Number(m.precio_unitario)),
               proveedor: m.proveedor || null,
               actividad_id:m.actividad_id??tables.materiales_proyecto.find((row:any)=>row.id===m.id)?.actividad_id??null,
               comprado: Boolean(m.comprado),
@@ -629,10 +634,8 @@ export async function POST(request: NextRequest) {
         : query.in('proyecto_id',tables.proyectos.map((p:any)=>p.id));
       await checked(query,'la eliminación solicitada');
     }
-    return NextResponse.json({
-      success: true,
-      updated_at: new Date().toISOString(),
-    });
+    const requestId = typeof input.request_id === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(input.request_id) ? input.request_id : crypto.randomUUID();
+    return NextResponse.json(await transaction.commit(requestId, Object.fromEntries(Object.entries(input.versiones || {}).map(([key, value]) => [mapping[key] || key, value]))));
   } catch (err: any) {
     return errorJSON(err);
   }

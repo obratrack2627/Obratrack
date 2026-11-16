@@ -21,7 +21,7 @@ function database({ plan = 'pro_ia', gates = {}, failure } = {}) {
       select() { return query; },
       eq(key, value) { predicates.push(row => row[key] === value); return query; },
       in(key, values) { predicates.push(row => values.includes(row[key])); return query; },
-      order() { return query; }, limit() { return query; },
+      order() { return query; }, limit() { return query; }, range() {return query;},
       then(resolve, reject) {
         events.push(table);
         return (async () => {

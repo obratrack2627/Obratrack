@@ -1423,7 +1423,7 @@ export default function ProyectosPage() {
                 ¿Eliminar esta obra?
               </h3>
               <p className="text-sm font-bold text-[#FF6A00]">
-                "{projectToDelete.nombre}"
+                &quot;{projectToDelete.nombre}&quot;
               </p>
               <p className="text-xs text-gray-500 font-sans mt-2 leading-relaxed">
                 Esta acción eliminará de forma permanente el proyecto, sus trabajadores asignados, su Carta Gantt, sus materiales, estados de pago e imprevistos.

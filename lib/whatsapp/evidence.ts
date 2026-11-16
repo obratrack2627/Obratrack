@@ -1,3 +1,4 @@
+import { validateFileContent } from '@/lib/supabase/file-validation';
 import { createHash } from "node:crypto";
 import { AIError } from "@/lib/ai/errors";
 import { resolveEntity } from "@/lib/ai/actions";
@@ -28,6 +29,7 @@ export async function storeEvidence(
   const buffer = Buffer.from(media.data, "base64");
   if (!buffer.length || buffer.length > 10 * 1024 * 1024)
     throw new AIError("IMAGE_SIZE", "La foto debe ocupar hasta 10 MB.", 422);
+  await validateFileContent(buffer,media.mimeType);
   const hash = createHash("sha256").update(messageId).digest("hex");
   const path = `${user.empresa_id}/${user.id}/${hash}.${ext[media.mimeType]}`;
   const { error } = await sb.storage

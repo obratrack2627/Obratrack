@@ -3,8 +3,9 @@ import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params: parameters }: { params: Promise<{ id: string }> },
 ) {
+  const params = await parameters;
   try {
     const { client, user } = await authorizeAI(request);
     const body = await request.json();

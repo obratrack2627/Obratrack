@@ -1,3 +1,6 @@
+import { withSnapshotVersions } from '@/lib/sync/snapshot-versions';
+import { setAIUsageActor } from '@/lib/ai/usage';
+import { completeRows } from '@/lib/supabase/pagination';
 import { turnQualityEvent } from '@/lib/ai/quality';
 import { scheduleQualityEvent } from '@/lib/ai/quality-server';
 import { projectLiterals, requestsNewProject } from './project-literals';
@@ -64,12 +67,13 @@ export async function processPersonalMessage(
   if (!message.id || !canonicalPhone(message.from || ""))
     throw new Error("Mensaje inválido.");
   const [usersResult, previousResult] = await Promise.all([
-    sb.from('usuarios').select('*'),
+    completeRows(() => sb.from('usuarios').select('*')),
     sb.from('whatsapp_mensajes').select('*').eq('message_id', message.id)
       .eq('sender_phone', canonicalPhone(message.from)),
   ]);
   const users = checked(usersResult);
   const user = identifySender(users, message.from);
+  if(user)setAIUsageActor(user);
   // Meta puede reenviar el mismo evento después de cambiar el teléfono propio.
   // Solo repetir su confirmación: el número anterior no obtiene acceso a mensajes nuevos.
   const previous = checked(previousResult)[0];
@@ -581,6 +585,7 @@ export async function processPersonalMessage(
   const newProjects = (plan.changed.proyectos || []).filter((p: any) => !tables.proyectos.some((previous: any) => previous.id === p.id));
   if (quoteOrigin && newProjects.length === 1 && plan.result) Object.assign(plan.result, { presupuesto_cotizacion_id: quoteOrigin, presupuesto_proyecto_id: newProjects[0].id });
   if (budgetSelection) plan.result = { tipo: 'actualizar_proyecto', titulo: 'Alternativa elegida', resultado_texto: confirmationResponse, detalles: {}, presupuesto_seleccion_id: budgetSelection.row.id, presupuesto_seleccion_version: budgetSelection.row.updated_at, presupuesto_ejecucion: budgetSelection.payload } as any;
+  const versioned=withSnapshotVersions(plan,tables);
   const params = {
     p_id: message.id,
     p_empresa: user.empresa_id,
@@ -590,8 +595,8 @@ export async function processPersonalMessage(
     p_respuesta: response,
     p_cotizacion: result.cotizacion,
     p_acciones: { ...(plan.result || {}), preferencias_conversacion:preferences.state, borrador_registro: nextPerson, edicion_nombre_pendiente:nameCommand?.pending || null, rol_actor: user.rol, proyecto_contexto_id: attachment?.proyecto_id || (newProjects.length === 1 ? newProjects[0].id : activeProject) || null },
-    p_changed: plan.changed,
-    p_deleted: plan.deleted,
+    p_changed: versioned.changed,
+    p_deleted: versioned.deleted,
     p_adjunto: attachment,
   };
   let { data, error } = await sb.rpc("aplicar_lote_copiloto", {
@@ -605,6 +610,10 @@ export async function processPersonalMessage(
         }
       : null,
   });
+  if(error?.message?.includes('SYNC_CONFLICT')) {
+    const conflict=await sb.rpc('aplicar_lote_copiloto',{...params,p_respuesta:whatsappCard('Cambios pendientes','La obra cambió mientras preparaba tu solicitud. No apliqué los cambios. Revisa el estado actual y vuelve a indicarme qué quieres modificar.'),p_changed:{},p_deleted:{},p_acciones:{rol_actor:user.rol,proyecto_contexto_id:activeProject||null},p_cotizacion:null,p_borrador:pendingProject||null,p_aviso:null});
+    data=conflict.data;error=conflict.error;
+  }
   const contactError = ((plan.changed.usuarios || []).length || (plan.changed.clientes || []).length)
     ? contactDatabaseMessage(error) : null;
   const registrationError = error?.message?.includes('REGISTRATION_') ? 'Revisa el nombre completo, RUT, correo, teléfono, rol y obra antes de finalizar el registro.' : null;
@@ -624,7 +633,7 @@ export async function processPersonalMessage(
       }
     }
     const fallbackActions = mediaPlan.result || candidatePerson || nameCommand?.action || preferences.respuesta || Object.keys(preferences.state.valores).length ? { ...(mediaPlan.result || {}), borrador_registro:candidatePerson || null, preferencias_conversacion:preferences.state, edicion_nombre_pendiente:nameCommand?.action ? {nuevo_nombre:nameCommand.action.nuevo_nombre,usuario_id:nameCommand.action.usuario_id} : nameCommand?.pending || null, rol_actor:user.rol, proyecto_contexto_id:mediaAttachment?.proyecto_id || activeProject || null } : null;
-    const fallback = await sb.rpc('aplicar_lote_copiloto', { ...params, p_respuesta: whatsappCard(contactError || registrationError ? 'Registro pendiente' : 'Presupuesto pendiente', reason), p_cotizacion: null, p_acciones:fallbackActions, p_changed:mediaPlan.changed, p_deleted:mediaPlan.deleted, p_adjunto:mediaAttachment, p_borrador: pendingProject || null, p_aviso: null });
+    const fallback = await sb.rpc('aplicar_lote_copiloto', { ...params, p_respuesta: whatsappCard(contactError || registrationError ? 'Registro pendiente' : 'Presupuesto pendiente', reason), p_cotizacion: null, p_acciones:fallbackActions, p_changed:withSnapshotVersions(mediaPlan,tables).changed, p_deleted:withSnapshotVersions(mediaPlan,tables).deleted, p_adjunto:mediaAttachment, p_borrador: pendingProject || null, p_aviso: null });
     data = fallback.data; error = fallback.error;
   }
   if (error || !data?.message_id)

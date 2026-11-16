@@ -155,7 +155,7 @@ export default function LegalTermsModal({
               <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-emerald-900 dark:text-emerald-200 font-medium">
-                  <strong>Titularidad y Secreto Comercial (Ley N° 21.719):</strong> La constructora o cliente es el único y exclusivo dueño de sus planos, presupuestos, cubicaciones e información técnica cargada en la plataforma.
+                  <strong>Privacidad y control de la información:</strong> La constructora o cliente es el único y exclusivo dueño de sus planos, presupuestos, cubicaciones e información técnica cargada en la plataforma.
                 </p>
               </div>
 
@@ -193,7 +193,7 @@ export default function LegalTermsModal({
               <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-2xl flex items-start gap-2.5">
                 <Server className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-blue-900 dark:text-blue-200 font-medium">
-                  <strong>Ley Marco de Ciberseguridad (Ley N° 21.663):</strong> Medidas de protección técnica, portabilidad de datos y destrucción segura ante la baja de servicios.
+                  <strong>Protección de la información:</strong> controles de acceso, portabilidad y atención de solicitudes de privacidad.
                 </p>
               </div>
 
@@ -211,7 +211,7 @@ export default function LegalTermsModal({
                   2. Derecho de Supresión y Destrucción Segura de Datos
                 </h4>
                 <p>
-                  En caso de cierre voluntario de cuenta, ObraTrack procederá a la eliminación segura y definitiva de los registros y archivos almacenados en la nube dentro de un plazo máximo de 30 días, exceptuando únicamente la información que deba conservarse por obligaciones tributarias legales (SII).
+                  Para solicitar la supresión de tus datos o el cierre de cuenta, escribe a obratrack2627@gmail.com desde el correo registrado. Verificaremos tu identidad y el alcance de la solicitud antes de ejecutarla, considerando las obligaciones de conservación aplicables. Cerrar sesión o cancelar una suscripción no elimina los datos de la empresa.
                 </p>
               </div>
 
@@ -220,7 +220,7 @@ export default function LegalTermsModal({
                   3. Seguridad de Infraestructura & Cifrado
                 </h4>
                 <p>
-                  El tráfico de datos se realiza bajo protocolo cifrado HTTPS / TLS 1.3, y las bases de datos cuentan con autenticación reforzada y respaldos automáticos distribuidos geográficamente.
+                  El tráfico utiliza HTTPS y el acceso a los datos se controla por empresa y permisos. Los respaldos incluyen base de datos y archivos según el alcance contratado y la configuración operativa. Puedes solicitar a soporte información sobre retención, recuperación y atención de incidentes.
                 </p>
               </div>
             </div>

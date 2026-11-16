@@ -87,7 +87,7 @@ function database() {
     },
     from(table) {
       let predicates = [],
-        max = Infinity, single = false;
+        max = Infinity, offset = 0, single = false;
       const q = {
         select() {
           return q;
@@ -107,9 +107,10 @@ function database() {
           max = n;
           return q;
         },
+        range(start,end) {offset=start;max=end-start+1;return q;},
         maybeSingle() { single = true; return q; },
         then(resolve, reject) {
-          const rows = (db[table] || []).filter((x) => predicates.every((p) => p(x))).slice(0, max);
+          const rows = (db[table] || []).filter((x) => predicates.every((p) => p(x))).slice(offset, offset+max);
           return Promise.resolve({ data: single ? rows[0] || null : rows }).then(resolve, reject);
         },
       };

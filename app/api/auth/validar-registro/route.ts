@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
@@ -66,54 +67,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, checked: false, conflicts: [] });
     }
 
-    const [usuariosRes, empresasRes] = await Promise.all([
-      admin.from('usuarios').select('email, email_acceso, rut, telefono_whatsapp').limit(5000),
-      admin.from('empresas').select('rut').limit(5000),
-    ]);
-
-    if (usuariosRes.error || empresasRes.error) {
-      return NextResponse.json({ ok: true, checked: false, conflicts: [] });
-    }
-
-    const targetRut = normalizeRutKey(rut);
-    const targetPhone = normalizePhoneKeyDigits(telefono);
-
-    const hasRutConflict =
-      Boolean(targetRut) &&
-      ((usuariosRes.data || []).some((row) => normalizeRutKey(row.rut) === targetRut) ||
-        (empresasRes.data || []).some((row) => normalizeRutKey(row.rut) === targetRut));
-
-    const hasPhoneConflict =
-      Boolean(targetPhone) &&
-      (usuariosRes.data || []).some(
-        (row) => normalizePhoneKeyDigits(row.telefono_whatsapp) === targetPhone,
-      );
-
-    let hasEmailConflict =
-      Boolean(email) &&
-      (usuariosRes.data || []).some(
-        (row) =>
-          sanitizeEmail(row.email).toLowerCase() === email ||
-          sanitizeEmail(row.email_acceso).toLowerCase() === email,
-      );
-
-    if (!hasEmailConflict && email && admin.auth?.admin?.listUsers) {
-      try {
-        const listed = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-        hasEmailConflict = Boolean(
-          listed?.data?.users?.some(
-            (u) => sanitizeEmail(u.email).toLowerCase() === email,
-          ),
-        );
-      } catch {
-        // Ignorar si listUsers no está disponible en este entorno
-      }
-    }
-
-    const conflicts: RegistrationConflictField[] = [];
-    if (hasRutConflict) conflicts.push('rut');
-    if (hasPhoneConflict) conflicts.push('telefono');
-    if (hasEmailConflict) conflicts.push('email');
+    const address = request.headers.get('x-vercel-forwarded-for')?.split(',').at(-1)?.trim() || 'shared';
+    const clientKey = createHmac('sha256', process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'local-only').update(address).digest('hex');
+    const {data,error}=await admin.rpc('prevalidar_registro_constructor',{
+      p_key:clientKey,p_email:email,p_phone:normalizePhoneKeyDigits(telefono),p_rut:normalizeRutKey(rut),
+    });
+    if(error?.message?.includes('REGISTRATION_RATE_LIMIT'))return NextResponse.json({ok:false,error:'Demasiados intentos de registro. Espera un momento antes de volver a intentar.'},{status:429,headers:{'Retry-After':'3600'}});
+    if(error || !Array.isArray(data?.conflicts))return NextResponse.json({ok:true,checked:false,conflicts:[]});
+    const conflicts=data.conflicts.filter((field:unknown)=>['rut','telefono','email'].includes(String(field))) as RegistrationConflictField[];
 
     if (conflicts.length > 0) {
       return NextResponse.json(

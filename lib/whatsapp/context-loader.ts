@@ -1,3 +1,4 @@
+import { completeRows, completeProjectRows } from '@/lib/supabase/pagination';
 import { AIError } from "@/lib/ai/errors";
 
 export const whatsappChildTables = [
@@ -27,7 +28,7 @@ export async function loadWhatsAppContext(sb: any, user: any, users: any[]) {
     sb.from("empresas").select("id,plan_id").eq("id", user.empresa_id),
   );
   const projectResult = Promise.resolve(
-    sb.from("proyectos").select("*").eq("empresa_id", user.empresa_id),
+    completeRows(() => sb.from("proyectos").select("*").eq("empresa_id", user.empresa_id)),
   );
 
   // Las tablas de obra dependen de sus IDs, pero no del historial ni del plan.
@@ -41,18 +42,11 @@ export async function loadWhatsAppContext(sb: any, user: any, users: any[]) {
       "proyecto_trabajadores",
     ];
     const results = await Promise.all([
-      sb.from("clientes").select("*").eq("empresa_id", user.empresa_id),
-      sb.from("agenda_eventos").select("*").eq("empresa_id", user.empresa_id),
+      completeRows(() => sb.from("clientes").select("*").eq("empresa_id", user.empresa_id)),
+      completeRows(() => sb.from("agenda_eventos").select("*").eq("empresa_id", user.empresa_id)),
       ...[...whatsappChildTables, "proyecto_trabajadores"].map((table) => {
         if (!ids.length) return Promise.resolve({ data: [] });
-        const query = sb.from(table).select("*").in("proyecto_id", ids);
-        if (table !== "materiales_proyecto" || typeof query?.order !== "function") {
-          return query;
-        }
-        const byCreated = query.order("created_at", { ascending: true });
-        return typeof byCreated?.order === "function"
-          ? byCreated.order("id", { ascending: true })
-          : byCreated;
+        return completeProjectRows(sb, table, ids, table === 'proyecto_trabajadores' ? ['proyecto_id','usuario_id'] : table === 'materiales_proyecto' ? ['created_at','id'] : ['id']);
       }),
     ]);
     const tables: Record<string, any[]> = {

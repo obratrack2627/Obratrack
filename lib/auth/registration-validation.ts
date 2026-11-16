@@ -61,8 +61,8 @@ export function validateSignUpFields(args: SignUpValidationInput): string | null
   if (args.requirePassword !== false) {
     const pass = args.signupPassword || '';
     const confirm = args.signupConfirmPassword || '';
-    if (pass.length < 6) {
-      return 'La contraseña debe tener al menos 6 caracteres.';
+    if (pass.length < 12) {
+      return 'La contraseña debe tener al menos 12 caracteres.';
     }
     if (pass !== confirm) {
       return 'Las contraseñas no coinciden.';

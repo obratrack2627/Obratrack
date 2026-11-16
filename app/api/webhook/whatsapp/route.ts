@@ -1,3 +1,4 @@
+import { withAIRequest } from '@/lib/ai/usage';
 import {
   getWhatsAppStatus,
   createWhatsAppWebhook,
@@ -5,4 +6,4 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export const GET = getWhatsAppStatus;
-export const POST = createWhatsAppWebhook();
+export const POST = withAIRequest(createWhatsAppWebhook(), 'whatsapp');

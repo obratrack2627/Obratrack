@@ -1,5 +1,6 @@
 .root {
   --g-surface: #fff;
+  --g-accent-ink: #b44500;
   --g-muted: #faf8f5;
   --g-border: #e5dfc9;
   --g-ink: #1e1e1e;
@@ -12,6 +13,7 @@
 }
 :global(.dark) .root {
   --g-surface: #141a23;
+  --g-accent-ink: #ff9b55;
   --g-muted: #0b0f14;
   --g-border: #263040;
   --g-ink: #f3f4f6;
@@ -46,13 +48,13 @@
   min-height: 44px;
   padding: 10px 16px;
   border-radius: 12px;
-  background: #ff6a00;
+  background: #b44500;
   color: #fff;
   font-size: 13px;
   font-weight: 650;
 }
 .primary:hover {
-  background: #e55f00;
+  background: #923700;
 }
 .summary {
   display: flex;
@@ -76,7 +78,7 @@
 }
 .overall strong {
   font-size: 16px;
-  color: #ff6a00;
+  color: var(--g-accent-ink);
 }
 .track {
   height: 6px;
@@ -89,7 +91,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #ff6a00;
+  background: #b44500;
 }
 .counts {
   display: flex;
@@ -140,7 +142,7 @@
 }
 .viewSwitch button[aria-pressed="true"] {
   background: var(--g-surface);
-  color: #ff6a00;
+  color: var(--g-accent-ink);
   box-shadow: 0 1px 3px #00000010;
 }
 .filters {
@@ -287,7 +289,7 @@
   overflow-wrap: anywhere;
 }
 .activityName:hover {
-  color: #ff6a00;
+  color: var(--g-accent-ink);
 }
 .activityDates {
   color: var(--g-dim);
@@ -325,7 +327,7 @@
   top: 0;
   bottom: 0;
   width: 1px;
-  background: #ff6a00;
+  background: #b44500;
   pointer-events: none;
   z-index: 2;
 }
@@ -337,7 +339,7 @@
   border-radius: 7px;
   padding: 4px 7px;
   color: white;
-  background: #ff6a00;
+  background: #b44500;
   font-size: 10px;
   white-space: nowrap;
 }
@@ -370,11 +372,11 @@
 }
 .bar[data-status="terminada"] {
   border-color: #6b8f72;
-  background: #6b8f72;
+  background: #3f6848;
   color: #fff;
 }
 .bar[data-status="en_curso"] {
-  border-color: #ff6a00;
+  border-color: var(--g-accent-ink);
   background: #fff3e8;
   color: #7b3500;
 }
@@ -507,7 +509,7 @@
   gap: 5px;
   align-items: center;
   min-height: 40px;
-  color: #ff6a00;
+  color: var(--g-accent-ink);
   font-size: 12px;
   font-weight: 650;
 }
@@ -524,7 +526,7 @@
   font-weight: 650;
 }
 .quick button:last-child {
-  background: #6b8f72;
+  background: #3f6848;
   color: #fff;
   border-color: #6b8f72;
 }

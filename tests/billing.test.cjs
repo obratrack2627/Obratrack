@@ -153,6 +153,25 @@ function createInMemoryBillingDb(seed = {}) {
     db,
     client: {
       from(table) { return makeBuilder(table); },
+      async rpc(name,{p_evento,p_datos:d}) {
+        // Contract mock only; atomicity, rollback and concurrency are tested in native SQL.
+        if(name==='billing_aplicar_estado_flow' && db.billing_webhook_events.some(e=>e.event_key===p_evento))return {data:{outcome:'duplicate',idempotent:true},error:null};
+        if(name==='billing_aplicar_estado_flow' && d.status!==2){
+          const pay=db.pagos_suscripcion.find(p=>p.id===d.pagoId);if(pay)pay.estado=d.status===3?'failed':d.status===4?'canceled':pay.estado;
+          db.billing_webhook_events.push({event_key:p_evento});return {data:{outcome:d.status===3?'failed':d.status===4?'canceled':'pending'},error:null};
+        }
+        const old=db.suscripciones.find(s=>s.empresa_id===d.empresaId);
+        const start=d.periodStartIso||new Date().toISOString();
+        const base=old?.estado==='active'&&old.plan_id===d.planId&&d.modalidad==='prepago'?Math.max(Date.parse(start),Date.parse(old.current_period_end)):Date.parse(start);
+        const sub={id:old?.id||'sub-fixture',...old,empresa_id:d.empresaId,plan_id:d.planId,ciclo:d.ciclo,modalidad:d.modalidad,estado:'active',current_period_start:start,current_period_end:d.periodEndIso||new Date(base+d.duracionDias*86400000).toISOString(),cancel_at_period_end:false,gateway_customer_id:d.gatewayCustomerId||old?.gateway_customer_id,gateway_subscription_id:d.gatewaySubscriptionId||old?.gateway_subscription_id};
+        if(old)Object.assign(old,sub);else db.suscripciones.push(sub);
+        db.empresas.find(e=>e.id===d.empresaId).plan_id=d.planId;
+        let pay=db.pagos_suscripcion.find(p=>p.id===d.pagoId);
+        if(!pay){pay={id:'pay-fixture-'+seq++,empresa_id:d.empresaId,commerce_order:d.commerceOrder,plan_id:d.planId,ciclo:d.ciclo,modalidad:d.modalidad,monto_clp:d.amount};db.pagos_suscripcion.push(pay);}
+        Object.assign(pay,{estado:'paid',suscripcion_id:sub.id,gateway_payment_id:d.gatewayPaymentId,paid_at:start,metodo_pago:d.metodoPago});
+        if(p_evento)db.billing_webhook_events.push({event_key:p_evento});
+        return {data:{outcome:'paid'},error:null};
+      },
     },
   };
 }

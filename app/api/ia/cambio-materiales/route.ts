@@ -1,3 +1,4 @@
+import { withAIRequest } from '@/lib/ai/usage';
 import { NextRequest, NextResponse } from "next/server";
 import { sugerirMaterialesCambioGemini } from "@/lib/gemini";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
@@ -5,7 +6,7 @@ import { AIError } from "@/lib/ai/errors";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const { client, user } = await authorizeAI(request);
     const { data: company, error: companyError } = await client
@@ -87,3 +88,5 @@ export async function POST(request: NextRequest) {
     return errorJSON(err);
   }
 }
+
+export const POST = withAIRequest(handlePOST);

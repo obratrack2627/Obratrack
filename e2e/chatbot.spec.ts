@@ -1625,10 +1625,10 @@ test('los indicadores móviles permanecen visibles y ajustan los importes comple
  db.pagos=[{id:'large-payment',proyecto_id:'p-existing',monto:123456789000,estado:'completado',fecha:'2026-11-09'}];
  for(const path of ['/dashboard','/proyectos','/clientes','/equipo','/asistencia','/proyectos/p-existing/finanzas','/proyectos/p-existing/documentos','/proyectos/p-existing/cambios','/proyectos/p-existing/asistencia','/proyectos/p-existing/ia']){
   await page.goto(path);
-  await expect(page.locator('.summary-overview')).toBeVisible();
+  await expect(path.endsWith('/p-existing/asistencia') ? page.getByRole('region',{name:'Resumen de cuadrilla'}) : page.locator('.summary-overview')).toBeVisible();
   await expect(page.getByText('Ver resumen',{exact:true})).toHaveCount(0);
   await expectMobileWidth(page);
-  expect(await page.locator('.workspace-metrics > div').evaluateAll(nodes=>Math.max(...nodes.map(node=>node.getBoundingClientRect().height)))).toBeLessThan(350);
+  expect(await page.locator(path.endsWith('/p-existing/asistencia') ? '[aria-label="Resumen de cuadrilla"] > div:first-child > div' : '.workspace-metrics > div').evaluateAll(nodes=>Math.max(...nodes.map(node=>node.getBoundingClientRect().height)))).toBeLessThan(350);
   if(await page.locator('.money-amount').count())await expect.poll(()=>page.locator('.money-amount').evaluateAll(nodes=>nodes.every(node=>(node.firstElementChild?.scrollWidth||0)<=node.clientWidth+1))).toBe(true);
  }
  await page.goto('/dashboard');

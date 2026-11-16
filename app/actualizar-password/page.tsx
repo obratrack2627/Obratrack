@@ -94,8 +94,8 @@ export default function ActualizarPasswordPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    if (newPassword.length < 6) {
-      setErrorMsg('La nueva contraseña debe tener al menos 6 caracteres.');
+    if (newPassword.length < 12) {
+      setErrorMsg('La nueva contraseña debe tener al menos 12 caracteres.');
       return;
     }
 
@@ -219,14 +219,16 @@ export default function ActualizarPasswordPage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full pl-10 pr-10 py-2.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/20 font-sans transition-all"
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 12 caracteres"
                   required
-                  minLength={6}
+                  minLength={12}
                 />
                 <button
                   type="button"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  aria-pressed={showPassword}
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  className="absolute right-2 min-h-9 min-w-9 flex items-center justify-center top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -275,7 +277,7 @@ export default function ActualizarPasswordPage() {
                   className="w-full pl-10 pr-10 py-2.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/20 font-sans transition-all"
                   placeholder="Repite la nueva contraseña"
                   required
-                  minLength={6}
+                  minLength={12}
                 />
               </div>
             </div>

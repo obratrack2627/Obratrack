@@ -83,7 +83,7 @@ export default function Logo({
   const isMonoLight = theme === 'monochrome-light';
   const isMonoDark = theme === 'monochrome-dark';
 
-  const orangeText = isMonoLight ? 'text-[#1E1E1E]' : isMonoDark ? 'text-white' : 'text-[#FF6A00]';
+  const orangeText = isMonoLight ? 'text-[#1E1E1E]' : isMonoDark ? 'text-white' : isDark ? 'text-[#FF9B55]' : 'text-obra-orange';
   const trackText = isMonoLight
     ? 'text-[#1E1E1E]'
     : isMonoDark

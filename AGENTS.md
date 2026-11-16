@@ -3,7 +3,7 @@
 ## Directivas del Proyecto
 1. **Identidad del Proyecto y Repositorio**:
    - Repositorio oficial en producción: `https://github.com/obratrack2627/Obratrack`
-   - Aplicación web SaaS desplegada en Vercel: `https://obratrack-5zwn.vercel.app`
+   - Aplicación web SaaS desplegada en Vercel: `https://obratrack-cl.vercel.app`
    - Equipo de Ingeniería (INACAP 2026): Benjamín Arriagada Achavar & Jorge Andre Castro Arteaga.
 
 2. **Base de Datos, Autenticación y Backend Cloud-Native**:
@@ -56,3 +56,10 @@
 - SFT: solo ejemplos revisados, anonimizados y consentidos; deduplicación y holdout independiente. No entrenar precios retail, aritmética, validación de permisos ni datos de contacto. Generar JSONL no autoriza iniciar un entrenamiento ni cambiar el modelo de producción.
 
 - Costo de IA: `OPENAI_MODEL=gpt-6-luna` es el predeterminado económico (2026-11-14), reasoning low. Se validaron 8 casos reales; no afirmar 37/37 para este modelo. El runner tiene un máximo predeterminado de 5 llamadas contando retries; no ejecutar lotes pagados grandes sin un límite explícito. Voz y embeddings mantienen modelos especializados.
+
+## Integridad y operación (2026-11-16)
+- Guardado web mediante `sincronizar_lote_web`: transaccional, con versiones y request_id estable para reintentos. No restaurar escrituras secuenciales ni rebasar conflictos sin una decisión explícita del usuario.
+- Activación de pagos mediante RPCs service_role, después de verificar Flow; no marcar un evento completado antes de activar el plan. Un enrolamiento remoto ambiguo requiere conciliación, nunca repetir a ciegas la creación/cobro.
+- Los límites por plan, importes y pertenencia se comprueban en BD. Las lecturas completas paginan y acotan las listas de IDs.
+- Las rutas IA crean un contexto de consumo; cuotas y reservas se verifican antes de cada llamada pagada. La liberación de cuota es exclusiva del servidor. Nunca desactivar cuotas para resolver un error de configuración.
+- Scripts SQL de prueba crean una BD efímera; no ejecutar fixtures con escrituras contra producción. Claves de respaldo y copias con datos personales quedan fuera de Git.

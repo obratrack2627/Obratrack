@@ -607,10 +607,10 @@ test('toggle de compra y pago sincroniza solo el material editado y conserva el 
     from(table) {
       const q = {
         select() { return q; },
-        eq() { return Promise.resolve({ data: table === 'empresas' ? [{ id: 'a', plan_id: 'pro_ia' }] : table === 'proyectos' ? [p1] : [], error: null }); },
+        eq() { return q; }, range(){return q;},
         in() { return q; },
         order(col, opts) { orderCalls.push({ table, col, opts }); return q; },
-        then(resolve, reject) { return Promise.resolve({ data: [], error: null }).then(resolve, reject); },
+        then(resolve, reject) { return Promise.resolve({ data: table === 'empresas' ? [{ id: 'a', plan_id: 'pro_ia' }] : table === 'proyectos' ? [p1] : [], error: null }).then(resolve, reject); },
       };
       return q;
     },
