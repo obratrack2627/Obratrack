@@ -65,7 +65,7 @@ DECLARE
   dv TEXT;
   leading_digits TEXT;
 BEGIN
-  IF raw_rut IS NULL OR btrim(raw_rut) = '' THEN
+  IF raw_rut IS NULL OR length(btrim(raw_rut)) = 0 THEN
     RETURN NULL;
   END IF;
   clean := upper(regexp_replace(raw_rut, '[^0-9kK]', '', 'g'));
@@ -87,7 +87,7 @@ AS $$
 DECLARE
   digits TEXT;
 BEGIN
-  IF raw_phone IS NULL OR btrim(raw_phone) = '' THEN
+  IF raw_phone IS NULL OR length(btrim(raw_phone)) = 0 THEN
     RETURN NULL;
   END IF;
   digits := regexp_replace(raw_phone, '\D', '', 'g');
@@ -111,7 +111,7 @@ DECLARE
   local_part TEXT;
   domain_part TEXT;
 BEGIN
-  IF raw_email IS NULL OR btrim(raw_email) = '' THEN
+  IF raw_email IS NULL OR length(btrim(raw_email)) = 0 THEN
     RETURN NULL;
   END IF;
   at_pos := strpos(raw_email, '@');
