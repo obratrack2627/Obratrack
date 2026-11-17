@@ -1,0 +1,20 @@
+name: Sonar diagnostics
+on:
+  workflow_dispatch:
+  push:
+    paths: [.github/workflows/sonar-diagnostics.yml]
+permissions:
+  contents: read
+jobs:
+  issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read public reliability findings
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+          url='https://sonarcloud.io/api/issues/search?componentKeys=obratrack2627_Obratrack&branch=main&types=BUG&resolved=false&sinceLeakPeriod=true&ps=100'
+          with urllib.request.urlopen(url, timeout=30) as response:
+              data=json.load(response)
+          print(json.dumps({'total':data.get('total'),'issues':[{'key':i.get('key'),'rule':i.get('rule'),'file':i.get('component'),'line':i.get('line'),'message':i.get('message')} for i in data.get('issues',[])]},ensure_ascii=False,indent=2))
+          PY
