@@ -256,7 +256,7 @@ function SignInView(props: SignInViewProps) {
             value={props.email}
             onChange={(e) => props.onEmailChange(e.target.value)}
             className={INPUT_CLASS}
-            placeholder="nombre@empresa.cl o 12.345.678-5"
+            placeholder="nombre@empresa.cl o RUT"
             required
           />
         </div>
