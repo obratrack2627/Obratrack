@@ -397,7 +397,8 @@ export default function PushNotificationsControl({ headless = false }: PushNotif
   };
 
   const handleToggleCategory = async (key: CategoryKey) => {
-    const next = { ...prefs, [key]: !prefs[key] };
+    const previousPreferences = { ...prefs };
+    const next = { ...previousPreferences, [key]: !previousPreferences[key] };
     setPrefs(next);
     setSavingPrefs(true);
     setErrorMsg(null);
@@ -413,7 +414,7 @@ export default function PushNotificationsControl({ headless = false }: PushNotif
       }
       setStatusMsg('Preferencias guardadas.');
     } catch (err) {
-      setPrefs(prefs);
+      setPrefs(previousPreferences);
       setErrorMsg((err as Error).message || 'Error guardando preferencia.');
     } finally {
       setSavingPrefs(false);
