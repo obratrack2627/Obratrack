@@ -240,3 +240,17 @@ test("endpoint cron /api/notificaciones/cron rechaza accesos sin CRON_SECRET vá
   const unauthorized = await cronGET(new NextRequest("https://example.test/api/notificaciones/cron"));
   assert.equal(unauthorized.status, 401);
 });
+
+test('envío predeterminado soporta web-push ESM sin exportación default',async()=>{
+ const packagePath=require.resolve('web-push');const serverPath=require.resolve('../lib/push/server.ts');
+ const oldPackage=require.cache[packagePath];const oldServer=require.cache[serverPath];
+ const actual=require('web-push');
+ try{
+  require.cache[packagePath]={...oldPackage,exports:{...actual,__esModule:true}};
+  delete require.cache[serverPath];
+  const {sendPushToUsers:send}=require('../lib/push/server.ts');
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY='fixture-public';process.env.VAPID_PRIVATE_KEY='fixture-private';
+  const db={from(){return {select(){return this;},eq(){return this;},then(resolve){return Promise.resolve({data:[],error:null}).then(resolve);}};}};
+  assert.deepEqual(await send(db,{empresaId:'fixture-company',payload:{title:'Prueba'}}),{attempted:0,sent:0,deactivated:0});
+ }finally{require.cache[packagePath]=oldPackage;require.cache[serverPath]=oldServer;}
+});

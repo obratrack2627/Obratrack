@@ -1,5 +1,5 @@
 import { createECDH } from "node:crypto";
-import webPush from "web-push";
+import { sendNotification } from "web-push";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const PUSH_ICON_PATH = "/app-icons/obratrack-mobile-v3-192.png?v=4";
@@ -175,7 +175,7 @@ export interface SendPushParams {
 export async function sendPushToUsers(
   sb: any,
   params: SendPushParams,
-  sender: typeof webPush.sendNotification = webPush.sendNotification.bind(webPush),
+  sender: typeof sendNotification = sendNotification,
 ): Promise<{ attempted: number; sent: number; deactivated: number }> {
   const admin = sb || (() => {
     try {
@@ -284,7 +284,7 @@ export async function sendPushIdempotent(
   sb: any,
   dedupKey: string,
   params: SendPushParams,
-  sender?: typeof webPush.sendNotification,
+  sender?: typeof sendNotification,
 ): Promise<{ skipped: boolean; sent: number }> {
   const admin = sb || getSupabaseAdmin();
   if (!admin) return { skipped: true, sent: 0 };

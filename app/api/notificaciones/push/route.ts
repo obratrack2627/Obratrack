@@ -16,6 +16,13 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function pushErrorResponse(error: unknown) {
+  if(error instanceof AIError)return errorJSON(error);
+  // Never expose subscription endpoints, keys or provider response bodies.
+  console.error('push_request_failed',{type:error instanceof Error?error.name:'unknown'});
+  return NextResponse.json({code:'PUSH_INTERNAL',error:'No se pudo completar la solicitud de notificaciones. Intenta nuevamente.'},{status:503});
+}
+
 async function authorizePushActor(request: NextRequest) {
   const authorization = (request.headers.get("authorization") || "").trim().split(/\s+/);
   const bearer =
@@ -109,7 +116,7 @@ export async function GET(request: NextRequest) {
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
-    return errorJSON(error);
+    return pushErrorResponse(error);
   }
 }
 
@@ -196,7 +203,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, subscribed: true, preferences: prefs });
   } catch (error) {
-    return errorJSON(error);
+    return pushErrorResponse(error);
   }
 }
 
@@ -222,6 +229,6 @@ export async function DELETE(request: NextRequest) {
     }
     return NextResponse.json({ ok: true, subscribed: false });
   } catch (error) {
-    return errorJSON(error);
+    return pushErrorResponse(error);
   }
 }
