@@ -13,6 +13,8 @@ require('./helpers/browser.cjs')();
 const server = require('../lib/ai/server.ts');
 
 const {
+  MASKED_CLP_AMOUNT,
+  maskCLP,
   maskRUT,
   maskPhone,
   maskEmail,
@@ -27,18 +29,21 @@ afterEach(() => {
   fixture.reset();
 });
 
-test('ISO A.8.11: maskRUT, maskPhone y maskEmail enmascaran PII de forma legible', () => {
-  assert.equal(maskRUT('12.345.678-5'), '12.•••.••8-5');
-  assert.equal(maskRUT('9876543-k'), '9.•••.••3-K');
+test('ISO A.8.11: maskRUT, maskPhone, maskEmail y maskCLP enmascaran PII y montos correctamente', () => {
+  assert.equal(maskRUT('12.345.678-5'), '12.345.•••-•');
+  assert.equal(maskRUT('9876543-k'), '9.876.•••-•');
   assert.equal(maskRUT(''), '');
 
-  assert.equal(maskPhone('+56987654321'), '+56 9 •••• 4321');
-  assert.equal(maskPhone('987654321'), '••• •••• 4321');
+  assert.equal(maskPhone('+56987654321'), '+56 9 8765 ••••');
+  assert.equal(maskPhone('987654321'), '98765 ••••');
   assert.equal(maskPhone(''), '');
 
-  assert.equal(maskEmail('constructor@obratrack.cl'), 'co•••@obratrack.cl');
-  assert.equal(maskEmail('a@b.cl'), 'a•••@b.cl');
+  assert.equal(maskEmail('constructor@obratrack.cl'), '•••or@obratrack.cl');
+  assert.equal(maskEmail('a@b.cl'), '•••@b.cl');
   assert.equal(maskEmail(''), '');
+
+  assert.equal(maskCLP(), MASKED_CLP_AMOUNT);
+  assert.equal(MASKED_CLP_AMOUNT, '$ *******');
 });
 
 test('ISO A.8.12/A.8.15: redactSensitiveText y sanitizeLogData ocultan JWT, tokens, RUT, email y teléfonos', () => {
@@ -49,8 +54,8 @@ test('ISO A.8.12/A.8.15: redactSensitiveText y sanitizeLogData ocultan JWT, toke
   assert.equal(redacted.includes('jefe@constructora.cl'), false);
   assert.equal(redacted.includes('56912345678'), false);
   assert.match(redacted, /Bearer \[REDACTED\]|\[JWT_REDACTED\]/);
-  assert.match(redacted, /12\.•••\.••8-5/);
-  assert.match(redacted, /je•••@constructora\.cl/);
+  assert.match(redacted, /12\.345\.•••-•/);
+  assert.match(redacted, /•••fe@constructora\.cl/);
 
   const sanitizedObj = sanitizeLogData({
     password: 'SecretPassword123',
@@ -59,7 +64,7 @@ test('ISO A.8.12/A.8.15: redactSensitiveText y sanitizeLogData ocultan JWT, toke
   });
   assert.equal(sanitizedObj.password, '[REDACTED]');
   assert.equal(sanitizedObj.token, '[REDACTED]');
-  assert.equal(sanitizedObj.email, 'pe•••@example.test');
+  assert.equal(sanitizedObj.email, '•••ro@example.test');
 
   const errInfo = sanitizeErrorForLog(new Error('Fallo para pedro@example.test con token sk-1234567890abcdef'));
   assert.equal(errInfo.message.includes('pedro@example.test'), false);
@@ -77,14 +82,14 @@ test('ISO A.8.11: compactAIContext enmascara RUT, email y teléfono antes de env
   });
 
   assert.equal(compact.clientes[0].nombre, 'Inmobiliaria Sur');
-  assert.equal(compact.clientes[0].rut, '76.•••.••6-7');
-  assert.equal(compact.clientes[0].email, 'co•••@sur.cl');
-  assert.equal(compact.clientes[0].telefono, '+56 9 •••• 3344');
+  assert.equal(compact.clientes[0].rut, '76.123.•••-•');
+  assert.equal(compact.clientes[0].email, '•••to@sur.cl');
+  assert.equal(compact.clientes[0].telefono, '+56 9 1122 ••••');
 
   assert.equal(compact.trabajadores[0].nombre, 'Pedro Soto');
-  assert.equal(compact.trabajadores[0].rut, '12.•••.••8-5');
-  assert.equal(compact.trabajadores[0].email, 'pe•••@obra.cl');
-  assert.equal(compact.trabajadores[0].telefono_whatsapp, '+56 9 •••• 4321');
+  assert.equal(compact.trabajadores[0].rut, '12.345.•••-•');
+  assert.equal(compact.trabajadores[0].email, '•••ro@obra.cl');
+  assert.equal(compact.trabajadores[0].telefono_whatsapp, '+56 9 8765 ••••');
 });
 
 test('ISO A.8.15: recordSecurityEvent y /api/auditoria/evento validan permisos y sanitizan metadata', async () => {

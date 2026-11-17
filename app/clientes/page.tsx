@@ -572,6 +572,7 @@ export default function ClientesPage() {
               <thead>
                 <tr className="border-b border-kraft-200 dark:border-[#263040] text-gray-500 dark:text-gray-400 font-mono uppercase text-[11px]">
                   <th className="py-2 pr-3 font-medium">Cliente</th>
+                  <th className="py-2 pr-3 font-medium">RUT</th>
                   <th className="py-2 pr-3 font-medium">Contacto</th>
                   <th className="py-2 pr-3 font-medium">Obras</th>
                   <th className="py-2 pr-3 font-medium text-right">Contratado</th>
@@ -598,11 +599,12 @@ export default function ClientesPage() {
                       key={c.id}
                       className="hover:bg-kraft-50/50 dark:hover:bg-[#1A222D]/40 transition-colors"
                     >
-                      <td className="py-2.5 pr-3 whitespace-nowrap">
-                        <span className="font-semibold text-navy-900 dark:text-white">
-                          {c.nombre}
-                        </span>
-                        {c.rut && (
+                      <td className="py-2.5 pr-3 whitespace-nowrap font-semibold text-navy-900 dark:text-white">
+                        {c.nombre}
+                      </td>
+
+                      <td className="py-2.5 pr-3 whitespace-nowrap font-mono text-[11px] text-gray-600 dark:text-gray-300">
+                        {c.rut ? (
                           <MaskedField
                             value={formatRUT(c.rut)}
                             masked={maskRUT(c.rut)}
@@ -610,8 +612,10 @@ export default function ClientesPage() {
                             resourceType="cliente"
                             resourceId={c.id}
                             fieldName="rut"
-                            className="ml-2 text-[11px]"
+                            className="text-[11px]"
                           />
+                        ) : (
+                          <span className="text-gray-400">—</span>
                         )}
                       </td>
 

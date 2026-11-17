@@ -1,6 +1,7 @@
 'use client';
 import { calendarDays, chileToday } from '@/lib/work-calendar';
 import MoneyAmount from "@/components/MoneyAmount";
+import MaskedMoneyAmount from '@/components/MaskedMoneyAmount';
 import CompactSummary from '@/components/CompactSummary';
 import { ProjectStatusBadge } from '@/components/ProjectStatus';
 
@@ -268,10 +269,8 @@ export default function DashboardPage() {
               <DollarSign className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <span className="text-2xl lg:text-3xl font-heading font-black text-navy-900 dark:text-white">
-              <MoneyAmount value={totalCotizado} />
-            </span>
+          <div className="mt-3 text-2xl lg:text-3xl font-heading font-black text-navy-900 dark:text-white">
+            <MaskedMoneyAmount value={totalCotizado} label="Total facturado / cotizado" />
           </div>
           <p className="mt-3 text-xs text-gray-500 font-mono">
             Valor total de presupuestos aprobados
@@ -288,10 +287,8 @@ export default function DashboardPage() {
               <TrendingUp className="w-5 h-5" />
             </div>
           </div>
-          <div className="mt-3">
-            <span className="text-2xl lg:text-3xl font-heading font-black text-[#6B8F72]">
-              <MoneyAmount value={totalCobrado} />
-            </span>
+          <div className="mt-3 text-2xl lg:text-3xl font-heading font-black text-[#6B8F72]">
+            <MaskedMoneyAmount value={totalCobrado} label="Total recaudado / cobrado" />
           </div>
           <div className="mt-3 space-y-1 text-xs font-mono text-gray-500">
             <span className="block">Saldo por cobrar:</span>

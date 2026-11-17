@@ -8,16 +8,23 @@ const EMAIL_PATTERN = /\b([A-Za-z0-9._%+-]{1,64})@([A-Za-z0-9.-]+\.[A-Za-z]{2,})
 const RUT_PATTERN = /\b(\d{1,2})\.?(\d{3})\.?(\d{3})-([\dkK])\b/g;
 const PHONE_PATTERN = /(?:\+\d{1,3}[\s-]?)?\b(?:9[\s-]?\d{4}[\s-]?\d{4}|\d{9,12})\b/g;
 
+export const MASKED_CLP_AMOUNT = '$ *******';
+
+export function maskCLP(): string {
+  return MASKED_CLP_AMOUNT;
+}
+
 export function maskRUT(value?: string | null): string {
   const raw = (value || '').trim();
   if (!raw) return '';
   const clean = raw.replace(/[^0-9kK]/g, '').toUpperCase();
   if (clean.length < 4) return '•••-•';
   const body = clean.slice(0, -1);
-  const dv = clean.slice(-1);
-  const leading = body.length > 7 ? body.slice(0, 2) : body.slice(0, 1);
-  const trailing = body.slice(-1);
-  return `${leading}.•••.••${trailing}-${dv}`;
+  if (body.length <= 3) return '•••-•';
+  const visibleHead = body.slice(0, -3);
+  const formattedHead =
+    visibleHead.length > 3 ? `${visibleHead.slice(0, -3)}.${visibleHead.slice(-3)}` : visibleHead;
+  return `${formattedHead}.•••-•`;
 }
 
 export function maskPhone(value?: string | null): string {
@@ -25,14 +32,14 @@ export function maskPhone(value?: string | null): string {
   if (!raw) return '';
   const digits = raw.replace(/\D/g, '');
   if (digits.length < 6) return '••••';
-  const last4 = digits.slice(-4);
   if (digits.startsWith('56') && digits.length >= 11) {
-    return `+56 ${digits[2]} •••• ${last4}`;
+    return `+56 ${digits[2]} ${digits.slice(3, 7)} ••••`;
   }
   if (raw.startsWith('+') && digits.length >= 8) {
-    return `+${digits.slice(0, 2)} •••• ${last4}`;
+    const visibleRest = digits.slice(2, Math.min(6, digits.length - 4));
+    return `+${digits.slice(0, 2)} ${visibleRest} ••••`;
   }
-  return `••• •••• ${last4}`;
+  return `${digits.slice(0, Math.max(2, digits.length - 4))} ••••`;
 }
 
 export function maskEmail(value?: string | null): string {
@@ -42,8 +49,8 @@ export function maskEmail(value?: string | null): string {
   if (atIndex <= 0 || atIndex === raw.length - 1) return '•••';
   const local = raw.slice(0, atIndex);
   const domain = raw.slice(atIndex + 1);
-  const visible = local.slice(0, local.length <= 2 ? 1 : 2);
-  return `${visible}•••@${domain}`;
+  const visibleEnd = local.length <= 2 ? '' : local.slice(-2);
+  return `•••${visibleEnd}@${domain}`;
 }
 
 export function redactSensitiveText(text: string): string {
