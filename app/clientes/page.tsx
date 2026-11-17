@@ -1,5 +1,4 @@
 'use client';
-import MoneyAmount from "@/components/MoneyAmount";
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 import ClientProjectAssignments from '@/components/ClientProjectAssignments';
@@ -376,9 +375,9 @@ export default function ClientesPage() {
                 <DollarSign className="w-4 h-4" />
               </div>
             </div>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white">
-              <MoneyAmount value={totalContratadoGeneral} />
-            </h3>
+            <div className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white">
+              <MaskedMoneyAmount value={totalContratadoGeneral} label="Total cotizado de clientes" />
+            </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
               Presupuestos asociados a sus obras
             </p>

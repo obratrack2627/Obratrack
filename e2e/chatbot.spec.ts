@@ -1632,6 +1632,8 @@ test('los indicadores móviles permanecen visibles y ajustan los importes comple
   if(await page.locator('.money-amount').count())await expect.poll(()=>page.locator('.money-amount').evaluateAll(nodes=>nodes.every(node=>(node.firstElementChild?.scrollWidth||0)<=node.clientWidth+1))).toBe(true);
  }
  await page.goto('/dashboard');
+ await expect(page.getByLabel('Total facturado / cotizado oculto')).toBeVisible();
+ await page.getByRole('button',{name:'Mostrar Total facturado / cotizado'}).click();
  await expect(page.locator('.money-amount').first()).toContainText('987.654.321.000');
  await page.screenshot({path:'/tmp/obratrack-summaries-mobile.png',fullPage:true});
  const size=await page.locator('.money-amount > span').first().evaluate(el=>Number.parseFloat(getComputedStyle(el).fontSize));
