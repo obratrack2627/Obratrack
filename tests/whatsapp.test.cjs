@@ -72,6 +72,7 @@ const event = (messages) => ({
   ],
 });
 function database() {
+  const delivery = require('./helpers/reply-delivery.cjs')();
   const db = {
     usuarios: [user],
     empresas: [{ id: "empresa1", plan_id: "pro_ia" }],
@@ -117,6 +118,7 @@ function database() {
       return q;
     },
     async rpc(_, p) {
+      if(_.startsWith('whatsapp_reservar_respuesta') || _==='whatsapp_finalizar_respuesta')return delivery(_,p);
       let row = db.whatsapp_mensajes.find((m) => m.message_id === p.p_id);
       if (!row) {
         commits++;
@@ -1683,6 +1685,7 @@ test('borradores antiguos con más de 12 horas caducan y si falla PDF tras envia
   let marked = false;
   const handler = createWhatsAppWebhook({
     client: () => ({
+      rpc: require('./helpers/reply-delivery.cjs')(),
       from: () => ({ update: () => ({ eq: async () => { marked = true; return { error: null }; } }) }),
     }),
     process: async () => ({ persistido: true, actor_id: user.id, empresa_id: user.empresa_id, respuesta: 'Cierre OK', acciones: { tipo: 'registrar_documento', detalles: { id: 'x', categoria: 'cierre_diario' } } }),
@@ -1821,4 +1824,16 @@ test('conflicto de versión en WhatsApp no publica notificaciones de cambios rec
   assert.equal(rejected,true);assert.match(result.respuesta,/No apliqué los cambios/);assert.equal(sb.db.proyectos[0].estado,'activo');
   for(const event of events){assert.deepEqual(event.changed,{});assert.equal(event.result,null);assert.equal(event.campaign,undefined);}
  }finally{push.notifyPushOnWhatsAppChanges=original;}
+});
+
+test('redelivery del mismo evento no repite texto ni PDF aunque falle guardar sent_at',async()=>{
+ setup();const sb=database();const {normalizeQuote}=require('../lib/ai/protocol.ts');
+ const q=normalizeQuote({id:'q-once',titulo_proyecto:'Cerámica La Reina',comuna_region:'La Reina',materiales:[{nombre:'Adhesivo',cantidad:1,unidad:'saco',precio_unitario_estimado:15000}],mano_de_obra:[]});
+ sb.db.presupuestos=[{id:'budget-once',empresa_id:user.empresa_id,cotizacion:q,estado:'aprobada',proyecto_id:'p-once'}];
+ const from=sb.from.bind(sb);sb.from=table=>{const query=from(table);query.update=()=>({...query,eq:async()=>({error:{message:'lost acknowledgement'}})});return query;};
+ let texts=0,pdfs=0;
+ const handler=createWhatsAppWebhook({client:()=>sb,process:async()=>({persistido:true,actor_id:user.id,empresa_id:user.empresa_id,respuesta:'Obra creada',acciones:{presupuesto_cotizacion_id:'budget-once',proyecto_contexto_id:'p-once'}}),send:async()=>{texts++;},sendDocument:async()=>{pdfs++;}});
+ const message={id:'inbound-once',from:'56912345678',type:'text',text:{body:'Crea la obra con la cotización'}};
+ assert.equal((await handler(request(event([message])))).status,200);assert.equal((await handler(request(event([message])))).status,200);
+ assert.equal(texts,1);assert.equal(pdfs,1);
 });

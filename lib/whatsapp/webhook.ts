@@ -1,3 +1,5 @@
+import {deliverReplyOnce} from './reply-delivery';
+import {splitWhatsAppMessage} from './format';
 import { isAIConfigured } from '@/lib/ai/provider';
 import { aiErrorResponse } from "@/lib/ai/errors";
 import { NextRequest, NextResponse } from "next/server";
@@ -125,43 +127,39 @@ export function createWhatsAppWebhook(
               : await deps.process(sb, message);
             if ('ignorado' in result && result.ignorado) continue;
             if (!result.sent_at) {
+              let deliveryComplete=true;
+              const sendOnce=async(part:string,send:()=>Promise<unknown>)=>{
+                try{const accepted=await deliverReplyOnce(sb,result,message.id,part,send);if(!accepted)deliveryComplete=false;}
+                catch(error){deliveryComplete=false;throw error;}
+              };
               stage = "send";
-              await deps.send(message.from, result.respuesta);
+              for(const [index,part] of splitWhatsAppMessage(result.respuesta).entries())
+                await sendOnce(`text:${index}`,()=>deps.send(message.from,part));
               if (deps.sendDocument) {
                 stage = 'daily_close_pdf';
                 try {
                   const document = await dailyCloseDocument(sb, result, message.from);
-                  if (document) await deps.sendDocument(message.from, document.bytes, document.filename, document.caption);
+                  if (document) await sendOnce(stage,()=>deps.sendDocument!(message.from,document.bytes,document.filename,document.caption));
                 } catch (docError) {
                   console.error("whatsapp_document_send_failure", {
                     stage,
                     code: aiErrorResponse(docError).code,
                   });
-                  await deps
-                    .send(
-                      message.from,
-                      "El cierre quedó guardado en ObraTrack, pero no pude enviar el PDF aquí. Descárgalo desde Documentos.",
-                    )
-                    .catch(() => {});
+                  await sendOnce('daily_close_notice',()=>deps.send(message.from,'El cierre quedó guardado en ObraTrack, pero no pude enviar el PDF aquí. Descárgalo desde Documentos.')).catch(()=>{});
                 }
                 stage = 'quote_pdf';
                 try {
                   const document = await quotePdfDocument(sb, result, message.from);
-                  if (document) await deps.sendDocument(message.from, document.bytes, document.filename, document.caption);
+                  if (document) await sendOnce(stage,()=>deps.sendDocument!(message.from,document.bytes,document.filename,document.caption));
                 } catch (docError) {
                   console.error("whatsapp_document_send_failure", {
                     stage,
                     code: aiErrorResponse(docError).code,
                   });
-                  await deps
-                    .send(
-                      message.from,
-                      "La cotización quedó aprobada en ObraTrack, pero no pude enviar el PDF aquí. Descárgalo desde ObraTrack → Presupuestos.",
-                    )
-                    .catch(() => {});
+                  await sendOnce('quote_notice',()=>deps.send(message.from,'La cotización quedó aprobada en ObraTrack, pero no pude enviar el PDF aquí. Descárgalo desde ObraTrack → Presupuestos.')).catch(()=>{});
                 }
               }
-              if (result.persistido) {
+              if (result.persistido && deliveryComplete) {
                 stage = "confirm_delivery";
                 const { error } = await sb
                   .from("whatsapp_mensajes")

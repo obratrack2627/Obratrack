@@ -338,6 +338,7 @@ export function validateAction(raw: any): AIAction {
       "estado",
       "monto",
       "monto_cotizado",
+      "fecha_inicio",
       "fecha_termino_estimada",
       "descripcion",
       "nuevo_nombre",

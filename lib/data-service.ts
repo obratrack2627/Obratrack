@@ -1804,6 +1804,7 @@ export class DataService {
         }
         if (accion.estado) updates.estado = accion.estado;
         if (accion.monto != null || accion.monto_cotizado != null) updates.monto_cotizado = Number(accion.monto_cotizado ?? accion.monto);
+        if (accion.fecha_inicio) updates.fecha_inicio = accion.fecha_inicio;
         if (accion.fecha_termino_estimada) updates.fecha_termino_estimada = accion.fecha_termino_estimada;
         if (accion.descripcion) updates.descripcion = accion.descripcion;
         const updated = this.updateProyecto(proj.id, updates);
@@ -1822,6 +1823,7 @@ export class DataService {
               ? `El estado quedó como ${projectStatusLabel(updates.estado).toLowerCase()}.`
               : '',
             updates.monto_cotizado !== undefined ? `El presupuesto quedó en $${updates.monto_cotizado.toLocaleString('es-CL')}.` : '',
+            updates.fecha_inicio ? `El inicio quedó para el ${updates.fecha_inicio.split('-').reverse().join('/')}.` : '',
             updates.fecha_termino_estimada ? `La entrega quedó para el ${updates.fecha_termino_estimada.split('-').reverse().join('/')}.` : '',
             updates.descripcion ? 'Actualicé la descripción.' : '',
           ].filter(Boolean).join(' '),

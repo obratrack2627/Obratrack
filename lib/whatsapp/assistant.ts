@@ -399,7 +399,7 @@ export async function processPersonalMessage(
   }
   if (!pendingProject && candidates.length > 1) {
     chosenBudget = chooseBudgetOption(text, candidates, menuShown);
-    if (!chosenBudget && (acceptsQuotedProject(text) || /^(elige|aprueba|selecciona|me quedo con)\b/i.test(text.trim()))) confirmationResponse = 'Hay varias alternativas para esta obra. Indica el nombre de la opción que quieres elegir: ' + candidates.map((r) => r.cotizacion.nombre_alternativa || r.nombre_alternativa).join(', ') + '.';
+    if (!chosenBudget && (acceptsQuotedProject(text, Boolean(history[0]?.cotizacion)) || /^(elige|aprueba|selecciona|me quedo con)\b/i.test(text.trim()))) confirmationResponse = 'Hay varias alternativas para esta obra. Indica el nombre de la opción que quieres elegir: ' + candidates.map((r) => r.cotizacion.nombre_alternativa || r.nombre_alternativa).join(', ') + '.';
   }
   const menuChoice = quoteMenuChoice(text, history[0]);
   if (menuChoice === 1 && pendingProject)
@@ -408,7 +408,7 @@ export async function processPersonalMessage(
     confirmationResponse = '¿Qué deseas modificar de la cotización? Indica el material, cantidad, precio o margen que quieres cambiar. No se creará una obra con esta opción.';
   if (menuChoice === 3)
     confirmationResponse = '¿Qué material quieres comparar? Indica presentación y cantidad si las conoces.\n\nPor ejemplo: «Busca el mejor precio de 20 sacos de cemento de 25 kg en Maipú», o responde *«búscalos»* para consultar en tiendas los materiales de esta cotización.';
-  if (!pendingProject && (chosenBudget || (lastQuoteMessage?.cotizacion && !confirmationResponse && ((history[0]?.cotizacion && (menuChoice === 1 || acceptsQuotedProject(text))) || explicitQuoteCreation)))) {
+  if (!pendingProject && (chosenBudget || (lastQuoteMessage?.cotizacion && !confirmationResponse && ((history[0]?.cotizacion && (menuChoice === 1 || acceptsQuotedProject(text, Boolean(history[0]?.cotizacion)))) || explicitQuoteCreation)))) {
     const budget = chosenBudget || nativeBudget || await findBudget(sb, user.empresa_id, lastQuoteMessage.cotizacion.id);
     if (!budget) confirmationResponse = 'No se pudo recuperar el presupuesto guardado. Ábrelo en ObraTrack para revisarlo.';
     else if (['rechazada', 'anulada'].includes(budget.estado)) confirmationResponse = 'El presupuesto está rechazado o anulado. Revisa su estado en ObraTrack antes de crear la obra.';

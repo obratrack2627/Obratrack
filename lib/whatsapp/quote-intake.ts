@@ -31,8 +31,9 @@ export function legacyQuotedProjectMessage(rows: any[]) {
   }
   return null;
 }
-export function acceptsQuotedProject(text: string) {
+export function acceptsQuotedProject(text: string, quoteJustOffered = true) {
   const value = stripTrailingPunctuation(text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(), '.!');
+  if(value==='si' && !quoteJustOffered)return false;
   return requestsQuotedProject(text) || /^(?:si|si[, ]+(?:creala|crea (?:la|esa|esta) obra)(?: con (?:el |un )?gantt(?: y (?:los |sus )?materiales)?)?|creala|crea(?:r)? (?:la |esa |esta )?obra(?: con (?:el |un )?gantt(?: y (?:los |sus )?materiales)?)?)$/.test(value);
 }
 export function quotedProjectDraft(q: CotizacionEstimacion) {

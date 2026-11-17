@@ -136,6 +136,13 @@ export function prepareActionPlan(
           'Esta acción corresponde a otra obra. Abre su asistente o usa el chat general.',
         );
       if (!p.id.startsWith('planned-')) a.proyecto_id = p.id;
+      if(a.tipo==='actualizar_proyecto') {
+        const start=a.fecha_inicio ?? p.fecha_inicio, end=a.fecha_termino_estimada ?? p.fecha_termino_estimada;
+        if((a.fecha_inicio || a.fecha_termino_estimada) && start && end && start>end)
+          throw new Error('La fecha de inicio no puede ser posterior al término. Indica el nuevo término de la obra; no inventes fechas ni cambies el presupuesto.');
+        if(a.fecha_inicio)p.fecha_inicio=a.fecha_inicio;
+        if(a.fecha_termino_estimada)p.fecha_termino_estimada=a.fecha_termino_estimada;
+      }
       if (a.tipo === 'actualizar_proyecto' && typeof a.nuevo_nombre === 'string' && a.nuevo_nombre.trim()) {
         p.nombre = a.nuevo_nombre.trim();
       }

@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {deliverReplyOnce} from './reply-delivery';
 import { AIError } from "@/lib/ai/errors";
 import { findBudget } from "@/lib/presupuestos";
 import { canonicalPhone } from "@/lib/phone";
@@ -96,7 +98,10 @@ export async function quotePdfDocument(sb: any, receipt: any, to: string) {
     );
 
   const budget = await findBudget(sb, receipt.empresa_id, budgetId);
-  if (!budget?.cotizacion) return null;
+  if (!budget?.cotizacion || ['rechazada','anulada'].includes(budget.estado)) return null;
+  const expectedProject=action.presupuesto_proyecto_id || action.proyecto_contexto_id;
+  if(expectedProject && budget.proyecto_id && expectedProject!==budget.proyecto_id)
+    throw new AIError('QUOTE_PDF_FORBIDDEN','La cotización no corresponde a la obra de esta conversación.',403);
 
   return buildQuotePdfBuffer(sb, {
     cotizacion: budget.cotizacion,
@@ -128,13 +133,15 @@ export async function sendAcceptedQuotePdfToWhatsApp(
       .maybeSingle();
     const phone = canonicalPhone(actor?.telefono_whatsapp || "");
     if (!phone) return false;
+    const source=`web-quote:${params.cotizacion.id}:${createHash('sha256').update(JSON.stringify(params.cotizacion)).digest('hex')}`;
+    return await deliverReplyOnce(sb,{persistido:true,empresa_id:params.user.empresa_id,actor_id:params.user.id},source,'quote_pdf',async()=>{
     const doc = await buildQuotePdfBuffer(sb, {
       cotizacion: params.cotizacion,
       empresaId: params.user.empresa_id,
       actor: actor || params.user,
     });
     await sendMetaDocument(phone, doc.bytes, doc.filename, doc.caption);
-    return true;
+    },false);
   } catch (error) {
     console.error("quote_whatsapp_pdf_failure", {
       message: error instanceof Error ? error.message : String(error),

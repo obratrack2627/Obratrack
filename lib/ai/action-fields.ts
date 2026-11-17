@@ -45,6 +45,7 @@ const scoped: Record<string, string[]> = {
   ],
   trabajadores: ["agregar_trabajadores", "asignar_trabajadores"],
   fecha_inicio: [
+    "actualizar_proyecto",
     "crear_proyecto",
     "crear_proyecto_completo",
     "crear_actividad",

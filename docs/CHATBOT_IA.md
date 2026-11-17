@@ -476,3 +476,15 @@ Los permisos, el cálculo determinista y el esquema de acciones siguen en el
 servidor. La identidad pública continúa siendo ObraBot. Audio conserva su modelo
 especializado de transcripción y embeddings conserva `text-embedding-3-small`.
 Cambiar de modelo no requiere crear otra API key.
+
+## Edición de fechas y respuestas de WhatsApp (2026-11-17)
+
+`actualizar_proyecto` admite `fecha_inicio` y `fecha_termino_estimada` tanto en web como en WhatsApp, sujetos al plan, rol y asignación existentes. El contrato estructurado, filtro de campos, validación y aplicación comparten esta capacidad. Se comprueba el rango contra las fechas actuales: si un inicio nuevo supera el término, se pide el término faltante, sin inventarlo. Los importes y las fechas de partidas no se modifican por una edición de fechas de obra. Reprogramar partidas sigue siendo un proceso distinto en Carta Gantt.
+
+Las mutaciones de fechas quedan fuera del RAG; las referencias históricas no determinan fechas de obras actuales. Un «sí» solo acepta una cotización cuando la oferta es inmediata; no reutiliza cotizaciones antiguas tras cambiar de tema.
+
+Aplicar `supabase/20261117_whatsapp_reply_delivery.sql` antes del servidor nuevo. Reserva atómica, exclusiva del servicio, para cada texto fragmentado/PDF. Un reintento de Meta no repite partes aceptadas aunque no se haya guardado `sent_at`. Si el resultado de red es ambiguo, no se reenvía automáticamente: la reserva conserva la incertidumbre, evitando duplicados. Un rechazo explícito admite otro intento seguro. No se promete entrega exactamente una vez; una interrupción antes de enviar puede dejar una reserva pendiente. La base registra estados operativos, no el contenido ni credenciales.
+
+Una respuesta histórica de más de 15 minutos no se envía de nuevo como si fuera actual. La aprobación desde la web también utiliza una clave de envío para la misma cotización y usuario. Nunca limpiar reservas pendientes para forzar un reintento sin verificar qué recibió Meta.
+
+Pruebas: contrato de fechas, edición y asignación combinadas, rango inválido, rol de terreno, separación del RAG, confirmación ambigua, concurrencia y reentrega del webhook con fallo de confirmación. Usan datos sintéticos y no envían mensajes reales ni consumen IA de pago.

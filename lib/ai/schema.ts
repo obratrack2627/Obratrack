@@ -88,7 +88,7 @@ const actionProperties: Record<string, any> = {
 const actionFields: Record<typeof ACTION_TYPES[number], string> = {
   "crear_proyecto": "nombre monto_cotizado monto comuna direccion descripcion dias fecha_inicio fecha_termino_estimada cliente_id cliente_nombre cliente_email cliente_telefono cliente_rut partidas materiales trabajadores_nombres",
   "crear_proyecto_completo": "nombre monto_cotizado monto comuna direccion descripcion dias fecha_inicio fecha_termino_estimada cliente_id cliente_nombre cliente_email cliente_telefono cliente_rut partidas materiales trabajadores_nombres",
-  "actualizar_proyecto": "nuevo_nombre estado monto_cotizado monto fecha_termino_estimada descripcion",
+  "actualizar_proyecto": "nuevo_nombre estado monto_cotizado monto fecha_inicio fecha_termino_estimada descripcion",
   "eliminar_proyecto": "",
   "crear_cliente": "nombre telefono email rut direccion comuna",
   "actualizar_cliente": "cliente_id nombre nuevo_nombre telefono email rut direccion comuna",
