@@ -14,6 +14,11 @@ export interface ConversionPresupuestoResultado {
   materialesCargados: number;
 }
 
+const trimMax = (value: unknown, max: number, fallback = ''): string => {
+  const clean = typeof value === 'string' ? value.trim() : '';
+  return (clean || fallback).slice(0, max);
+};
+
 function resolverComunaYRegion(comunaRegionRaw?: string): {
   comuna: string;
   region: string;
@@ -87,10 +92,10 @@ export function convertirPresupuestoEnObra(
     if (!cliente) {
       cliente = service.createCliente({
         empresa_id: empresaId,
-        nombre: cotizacion.cliente_nombre.trim(),
-        telefono: cotizacion.cliente_telefono || '',
-        email: cotizacion.cliente_email || '',
-        direccion: cotizacion.comuna_region || '',
+        nombre: trimMax(cotizacion.cliente_nombre, 150),
+        telefono: trimMax(cotizacion.cliente_telefono, 20),
+        email: trimMax(cotizacion.cliente_email, 100),
+        direccion: trimMax(cotizacion.comuna_region, 250),
       });
     }
   }
@@ -103,7 +108,7 @@ export function convertirPresupuestoEnObra(
     .filter((a) => a && a.nombre?.trim())
     .sort((a, b) => (a.orden || 0) - (b.orden || 0))
     .map((a) => ({
-      nombre: a.nombre.trim(),
+      nombre: trimMax(a.nombre, 150),
       dias: Math.max(1, Math.round(Number(a.dias) || 5)),
     }));
 
@@ -124,29 +129,29 @@ export function convertirPresupuestoEnObra(
   terminoDate.setDate(terminoDate.getDate() + duracionTotal);
   const fechaTermino = terminoDate.toISOString().split('T')[0];
 
-  const montoTotalConIva = Math.max(
-    0,
-    Math.round(Number(cotizacion.estructura_financiera?.precio_total_con_iva) || 0)
-  );
+  const rawTotalConIva = Number(cotizacion.estructura_financiera?.precio_total_con_iva);
+  const montoTotalConIva = Number.isFinite(rawTotalConIva) && rawTotalConIva >= 0 ? rawTotalConIva : 0;
 
   // 4. Crear Proyecto + Carta Gantt (valida también límite del Plan Gratis)
   const proyecto = service.createProyecto(
     {
       empresa_id: empresaId,
       cliente_id: cliente?.id,
-      nombre: cotizacion.titulo_proyecto.trim(),
+      nombre: trimMax(cotizacion.titulo_proyecto, 150, 'Obra desde cotización'),
       descripcion:
         cotizacion.resumen_ejecutivo?.trim() ||
         `Obra generada a partir de presupuesto ${cotizacion.id}.`,
       direccion: cotizacion.comuna_region || ubicacion.comuna,
-      comuna: ubicacion.comuna,
-      region: ubicacion.region,
+      comuna: trimMax(ubicacion.comuna, 100, 'Por definir'),
+      region: trimMax(ubicacion.region, 100),
       latitud: ubicacion.latitud,
       longitud: ubicacion.longitud,
       fecha_inicio: fechaInicio,
       fecha_termino_estimada: fechaTermino,
       estado: 'activo',
       monto_cotizado: montoTotalConIva,
+      dias_laborales: [1, 2, 3, 4, 5],
+      fechas_no_laborales: [],
       trabajadores_ids: [],
     },
     options?.incluirGantt === false ? [] : actividadesIniciales
@@ -166,13 +171,13 @@ export function convertirPresupuestoEnObra(
 
     const creado = service.createMaterialProyecto({
       proyecto_id: proyecto.id,
-      nombre: mat.nombre.trim(),
-      categoria: mat.categoria || 'Cubicación Presupuesto',
+      nombre: trimMax(mat.nombre, 150),
+      categoria: trimMax(mat.categoria, 80, 'Cubicación Presupuesto'),
       cantidad,
-      unidad: mat.unidad || 'un',
+      unidad: trimMax(mat.unidad, 30, 'un'),
       precio_unitario: precioUnit,
       subtotal,
-      proveedor: mat.mejor_tienda || 'Por confirmar',
+      proveedor: trimMax(mat.mejor_tienda, 100, 'Por confirmar'),
       comprado: false,
     });
     materialesCreados.push(creado);
@@ -182,9 +187,9 @@ export function convertirPresupuestoEnObra(
   service.createBitacoraEntrada({
     proyecto_id: proyecto.id,
     usuario_id: activeUser?.id || 'u-sistema',
-    autor_nombre: activeUser?.nombre || 'Administración ObraTrack',
+    autor_nombre: trimMax(activeUser?.nombre, 150, 'Administración ObraTrack'),
     titulo: 'Inicio de Obra desde Presupuesto Aprobado',
-    nota: `Obra creada desde presupuesto "${cotizacion.titulo_proyecto}" por $${montoTotalConIva.toLocaleString('es-CL')} CLP (IVA incl.), con ${options?.incluirGantt === false ? 0 : actividadesIniciales.length} partidas en Carta Gantt y ${materialesCreados.length} materiales cubicados.`,
+    nota: `Obra creada desde presupuesto "${trimMax(cotizacion.titulo_proyecto, 150)}" por $${Math.round(montoTotalConIva).toLocaleString('es-CL')} CLP (IVA incl.), con ${options?.incluirGantt === false ? 0 : actividadesIniciales.length} partidas en Carta Gantt y ${materialesCreados.length} materiales cubicados.`,
     fecha: fechaInicio,
     tipo: 'avance',
   });

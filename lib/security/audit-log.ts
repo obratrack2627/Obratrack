@@ -9,7 +9,8 @@ export type SecurityEventType =
   | 'team.member_created'
   | 'team.role_changed'
   | 'billing.checkout_created'
-  | 'billing.subscription_canceled';
+  | 'billing.subscription_canceled'
+  | 'report.deleted';
 
 export interface SecurityAuditInput {
   empresaId: string;

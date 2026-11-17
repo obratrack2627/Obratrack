@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { recordSecurityEvent } from "@/lib/security/audit-log";
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
@@ -102,6 +104,65 @@ export async function GET(request: NextRequest) {
         obras: visibleProjects,
         gestion: staff,
       },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
+  } catch (error) {
+    return errorJSON(error);
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { client, user } = await authorizeAI(request);
+    if (!["admin", "supervisor"].includes(user.rol)) {
+      throw new AIError(
+        "REPORT_FORBIDDEN",
+        "Solo administración y supervisión pueden eliminar reportes.",
+        403,
+      );
+    }
+    let messageId = (request.nextUrl.searchParams.get("id") || "").trim();
+    if (!messageId) {
+      const body = await request.json().catch(() => null);
+      messageId = typeof body?.message_id === "string" ? body.message_id.trim() : "";
+    }
+    if (!messageId || messageId.length > 200) {
+      throw new AIError("INVALID_REQUEST", "Selecciona un reporte válido para eliminar.", 400);
+    }
+
+    const db = getSupabaseAdmin() || client;
+    const { data: existing, error: readError } = await db
+      .from("whatsapp_mensajes")
+      .select("message_id, empresa_id")
+      .eq("empresa_id", user.empresa_id)
+      .eq("message_id", messageId)
+      .maybeSingle();
+    if (readError) {
+      throw new AIError("WHATSAPP_INBOX", "No se pudo consultar el reporte seleccionado.", 503);
+    }
+    if (!existing) {
+      throw new AIError("REPORT_NOT_FOUND", "El reporte no existe o no pertenece a tu empresa.", 404);
+    }
+
+    const { error: deleteError } = await db
+      .from("whatsapp_mensajes")
+      .delete()
+      .eq("empresa_id", user.empresa_id)
+      .eq("message_id", messageId);
+    if (deleteError) {
+      throw new AIError("WHATSAPP_INBOX", "No se pudo eliminar el reporte. Intenta nuevamente.", 503);
+    }
+
+    await recordSecurityEvent(db, {
+      empresaId: user.empresa_id,
+      actorId: user.id,
+      eventType: "report.deleted",
+      resourceType: "whatsapp_mensajes",
+      resourceId: messageId,
+    });
+
+    return NextResponse.json(
+      { deleted: true, message_id: messageId },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {

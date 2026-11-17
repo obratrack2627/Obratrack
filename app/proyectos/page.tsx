@@ -2,6 +2,7 @@
 import { chileToday } from '@/lib/ai/project-deadlines';
 
 import MoneyAmount from "@/components/MoneyAmount";
+import MaskedMoneyAmount from '@/components/MaskedMoneyAmount';
 import CompactSummary from '@/components/CompactSummary';
 import { projectStatuses } from '@/lib/project-status';
 import { ProjectStatusBadge } from '@/components/ProjectStatus';
@@ -497,9 +498,9 @@ export default function ProyectosPage() {
                 <DollarSign className="w-4 h-4" />
               </div>
             </div>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white">
-              <MoneyAmount value={cotizadoTotal} />
-            </h3>
+            <div className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white">
+              <MaskedMoneyAmount value={cotizadoTotal} label="Cotizado Total" />
+            </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
               En obras en ejecución
             </p>
@@ -515,9 +516,9 @@ export default function ProyectosPage() {
                 <CheckCircle2 className="w-4 h-4" />
               </div>
             </div>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-obra-green">
-              <MoneyAmount value={totalCobrado} />
-            </h3>
+            <div className="text-xl sm:text-2xl font-bold font-mono text-obra-green">
+              <MaskedMoneyAmount value={totalCobrado} label="Total Cobrado" />
+            </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
               {cotizadoTotal > 0 ? Math.round((totalCobrado / cotizadoTotal) * 100) : 0}% recaudado
             </p>
@@ -533,9 +534,9 @@ export default function ProyectosPage() {
                 <TrendingUp className="w-4 h-4" />
               </div>
             </div>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-obra-red">
-              <MoneyAmount value={porCobrar} />
-            </h3>
+            <div className="text-xl sm:text-2xl font-bold font-mono text-obra-red">
+              <MaskedMoneyAmount value={porCobrar} label="Saldo Por Cobrar" />
+            </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
               Estados de pago pendientes
             </p>

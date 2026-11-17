@@ -24,6 +24,8 @@ import {
   ShieldCheck,
   Zap,
   MapPin,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -42,6 +44,7 @@ import { dataService } from '@/lib/data-service';
 import { Proyecto, ReporteWhatsApp, Usuario } from '@/types/database';
 import { formatCLP, formatDate } from '@/lib/utils';
 import { aiHeaders } from '@/lib/ai/client';
+import { MASKED_CLP_AMOUNT } from '@/lib/privacy/mask';
 
 const compactCLP = (value: number) => {
   const amount = Number(value);
@@ -57,6 +60,17 @@ export default function DashboardPage() {
   const [whatsappPendingCount, setWhatsappPendingCount] = useState(0);
   const [activeUser, setActiveUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
+  const [barChartRevealed, setBarChartRevealed] = useState(false);
+  const [pieChartRevealed, setPieChartRevealed] = useState(false);
+
+  useEffect(() => {
+    if (!barChartRevealed && !pieChartRevealed) return;
+    const timer = window.setTimeout(() => {
+      setBarChartRevealed(false);
+      setPieChartRevealed(false);
+    }, 30000);
+    return () => window.clearTimeout(timer);
+  }, [barChartRevealed, pieChartRevealed]);
 
   useEffect(() => {
     const user = dataService.getActiveUser();
@@ -184,7 +198,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+    <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
       {/* Cabecera Principal */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#141A23] p-6 md:pr-14 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
         <div className="space-y-1">
@@ -409,7 +423,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 shrink-0">
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0">
                       <div className="w-32">
                         <div className="flex justify-between text-xs font-mono mb-1">
                           <span className="text-gray-500">Avance</span>
@@ -449,9 +463,9 @@ export default function DashboardPage() {
       {/* Sección Gráfica y Obras en Curso */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Gráfico de Flujo de Caja por Obra */}
-        <div className="min-w-0 lg:col-span-2 p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
+        <div className="min-w-0 max-w-full overflow-hidden lg:col-span-2 p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+            <div className="min-w-0 flex-1">
               <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
                 Flujo Financiero por Obra (CLP)
               </h3>
@@ -459,13 +473,25 @@ export default function DashboardPage() {
                 Comparativa entre monto contratado y pagos recaudados
               </p>
             </div>
-            <Link
-              href="/proyectos"
-              className="text-xs font-heading font-bold text-[#FF6A00] hover:underline flex items-center gap-1"
-            >
-              <span>Ver todas</span>
-              <ArrowUpRight className="w-3 h-3" />
-            </Link>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setBarChartRevealed((prev) => !prev)}
+                aria-label={barChartRevealed ? 'Ocultar montos de Flujo Financiero' : 'Mostrar montos de Flujo Financiero'}
+                aria-pressed={barChartRevealed}
+                title={barChartRevealed ? 'Ocultar montos' : 'Mostrar montos'}
+                className="inline-flex items-center justify-center p-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50/80 dark:bg-[#1E2633] text-gray-500 hover:text-[#FF6A00] transition-colors"
+              >
+                {barChartRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+              <Link
+                href="/proyectos"
+                className="text-xs font-heading font-bold text-[#FF6A00] hover:underline flex items-center gap-1"
+              >
+                <span>Ver todas</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </Link>
+            </div>
           </div>
 
           {chartDataFinanzas.length ? <>
@@ -475,23 +501,17 @@ export default function DashboardPage() {
               <BarChart aria-hidden="true" accessibilityLayer={false} tabIndex={-1} data={chartDataFinanzas} margin={{ top: 30, right: 16, left: 4, bottom: 15 }} barGap={6}>
                 <CartesianGrid vertical={false} stroke="#94a3b8" strokeOpacity={0.18}/>
                 <XAxis dataKey="nombre" stroke="#888888" fontSize={11} tickLine={false} interval={0} tickFormatter={name => name.length > 20 ? name.slice(0,19) + '…' : name}/>
-                <YAxis width={72} stroke="#888888" fontSize={10} tickLine={false} axisLine={false} tickFormatter={compactCLP}/>
-                <Tooltip formatter={(value: number, name: string) => [formatCLP(Number(value)), name]} cursor={{ fill: 'rgba(148,163,184,0.10)' }} contentStyle={{ backgroundColor: '#141A23', border: '1px solid #344156', borderRadius: '12px', color: '#fff' }} itemStyle={{ color: '#fff' }} labelStyle={{ color: '#fff', fontWeight: 700, marginBottom: 6 }}/>
+                <YAxis width={72} stroke="#888888" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val: number) => (barChartRevealed ? compactCLP(val) : '$ ***')}/>
+                <Tooltip formatter={(value: number, name: string) => [barChartRevealed ? formatCLP(Number(value)) : MASKED_CLP_AMOUNT, name]} cursor={{ fill: 'rgba(148,163,184,0.10)' }} contentStyle={{ backgroundColor: '#141A23', border: '1px solid #344156', borderRadius: '12px', color: '#fff' }} itemStyle={{ color: '#fff' }} labelStyle={{ color: '#fff', fontWeight: 700, marginBottom: 6 }}/>
                 <Bar dataKey="Presupuestado" name="Contratado" fill="#FF6A00" radius={[4,4,0,0]} maxBarSize={42} isAnimationActive={false}>
-                  <LabelList dataKey="Presupuestado" position="top" formatter={compactCLP} fill="#c74c00" fontSize={10}/>
+                  <LabelList dataKey="Presupuestado" position="top" formatter={(val: unknown) => (barChartRevealed ? compactCLP(Number(val)) : '$ ***')} fill="#c74c00" fontSize={10}/>
                 </Bar>
                 <Bar dataKey="Cobrado" name="Cobrado" fill="#6B8F72" radius={[4,4,0,0]} maxBarSize={42} isAnimationActive={false}>
-                  <LabelList dataKey="Cobrado" position="top" formatter={compactCLP} fill="#52745a" fontSize={10}/>
+                  <LabelList dataKey="Cobrado" position="top" formatter={(val: unknown) => (barChartRevealed ? compactCLP(Number(val)) : '$ ***')} fill="#52745a" fontSize={10}/>
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
             </div>
-          </div>
-          <div className="max-w-full overflow-x-auto rounded-xl border border-kraft-200 dark:border-[#263040]">
-            <table className="w-full text-left text-xs" aria-label="Montos financieros por obra">
-              <thead className="bg-kraft-50 text-gray-500 dark:bg-[#0F141C]"><tr><th className="p-3 font-medium">Obra</th><th className="p-3 text-right font-medium">Contratado</th><th className="p-3 text-right font-medium">Cobrado</th></tr></thead>
-              <tbody>{chartDataFinanzas.map((row,index) => <tr key={index} className="border-t border-kraft-100 dark:border-[#263040]"><th className="p-3 font-medium break-words">{row.nombre}</th><td className="whitespace-nowrap p-3 text-right font-mono">{formatCLP(row.Presupuestado)}</td><td className="whitespace-nowrap p-3 text-right font-mono">{formatCLP(row.Cobrado)}</td></tr>)}</tbody>
-            </table>
           </div>
           </> : <p className="py-12 text-center text-sm text-gray-500">No hay obras para mostrar en el gráfico.</p>}
 
@@ -508,17 +528,29 @@ export default function DashboardPage() {
         </div>
 
         {/* Distribución Financiera / Pie Chart */}
-        <div className="min-w-0 p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4 flex flex-col justify-between">
-          <div>
-            <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
-              Distribución de Cartera
-            </h3>
-            <p className="text-xs text-gray-500 font-mono">
-              Estado general de cobranza
-            </p>
+        <div className="min-w-0 max-w-full overflow-hidden p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4 flex flex-col justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-2 min-w-0">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
+                Distribución de Cartera
+              </h3>
+              <p className="text-xs text-gray-500 font-mono">
+                Estado general de cobranza
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPieChartRevealed((prev) => !prev)}
+              aria-label={pieChartRevealed ? 'Ocultar montos de Distribución de Cartera' : 'Mostrar montos de Distribución de Cartera'}
+              aria-pressed={pieChartRevealed}
+              title={pieChartRevealed ? 'Ocultar montos' : 'Mostrar montos'}
+              className="inline-flex items-center justify-center p-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50/80 dark:bg-[#1E2633] text-gray-500 hover:text-[#FF6A00] transition-colors shrink-0"
+            >
+              {pieChartRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
           </div>
 
-          <div className="h-52 w-full flex items-center justify-center">
+          <div className="h-52 w-full min-w-0 overflow-hidden flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart aria-hidden="true" accessibilityLayer={false} tabIndex={-1}>
                 <Pie rootTabIndex={-1}
@@ -537,9 +569,9 @@ export default function DashboardPage() {
                   ))}
                 </Pie>
                 <text x="50%" y="46%" textAnchor="middle" fill="#888888" fontSize={11}>{pieDataRentabilidad.length ? 'Total de cartera' : 'Sin movimientos'}</text>
-                <text x="50%" y="57%" textAnchor="middle" className="fill-navy-900 dark:fill-gray-100" fontWeight={700} fontSize={14}>{compactCLP(totalCobrado + saldoPendiente)}</text>
+                <text x="50%" y="57%" textAnchor="middle" className="fill-navy-900 dark:fill-gray-100" fontWeight={700} fontSize={14}>{pieChartRevealed ? compactCLP(totalCobrado + saldoPendiente) : MASKED_CLP_AMOUNT}</text>
                 <Tooltip
-                  formatter={(val: number, name: string) => [`${formatCLP(Number(val))} · ${totalCobrado + saldoPendiente > 0 ? Math.round(Number(val) / (totalCobrado + saldoPendiente) * 100) : 0}%`, name]}
+                  formatter={(val: number, name: string) => [`${pieChartRevealed ? formatCLP(Number(val)) : MASKED_CLP_AMOUNT} · ${totalCobrado + saldoPendiente > 0 ? Math.round(Number(val) / (totalCobrado + saldoPendiente) * 100) : 0}%`, name]}
                   itemStyle={{ color: '#fff' }}
                   labelStyle={{ color: '#fff' }}
                   contentStyle={{
@@ -559,21 +591,21 @@ export default function DashboardPage() {
                 <span className="w-2.5 h-2.5 rounded-full bg-[#6B8F72]"></span>
                 Total Cobrado ({totalCobrado + saldoPendiente > 0 ? Math.round(totalCobrado / (totalCobrado + saldoPendiente) * 100) : 0}%):
               </span>
-              <strong className="text-[#6B8F72]">{formatCLP(totalCobrado)}</strong>
+              <strong className="text-[#6B8F72]">{pieChartRevealed ? formatCLP(totalCobrado) : MASKED_CLP_AMOUNT}</strong>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 font-mono">
               <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#FF6A00]"></span>
                 Por Cobrar ({totalCobrado + saldoPendiente > 0 ? Math.round(saldoPendiente / (totalCobrado + saldoPendiente) * 100) : 0}%):
               </span>
-              <strong className="text-[#FF6A00]">{formatCLP(saldoPendiente)}</strong>
+              <strong className="text-[#FF6A00]">{pieChartRevealed ? formatCLP(saldoPendiente) : MASKED_CLP_AMOUNT}</strong>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 font-mono">
               <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#D94336]"></span>
                 Imprevistos:
               </span>
-              <strong className="text-[#D94336]">{formatCLP(totalImprevistos)}</strong>
+              <strong className="text-[#D94336]">{pieChartRevealed ? formatCLP(totalImprevistos) : MASKED_CLP_AMOUNT}</strong>
             </div>
           </div>
         </div>

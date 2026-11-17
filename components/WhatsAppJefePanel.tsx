@@ -12,6 +12,8 @@ import {
   X,
   Search,
   RefreshCw,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { aiHeaders } from "@/lib/ai/client";
 import { dataService } from "@/lib/data-service";
@@ -66,6 +68,9 @@ export default function WhatsAppJefePanel() {
     [author, setAuthor] = useState(""),
     [project, setProject] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
+  const [reportToDelete, setReportToDelete] = useState<{ message_id: string; title: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("tab") === "envios")
       setTab("envios");
@@ -130,6 +135,28 @@ export default function WhatsAppJefePanel() {
     setter(value);
     setPage(0);
   };
+  async function confirmDeleteReport() {
+    if (!reportToDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const res = await fetch(
+        `/api/whatsapp/mensajes?id=${encodeURIComponent(reportToDelete.message_id)}`,
+        { method: "DELETE", headers: await aiHeaders() },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error || "No se pudo eliminar el reporte.");
+      }
+      setMessages((prev) => prev.filter((item) => item.message_id !== reportToDelete.message_id));
+      setTotal((prev) => Math.max(0, prev - 1));
+      setReportToDelete(null);
+    } catch (e) {
+      setDeleteError((e as Error).message);
+    } finally {
+      setDeleting(false);
+    }
+  }
   async function activateReception() {
     setActivating(true);
     setActivationError("");
@@ -427,9 +454,25 @@ export default function WhatsAppJefePanel() {
                         <h3 className="font-heading font-semibold text-sm sm:text-base text-navy-900 dark:text-gray-100 break-words">
                           {title}
                         </h3>
-                        <span className="shrink-0 rounded-full bg-kraft-100 dark:bg-[#1E2530] text-gray-600 dark:text-gray-300 px-2.5 py-0.5 text-xs font-medium">
-                          {labels[category] || "Registro"}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="rounded-full bg-kraft-100 dark:bg-[#1E2530] text-gray-600 dark:text-gray-300 px-2.5 py-0.5 text-xs font-medium">
+                            {labels[category] || "Registro"}
+                          </span>
+                          {staff && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteError("");
+                                setReportToDelete({ message_id: m.message_id, title });
+                              }}
+                              aria-label={`Eliminar reporte ${title}`}
+                              title="Eliminar reporte"
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 break-words">
                         {m.autor?.nombre || "Mi cuenta"}
@@ -605,6 +648,57 @@ export default function WhatsAppJefePanel() {
             alt="Evidencia fotográfica ampliada"
             className="max-h-[85vh] max-w-full rounded-xl object-contain"
           />
+        </ModalOverlay>
+      )}
+      {reportToDelete && (
+        <ModalOverlay
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmar eliminación de reporte"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] p-5 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 shrink-0">
+                <Trash2 className="w-4 h-4" />
+              </span>
+              <div className="min-w-0 space-y-1">
+                <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
+                  Eliminar reporte
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-300 break-words">
+                  Se eliminará <strong>{reportToDelete.title}</strong> de la bandeja de reportes. Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            {deleteError && (
+              <p role="alert" className="text-xs text-red-700 dark:text-red-400">
+                {deleteError}
+              </p>
+            )}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => {
+                  setReportToDelete(null);
+                  setDeleteError("");
+                }}
+                className="px-3.5 py-2 rounded-xl border border-kraft-200 dark:border-[#263040] text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-kraft-50 dark:hover:bg-[#1E2530] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void confirmDeleteReport()}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold disabled:opacity-50"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{deleting ? "Eliminando…" : "Eliminar"}</span>
+              </button>
+            </div>
+          </div>
         </ModalOverlay>
       )}
     </div>

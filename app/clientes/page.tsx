@@ -30,9 +30,10 @@ import {
 import Navbar from '@/components/Navbar';
 import { dataService } from '@/lib/data-service';
 import { Cliente, Proyecto } from '@/types/database';
-import { formatCLP, formatRUT, validarRutChileno } from '@/lib/utils';
+import { formatRUT, validarRutChileno } from '@/lib/utils';
 import { canonicalPhone } from '@/lib/phone';
 import MaskedField from '@/components/MaskedField';
+import MaskedMoneyAmount from '@/components/MaskedMoneyAmount';
 import { maskEmail, maskPhone, maskRUT } from '@/lib/privacy/mask';
 import {
   formatRegistrationConflictMessage,
@@ -587,10 +588,6 @@ export default function ClientesPage() {
                     (sum, p) => sum + (Number(p.monto_cotizado) || 0),
                     0
                   );
-                  const totalPagadoCliente = obrasCliente.reduce(
-                    (sum, p) => sum + (Number(p.total_pagado) || 0),
-                    0
-                  );
                   const validPhone = canonicalPhone(c.telefono || '');
                   const hasActiveWork = clientesIdsActivos.has(c.id);
 
@@ -673,9 +670,11 @@ export default function ClientesPage() {
                       </td>
 
                       <td className="py-2.5 pr-3 whitespace-nowrap text-right font-mono font-semibold text-navy-900 dark:text-white">
-                        <span title={totalPagadoCliente > 0 ? `Pagado: ${formatCLP(totalPagadoCliente)}` : undefined}>
-                          {formatCLP(totalCotizadoCliente)}
-                        </span>
+                        <MaskedMoneyAmount
+                          compact
+                          value={totalCotizadoCliente}
+                          label={`total contratado de ${c.nombre}`}
+                        />
                       </td>
 
                       <td className="py-2.5 pr-3 whitespace-nowrap">
@@ -846,7 +845,11 @@ export default function ClientesPage() {
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-500 dark:text-gray-400 font-mono">Total Contratado:</span>
                       <span className="font-bold font-mono text-navy-900 dark:text-white">
-                        {formatCLP(totalCotizadoCliente)}
+                        <MaskedMoneyAmount
+                          compact
+                          value={totalCotizadoCliente}
+                          label={`total contratado de ${c.nombre}`}
+                        />
                       </span>
                     </div>
 

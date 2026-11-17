@@ -144,3 +144,149 @@ test('ISO A.8.15: recordSecurityEvent y /api/auditoria/evento validan permisos y
     { empresaId: 'emp-1', actorId: 'u1', eventType: 'auth.session_established' },
   );
 });
+
+test('convertirPresupuestoEnObra acota textos largos al esquema SQL y /api/presupuestos/convertir completa defaults NOT NULL de proyectos', async () => {
+  const { convertirPresupuestoEnObra } = require('../lib/presupuestos-to-obra.ts');
+  const { isolatedState } = require('../lib/whatsapp/state.ts');
+  const service = isolatedState({ id: 'u1', empresa_id: 'emp-1', nombre: 'Admin', rol: 'admin', email: 'a@b.cl' }, {}, 'pro_ia');
+
+  const quote = {
+    id: 'cot-long',
+    titulo_proyecto: 'X'.repeat(180),
+    tipo_obra: 'Radier',
+    comuna_region: 'Santiago, Región Metropolitana',
+    cliente_nombre: 'C'.repeat(180),
+    cliente_telefono: '+56912345678901234567890',
+    duracion_dias_estimada: 5,
+    resumen_ejecutivo: 'Radier exterior',
+    materiales: [
+      {
+        nombre: 'M'.repeat(180),
+        categoria: 'G'.repeat(100),
+        cantidad: 2,
+        unidad: 'U'.repeat(50),
+        precio_unitario_estimado: 10000,
+        subtotal_estimado: 20000,
+        mejor_tienda: 'T'.repeat(130),
+      },
+    ],
+    mano_de_obra: [],
+    estructura_financiera: {
+      costo_materiales_total: 20000,
+      costo_mano_obra_total: 0,
+      costo_directo: 20000,
+      gastos_generales_porcentaje: 0,
+      gastos_generales_monto: 0,
+      imprevistos_porcentaje: 0,
+      imprevistos_monto: 0,
+      margen_utilidad_porcentaje: 0,
+      margen_utilidad_monto: 0,
+      precio_sugerido_neto: 20000,
+      iva_19: 3800,
+      precio_total_con_iva: 23800.5,
+      ahorro_compras_estrategicas: 0,
+    },
+    actividades_gantt: [{ nombre: 'A'.repeat(180), dias: 5, orden: 1 }],
+    radar_proveedores: [],
+    consejos_experto_pyme: [],
+    fecha_creacion: new Date().toISOString(),
+  };
+
+  const res = convertirPresupuestoEnObra(quote, { service, fechaInicio: '2026-11-17' });
+  assert.equal(res.proyecto.nombre.length, 150);
+  assert.equal(res.proyecto.monto_cotizado, 23800.5);
+  assert.deepEqual(res.proyecto.dias_laborales, [1, 2, 3, 4, 5]);
+  assert.equal(res.cliente.telefono.length, 20);
+  const mat = service.getMaterialesProyecto(res.proyecto.id)[0];
+  assert.equal(mat.unidad.length, 30);
+  assert.equal(mat.proveedor.length, 100);
+  assert.equal(mat.categoria.length, 80);
+
+  fixture.tables.set('empresas', [{ id: 'emp-1', nombre: 'Demo', plan_id: 'pro_ia', rut: '76111111-1' }]);
+  fixture.tables.set('usuarios', [{ id: 'u1', empresa_id: 'emp-1', nombre: 'Admin', rol: 'admin' }]);
+  fixture.tables.set('presupuestos', [
+    {
+      id: 'cot-long',
+      empresa_id: 'emp-1',
+      creado_por: 'u1',
+      proyecto_id: null,
+      estado: 'borrador',
+      origen: 'plataforma',
+      cotizacion: quote,
+      created_at: '2026-11-17T00:00:00Z',
+      updated_at: '2026-11-17T00:00:00Z',
+    },
+  ]);
+
+  let rpcPayload = null;
+  fixture.handleRPC('convertir_presupuesto_obra', (params) => {
+    rpcPayload = params.p_payload;
+    return {
+      data: {
+        presupuesto: { id: 'cot-long', proyecto_id: params.p_payload.proyectos[0].id, estado: 'aprobada' },
+        proyecto: params.p_payload.proyectos[0],
+        actividadesCreadas: 1,
+        materialesCargados: 1,
+      },
+      error: null,
+    };
+  });
+
+  server.authorizeAI = async () => ({
+    client: fixture.supabase,
+    user: { id: 'u1', empresa_id: 'emp-1', rol: 'admin', nombre: 'Admin' },
+  });
+
+  const quoteDocPath = require.resolve('../lib/whatsapp/quote-document.ts');
+  const prevQuoteDoc = require.cache[quoteDocPath];
+  require.cache[quoteDocPath] = {
+    id: quoteDocPath,
+    filename: quoteDocPath,
+    loaded: true,
+    exports: { sendAcceptedQuotePdfToWhatsApp: async () => false },
+  };
+  try {
+    const { POST } = require('../app/api/presupuestos/convertir/route.ts');
+    const convertRes = await POST(
+      new NextRequest('https://example.test/api/presupuestos/convertir', {
+        method: 'POST',
+        body: JSON.stringify({ id: 'cot-long', updated_at: '2026-11-17T00:00:00Z' }),
+      }),
+    );
+    assert.equal(convertRes.status, 200);
+    assert.deepEqual(rpcPayload.proyectos[0].dias_laborales, [1, 2, 3, 4, 5]);
+    assert.deepEqual(rpcPayload.proyectos[0].fechas_no_laborales, []);
+    assert.equal(rpcPayload.proyectos[0].finalizada_automaticamente, false);
+    assert.equal(rpcPayload.proyectos[0].recepcion_estado, 'pendiente');
+  } finally {
+    if (prevQuoteDoc) require.cache[quoteDocPath] = prevQuoteDoc;
+    else delete require.cache[quoteDocPath];
+  }
+});
+
+test('Reportes: DELETE /api/whatsapp/mensajes valida rol, empresa y elimina reporte propio', async () => {
+  fixture.tables.set('whatsapp_mensajes', [
+    { message_id: 'rep-own', empresa_id: 'emp-1', actor_id: 'u1', texto: 'Avance' },
+    { message_id: 'rep-other', empresa_id: 'emp-2', actor_id: 'u2', texto: 'Ajeno' },
+  ]);
+
+  let role = 'terreno';
+  server.authorizeAI = async () => ({
+    client: fixture.supabase,
+    user: { id: 'u1', empresa_id: 'emp-1', rol: role, nombre: 'Usuario' },
+  });
+
+  const { DELETE } = require('../app/api/whatsapp/mensajes/route.ts');
+
+  const denied = await DELETE(new NextRequest('https://example.test/api/whatsapp/mensajes?id=rep-own', { method: 'DELETE' }));
+  assert.equal(denied.status, 403);
+
+  role = 'admin';
+  const foreign = await DELETE(new NextRequest('https://example.test/api/whatsapp/mensajes?id=rep-other', { method: 'DELETE' }));
+  assert.equal(foreign.status, 404);
+
+  const ok = await DELETE(new NextRequest('https://example.test/api/whatsapp/mensajes?id=rep-own', { method: 'DELETE' }));
+  assert.equal(ok.status, 200);
+  const remaining = fixture.tables.get('whatsapp_mensajes') || [];
+  assert.deepEqual(remaining.map((r) => r.message_id), ['rep-other']);
+});
