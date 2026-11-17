@@ -105,6 +105,9 @@ class Query {
     this.payload = payload;
     return this;
   }
+  insert(payload) {
+    return this.upsert(payload);
+  }
   delete() {
     this.mode = "delete";
     return this;

@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { aiHeaders } from "@/lib/ai/client";
+import MaskedField from "@/components/MaskedField";
+import { maskPhone } from "@/lib/privacy/mask";
 const labels: Record<string, string> = {
   pendiente: "Pendiente",
   procesando: "En proceso",
@@ -198,7 +200,19 @@ export default function WhatsAppAvisosPanel() {
                         </p>
                       </td>
                       <td data-label="Teléfono" className="p-2 break-words">
-                        {d.telefono ? "+" + d.telefono : "Sin registrar"}
+                        {d.telefono ? (
+                          <MaskedField
+                            value={`+${d.telefono}`}
+                            masked={maskPhone(d.telefono)}
+                            label={`teléfono de ${d.nombre}`}
+                            resourceType="whatsapp_envio"
+                            resourceId={d.id}
+                            fieldName="telefono"
+                            className="text-xs"
+                          />
+                        ) : (
+                          "Sin registrar"
+                        )}
                       </td>
                       <td data-label="Estado" className="p-2 break-words">
                         {labels[d.estado] || d.estado}

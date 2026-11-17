@@ -31,6 +31,8 @@ import { aiHeaders } from '@/lib/ai/client';
 import { dataService } from '@/lib/data-service';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
 import { canonicalPhone } from '@/lib/phone';
+import MaskedField from '@/components/MaskedField';
+import { maskEmail, maskPhone, maskRUT } from '@/lib/privacy/mask';
 import { isDeveloperEmail } from '@/lib/auth-utils';
 import {
   formatRegistrationConflictMessage,
@@ -537,9 +539,15 @@ export default function EquipoPage() {
                           {user.nombre}
                         </span>
                         {user.rut && (
-                          <span className="ml-2 font-mono text-[11px] text-gray-500 dark:text-gray-400">
-                            {formatRUT(user.rut)}
-                          </span>
+                          <MaskedField
+                            value={formatRUT(user.rut)}
+                            masked={maskRUT(user.rut)}
+                            label={`RUT de ${user.nombre}`}
+                            resourceType="usuario"
+                            resourceId={user.id}
+                            fieldName="rut"
+                            className="ml-2 text-[11px]"
+                          />
                         )}
                       </td>
 
@@ -576,12 +584,15 @@ export default function EquipoPage() {
                       <td className="py-2.5 pr-3 whitespace-nowrap font-mono text-gray-600 dark:text-gray-300">
                         {cleanPhone ? (
                           <span className="inline-flex items-center gap-2">
-                            <a
+                            <MaskedField
+                              value={`+${cleanPhone}`}
+                              masked={maskPhone(cleanPhone)}
+                              label={`teléfono de ${user.nombre}`}
                               href={`tel:+${cleanPhone}`}
-                              className="hover:text-navy-900 dark:hover:text-white hover:underline"
-                            >
-                              +{cleanPhone}
-                            </a>
+                              resourceType="usuario"
+                              resourceId={user.id}
+                              fieldName="telefono_whatsapp"
+                            />
                             <a
                               href={`https://wa.me/${cleanPhone}`}
                               target="_blank"
@@ -593,7 +604,15 @@ export default function EquipoPage() {
                             </a>
                           </span>
                         ) : user.email ? (
-                          <span className="text-gray-500 dark:text-gray-400">{user.email}</span>
+                          <MaskedField
+                            value={user.email}
+                            masked={maskEmail(user.email)}
+                            label={`correo de ${user.nombre}`}
+                            resourceType="usuario"
+                            resourceId={user.id}
+                            fieldName="email"
+                            className="text-[11px]"
+                          />
                         ) : (
                           <span className="text-gray-400">Sin contacto</span>
                         )}
@@ -728,9 +747,15 @@ export default function EquipoPage() {
                         <div className="flex items-center gap-2 truncate">
                           <Phone className="w-3.5 h-3.5 text-obra-green shrink-0" />
                           {cleanPhone ? (
-                            <a href={`tel:+${cleanPhone}`} className="hover:text-navy-900 dark:hover:text-white truncate">
-                              +{cleanPhone}
-                            </a>
+                            <MaskedField
+                              value={`+${cleanPhone}`}
+                              masked={maskPhone(cleanPhone)}
+                              label={`teléfono de ${user.nombre}`}
+                              href={`tel:+${cleanPhone}`}
+                              resourceType="usuario"
+                              resourceId={user.id}
+                              fieldName="telefono_whatsapp"
+                            />
                           ) : (
                             <span className="text-gray-400">Sin teléfono</span>
                           )}
@@ -751,7 +776,18 @@ export default function EquipoPage() {
 
                       <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                         <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <span className="truncate">{user.email}</span>
+                        {user.email ? (
+                          <MaskedField
+                            value={user.email}
+                            masked={maskEmail(user.email)}
+                            label={`correo de ${user.nombre}`}
+                            resourceType="usuario"
+                            resourceId={user.id}
+                            fieldName="email"
+                          />
+                        ) : (
+                          <span className="text-gray-400">Sin email</span>
+                        )}
                       </div>
                     </div>
                   </div>

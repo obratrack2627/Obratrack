@@ -234,4 +234,16 @@ export async function downloadProjectExcel(payload: ProjectExcelExportPayload): 
   anchor.click();
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
+  if (typeof fetch === 'function') {
+    fetch('/api/auditoria/evento', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        event_type: 'export.excel_report',
+        resource_type: 'proyecto',
+        resource_id: payload.proyecto.id,
+      }),
+    }).catch(() => {});
+  }
 }

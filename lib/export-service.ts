@@ -107,6 +107,19 @@ export const exportService = {
         setTimeout(() => URL.revokeObjectURL(objectUrl!), 1000);
       }
 
+      if (typeof fetch === 'function') {
+        fetch('/api/auditoria/evento', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: JSON.stringify({
+            event_type: 'export.backup_json',
+            resource_type: 'empresa',
+            resource_id: backup.empresa.id || null,
+          }),
+        }).catch(() => {});
+      }
+
       return true;
     } catch (err) {
       console.error('Error al exportar datos de ObraTrack:', err);

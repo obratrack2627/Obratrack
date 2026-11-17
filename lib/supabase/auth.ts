@@ -5,6 +5,7 @@ import { dataService } from '@/lib/data-service';
 import { canAccessWeb, WEB_ACCESS_ERROR } from '@/lib/auth/access';
 import { establishWebSession, clearWebSession } from '@/lib/auth/session-client';
 import { sanitizeEmail } from '@/lib/auth/registration-validation';
+import { sanitizeErrorForLog } from '@/lib/privacy/mask';
 
 export interface AuthResult {
   success: boolean;
@@ -249,7 +250,7 @@ export async function signUpWithSupabase(
         : 'Cuenta creada con éxito.',
     };
   } catch (error: any) {
-    console.error('Error en signUpWithSupabase:', error);
+    console.error('Error en signUpWithSupabase:', sanitizeErrorForLog(error));
     return {
       success: false,
       error: mapSupabaseAuthError(error.message || 'Error al crear la cuenta en Supabase.'),
@@ -283,7 +284,7 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
         }
       }
     } catch (err) {
-      console.warn('Error resolviendo usuario por RUT:', err);
+      console.warn('Error resolviendo usuario por RUT:', sanitizeErrorForLog(err));
     }
   }
 
@@ -313,7 +314,7 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
 
     return { success: true, user: usuario };
   } catch (error: any) {
-    console.error('Error en signInWithSupabase:', error);
+    console.error('Error en signInWithSupabase:', sanitizeErrorForLog(error));
     return {
       success: false,
       error: mapSupabaseAuthError(error.message || 'Error al iniciar sesión en Supabase.'),
@@ -330,7 +331,7 @@ export async function signOutSupabase(discardPending = false): Promise<void> {
   try {
     await supabase.auth.signOut();
   } catch (err) {
-    console.warn('Error cerrando sesión en Supabase:', err);
+    console.warn('Error cerrando sesión en Supabase:', sanitizeErrorForLog(err));
   } finally {
     dataService.clearActiveUser();
     for(const key of Object.keys(localStorage))if(/^sb-.*-auth-token/.test(key))localStorage.removeItem(key);
@@ -362,7 +363,7 @@ export async function resetPasswordWithSupabase(email: string): Promise<AuthResu
       message: 'Te hemos enviado un correo con instrucciones para restablecer tu contraseña. Por favor revisa tu bandeja de entrada o spam.',
     };
   } catch (error: any) {
-    console.error('Error en resetPasswordWithSupabase:', error);
+    console.error('Error en resetPasswordWithSupabase:', sanitizeErrorForLog(error));
     return {
       success: false,
       error: mapSupabaseAuthError(error.message || 'Error al enviar correo de recuperación.'),
@@ -398,7 +399,7 @@ export async function updatePasswordWithSupabase(newPassword: string): Promise<A
       message: 'Tu contraseña ha sido actualizada exitosamente.',
     };
   } catch (error: any) {
-    console.error('Error en updatePasswordWithSupabase:', error);
+    console.error('Error en updatePasswordWithSupabase:', sanitizeErrorForLog(error));
     return {
       success: false,
       error: mapSupabaseAuthError(error.message || 'Error al actualizar contraseña.'),
@@ -434,7 +435,7 @@ export async function resendConfirmationEmail(email: string): Promise<AuthResult
       message: `Correo de confirmación reenviado a ${cleanEmail}. Por favor revisa tu bandeja.`,
     };
   } catch (error: any) {
-    console.error('Error en resendConfirmationEmail:', error);
+    console.error('Error en resendConfirmationEmail:', sanitizeErrorForLog(error));
     return {
       success: false,
       error: mapSupabaseAuthError(error.message || 'Error al reenviar correo de confirmación.'),

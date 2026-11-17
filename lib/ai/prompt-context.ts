@@ -1,11 +1,28 @@
-// Reducir columnas y duplicados conservando todas las referencias de entidades.
-// No se recorta JSON serializado: cada dato enviado conserva su estructura.
+import { maskEmail, maskPhone, maskRUT } from '@/lib/privacy/mask';
+
+// Reducir columnas, duplicados y PII en claro antes de enviar contexto a proveedores externos de IA.
 export function compactAIContext(context: Record<string, any>) {
   const pick = (row: any, fields: string[]) => Object.fromEntries(fields.filter(k => row?.[k] !== undefined).map(k => [k, row[k]]));
   const compact = { ...context };
   if (Array.isArray(context.proyectos)) compact.proyectos = context.proyectos.map((p: any) => pick(p, ['id','nombre','estado','cliente_id','comuna','direccion','descripcion','fecha_inicio','fecha_termino_estimada','monto_cotizado','porcentaje_avance']));
-  if (Array.isArray(context.clientes)) compact.clientes = context.clientes.map((c: any) => pick(c, ['id','nombre','email','telefono','rut','direccion','comuna']));
-  if (Array.isArray(context.trabajadores)) compact.trabajadores = context.trabajadores.map((u: any) => pick(u, ['id','nombre','rol','email','telefono_whatsapp','rut','especialidades']));
+  if (Array.isArray(context.clientes)) {
+    compact.clientes = context.clientes.map((c: any) => {
+      const picked = pick(c, ['id','nombre','email','telefono','rut','direccion','comuna']);
+      if (picked.email) picked.email = maskEmail(picked.email);
+      if (picked.telefono) picked.telefono = maskPhone(picked.telefono);
+      if (picked.rut) picked.rut = maskRUT(picked.rut);
+      return picked;
+    });
+  }
+  if (Array.isArray(context.trabajadores)) {
+    compact.trabajadores = context.trabajadores.map((u: any) => {
+      const picked = pick(u, ['id','nombre','rol','email','telefono_whatsapp','rut','especialidades']);
+      if (picked.email) picked.email = maskEmail(picked.email);
+      if (picked.telefono_whatsapp) picked.telefono_whatsapp = maskPhone(picked.telefono_whatsapp);
+      if (picked.rut) picked.rut = maskRUT(picked.rut);
+      return picked;
+    });
+  }
   // operacion_obra ya contiene extractos, totales y avisos de recorte verificados.
   delete compact.materiales; delete compact.actividades; delete compact.pagos;
   return compact;

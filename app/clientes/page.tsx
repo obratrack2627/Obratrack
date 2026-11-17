@@ -32,6 +32,8 @@ import { dataService } from '@/lib/data-service';
 import { Cliente, Proyecto } from '@/types/database';
 import { formatCLP, formatRUT, validarRutChileno } from '@/lib/utils';
 import { canonicalPhone } from '@/lib/phone';
+import MaskedField from '@/components/MaskedField';
+import { maskEmail, maskPhone, maskRUT } from '@/lib/privacy/mask';
 import {
   formatRegistrationConflictMessage,
   isValidEmail,
@@ -601,22 +603,38 @@ export default function ClientesPage() {
                           {c.nombre}
                         </span>
                         {c.rut && (
-                          <span className="ml-2 font-mono text-[11px] text-gray-500 dark:text-gray-400">
-                            {formatRUT(c.rut)}
-                          </span>
+                          <MaskedField
+                            value={formatRUT(c.rut)}
+                            masked={maskRUT(c.rut)}
+                            label={`RUT de ${c.nombre}`}
+                            resourceType="cliente"
+                            resourceId={c.id}
+                            fieldName="rut"
+                            className="ml-2 text-[11px]"
+                          />
                         )}
                       </td>
 
                       <td className="py-2.5 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
                         {validPhone ? (
-                          <a
+                          <MaskedField
+                            value={`+${validPhone}`}
+                            masked={maskPhone(validPhone)}
+                            label={`teléfono de ${c.nombre}`}
                             href={`tel:+${validPhone}`}
-                            className="font-mono hover:text-navy-900 dark:hover:text-white hover:underline"
-                          >
-                            +{validPhone}
-                          </a>
+                            resourceType="cliente"
+                            resourceId={c.id}
+                            fieldName="telefono"
+                          />
                         ) : c.email ? (
-                          <span className="text-gray-500 dark:text-gray-400">{c.email}</span>
+                          <MaskedField
+                            value={c.email}
+                            masked={maskEmail(c.email)}
+                            label={`correo de ${c.nombre}`}
+                            resourceType="cliente"
+                            resourceId={c.id}
+                            fieldName="email"
+                          />
                         ) : c.direccion ? (
                           <span className="max-w-[180px] truncate inline-block align-bottom text-gray-500">
                             {c.direccion}
@@ -719,9 +737,16 @@ export default function ClientesPage() {
                           {c.nombre}
                         </h3>
                         {c.rut ? (
-                          <span className="text-[11px] font-mono text-gray-500 dark:text-gray-400">
-                            RUT: {formatRUT(c.rut)}
-                          </span>
+                          <MaskedField
+                            value={formatRUT(c.rut)}
+                            masked={maskRUT(c.rut)}
+                            label={`RUT de ${c.nombre}`}
+                            prefix="RUT:"
+                            resourceType="cliente"
+                            resourceId={c.id}
+                            fieldName="rut"
+                            className="text-[11px]"
+                          />
                         ) : (
                           <span className="text-[11px] font-mono text-gray-400">
                             Sin RUT registrado
@@ -753,9 +778,15 @@ export default function ClientesPage() {
                       {validPhone ? (
                         <div className="flex items-center gap-2 font-mono">
                           <Phone className="w-3.5 h-3.5 text-obra-green shrink-0" />
-                          <a href={`tel:+${validPhone}`} className="hover:text-navy-900 dark:hover:text-white truncate">
-                            +{validPhone}
-                          </a>
+                          <MaskedField
+                            value={`+${validPhone}`}
+                            masked={maskPhone(validPhone)}
+                            label={`teléfono de ${c.nombre}`}
+                            href={`tel:+${validPhone}`}
+                            resourceType="cliente"
+                            resourceId={c.id}
+                            fieldName="telefono"
+                          />
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 font-mono text-gray-400">
@@ -767,7 +798,14 @@ export default function ClientesPage() {
                       {c.email ? (
                         <div className="flex items-center gap-2 font-mono">
                           <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span className="truncate">{c.email}</span>
+                          <MaskedField
+                            value={c.email}
+                            masked={maskEmail(c.email)}
+                            label={`correo de ${c.nombre}`}
+                            resourceType="cliente"
+                            resourceId={c.id}
+                            fieldName="email"
+                          />
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 font-mono text-gray-400">
