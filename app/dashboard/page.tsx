@@ -322,7 +322,7 @@ export default function DashboardPage() {
               href="/reportes"
               className="inline-flex items-center gap-1 text-xs font-heading font-bold text-[#FF6A00] hover:underline"
             >
-              <span>Revisar bandeja WhatsApp</span>
+              <span>Ver reportes</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </Link>
           </div>

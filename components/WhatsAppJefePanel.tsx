@@ -11,6 +11,7 @@ import {
   ChevronDown,
   X,
   Search,
+  RefreshCw,
 } from "lucide-react";
 import { aiHeaders } from "@/lib/ai/client";
 import { dataService } from "@/lib/data-service";
@@ -35,6 +36,15 @@ const dates = (value?: string) =>
         timeStyle: "short",
       }).format(new Date(value))
     : "Fecha no disponible";
+
+function cleanReportTitle(raw: string): string {
+  if (!raw) return raw;
+  const trimmed = raw.trim();
+  if (/^1\b/.test(trimmed)) {
+    return trimmed.replace(/\(s\)/gi, "");
+  }
+  return trimmed.replace(/\(s\)/gi, "s");
+}
 export default function WhatsAppJefePanel() {
   const [tab, setTab] = useState<"registros" | "envios">("registros");
   const [connection, setConnection] = useState<any>(null);
@@ -134,117 +144,165 @@ export default function WhatsAppJefePanel() {
       setActivating(false);
     }
   }
+  const connectionStatusText =
+    connection?.estado === "permisos_pendientes"
+      ? "Permisos de Meta pendientes"
+      : connection?.estado === "renovar_conexion"
+        ? "Renovar conexión con Meta"
+        : connection?.estado === "numero_desactualizado"
+          ? "Actualizar número de WhatsApp"
+          : connection && connection.estado !== "disponible"
+            ? "Revisar conexión con Meta"
+            : status
+              ? status.cloud_api_configurada
+                ? "Canal configurado"
+                : "Conexión con Meta pendiente"
+              : "Comprobando conexión…";
+
+  const hasFilters = Boolean(search || type || project || author);
+
   return (
-    <div className="whatsapp-workspace space-y-5">
-      <section className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h2 className="font-heading font-bold">
-            Canal de WhatsApp
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Tu teléfono: {phone || "Pendiente en tu ficha"} ·{" "}
-            <span>
-              {connection?.estado === "permisos_pendientes"
-                ? "Permisos de Meta pendientes"
-                : connection?.estado === "renovar_conexion"
-                  ? "Renovar conexión con Meta"
-                  : connection?.estado === "numero_desactualizado"
-                    ? "Actualizar número de WhatsApp"
-                    : connection && connection.estado !== "disponible"
-                      ? "Revisar conexión con Meta"
-                  : status
-                    ? status.cloud_api_configurada
-                      ? "Canal configurado"
-                      : "Conexión con Meta pendiente"
-                    : "Comprobando conexión…"}
-            </span>
-          </p>
-          {connection && connection.estado !== "disponible" && (
-            <p className="text-sm text-amber-800 mt-2 max-w-xl" role="status">
-              {connection.mensaje}
-            </p>
-          )}
-          {canActivate && connection?.estado === "webhook_pendiente" && (
-            <button disabled={activating} onClick={() => void activateReception()}
-              className="mt-3 rounded-xl bg-green-700 text-white px-4 py-2 text-sm disabled:opacity-50">
-              {activating ? "Activando recepción…" : "Activar recepción de mensajes"}
-            </button>
-          )}
-          {activationError && <p role="alert" className="text-sm text-red-700 mt-2">{activationError}</p>}
-        </div>
-        {status?.cloud_api_configurada && status.numero &&
-          (!connection || connection.estado === "disponible") && (
-          <a
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-green-700 text-white px-4 py-2.5 text-sm font-semibold"
-            href={`https://wa.me/${status.numero.replace(/\D/g, "")}`}
-            target="_blank"
-            rel="noreferrer"
+    <div className="whatsapp-workspace space-y-4">
+      <section className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3 sm:p-4 shadow-sm space-y-3 min-w-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 min-w-0">
+          <div
+            className="inline-flex min-w-0 max-w-full gap-1 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-100 dark:bg-[#0B0F14] p-1"
+            role="tablist"
+            aria-label="Secciones de reportes"
           >
-            <MessageCircle className="w-4 h-4" />
-            Abrir WhatsApp de ObraTrack
-          </a>
+            <button
+              role="tab"
+              aria-selected={tab === "registros"}
+              onClick={() => setTab("registros")}
+              className={`rounded-lg px-3.5 py-2 text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors ${
+                tab === "registros"
+                  ? "bg-white dark:bg-[#1E2530] text-obra-orange shadow-sm"
+                  : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              Registros
+            </button>
+            {staff && (
+              <button
+                role="tab"
+                aria-selected={tab === "envios"}
+                onClick={() => setTab("envios")}
+                className={`rounded-lg px-3.5 py-2 text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors ${
+                  tab === "envios"
+                    ? "bg-white dark:bg-[#1E2530] text-obra-orange shadow-sm"
+                    : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                }`}
+              >
+                Avisos enviados
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+            <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 min-w-0 max-w-full">
+              <span
+                className={`w-2 h-2 rounded-full shrink-0 ${
+                  connection && connection.estado !== "disponible"
+                    ? "bg-amber-500"
+                    : status?.cloud_api_configurada
+                      ? "bg-emerald-500"
+                      : "bg-gray-400"
+                }`}
+              />
+              <span className="truncate">
+                Tu teléfono: {phone || "Pendiente en tu ficha"} ·{" "}
+                {connectionStatusText}
+              </span>
+            </span>
+
+            {tab === "registros" && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void refresh()}
+                aria-label="Actualizar registros"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] hover:bg-kraft-100 dark:hover:bg-[#1E2530] px-3 py-2 text-xs font-semibold text-navy-900 dark:text-gray-200 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`}
+                />
+                <span>{busy ? "Actualizando…" : "Actualizar"}</span>
+              </button>
+            )}
+
+            {status?.cloud_api_configurada &&
+              status.numero &&
+              (!connection || connection.estado === "disponible") && (
+                <a
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-green-700 hover:bg-green-800 text-white px-3.5 py-2 text-xs sm:text-sm font-semibold transition-colors"
+                  href={`https://wa.me/${status.numero.replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <MessageCircle className="w-4 h-4 shrink-0" />
+                  <span>Abrir WhatsApp de ObraTrack</span>
+                </a>
+              )}
+          </div>
+        </div>
+
+        {((connection && connection.estado !== "disponible") ||
+          activationError) && (
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 px-3 py-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0 flex-1 space-y-1">
+              {connection && connection.estado !== "disponible" && (
+                <p
+                  className="text-xs sm:text-sm text-amber-800 dark:text-amber-200"
+                  role="status"
+                >
+                  {connection.mensaje}
+                </p>
+              )}
+              {activationError && (
+                <p
+                  role="alert"
+                  className="text-xs sm:text-sm text-red-700 dark:text-red-300"
+                >
+                  {activationError}
+                </p>
+              )}
+            </div>
+            {canActivate && connection?.estado === "webhook_pendiente" && (
+              <button
+                disabled={activating}
+                onClick={() => void activateReception()}
+                className="rounded-xl bg-green-700 text-white px-3.5 py-2 text-xs sm:text-sm font-semibold disabled:opacity-50 shrink-0"
+              >
+                {activating
+                  ? "Activando recepción…"
+                  : "Activar recepción de mensajes"}
+              </button>
+            )}
+          </div>
         )}
       </section>
-      <div
-        className="flex min-w-0 gap-1 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-100 dark:bg-[#0B0F14] p-1"
-        role="tablist"
-        aria-label="Actividad de WhatsApp"
-      >
-        <button
-          role="tab"
-          aria-selected={tab === "registros"}
-          onClick={() => setTab("registros")}
-          className={`flex-1 sm:flex-none rounded-lg px-4 py-2.5 text-sm font-semibold ${tab === "registros" ? "bg-white dark:bg-[#1E2530] text-obra-orange shadow-sm" : "text-gray-500"}`}
-        >
-          Registros
-        </button>
-        {staff && (
-          <button
-            role="tab"
-            aria-selected={tab === "envios"}
-            onClick={() => setTab("envios")}
-            className={`flex-1 sm:flex-none rounded-lg px-4 py-2.5 text-sm font-semibold ${tab === "envios" ? "bg-white dark:bg-[#1E2530] text-obra-orange shadow-sm" : "text-gray-500"}`}
-          >
-            Avisos enviados
-          </button>
-        )}
-      </div>
+
       {tab === "envios" && staff ? (
         <WhatsAppAvisosPanel />
       ) : (
-        <section className="space-y-4" aria-label="Registros de WhatsApp">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="text-lg font-bold">
-              Registros de WhatsApp{" "}
-              <span className="text-sm font-normal text-gray-500">
-                ({total})
-              </span>
-            </h3>
-            <button
-              disabled={busy}
-              onClick={() => void refresh()}
-              className="text-sm underline"
-            >
-              {busy ? "Actualizando…" : "Actualizar registros"}
-            </button>
-          </div>
-          <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3.5 sm:p-4 shadow-sm space-y-3 min-w-0">
-            <div className="grid min-w-0 grid-cols-2 lg:grid-cols-4 gap-2.5">
-              <div className="col-span-2 lg:col-span-1 relative min-w-0">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <section className="space-y-3" aria-label="Registros de reportes">
+          <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3 sm:p-3.5 shadow-sm space-y-2.5 min-w-0">
+            <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+              <div className="relative min-w-0">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   aria-label="Buscar registro"
                   placeholder="Buscar por mensaje, autor o detalle…"
                   value={search}
                   onChange={(e) => change(setSearch)(e.target.value)}
-                  className="block w-full min-w-0 h-10 pl-10 pr-8 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] text-xs text-navy-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-obra-orange"
+                  className="block w-full min-w-0 h-9 pl-9 pr-8 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] text-xs text-navy-900 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none focus:border-obra-orange"
                 />
                 {search && (
                   <button
                     type="button"
                     onClick={() => change(setSearch)("")}
                     aria-label="Limpiar búsqueda"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full hover:bg-kraft-200 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center justify-center text-xs transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full hover:bg-kraft-200 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center justify-center text-xs transition-colors"
                   >
                     ✕
                   </button>
@@ -254,7 +312,7 @@ export default function WhatsAppJefePanel() {
                 aria-label="Tipo de registro"
                 value={type}
                 onChange={(e) => change(setType)(e.target.value)}
-                className="block w-full min-w-0 h-10 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] px-3 text-xs font-medium text-navy-900 dark:text-gray-100 truncate focus:outline-none focus:border-obra-orange"
+                className="block w-full min-w-0 h-9 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] px-3 text-xs font-medium text-navy-900 dark:text-gray-100 truncate focus:outline-none focus:border-obra-orange"
               >
                 <option value="">Todos los tipos</option>
                 {Object.entries(labels).map(([value, label]) => (
@@ -267,7 +325,7 @@ export default function WhatsAppJefePanel() {
                 aria-label="Filtrar registros por obra"
                 value={project}
                 onChange={(e) => change(setProject)(e.target.value)}
-                className="block w-full min-w-0 h-10 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] px-3 text-xs font-medium text-navy-900 dark:text-gray-100 truncate focus:outline-none focus:border-obra-orange"
+                className="block w-full min-w-0 h-9 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] px-3 text-xs font-medium text-navy-900 dark:text-gray-100 truncate focus:outline-none focus:border-obra-orange"
               >
                 <option value="">Todas las obras</option>
                 {projects.map((p) => (
@@ -281,7 +339,7 @@ export default function WhatsAppJefePanel() {
                   aria-label="Autor del registro"
                   value={author}
                   onChange={(e) => change(setAuthor)(e.target.value)}
-                  className="col-span-2 lg:col-span-1 block w-full min-w-0 h-10 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] px-3 text-xs font-medium text-navy-900 dark:text-gray-100 truncate focus:outline-none focus:border-obra-orange"
+                  className="block w-full min-w-0 h-9 rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] px-3 text-xs font-medium text-navy-900 dark:text-gray-100 truncate focus:outline-none focus:border-obra-orange"
                 >
                   <option value="">Todos los autores</option>
                   {authors.map((a) => (
@@ -293,87 +351,11 @@ export default function WhatsAppJefePanel() {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-kraft-100 dark:border-[#1E2530] min-w-0">
-              <div
-                role="tablist"
-                aria-label="Filtrar registros por tipo"
-                className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 -mx-1 px-1"
-              >
-                {(
-                  [
-                    {
-                      value: "",
-                      label: "Todos",
-                      dot: "bg-gray-400",
-                      activeClass:
-                        "bg-navy-900 text-white border-navy-900 dark:bg-white dark:text-navy-900 dark:border-white shadow-sm",
-                    },
-                    {
-                      value: "fotografia",
-                      label: "Evidencia",
-                      dot: "bg-obra-orange",
-                      activeClass: "bg-obra-orange text-white border-obra-orange shadow-sm",
-                    },
-                    {
-                      value: "registro",
-                      label: "Registro de obra",
-                      dot: "bg-obra-green",
-                      activeClass: "bg-obra-green text-white border-obra-green shadow-sm",
-                    },
-                    {
-                      value: "cotizacion",
-                      label: "Cotización",
-                      dot: "bg-blue-500",
-                      activeClass: "bg-blue-600 text-white border-blue-600 shadow-sm",
-                    },
-                    {
-                      value: "consulta",
-                      label: "Consulta",
-                      dot: "bg-purple-500",
-                      activeClass: "bg-purple-600 text-white border-purple-600 shadow-sm",
-                    },
-                    {
-                      value: "datos_obra",
-                      label: "Datos pendientes",
-                      dot: "bg-amber-500",
-                      activeClass: "bg-amber-500 text-white border-amber-500 shadow-sm",
-                    },
-                    {
-                      value: "aviso",
-                      label: "Aviso al equipo",
-                      dot: "bg-slate-400",
-                      activeClass: "bg-slate-700 text-white border-slate-700 shadow-sm",
-                    },
-                  ] as const
-                ).map((cat) => {
-                  const isActive = type === cat.value;
-                  return (
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      key={cat.value || "todos"}
-                      onClick={() => change(setType)(cat.value)}
-                      className={`h-8 px-3 rounded-xl text-xs font-heading font-semibold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap border transition-all ${
-                        isActive
-                          ? cat.activeClass
-                          : "bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border-kraft-200 dark:border-[#263040] hover:bg-kraft-100 dark:hover:bg-[#1E2530]"
-                      }`}
-                    >
-                      {cat.value !== "" && (
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            isActive ? "bg-white dark:bg-current" : cat.dot
-                          }`}
-                        />
-                      )}
-                      <span>{cat.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {(search || type || project || author) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400 px-0.5">
+              <span>
+                {total} {total === 1 ? "registro" : "registros"}
+              </span>
+              {hasFilters && (
                 <button
                   type="button"
                   onClick={() => {
@@ -383,9 +365,9 @@ export default function WhatsAppJefePanel() {
                     setAuthor("");
                     setPage(0);
                   }}
-                  className="text-xs font-heading font-bold text-obra-orange hover:underline shrink-0 pl-2 whitespace-nowrap"
+                  className="font-heading font-bold text-obra-orange hover:underline"
                 >
-                  Limpiar
+                  Limpiar filtros
                 </button>
               )}
             </div>
@@ -399,7 +381,7 @@ export default function WhatsAppJefePanel() {
             </p>
           )}
           {!busy && !error && !messages.length && (
-            <div className="rounded-2xl border bg-white p-8 text-center text-sm text-gray-500">
+            <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-8 text-center text-sm text-gray-500 dark:text-gray-400">
               No hay registros con estos filtros.
             </div>
           )}
@@ -422,31 +404,34 @@ export default function WhatsAppJefePanel() {
                     : category === "aviso"
                       ? Send
                       : ClipboardList;
-              const title =
+              const rawTitle =
                 m.cotizacion?.titulo_proyecto ||
                 m.acciones?.titulo ||
                 labels[category] ||
-                "Registro de WhatsApp";
+                "Registro de obra";
+              const title = cleanReportTitle(rawTitle);
               const actions =
                 m.acciones?.detalles?.acciones ||
                 (m.acciones ? [m.acciones] : []);
               return (
                 <article
                   key={m.message_id}
-                  className="min-w-0 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-4 sm:p-5 space-y-4"
+                  className="min-w-0 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3.5 sm:p-4 space-y-2.5"
                 >
-                  <div className="flex items-start gap-3">
-                    <span className="shrink-0 rounded-xl bg-obra-orange/10 p-2.5 text-obra-orange">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <span className="shrink-0 rounded-xl bg-obra-orange/10 p-2 text-obra-orange mt-0.5">
                       <Icon className="h-4 w-4" />
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h4 className="font-semibold break-words">{title}</h4>
-                        <span className="rounded-full bg-kraft-100 text-gray-600 px-2 py-1 text-xs">
+                        <h3 className="font-heading font-semibold text-sm sm:text-base text-navy-900 dark:text-gray-100 break-words">
+                          {title}
+                        </h3>
+                        <span className="shrink-0 rounded-full bg-kraft-100 dark:bg-[#1E2530] text-gray-600 dark:text-gray-300 px-2.5 py-0.5 text-xs font-medium">
                           {labels[category] || "Registro"}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-gray-500">
+                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 break-words">
                         {m.autor?.nombre || "Mi cuenta"}
                         {m.autor?.rol
                           ? " · " +
@@ -460,56 +445,69 @@ export default function WhatsAppJefePanel() {
                       </p>
                     </div>
                   </div>
-                  <p className="rounded-xl bg-kraft-50 dark:bg-[#0B0F14] p-3 text-sm text-gray-700 dark:text-gray-300 break-words">
-                    {String(m.texto || "").slice(0, 220)}
-                    {m.texto?.length > 220 ? "…" : ""}
-                  </p>
-                  {m.obras?.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {m.obras.map((p: any) => (
-                        <Link
-                          key={p.id}
-                          className="max-w-full rounded-lg border border-obra-orange/20 px-2 py-1 text-xs font-medium text-obra-orange hover:underline"
-                          href={`/proyectos/${p.id}/gantt`}
-                        >
-                          {p.nombre}
-                        </Link>
-                      ))}
-                    </div>
+                  {m.texto && (
+                    <p className="text-sm text-gray-700 dark:text-[#C9D3E0] leading-relaxed whitespace-pre-wrap break-words">
+                      {String(m.texto).slice(0, 220)}
+                      {m.texto.length > 220 ? "…" : ""}
+                    </p>
                   )}
-                  {m.adjunto?.path && (!m.adjunto.mime_type || m.adjunto.mime_type.startsWith('image/')) && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPhoto("whatsapp-evidencias:" + m.adjunto.path)
-                      }
-                      aria-label="Ampliar foto"
-                      className="block"
-                    >
-                      <EvidenceImage
-                        src={"whatsapp-evidencias:" + m.adjunto.path}
-                        alt="Foto enviada por WhatsApp"
-                        className="max-h-44 max-w-full rounded-xl object-contain"
+                  {m.adjunto?.path &&
+                    (!m.adjunto.mime_type ||
+                      m.adjunto.mime_type.startsWith("image/")) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPhoto("whatsapp-evidencias:" + m.adjunto.path)
+                        }
+                        aria-label="Ampliar foto"
+                        className="block"
+                      >
+                        <EvidenceImage
+                          src={"whatsapp-evidencias:" + m.adjunto.path}
+                          alt="Foto enviada por WhatsApp"
+                          className="max-h-44 max-w-full rounded-xl object-contain"
+                        />
+                      </button>
+                    )}
+                  {m.adjunto?.path &&
+                    m.adjunto.mime_type &&
+                    !m.adjunto.mime_type.startsWith("image/") && (
+                      <EvidenceLink
+                        path={m.adjunto.path}
+                        name={m.adjunto.archivo_nombre || "Archivo de obra"}
                       />
-                    </button>
-                  )}
-                  {m.adjunto?.path && m.adjunto.mime_type && !m.adjunto.mime_type.startsWith('image/') && <EvidenceLink path={m.adjunto.path} name={m.adjunto.archivo_nombre || 'Archivo de obra'} />}
-                  <div className="flex flex-wrap gap-2 items-center text-xs">
+                    )}
+                  <AIMessageTools
+                    compact
+                    message={{ cotizacion_generada: m.cotizacion || undefined }}
+                  />
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs min-w-0">
+                    {m.obras?.map((p: any) => (
+                      <Link
+                        key={p.id}
+                        className="max-w-full truncate rounded-lg border border-obra-orange/25 bg-obra-orange/5 px-2 py-0.5 font-medium text-obra-orange hover:underline"
+                        href={`/proyectos/${p.id}/gantt`}
+                      >
+                        {p.nombre}
+                      </Link>
+                    ))}
                     {category === "datos_obra" ? (
-                      <span className="text-amber-700 font-medium">
+                      <span className="text-amber-700 dark:text-amber-400 font-medium">
                         Datos pendientes para crear obra
                       </span>
-                    ) : m.adjunto?.path && !m.adjunto?.proyecto_id && !m.obras?.length ? (
-                      <span className="text-amber-700 font-medium">
+                    ) : m.adjunto?.path &&
+                      !m.adjunto?.proyecto_id &&
+                      !m.obras?.length ? (
+                      <span className="text-amber-700 dark:text-amber-400 font-medium">
                         Pendiente de asociar a una obra
                       </span>
                     ) : (
-                      <span className="text-green-700 font-medium">
+                      <span className="text-green-700 dark:text-emerald-400 font-medium">
                         {m.adjunto?.path ? "Guardado en bitácora" : "Registrado"}
                       </span>
                     )}
                     {!m.sent_at && (
-                      <span className="text-amber-700">
+                      <span className="text-amber-700 dark:text-amber-400">
                         Respuesta pendiente
                       </span>
                     )}
@@ -522,12 +520,9 @@ export default function WhatsAppJefePanel() {
                       </button>
                     )}
                   </div>
-                  <AIMessageTools compact
-                    message={{ cotizacion_generada: m.cotizacion || undefined }}
-                  />
-                  <details className="min-w-0 border-t border-kraft-200 dark:border-[#263040] pt-3">
-                    <summary className="cursor-pointer text-sm font-medium flex items-center gap-1">
-                      Ver detalle <ChevronDown className="h-4 w-4" />
+                  <details className="min-w-0 border-t border-kraft-100 dark:border-[#1E2530] pt-2">
+                    <summary className="cursor-pointer text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-navy-900 dark:hover:text-white inline-flex items-center gap-1 select-none">
+                      Ver detalle <ChevronDown className="h-3.5 w-3.5" />
                     </summary>
                     <div className="min-w-0 mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                       <div className="min-w-0 rounded-xl bg-kraft-50 dark:bg-[#0B0F14] p-3">

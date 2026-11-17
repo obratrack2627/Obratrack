@@ -121,7 +121,7 @@ export default function Sidebar() {
           icon: ClipboardCheck,
         },
         {
-          label: 'WhatsApp & Reportes',
+          label: 'Reportes',
           href: '/reportes',
           icon: MessageSquareShare,
           badge: pendingReportsCount > 0 ? pendingReportsCount : null,
@@ -156,7 +156,7 @@ export default function Sidebar() {
           icon: ClipboardCheck,
         },
         {
-          label: 'WhatsApp',
+          label: 'Reportes',
           href: '/reportes',
           icon: MessageSquareShare,
           badge: pendingReportsCount > 0 ? pendingReportsCount : null,
