@@ -211,7 +211,7 @@ export default function WhatsAppJefePanel() {
               />
               <span className="truncate">
                 Tu teléfono: {phone || "Pendiente en tu ficha"} ·{" "}
-                {connectionStatusText}
+                <span>{connectionStatusText}</span>
               </span>
             </span>
 

@@ -460,7 +460,7 @@ test("la bandeja del jefe muestra conexión pendiente y abre una cotización rec
   });
   await page.goto("/reportes");
   await expect(
-    page.getByRole("heading", { name: "Canal de WhatsApp" }),
+    page.getByRole("heading", { name: "Reportes", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("Conexión con Meta pendiente", { exact: true }),
