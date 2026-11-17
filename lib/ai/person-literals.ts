@@ -3,6 +3,7 @@ import { isConversationalName, isPersonName, explicitPersonName } from './person
 import type { PersonDraft } from "@/lib/registrations";
 import { phonesInText } from "@/lib/phone";
 import { projectMentions } from "./project-reference";
+import { assignmentPersonName } from './team-assignment';
 
 const norm = (value: string) =>
   value
@@ -11,7 +12,7 @@ const norm = (value: string) =>
     .toLowerCase()
     .trim();
 export const personStart = (message: string) =>
-  /^(?:por favor[, ]+)?(?:quiero |necesito |puedes |puedes ayudarme a )?(?:agregar?|registrar?|anadir|anade|crear?|ingresar?|incorporar?)(?:me)?\s+(?:a\s+)?(?:(?:un|una|al|el|la|nuevo|nueva)\s+)*(?:trabajador|maestro|supervisor|cliente)\b/.test(
+  /^(?:por favor[, ]+)?(?:quiero |necesito |puedes |puedes ayudarme a )?(?:agregar?|registrar?|anadir|anade|crear?|ingresar?|incorporar?)(?:me)?\s+(?:a\s+)?(?:(?:un|una|al|el|la|nuevo|nueva)\s+)*(?:trabajador|maestro|supervisor|jefe de obra|jefa de obra|cliente)\b/.test(
     norm(message),
   );
 
@@ -66,20 +67,20 @@ export function personLiterals(
   if (rut) draft.rut = rut;
   const phones = phonesInText(message);
   if (phones.length === 1) draft.telefono = "+" + phones[0];
-  if (/\bsupervisor(?:a)?\b/.test(plain)) draft.rol = "supervisor";
+  if (/\b(?:supervisor(?:a)?|jef[ea] de obra)\b/.test(plain)) draft.rol = "supervisor";
   else if (/\b(?:terreno|maestro|maestra)\b/.test(plain)) draft.rol = "terreno";
   const explicit = explicitPersonName(message);
   const leading = message
     .split(/[,;\n]/)[0]
     .replace(
-      /^(?:por favor[, ]+)?(?:(?:quiero|necesito|puedes)\s+)?(?:agregar?|registrar?|añadir|añade|crear?|ingresar?|incorporar?)\s+(?:a\s+)?(?:(?:un|una|al|el|la|nuevo|nueva)\s+)*(?:trabajador|maestro|maestra|supervisor|cliente)\s*(?:llamado|llamada)?\s*/i,
+      /^(?:por favor[, ]+)?(?:(?:quiero|necesito|puedes)\s+)?(?:agregar?|registrar?|añadir|añade|crear?|ingresar?|incorporar?)\s+(?:a\s+)?(?:(?:un|una|al|el|la|nuevo|nueva)\s+)*(?:trabajador|maestro|maestra|supervisor|jefe de obra|jefa de obra|cliente)\s*(?:llamado|llamada)?\s*/i,
       "",
     )
     .split(
       /\s+(?:rut|correo|email|tel[eé]fono|terreno|supervisor|as[ií]gnalo|asignalo)\b/i,
     )[0]
     .trim();
-  const name = (explicit || leading)
+  const name = (tipo === 'trabajador' ? assignmentPersonName(explicit || leading) : explicit || leading)
     .replace(/^(?:es|su nombre es)\s+/i, "")
     .trim();
   if (

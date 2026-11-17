@@ -5,6 +5,7 @@ import { executeAI } from "./execute";
 import { actionReply } from "./action-reply";
 import { isMaterialComparison } from "@/lib/materials/types";
 import type { CotizacionEstimacion } from "@/types/database";
+import { createdProjectTeamDraft } from './team-assignment';
 
 export async function aiHeaders() {
   const { data, error } = await supabase.auth.getSession();
@@ -84,6 +85,8 @@ export async function applyAIResponse(data: any, projectId?: string) {
   const executed = action?.result || data.accion_ejecutada;
   const draft = data.accion_ejecutada?.detalles?.borrador_registro;
   if (executed && draft) executed.detalles = {...(executed.detalles || {}), borrador_registro:draft};
+  const teamDraft = !action?.pendingId && !action?.warning ? createdProjectTeamDraft(action?.result) : undefined;
+  if (executed && teamDraft) executed.detalles = {...(executed.detalles || {}), borrador_registro: {items: [], asignacion: teamDraft}};
   for (const key of ['edicion_nombre_pendiente','preferencias_conversacion'])
     if (executed && Object.hasOwn(data.accion_ejecutada?.detalles || {}, key)) executed.detalles={...(executed.detalles || {}),[key]:data.accion_ejecutada.detalles[key]};
   const actionText = action?.result

@@ -27,3 +27,13 @@ test('las consultas conservan su respuesta y no ejecutan escrituras',async()=>{
  const result=await applyAIResponse({respuesta:'Radier tiene tres días de atraso.',accion:null});
  assert.equal(result.texto,'Radier tiene tres días de atraso.');assert.equal(calls,0);
 });
+test('crear una obra confirmada pregunta por el equipo y conserva su ID para el siguiente turno',async()=>{
+ outcome={result:{tipo:'crear_proyecto',detalles:{id:'nueva',nombre:'Radier',monto_cotizado:1000000}},warning:''};
+ const result=await applyAIResponse({respuesta:'Prepararé la obra',accion:{tipo:'crear_proyecto',nombre:'Radier',monto_cotizado:1000000}});
+ assert.match(result.texto,/¿Quieres añadir trabajadores o jefes de obra/);assert.deepEqual(result.accion_ejecutada.detalles.borrador_registro,{items:[],asignacion:{nombres:[],proyecto_id:'nueva'}});
+});
+test('una creación pendiente no ofrece añadir personas a una obra aún sin confirmar',async()=>{
+ outcome={result:undefined,pendingId:'pending-create',warning:'Guardado pendiente'};
+ const result=await applyAIResponse({respuesta:'Prepararé la obra',accion:{tipo:'crear_proyecto'}});
+ assert.equal(result.texto,'Guardado pendiente');assert.equal(result.accion_ejecutada,undefined);
+});

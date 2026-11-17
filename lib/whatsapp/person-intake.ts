@@ -9,13 +9,15 @@ import {
 } from "@/lib/ai/person-literals";
 import { resolveEntity } from "@/lib/ai/actions";
 import { validarRutChileno } from "@/lib/utils";
+import { isCompoundTeamInstruction, teamAssignmentIntake, type TeamAssignmentDraft } from '@/lib/ai/team-assignment';
+import { projectMentions } from '@/lib/ai/project-reference';
 const norm = (value: string) =>
   value
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
-export type PersonIntakeDraft = { items: PersonDraft[] };
+export type PersonIntakeDraft = { items: PersonDraft[]; asignacion?: TeamAssignmentDraft };
 const personActions = new Set([
   "crear_cliente",
   "agregar_trabajador",
@@ -30,7 +32,22 @@ export function personIntake(
   selectedId?: string,
   users: any[] = [],
 ) {
-  if (previous) previous = {items:previous.items.map(item=>registrationFields(item).draft)};
+  const mentionedProjects = projectMentions(projects, message);
+  if (previous?.asignacion?.proyecto_id && mentionedProjects.length === 1 && mentionedProjects[0].id !== previous.asignacion.proyecto_id) previous = null;
+  if (isCompoundTeamInstruction(message)) return { actions, draft: previous, question: null, result: null };
+  const assignment = teamAssignmentIntake(message, projects, users, selectedId, previous?.asignacion, previous?.items.find(item => item.tipo === 'trabajador')?.nombre);
+  if (assignment) {
+    const draft: PersonIntakeDraft | null = assignment.draft ? { items: [], asignacion: assignment.draft } : null;
+    const question = assignment.question;
+    return {
+      actions: question ? [] : [...actions.filter(action => !personActions.has(action.tipo) && !['asignar_trabajador','asignar_trabajadores'].includes(action.tipo)), ...assignment.actions],
+      draft,
+      question,
+      result: question && draft ? { tipo: 'solicitar_datos_persona' as const, titulo: 'Asignación del equipo', resultado_texto: question, detalles: { borrador_registro: draft } } : null,
+    };
+  }
+  if (previous) previous = {...previous,items:previous.items.map(item=>registrationFields(item).draft)};
+  if (previous?.asignacion && personStart(message)) previous = null;
   if (anotherTask(message, previous?.items[0]?.nombre))
     return {
       actions: actions.filter((action) => !personActions.has(action.tipo)),
@@ -209,8 +226,8 @@ export function personIntake(
         phonesInText(message).includes(canonicalPhone(value));
       const role =
         field === "rol" &&
-        value === "terreno" &&
-        /\b(maestro|trabajador|terreno)\b/.test(literal);
+        (value === "terreno" && /\b(maestro|trabajador|terreno)\b/.test(literal)
+          || value === 'supervisor' && /\bjef[ea] de obra\b/.test(literal));
       const rut =
         field === "rut" &&
         literal.replace(/[.-]/g, "").includes(norm(value).replace(/[.-]/g, ""));
@@ -240,6 +257,24 @@ export function personIntake(
     }
   }
   const validated = items.map((item) => registrationFields(item));
+  const cleanRut = (value: string) => value.replace(/[.\s-]/g, '').toUpperCase();
+  // Reuse a ficha before asking for its contacts, even if the agent proposed an alta.
+  for (const { draft } of validated) {
+    if (draft.tipo !== 'trabajador' || validated.length !== 1) continue;
+    const rutMatches = users.filter(user => user.rut && draft.rut && cleanRut(user.rut) === cleanRut(draft.rut));
+    const candidates = rutMatches.length ? rutMatches : users.filter(user => draft.nombre && norm(user.nombre) === norm(draft.nombre) && (!draft.rut || !user.rut || cleanRut(user.rut) === cleanRut(draft.rut)));
+    if (candidates.length > 1) {
+      const question = 'Hay más de una ficha con ese nombre. Indica el RUT de la persona que quieres asignar; no creé otra ficha.';
+      const pending: PersonIntakeDraft = { items: [], asignacion: { nombres: [draft.nombre!], ...(selectedId ? { proyecto_id: selectedId } : {}) } };
+      return { actions: [], draft: pending, question, result: { tipo: 'solicitar_datos_persona' as const, titulo: 'Elegir ficha', resultado_texto: question, detalles: { borrador_registro: pending } } };
+    }
+    const existing = candidates[0];
+    if (existing && (registrationFields(draft).missing.length || !existing.rut)) {
+      const question = `${existing.nombre} ya está en el equipo. ¿Quieres asignarlo a una obra? Indica la obra o responde «sí» para usar la obra actual.`;
+      const draft: PersonIntakeDraft = { items: [], asignacion: { nombres: [existing.id], ...(selectedId ? { proyecto_id: selectedId } : {}) } };
+      return { actions: [], draft, question, result: { tipo: 'solicitar_datos_persona' as const, titulo: 'Persona existente', resultado_texto: question, detalles: { borrador_registro: draft } } };
+    }
+  }
   const incomplete = validated.find((item) => item.missing.length);
   if (incomplete) {
     const question = `Para registrar ${incomplete.draft.nombre || (incomplete.draft.tipo === "cliente" ? "al cliente" : "al trabajador")} falta:\n${incomplete.missing.map((field) => "• " + field).join("\n")}\nPuedes responder estos datos juntos o uno por uno.`;
@@ -256,8 +291,6 @@ export function personIntake(
       },
     };
   }
-  const cleanRut = (value: string) =>
-    value.replace(/[.\s-]/g, "").toUpperCase();
   for (const { draft } of validated)
     if (draft.tipo === "trabajador") {
       const existing = users.find(

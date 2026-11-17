@@ -31,6 +31,26 @@ beforeEach(() =>
   fixture.tables.set("empresas", [{ id: "company-a", plan_id: "pro_ia" }]),
 );
 afterEach(() => fixture.reset());
+test('asignar una ficha existente en el chat global usa la obra de la conversación sin invocar el modelo',async()=>{
+ fixture.tables.set('proyectos',[{id:'p1',nombre:'Quincho Peñaflor',empresa_id:'company-a'},{id:'p2',nombre:'Radier',empresa_id:'company-a'}]);
+ fixture.tables.set('usuarios',[{id:'nicolas',empresa_id:'company-a',nombre:'Nicolás Paredes',rol:'terreno'}]);
+ const handler=createChatHandler({authorize:authorized,global:async()=>{throw Error('No necesita modelo')},project:async()=>response});
+ const res=await handler(makeRequest({mensaje:'Añade al trabajador Nicolás Paredes al proyecto',historial:[{remitente:'agente',texto:'Creé la obra Quincho Peñaflor.'}]}));
+ assert.equal(res.status,200);const body=await res.json();assert.equal(body.accion.tipo,'asignar_trabajador');assert.equal(body.accion.proyecto_id,'p1');assert.equal(body.accion.trabajador_nombre,'nicolas');assert.doesNotMatch(body.respuesta,/RUT|Correo|Teléfono/);
+});
+test('el seguimiento web asigna nombres a la obra guardada y mantiene el requisito Pro IA',async()=>{
+ fixture.tables.set('proyectos',[{id:'p1',nombre:'Quincho',empresa_id:'company-a'},{id:'p2',nombre:'Radier',empresa_id:'company-a'}]);
+ fixture.tables.set('usuarios',[{id:'ana',empresa_id:'company-a',nombre:'Ana Pérez',rol:'supervisor'}]);
+ const handler=createChatHandler({authorize:authorized,global:async()=>{throw Error('No necesita modelo')},project:async()=>response});
+ const body={mensaje:'Ana Pérez',historial:[{remitente:'agente',texto:'¿Quieres añadir trabajadores o jefes de obra?',registro_pendiente:{items:[],asignacion:{nombres:[],proyecto_id:'p1'}}}]};
+ const allowed=await handler(makeRequest(body));assert.equal(allowed.status,200);assert.equal((await allowed.json()).accion.proyecto_id,'p1');
+ fixture.tables.set('empresas',[{id:'company-a',plan_id:'pro'}]);assert.equal((await handler(makeRequest(body))).status,403);
+});
+test('la búsqueda para asignar no reutiliza fichas de otra empresa',async()=>{
+ fixture.tables.set('proyectos',[{id:'p1',nombre:'Quincho',empresa_id:'company-a'}]);fixture.tables.set('usuarios',[{id:'foreign',empresa_id:'company-b',nombre:'Nicolás Paredes',rol:'terreno'}]);
+ const handler=createChatHandler({authorize:authorized,global:async()=>{throw Error('No necesita modelo')},project:async()=>response});
+ const res=await handler(makeRequest({mensaje:'Asigna a Nicolás Paredes'}));assert.equal(res.status,200);const body=await res.json();assert.equal(body.accion,null);assert.match(body.respuesta,/No encontré/);
+});
 test("una cookie inventada no autoriza solicitudes a Gemini", async () => {
   const req = new NextRequest("http://localhost/api/cotizador/chat", {
     method: "POST",

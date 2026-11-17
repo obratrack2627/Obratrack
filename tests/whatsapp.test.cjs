@@ -918,6 +918,33 @@ test("confirmar una cotización por WhatsApp crea sus partidas y materiales sin 
   assert.equal(committed.p_changed.proyectos[0].cliente_id,'quote-client');
   assert.equal(committed.p_acciones.presupuesto_cotizacion_id,q.id);
   assert.equal(committed.p_acciones.presupuesto_proyecto_id,committed.p_changed.proyectos[0].id);
+  assert.match(response.respuesta,/¿Quieres añadir trabajadores o jefes de obra/);
+  assert.equal(committed.p_acciones.borrador_registro.asignacion.proyecto_id,committed.p_changed.proyectos[0].id);
+});
+
+test('WhatsApp asigna una ficha existente directamente, corrige ya existe y nunca vuelve a exigir contactos',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'quincho',empresa_id:user.empresa_id,nombre:'Quincho Peñaflor',monto_cotizado:1000000,estado:'activo'}];
+ sb.db.usuarios.push({id:'nicolas',empresa_id:user.empresa_id,nombre:'Nicolás Paredes',rol:'terreno'});
+ let params;const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{params=p;return rpc(name,p)};
+ const forbidden={chat:async()=>{throw Error('No necesita el modelo para asignar una ficha existente')}};
+ for(const [index,text] of ['Asigna al trabajador Nicolás paredes','Añade al trabajador Nicolás paredes al proyecto','Ya existe'].entries()){
+  if(index===2)sb.db.whatsapp_mensajes[0].acciones.borrador_registro={items:[{tipo:'trabajador',nombre:'Nicolás paredes al proyecto'}]};
+  const out=await processPersonalMessage(sb,{id:'team-existing-'+index,from:'56912345678',type:'text',text:{body:text}},forbidden);
+  assert.match(out.respuesta,/Asigné a Nicolás Paredes/);assert.doesNotMatch(out.respuesta,/RUT|Correo|registrar|nicolas a la/);assert.ok(params.p_changed.proyectos[0].trabajadores_ids.includes('nicolas'));assert.equal(params.p_changed.usuarios.length,0);assert.equal(out.cotizacion,null);
+ }
+});
+
+test('el seguimiento de equipo conserva la obra creada, no reutiliza cotizaciones y permite sí, jefe o ahora no',async()=>{
+ const sb=database();sb.db.proyectos=[{id:'quincho',empresa_id:user.empresa_id,nombre:'Quincho Peñaflor',monto_cotizado:1000000,estado:'activo'},{id:'otra',empresa_id:user.empresa_id,nombre:'Otra obra',monto_cotizado:2000000,estado:'activo'}];
+ sb.db.usuarios.push({id:'ana',empresa_id:user.empresa_id,nombre:'Ana Pérez',rol:'supervisor'});
+ sb.db.whatsapp_mensajes=[{message_id:'created',empresa_id:user.empresa_id,actor_id:user.id,texto:'Crea la obra',respuesta:'Creé la obra Quincho Peñaflor. ¿Quieres añadir trabajadores o jefes de obra?',cotizacion:{id:'old-quote'},acciones:{tipo:'crear_proyecto',rol_actor:'admin',proyecto_contexto_id:'quincho',borrador_registro:{items:[],asignacion:{nombres:[],proyecto_id:'quincho'}}}}];
+ let params;const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{params=p;return rpc(name,p)};
+ const forbidden={chat:async()=>{throw Error('El seguimiento de equipo es directo')}};
+ const message=(id,text)=>({id,from:'56912345678',type:'text',text:{body:text}});
+ const yes=await processPersonalMessage(sb,message('team-yes','Sí'),forbidden);assert.match(yes.respuesta,/nombres/);assert.doesNotMatch(yes.respuesta,/cotización|cotizacion/);assert.equal(yes.cotizacion,null);
+ const boss=await processPersonalMessage(sb,message('team-boss','Asigna al jefe de obra Ana Pérez'),forbidden);assert.match(boss.respuesta,/Asigné a Ana Pérez a la obra Quincho Peñaflor/);assert.equal(params.p_changed.proyectos[0].id,'quincho');assert.equal(params.p_changed.usuarios.length,0);
+ sb.db.whatsapp_mensajes[0].acciones.borrador_registro={items:[],asignacion:{nombres:[],proyecto_id:'quincho'}};
+ const no=await processPersonalMessage(sb,message('team-no','ahora no'),forbidden);assert.match(no.respuesta,/No añadí/);assert.equal(no.acciones.borrador_registro,null);assert.equal(params.p_changed.proyectos.length,0);
 });
 test("aceptar una cotización sin contactos conserva materiales y pide los obligatorios antes de crear", async () => {
   const { normalizeQuote } = require('../lib/ai/protocol.ts');

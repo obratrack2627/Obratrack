@@ -99,6 +99,7 @@ export function createWhatsAppWebhook(
     if (body.object !== "whatsapp_business_account")
       return NextResponse.json({ received: true });
     let stage = "initialize";
+    let messageId: string | undefined;
     try {
       const sb = deps.client();
       const deadline = Date.now() + 45000;
@@ -115,6 +116,8 @@ export function createWhatsAppWebhook(
             await receiveDeliveryStatus(sb, status);
           }
           for (const message of value.messages || []) {
+            messageId = message.id;
+            console.info('whatsapp_message_received', { messageId, type: message.type });
             if (Date.now() > deadline)
               throw new Error("El lote continuará en el siguiente intento.");
             stage = "process";
@@ -177,7 +180,7 @@ export function createWhatsAppWebhook(
       return NextResponse.json({ received: true });
     } catch (error) {
       const { code } = aiErrorResponse(error);
-      console.error("whatsapp_failure", { stage, code });
+      console.error("whatsapp_failure", { stage, code, messageId });
       // Meta reintentará; los mensajes guardados no vuelven a ejecutar pagos u otras acciones.
       return NextResponse.json(
         {

@@ -38,6 +38,7 @@ import { prepareCampaign } from "./campaigns";
 import { isMaterialComparison } from "@/lib/materials/types";
 import { contactDatabaseMessage } from '@/lib/ai/contacts';
 import { personIntake } from './person-intake';
+import { createdProjectTeamDraft } from '@/lib/ai/team-assignment';
 import { activeWhatsAppProject, workerHistory, projectContextForRole } from './project-context';
 import {
   collectWhatsAppBurst,
@@ -208,7 +209,7 @@ export async function processPersonalMessage(
   const history = conversationRows.slice(0, 6);
   const lastRowTime = history[0]?.created_at ? Date.parse(history[0].created_at) : NaN;
   const staleHistory = Number.isFinite(lastRowTime) && Date.now() - lastRowTime > 12 * 3600 * 1000;
-  const pendingPerson = staleHistory
+  let pendingPerson = staleHistory
     ? null
     : history[0]?.acciones?.borrador_registro || history[0]?.acciones?.detalles?.borrador_registro || null;
   let nextPerson = pendingPerson;
@@ -327,6 +328,11 @@ export async function processPersonalMessage(
       persistido: false,
     };
   }
+  if (pendingPerson?.asignacion && (requestsNewProject(text) || isQuoteRequest(text) || isQuoteRevision(text) || isAlternativeRequest(text))) {
+    pendingPerson = null;
+    nextPerson = null;
+    candidatePerson = null;
+  }
   const deadlineProjects = tables.proyectos.slice();
   const authorizedProjects = service.getProyectos();
   const projectListing = !attachment ? projectListAnswer(text, authorizedProjects, user) : null;
@@ -335,6 +341,8 @@ export async function processPersonalMessage(
     nextDraft = null;
   }
   const activeProject = activeWhatsAppProject(tables.proyectos, text, staleHistory ? [] : history);
+  const localRegistration = !attachment && user.rol !== 'terreno' ? personIntake([], null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios) : null;
+  const personTurn = !!(localRegistration?.question || localRegistration?.actions.length);
   if (user.rol === 'terreno' && activeProject) {
     tables.proyectos = tables.proyectos.filter(p => p.id === activeProject);
     for (const table of [...childTables, 'proyecto_trabajadores']) tables[table] = tables[table].filter(row => row.proyecto_id === activeProject);
@@ -349,7 +357,7 @@ export async function processPersonalMessage(
   const explicitQuoteCreation = requestsQuotedProject(text);
   const replied = replyContextId ? conversationRows.find(row => row.message_id === replyContextId) : null;
   const legacyQuoteMessage = pendingProject && !pendingProject.presupuesto_cotizacion_id ? legacyQuotedProjectMessage(conversationRows) : null;
-  const lastQuoteMessage = legacyQuoteMessage || (replied?.cotizacion ? replied : explicitQuoteCreation && replyContextId ? null : conversationRows.find((m: any) => m.cotizacion));
+  const lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : explicitQuoteCreation && replyContextId ? null : conversationRows.find((m: any) => m.cotizacion));
   const previousDraft = pendingProject;
   let nativeBudget: Presupuesto | null = null;
   let candidates: Presupuesto[] = [];
@@ -440,7 +448,6 @@ export async function processPersonalMessage(
   const attendanceRefusal = user.rol === 'terreno' && !attachment && isAttendanceManagementRequest(text) ? {respuesta:ATTENDANCE_MANAGEMENT_MESSAGE,accion:null,cotizacion:null,sugerencias:[]} : null;
   const nameReply = nameCommand?.handled ? {respuesta:nameCommand.question || 'Voy a corregir el nombre de la ficha.',accion:nameCommand.action || null,cotizacion:null,sugerencias:[]} : null;
   let analysisFailed = false;
-  let localRegistration: ReturnType<typeof personIntake> | null = null;
   let registrationReply: any = null;
   let introPause: ReturnType<typeof isIntroductoryPauseOnly> = null;
   try {
@@ -462,7 +469,6 @@ export async function processPersonalMessage(
       !history[0]?.respuesta?.includes('?')
         ? isIntroductoryPauseOnly(text, Boolean(attachment), authorizedProjects)
         : null;
-    localRegistration = !attachment && user.rol !== 'terreno' ? personIntake([], null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios) : null;
     registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
     const apuLesson = !attachment ? await learnApuCommand(sb, user, text, 'whatsapp') : { handled: false };
     const apuReply = apuLesson.handled ? { respuesta: apuLesson.respuesta || 'Rendimiento guardado.', accion: null, cotizacion: null, sugerencias: [] } : null;
@@ -802,6 +808,8 @@ export async function processPersonalMessage(
   response = response.startsWith(WHATSAPP_BRAND) ? whatsappText(response) : whatsappCard(title, response);
   const quoteOrigin = candidateDraft?.presupuesto_cotizacion_id || pendingProject?.presupuesto_cotizacion_id;
   const newProjects = (plan.changed.proyectos || []).filter((p: any) => !tables.proyectos.some((previous: any) => previous.id === p.id));
+  const teamDraft = createdProjectTeamDraft(plan.result);
+  if (teamDraft) nextPerson = { items: [], asignacion: teamDraft };
   if (quoteOrigin && newProjects.length === 1 && plan.result) Object.assign(plan.result, { presupuesto_cotizacion_id: quoteOrigin, presupuesto_proyecto_id: newProjects[0].id });
   if (budgetSelection) plan.result = { tipo: 'actualizar_proyecto', titulo: 'Alternativa elegida', resultado_texto: confirmationResponse, detalles: {}, presupuesto_seleccion_id: budgetSelection.row.id, presupuesto_seleccion_version: budgetSelection.row.updated_at, presupuesto_ejecucion: budgetSelection.payload } as any;
   const versioned=withSnapshotVersions(plan,tables);

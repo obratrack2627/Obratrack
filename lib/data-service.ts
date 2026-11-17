@@ -1977,12 +1977,13 @@ export class DataService {
           });
         }
 
+        const displayNames = nombres.map(ident => resolveEntity(this.getUsuarios(), ident).nombre);
         return {
           tipo: 'asignar_trabajador',
           titulo: `${nombres.length} Miembro(s) de Cuadrilla Asignado(s)`,
-          detalles: { nombres, proyecto: proj?.nombre },
+          detalles: { nombres: displayNames, proyecto: proj?.nombre },
           resultado_texto: proj
-            ? `${nombres.join(', ')} fueron incorporados a la faena "${proj.nombre}".`
+            ? `${displayNames.join(', ')} fueron incorporados a la faena "${proj.nombre}".`
             : `Trabajadores coordinados en el equipo.`,
           link_destino: proj ? `/proyectos/${proj.id}/gantt` : `/equipo`,
           link_texto: 'Ver Faena ➔',

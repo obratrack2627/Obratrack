@@ -31,6 +31,7 @@
 - Las consultas por obras asignadas usan la lista completa autorizada, sin limitarse a la obra activa de la conversación. Las fotos se confirman una vez con obra, tipo y título; conservar íntegro el detalle en bitácora y responder aparte las preguntas sobre la imagen.
 - Cierres de jornada: vista previa y PDF comparten el resumen guardado. WhatsApp entrega el PDF privado por ID de medio solo a admin/jefe autorizado; no publicar enlaces financieros sin autenticación ni enviar mensajes reales en pruebas.
 - Nuevas fichas de equipo: nombre completo, RUT, teléfono, correo, rol y obra para terreno. Se crean sin cuenta Auth ni contraseña. El registro y la asignación usan `crear_integrante_equipo`; no crear personas implícitas al asignar una cuadrilla.
+- Asignación de equipo: buscar fichas existentes antes de iniciar un alta; «añade al trabajador a la obra» no exige contactos otra vez. Tras crear una obra confirmada, ofrecer añadir trabajadores/jefes con el ID real en `borrador_registro.asignacion`; «sí» y «ahora no» responden a ese seguimiento, nunca aprueban cotizaciones antiguas. Mantener las instrucciones compuestas completas y no cambiar roles al asignar.
 - Evidencias de WhatsApp: originales privados, referencia estable `whatsapp-evidencias:` y firma de URL en lectura. PDF/Word/Excel son documentos; una boleta no genera un pago automáticamente.
 - Migraciones finales en orden: `contactos_whatsapp.sql`, luego `flujo_terreno_rbac.sql`. Las pruebas nativas en `tests/sql` revierten sus fixtures.
 

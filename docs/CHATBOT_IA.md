@@ -488,3 +488,11 @@ Aplicar `supabase/20261117_whatsapp_reply_delivery.sql` antes del servidor nuevo
 Una respuesta histórica de más de 15 minutos no se envía de nuevo como si fuera actual. La aprobación desde la web también utiliza una clave de envío para la misma cotización y usuario. Nunca limpiar reservas pendientes para forzar un reintento sin verificar qué recibió Meta.
 
 Pruebas: contrato de fechas, edición y asignación combinadas, rango inválido, rol de terreno, separación del RAG, confirmación ambigua, concurrencia y reentrega del webhook con fallo de confirmación. Usan datos sintéticos y no envían mensajes reales ni consumen IA de pago.
+
+## Asignación de equipo después de crear una obra (2026-11-17)
+
+Tras una creación confirmada, web y WhatsApp preguntan si se quieren añadir trabajadores o jefes de obra. El seguimiento conserva el ID real de la obra en `borrador_registro.asignacion`; «sí» pide nombres y «ahora no» lo descarta. No bloquea la creación ni crea fichas/cuentas automáticamente. Una creación web pendiente de sincronización no inicia este seguimiento.
+
+`teamAssignmentIntake` resuelve asignaciones simples antes de llamar al modelo: «asigna», «añade» y «agrega» reutilizan fichas existentes sin exigir contactos. Jefe de obra corresponde a supervisor, sin promover roles. Homónimos y obras ambiguas requieren aclaración; se puede distinguir una ficha por su RUT. «Ya existe» recupera incluso borradores antiguos que confundían «al proyecto» con parte del nombre. Un alta nueva explícita conserva sus requisitos; los mensajes compuestos pasan al agente para preservar todas sus acciones. La validación de empresa, plan, rol y pertenencia sigue siendo autoritativa en servidor y base de datos.
+
+El seguimiento de equipo tiene prioridad sobre la aprobación de cotizaciones anteriores y se descarta al cambiar explícitamente de obra. El webhook registra el ID/tipo del evento recibido y correlaciona errores por etapa, sin texto ni contactos. Los tests usan datos sintéticos, IA simulada y ningún envío real. Un mensaje que no llegó a la cola requiere revisar los registros de recepción de Meta/Vercel; estas pruebas no acreditan la entrega de eventos externos.

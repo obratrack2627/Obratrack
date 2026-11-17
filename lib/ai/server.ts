@@ -25,6 +25,8 @@ import { conversationHistory } from './conversation';
 import { operationsContext } from './operations-context';
 import {
   isAlternativeRequest,
+  isQuoteRequest,
+  isQuoteRevision,
   hasOtherWorkBeyondDeadline,
   hasOtherWorkBeyondStatus,
 } from './prompt';
@@ -159,7 +161,9 @@ export function createChatHandler(
           "El asistente de IA requiere el Plan Pro o Plan Pro IA.",
           403,
         );
-      let registrationDraft = pendingPerson(body.historial_original, body.historial, tables.proyectos, projectId);
+      const registrationProjectId = conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId);
+      let registrationDraft = pendingPerson(body.historial_original, body.historial, tables.proyectos, registrationProjectId);
+      if (registrationDraft?.asignacion && (isQuoteRequest(body.mensaje) || isQuoteRevision(body.mensaje) || isAlternativeRequest(body.mensaje))) registrationDraft = null;
       const nameCommand = !registrationDraft ? contactNameCommand(body.mensaje, tables.usuarios, contactTurns(body.historial_original), user.id) : null;
       const pendingNameEdit = nameCommand?.pending || null;
       const onQualityEvent = (event: import('./quality').QualityEvent) => scheduleQualityEvent(client,user,event);
@@ -168,7 +172,7 @@ export function createChatHandler(
       const validateResult = (result: any) => {
         // Prevalidación pura sobre copias: jamás guardar ni encolar en un reintento.
         const candidate = structuredClone(result);
-        const registration = personIntake(flattenActions(candidate.accion), candidate.registro_propuesto, registrationDraft, body.mensaje, tables.proyectos, projectId, tables.usuarios);
+        const registration = personIntake(flattenActions(candidate.accion), candidate.registro_propuesto, registrationDraft, body.mensaje, tables.proyectos, registrationProjectId, tables.usuarios);
         const scoped = scopeProjectActions(registration.actions, conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId), tables.proyectos, projectId);
         const actions = checkActionPermissions(user, scoped, body.mensaje);
         if ((actions.length || registration.prepared || registration.question && registration.draft) && company.plan_id !== 'pro_ia')
@@ -182,7 +186,7 @@ export function createChatHandler(
       };
       const preferences = conversationPreferences(body.historial_original, user, projectId, body.mensaje);
       const finish = async (result: any, currentId?: string, prepared?: ReturnType<typeof personIntake>) => {
-        const registration = prepared || personIntake(flattenActions(result.accion), result.registro_propuesto, registrationDraft, body.mensaje, tables.proyectos, projectId, tables.usuarios);
+        const registration = prepared || personIntake(flattenActions(result.accion), result.registro_propuesto, registrationDraft, body.mensaje, tables.proyectos, registrationProjectId, tables.usuarios);
         if ((registration.prepared || (registration.question && registration.draft)) && company.plan_id !== 'pro_ia') throw new AIError('PLAN_REQUIRED', 'Los registros y cambios por ObraBot requieren Pro IA.', 403);
         if ((registration.prepared || (registration.question && registration.draft)) && user.rol === 'terreno') throw new AIError('ACTION_FORBIDDEN', 'Solo administradores y supervisores pueden registrar personas.', 403);
         registrationDraft = registration.draft;
@@ -301,7 +305,7 @@ export function createChatHandler(
         await finish(result,projectId);
         return NextResponse.json(result);
       }
-      const localRegistration = personIntake([], null, registrationDraft, body.mensaje, tables.proyectos, projectId, tables.usuarios);
+      const localRegistration = personIntake([], null, registrationDraft, body.mensaje, tables.proyectos, registrationProjectId, tables.usuarios);
       if (localRegistration.question || localRegistration.actions.length) {
         const result = {respuesta:localRegistration.question || 'Voy a registrar la ficha y su asignación.',accion:null,cotizacion:null,sugerencias:[]};
         await finish(result, projectId, localRegistration);

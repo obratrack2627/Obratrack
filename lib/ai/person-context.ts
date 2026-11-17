@@ -2,6 +2,7 @@ import { normalizeSpecialties } from '@/lib/team-specialties';
 import type { PersonIntakeDraft } from "@/lib/whatsapp/person-intake";
 import { personIntake } from "@/lib/whatsapp/person-intake";
 import type { ConversationTurn } from "./conversation";
+import { readTeamAssignment } from './team-assignment';
 
 /** Borrador, nunca prueba de un alta. Las entidades y permisos se validan al ejecutar. */
 export function pendingPerson(
@@ -43,7 +44,8 @@ export function pendingPerson(
             .map((key) => [key, item[key]]),
         ),
       }));
-    return items.length ? ({ items } as PersonIntakeDraft) : null;
+    const asignacion = readTeamAssignment(value.asignacion);
+    return items.length || asignacion ? ({ items, ...(asignacion ? { asignacion } : {}) } as PersonIntakeDraft) : null;
   }
   // Recuperar conversaciones anteriores al borrador web sin repetir un alta ya confirmada.
   if (!/registr|trabajador|cliente|rut|duraci[oó]n/i.test(last?.texto || ""))

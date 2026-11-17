@@ -1,4 +1,5 @@
 import { formatCLP } from "@/lib/utils";
+import { TEAM_FOLLOW_UP } from './team-assignment';
 // Se usa después de preparar la operación; el canal solo la entrega cuando confirma el guardado.
 export function actionReply(result: any): string {
   if (!result) return "";
@@ -23,7 +24,7 @@ export function actionReply(result: any): string {
     return result.resultado_texto || "Actualicé los datos de la obra.";
   if (result.tipo === "enviar_mensaje_equipo") return result.resultado_texto;
   if (result.tipo === "crear_proyecto")
-    return `Creé la obra ${result.detalles?.nombre || ""}.${typeof result.detalles?.monto_cotizado === "number" ? ` El presupuesto es ${formatCLP(result.detalles.monto_cotizado)}.` : ""}`;
+    return `Creé la obra ${result.detalles?.nombre || ""}.${typeof result.detalles?.monto_cotizado === "number" ? ` El presupuesto es ${formatCLP(result.detalles.monto_cotizado)}.` : ""}\n\n${TEAM_FOLLOW_UP}`;
   if (["actualizar_cliente", "actualizar_trabajador"].includes(result.tipo))
     return `Actualicé los datos de ${result.detalles?.nombre || "la ficha"}.\n${result.resultado_texto || ""}`;
   if (result.tipo === "generar_mensaje_whatsapp")
