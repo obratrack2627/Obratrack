@@ -24,6 +24,7 @@ import {
 import ProjectTabsHeader from "@/components/ProjectTabsHeader";
 import GoogleMapsProjectViewer from "@/components/GoogleMapsProjectViewer";
 import ModalOverlay from "@/components/ModalOverlay";
+import CompactSummary from "@/components/CompactSummary";
 import CrewAttendanceEditor, {
   attendanceLabels,
   crewInput,
@@ -326,10 +327,11 @@ export default function ProjectCrewPage() {
             </button>
           </div>
         )}
-        <section
-          aria-label="Resumen de cuadrilla"
-          className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"
-        >
+        <CompactSummary>
+          <section
+            aria-label="Resumen de cuadrilla"
+            className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]"
+          >
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {[
               {
@@ -410,6 +412,7 @@ export default function ProjectCrewPage() {
             </label>
           </div>
         </section>
+        </CompactSummary>
         <div
           role="tablist"
           aria-label="Gestión de cuadrilla"

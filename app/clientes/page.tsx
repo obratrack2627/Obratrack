@@ -564,174 +564,137 @@ export default function ClientesPage() {
             )}
           </div>
         ) : viewMode === 'list' ? (
-          /* Vista Moderna en Lista Compacta */
-          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl overflow-hidden shadow-sm">
-            <div className="hidden lg:grid lg:grid-cols-12 gap-4 px-5 py-3 bg-[#FAF8F5] dark:bg-[#1A222D] border-b border-kraft-200 dark:border-[#263040] text-[11px] font-mono font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              <div className="col-span-4">Cliente / Mandante</div>
-              <div className="col-span-3">Contacto y Dirección</div>
-              <div className="col-span-2">Obras Asociadas</div>
-              <div className="col-span-2 text-right">Total Contratado</div>
-              <div className="col-span-1 text-right">Acciones</div>
-            </div>
+          /* Vista Minimalista en Lista (estilo Planes y Suscripción) */
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-kraft-200 dark:border-[#263040] text-gray-500 dark:text-gray-400 font-mono uppercase text-[11px]">
+                  <th className="py-2 pr-3 font-medium">Cliente</th>
+                  <th className="py-2 pr-3 font-medium">Contacto</th>
+                  <th className="py-2 pr-3 font-medium">Obras</th>
+                  <th className="py-2 pr-3 font-medium text-right">Contratado</th>
+                  <th className="py-2 pr-3 font-medium">Estado</th>
+                  <th className="py-2 text-right font-medium">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-kraft-200/70 dark:divide-[#263040]">
+                {filteredClientes.map((c) => {
+                  const obrasCliente = proyectosVigentes.filter((p) => p.cliente_id === c.id);
+                  const totalCotizadoCliente = obrasCliente.reduce(
+                    (sum, p) => sum + (Number(p.monto_cotizado) || 0),
+                    0
+                  );
+                  const totalPagadoCliente = obrasCliente.reduce(
+                    (sum, p) => sum + (Number(p.total_pagado) || 0),
+                    0
+                  );
+                  const validPhone = canonicalPhone(c.telefono || '');
+                  const hasActiveWork = clientesIdsActivos.has(c.id);
 
-            <div className="divide-y divide-kraft-100 dark:divide-[#1E2530]">
-              {filteredClientes.map((c) => {
-                const obrasCliente = proyectosVigentes.filter((p) => p.cliente_id === c.id);
-                const totalCotizadoCliente = obrasCliente.reduce(
-                  (sum, p) => sum + (Number(p.monto_cotizado) || 0),
-                  0
-                );
-                const totalPagadoCliente = obrasCliente.reduce(
-                  (sum, p) => sum + (Number(p.total_pagado) || 0),
-                  0
-                );
-                const validPhone = canonicalPhone(c.telefono || '');
-                const hasActiveWork = clientesIdsActivos.has(c.id);
-
-                return (
-                  <div
-                    key={c.id}
-                    className="px-4 py-3.5 sm:px-5 grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 items-start lg:items-center hover:bg-kraft-50/70 dark:hover:bg-[#1A222D]/60 transition-colors"
-                  >
-                    {/* Identidad */}
-                    <div className="lg:col-span-4 flex items-center justify-between gap-3 min-w-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-obra-orange/10 dark:bg-obra-orange/15 border border-obra-orange/20 text-obra-orange flex items-center justify-center font-heading font-bold text-sm shrink-0">
-                          {c.nombre.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <h3 className="font-heading font-bold text-sm text-navy-900 dark:text-white truncate">
-                              {c.nombre}
-                            </h3>
-                            {hasActiveWork && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-obra-green/15 text-obra-green text-[10px] font-mono font-bold shrink-0">
-                                <span className="w-1.5 h-1.5 rounded-full bg-obra-green" />
-                                En obra
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                            {c.rut ? `RUT ${formatRUT(c.rut)}` : 'Sin RUT registrado'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Monto visible en móvil junto al nombre */}
-                      <div className="lg:hidden text-right shrink-0">
-                        <span className="font-mono font-bold text-xs text-navy-900 dark:text-white block">
-                          {formatCLP(totalCotizadoCliente)}
+                  return (
+                    <tr
+                      key={c.id}
+                      className="hover:bg-kraft-50/50 dark:hover:bg-[#1A222D]/40 transition-colors"
+                    >
+                      <td className="py-2.5 pr-3 whitespace-nowrap">
+                        <span className="font-semibold text-navy-900 dark:text-white">
+                          {c.nombre}
                         </span>
-                        <span className="text-[10px] font-mono text-gray-400">
-                          {obrasCliente.length} {obrasCliente.length === 1 ? 'obra' : 'obras'}
-                        </span>
-                      </div>
-                    </div>
+                        {c.rut && (
+                          <span className="ml-2 font-mono text-[11px] text-gray-500 dark:text-gray-400">
+                            {formatRUT(c.rut)}
+                          </span>
+                        )}
+                      </td>
 
-                    {/* Contacto y Dirección */}
-                    <div className="lg:col-span-3 space-y-1 text-xs text-gray-600 dark:text-gray-300 min-w-0">
-                      <div className="flex flex-wrap lg:flex-col gap-x-4 gap-y-1 min-w-0">
+                      <td className="py-2.5 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
                         {validPhone ? (
                           <a
                             href={`tel:+${validPhone}`}
-                            className="inline-flex items-center gap-1.5 font-mono text-obra-green hover:underline truncate max-w-full"
+                            className="font-mono hover:text-navy-900 dark:hover:text-white hover:underline"
                           >
-                            <Phone className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">+{validPhone}</span>
+                            +{validPhone}
                           </a>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 font-mono text-gray-400">
-                            <Phone className="w-3.5 h-3.5 shrink-0" />
-                            <span>Sin teléfono</span>
-                          </span>
-                        )}
-
-                        {c.email ? (
-                          <span className="inline-flex items-center gap-1.5 font-mono text-gray-600 dark:text-gray-300 truncate max-w-full">
-                            <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="truncate">{c.email}</span>
+                        ) : c.email ? (
+                          <span className="text-gray-500 dark:text-gray-400">{c.email}</span>
+                        ) : c.direccion ? (
+                          <span className="max-w-[180px] truncate inline-block align-bottom text-gray-500">
+                            {c.direccion}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 font-mono text-gray-400">
-                            <Mail className="w-3.5 h-3.5 shrink-0" />
-                            <span>Sin email</span>
-                          </span>
+                          <span className="text-gray-400">Sin contacto</span>
                         )}
-                      </div>
+                      </td>
 
-                      {c.direccion && (
-                        <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 min-w-0">
-                          <MapPin className="w-3 h-3 text-gray-400 shrink-0" />
-                          <span className="truncate">{c.direccion}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Obras Asociadas */}
-                    <div className="lg:col-span-2 flex flex-wrap items-center gap-1.5 min-w-0">
-                      <span className="hidden lg:inline-flex items-center gap-1 text-[11px] font-mono font-bold text-navy-900 dark:text-gray-200 bg-kraft-100 dark:bg-[#0F141C] border border-kraft-200/80 dark:border-[#263040] px-2 py-0.5 rounded-md shrink-0">
-                        <FolderOpen className="w-3 h-3 text-obra-orange" />
-                        <span>{obrasCliente.length}</span>
-                      </span>
-                      {obrasCliente.length > 0 ? (
-                        <>
-                          {obrasCliente.slice(0, 2).map((p) => (
+                      <td className="py-2.5 pr-3 whitespace-nowrap">
+                        {obrasCliente.length > 0 ? (
+                          <span className="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
                             <Link
-                              key={p.id}
-                              href={`/proyectos/${p.id}/finanzas`}
-                              className="text-[11px] font-mono bg-kraft-50 dark:bg-[#0F141C] hover:bg-kraft-100 dark:hover:bg-[#1E2530] border border-kraft-200 dark:border-[#263040] text-navy-900 dark:text-gray-200 hover:text-obra-orange px-2 py-0.5 rounded-md inline-flex items-center gap-1 max-w-[160px] truncate transition-colors"
-                              title={p.nombre}
+                              href={`/proyectos/${obrasCliente[0].id}/finanzas`}
+                              className="max-w-[170px] truncate hover:text-[#C2410C] dark:hover:text-obra-orange hover:underline"
+                              title={obrasCliente[0].nombre}
                             >
-                              <span className="truncate">{p.nombre}</span>
-                              <ExternalLink className="w-2.5 h-2.5 text-gray-400 shrink-0" />
+                              {obrasCliente[0].nombre}
                             </Link>
-                          ))}
-                          {obrasCliente.length > 2 && (
-                            <span className="text-[10px] font-mono text-gray-400">
-                              +{obrasCliente.length - 2} más
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-[11px] text-gray-400 font-sans">Sin obras asociadas</span>
-                      )}
-                    </div>
+                            {obrasCliente.length > 1 && (
+                              <span
+                                className="font-mono text-[11px] text-gray-400"
+                                title={obrasCliente.slice(1).map((p) => p.nombre).join(', ')}
+                              >
+                                +{obrasCliente.length - 1}
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">Sin obras</span>
+                        )}
+                      </td>
 
-                    {/* Total Contratado (desktop) */}
-                    <div className="hidden lg:flex lg:col-span-2 flex-col items-end justify-center text-right">
-                      <span className="font-mono font-bold text-sm text-navy-900 dark:text-white">
-                        {formatCLP(totalCotizadoCliente)}
-                      </span>
-                      {totalPagadoCliente > 0 && (
-                        <span className="text-[10px] font-mono text-obra-green">
-                          Pagado: {formatCLP(totalPagadoCliente)}
+                      <td className="py-2.5 pr-3 whitespace-nowrap text-right font-mono font-semibold text-navy-900 dark:text-white">
+                        <span title={totalPagadoCliente > 0 ? `Pagado: ${formatCLP(totalPagadoCliente)}` : undefined}>
+                          {formatCLP(totalCotizadoCliente)}
                         </span>
-                      )}
-                    </div>
+                      </td>
 
-                    {/* Acciones */}
-                    <div className="lg:col-span-1 flex items-center justify-end gap-1 pt-1 lg:pt-0 border-t border-kraft-100 dark:border-[#1E2530] lg:border-t-0">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEdit(c)}
-                        className="p-1.5 text-gray-400 hover:text-[#FF6A00] hover:bg-[#FF6A00]/10 rounded-lg transition-colors"
-                        title="Editar cliente"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setClienteToDelete(c)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
-                        title="Eliminar cliente"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                      <td className="py-2.5 pr-3 whitespace-nowrap">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                            hasActiveWork
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                              : 'bg-gray-100 text-gray-600 dark:bg-[#1E2530] dark:text-gray-300'
+                          }`}
+                        >
+                          {hasActiveWork ? 'En obra' : 'Sin obra'}
+                        </span>
+                      </td>
+
+                      <td className="py-2.5 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(c)}
+                            aria-label={`Editar ${c.nombre}`}
+                            className="p-1 text-gray-400 hover:text-[#C2410C] dark:hover:text-obra-orange rounded transition-colors"
+                            title="Editar cliente"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setClienteToDelete(c)}
+                            aria-label={`Eliminar ${c.nombre}`}
+                            className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                            title="Eliminar cliente"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
           /* Vista en Tarjetas */

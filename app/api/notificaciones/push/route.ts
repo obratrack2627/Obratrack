@@ -12,6 +12,7 @@ import {
   sanitizePushPreferences,
   sendPushToUsers,
 } from "@/lib/push/server";
+import { isAllowedPushEndpoint } from "@/lib/push/endpoint";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -172,8 +173,25 @@ export async function POST(request: NextRequest) {
     const p256dh = typeof sub?.keys?.p256dh === "string" ? sub.keys.p256dh.trim() : "";
     const auth = typeof sub?.keys?.auth === "string" ? sub.keys.auth.trim() : "";
 
-    if (!endpoint.startsWith("https://") || endpoint.length > 1000 || !p256dh || !auth) {
-      throw new AIError("INVALID_SUBSCRIPTION", "Suscripción Web Push incompleta.", 400);
+    if (!isAllowedPushEndpoint(endpoint) || !p256dh || !auth) {
+      throw new AIError("INVALID_SUBSCRIPTION", "Suscripción Web Push inválida o dominio no autorizado.", 400);
+    }
+
+    const { data: existingSub } = await db
+      .from("push_suscripciones")
+      .select("empresa_id,usuario_id")
+      .eq("endpoint", endpoint)
+      .maybeSingle();
+
+    if (
+      existingSub &&
+      (existingSub.empresa_id !== user.empresa_id || existingSub.usuario_id !== user.id)
+    ) {
+      throw new AIError(
+        "PUSH_ENDPOINT_CONFLICT",
+        "Este dispositivo ya está asociado a otra cuenta.",
+        409,
+      );
     }
 
     const prefs = sanitizePushPreferences(body.preferencias);

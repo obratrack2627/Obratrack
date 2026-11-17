@@ -34,8 +34,13 @@ const PRIMARY_BTN_CLASS =
   'h-11 w-full bg-[#FF6A00] hover:bg-[#E65F00] active:bg-[#D15600] text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm';
 
 function isValidInternalRedirect(path: string | null): path is string {
-  if (!path) return false;
-  return path.startsWith('/') && !path.startsWith('//') && !path.includes('://');
+  if (!path || /[\x00-\x1f\x7f\\]/.test(path)) return false;
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('://')) return false;
+  try {
+    return new URL(path, 'https://obratrack.local').origin === 'https://obratrack.local';
+  } catch {
+    return false;
+  }
 }
 
 function resolveSafeRedirect(isTerreno: boolean): string {

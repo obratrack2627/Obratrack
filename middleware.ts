@@ -36,11 +36,18 @@ export function isValidAuthToken(token?: string): boolean {
 
 export function sanitizeRedirectPath(path: string | null): string {
   if (!path) return '/dashboard';
-  // Prevenir Open Redirect: debe empezar por '/' y NO por '//' o prefijos de protocolo
-  if (path.startsWith('/') && !path.startsWith('//') && !path.includes('://')) {
-    return path;
+  // Prevenir Open Redirect: bloquear backslashes, control chars y URLs externas
+  if (/[\x00-\x1f\x7f\\]/.test(path)) return '/dashboard';
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('://')) {
+    return '/dashboard';
   }
-  return '/dashboard';
+  try {
+    const parsed = new URL(path, 'https://obratrack.local');
+    if (parsed.origin !== 'https://obratrack.local') return '/dashboard';
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return '/dashboard';
+  }
 }
 
 async function handleRequest(request: NextRequest, forwardedHeaders: Headers) {

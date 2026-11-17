@@ -66,6 +66,7 @@ export default function ProyectoFinanzasPage() {
   const [materiales, setMateriales] = useState<MaterialProyecto[]>([]);
   const [financeSection, setFinanceSection] = useState('resumen');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const submitLockRef = React.useRef(false);
   
   // Modales de Creación
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -220,36 +221,48 @@ export default function ProyectoFinanzasPage() {
   };
 
   const handleRegistrarPagoDesdeEdp = (monto: number, nota: string) => {
-    dataService.createPago({
-      proyecto_id: projectId,
-      monto,
-      metodo: 'transferencia',
-      fecha: chileToday(),
-      nota,
-    });
-    loadData();
-    showToast(`Estado de pago registrado por ${formatCLP(monto)}.`);
+    if (submitLockRef.current || monto <= 0) return;
+    submitLockRef.current = true;
+    try {
+      dataService.createPago({
+        proyecto_id: projectId,
+        monto,
+        metodo: 'transferencia',
+        fecha: chileToday(),
+        nota,
+      });
+      loadData();
+      showToast(`Estado de pago registrado por ${formatCLP(monto)}.`);
+    } finally {
+      setTimeout(() => { submitLockRef.current = false; }, 500);
+    }
   };
 
   // --- CRUD PAGOS ---
   const handleCreatePago = (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     const parsed = parseThousands(montoPago);
     if (parsed <= 0) return;
 
-    dataService.createPago({
-      proyecto_id: projectId,
-      monto: parsed,
-      metodo: metodoPago,
-      fecha: fechaPago,
-      nota: notaPago.trim(),
-    });
+    submitLockRef.current = true;
+    try {
+      dataService.createPago({
+        proyecto_id: projectId,
+        monto: parsed,
+        metodo: metodoPago,
+        fecha: fechaPago,
+        nota: notaPago.trim(),
+      });
 
-    setIsPaymentModalOpen(false);
-    setMontoPago('');
-    setNotaPago('');
-    loadData();
-    showToast(`Pago de ${formatCLP(parsed)} registrado.`);
+      setIsPaymentModalOpen(false);
+      setMontoPago('');
+      setNotaPago('');
+      loadData();
+      showToast(`Pago de ${formatCLP(parsed)} registrado.`);
+    } finally {
+      setTimeout(() => { submitLockRef.current = false; }, 500);
+    }
   };
 
   const handleOpenEditPago = (p: Pago) => {
@@ -793,7 +806,7 @@ export default function ProyectoFinanzasPage() {
                 </button>
               </div>
 
-              <div className="divide-y divide-kraft-200/80 max-h-64 overflow-y-auto pr-1">
+              <div className="max-h-72 overflow-y-auto overflow-x-auto pr-1">
                 {pagos.length === 0 ? (
                   <div className="py-8 text-center space-y-2.5">
                     <div className="w-10 h-10 rounded-xl bg-obra-green-light dark:bg-obra-green/15 text-obra-green flex items-center justify-center mx-auto">
@@ -805,46 +818,62 @@ export default function ProyectoFinanzasPage() {
                     </p>
                   </div>
                 ) : (
-                  pagos.map((pago) => (
-                    <div key={pago.id} className="py-2.5 flex items-center justify-between text-xs gap-2">
-                      <div>
-                        <div className="font-mono font-bold text-navy-900">{formatCLP(pago.monto)}</div>
-                        <p className="text-[11px] text-gray-500 capitalize">
-                          {pago.metodo} {pago.nota ? `• ${pago.nota}` : ''}
-                        </p>
-                        <span className="text-[10px] font-mono text-gray-400">{formatDate(pago.fecha)}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditPago(pago)}
-                          className="p-1 text-gray-400 hover:text-obra-orange rounded"
-                          title="Editar pago"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPagoToDelete(pago)}
-                          className="p-1 text-gray-400 hover:text-red-600 rounded"
-                          title="Eliminar pago"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-kraft-200 dark:border-[#263040] text-gray-500 dark:text-gray-400 font-mono uppercase text-[11px]">
+                        <th className="py-2 pr-3 font-medium">Fecha</th>
+                        <th className="py-2 pr-3 font-medium">Detalle</th>
+                        <th className="py-2 pr-3 font-medium text-right">Monto</th>
+                        <th className="py-2 text-right font-medium">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-kraft-200/70 dark:divide-[#263040]">
+                      {pagos.map((pago) => (
+                        <tr key={pago.id} className="hover:bg-kraft-50/50 dark:hover:bg-[#1A222D]/40 transition-colors">
+                          <td className="py-2.5 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                            {formatDate(pago.fecha)}
+                          </td>
+                          <td className="py-2.5 pr-3 text-gray-700 dark:text-gray-300 max-w-[220px] truncate">
+                            <span className="capitalize font-medium text-navy-900 dark:text-white">{pago.metodo}</span>
+                            {pago.nota ? <span className="text-gray-500 dark:text-gray-400"> · {pago.nota}</span> : null}
+                          </td>
+                          <td className="py-2.5 pr-3 whitespace-nowrap text-right font-mono font-semibold text-navy-900 dark:text-white">
+                            {formatCLP(pago.monto)}
+                          </td>
+                          <td className="py-2.5 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditPago(pago)}
+                                className="p-1 text-gray-400 hover:text-obra-orange rounded transition-colors"
+                                title="Editar pago"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPagoToDelete(pago)}
+                                className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                title="Eliminar pago"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
             </div>
           </div>
 
           {/* Historial de Imprevistos con Fotos (con CRUD) */}
-          <div className={`${financeSection === 'imprevistos' ? 'flex' : 'hidden'} bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex-col justify-between`}>
+          <div className={`${financeSection === 'imprevistos' ? 'flex' : 'hidden'} bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-5 shadow-sm flex-col justify-between`}>
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h4 className="font-heading font-bold text-sm text-navy-900 flex items-center gap-1.5">
+                <h4 className="font-heading font-bold text-sm text-navy-900 dark:text-white flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-obra-red" />
                   <span>Gastos registrados</span>
                 </h4>
@@ -856,7 +885,7 @@ export default function ProyectoFinanzasPage() {
                 </button>
               </div>
 
-              <div className="divide-y divide-kraft-200/80 max-h-64 overflow-y-auto pr-1">
+              <div className="max-h-72 overflow-y-auto overflow-x-auto pr-1">
                 {imprevistos.length === 0 ? (
                   <div className="py-8 text-center space-y-2.5">
                     <div className="w-10 h-10 rounded-xl bg-obra-red-light dark:bg-obra-red/15 text-obra-red flex items-center justify-center mx-auto">
@@ -868,52 +897,84 @@ export default function ProyectoFinanzasPage() {
                     </p>
                   </div>
                 ) : (
-                  imprevistos.map((imp) => (
-                    <div key={imp.id} className="py-2.5 flex items-start justify-between gap-2 text-xs">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-obra-red">{formatCLP(imp.monto)}</span>
-                          <span className="text-[9px] font-mono uppercase bg-kraft-100 text-gray-600 px-1 py-0.2 rounded">
-                            {imp.origen === 'whatsapp_ia' ? 'WhatsApp IA' : 'Manual'}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-gray-700 leading-tight">{imp.descripcion}</p><p className="text-[11px] text-gray-500">{imp.categoria_gasto==='mano_obra'?'Mano de obra':imp.categoria_gasto==='gasto_general'?'Gasto general':'Imprevisto'} · {imp.pagado===true?'Pago confirmado':imp.pagado===false?'Pendiente de pago':'Pago sin confirmar'}</p>
-                        <span className="text-[10px] font-mono text-gray-400">{formatDate(imp.fecha)}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        {imp.foto_url && (
-                          <button
-                            onClick={() => setPreviewPhoto(imp.foto_url || null)}
-                            className="w-7 h-7 rounded border border-kraft-200 overflow-hidden relative group"
-                            title="Ver foto de respaldo"
-                          >
-                            <img
-                              src={imp.foto_url}
-                              alt="Evidencia"
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                            />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditImprevisto(imp)}
-                          className="p-1 text-gray-400 hover:text-obra-orange rounded"
-                          title="Editar imprevisto"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setImprevistoToDelete(imp)}
-                          className="p-1 text-gray-400 hover:text-red-600 rounded"
-                          title="Eliminar imprevisto"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-kraft-200 dark:border-[#263040] text-gray-500 dark:text-gray-400 font-mono uppercase text-[11px]">
+                        <th className="py-2 pr-3 font-medium">Fecha</th>
+                        <th className="py-2 pr-3 font-medium">Descripción</th>
+                        <th className="py-2 pr-3 font-medium">Categoría</th>
+                        <th className="py-2 pr-3 font-medium text-right">Monto</th>
+                        <th className="py-2 pr-3 font-medium">Estado</th>
+                        <th className="py-2 text-right font-medium">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-kraft-200/70 dark:divide-[#263040]">
+                      {imprevistos.map((imp) => (
+                        <tr key={imp.id} className="hover:bg-kraft-50/50 dark:hover:bg-[#1A222D]/40 transition-colors">
+                          <td className="py-2.5 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                            {formatDate(imp.fecha)}
+                          </td>
+                          <td className="py-2.5 pr-3 text-navy-900 dark:text-white font-medium max-w-[200px] truncate" title={imp.descripcion}>
+                            {imp.descripcion}
+                          </td>
+                          <td className="py-2.5 pr-3 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                            {imp.categoria_gasto === 'mano_obra' ? 'Mano de obra' : imp.categoria_gasto === 'gasto_general' ? 'Gasto general' : 'Imprevisto'}
+                            {imp.origen === 'whatsapp_ia' ? ' · IA' : ''}
+                          </td>
+                          <td className="py-2.5 pr-3 whitespace-nowrap text-right font-mono font-semibold text-obra-red">
+                            {formatCLP(imp.monto)}
+                          </td>
+                          <td className="py-2.5 pr-3 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                imp.pagado === true
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                  : imp.pagado === false
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                                    : 'bg-gray-100 text-gray-600 dark:bg-[#1E2530] dark:text-gray-300'
+                              }`}
+                            >
+                              {imp.pagado === true ? 'Pagado' : imp.pagado === false ? 'Pendiente' : 'Sin confirmar'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center justify-end gap-1">
+                              {imp.foto_url && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewPhoto(imp.foto_url || null)}
+                                  className="w-6 h-6 rounded border border-kraft-200 overflow-hidden"
+                                  title="Ver foto de respaldo"
+                                >
+                                  <img
+                                    src={imp.foto_url}
+                                    alt="Evidencia"
+                                    className="w-full h-full object-cover"
+                                  />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditImprevisto(imp)}
+                                className="p-1 text-gray-400 hover:text-obra-orange rounded transition-colors"
+                                title="Editar imprevisto"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setImprevistoToDelete(imp)}
+                                className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                title="Eliminar imprevisto"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
             </div>

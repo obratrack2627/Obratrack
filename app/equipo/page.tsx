@@ -498,200 +498,165 @@ export default function EquipoPage() {
             )}
           </div>
         ) : viewMode === 'list' ? (
-          /* Vista Moderna en Lista Compacta */
-          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl overflow-hidden shadow-sm">
-            <div className="hidden lg:grid lg:grid-cols-12 gap-4 px-5 py-3 bg-[#FAF8F5] dark:bg-[#1A222D] border-b border-kraft-200 dark:border-[#263040] text-[11px] font-mono font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              <div className="col-span-4">Integrante y Rol</div>
-              <div className="col-span-3">Contacto / WhatsApp</div>
-              <div className="col-span-3">Obras Asignadas</div>
-              <div className="col-span-1 text-center">Canal</div>
-              <div className="col-span-1 text-right">Acciones</div>
-            </div>
+          /* Vista Minimalista en Lista (estilo Planes y Suscripción) */
+          <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-kraft-200 dark:border-[#263040] text-gray-500 dark:text-gray-400 font-mono uppercase text-[11px]">
+                  <th className="py-2 pr-3 font-medium">Integrante</th>
+                  <th className="py-2 pr-3 font-medium">Rol</th>
+                  <th className="py-2 pr-3 font-medium">Especialidad</th>
+                  <th className="py-2 pr-3 font-medium">Contacto</th>
+                  <th className="py-2 pr-3 font-medium">Obras</th>
+                  <th className="py-2 pr-3 font-medium">Canal</th>
+                  <th className="py-2 text-right font-medium">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-kraft-200/70 dark:divide-[#263040]">
+                {filteredUsers.map((user) => {
+                  const roleBadge =
+                    user.rol === 'admin'
+                      ? 'bg-navy-800 text-white'
+                      : user.rol === 'supervisor'
+                      ? 'bg-orange-100 text-orange-900 dark:bg-orange-950/50 dark:text-orange-300'
+                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300';
 
-            <div className="divide-y divide-kraft-100 dark:divide-[#1E2530]">
-              {filteredUsers.map((user) => {
-                const roleBadge =
-                  user.rol === 'admin'
-                    ? 'bg-navy-800 text-white'
-                    : user.rol === 'supervisor'
-                    ? 'bg-obra-orange-light dark:bg-obra-orange/15 text-obra-orange border border-obra-orange/20'
-                    : 'bg-obra-green-light dark:bg-obra-green/15 text-obra-green border border-obra-green/20';
+                  const cleanPhone = canonicalPhone(user.telefono_whatsapp || '');
+                  const obrasAsignadas = proyectos.filter((p) =>
+                    (p.trabajadores_ids || []).includes(user.id)
+                  );
 
-                const cleanPhone = canonicalPhone(user.telefono_whatsapp || '');
-                const obrasAsignadas = proyectos.filter((p) =>
-                  (p.trabajadores_ids || []).includes(user.id)
-                );
+                  return (
+                    <tr
+                      key={user.id}
+                      data-team-member={user.id}
+                      className="hover:bg-kraft-50/50 dark:hover:bg-[#1A222D]/40 transition-colors"
+                    >
+                      <td className="py-2.5 pr-3 whitespace-nowrap">
+                        <span className="font-semibold text-navy-900 dark:text-white">
+                          {user.nombre}
+                        </span>
+                        {user.rut && (
+                          <span className="ml-2 font-mono text-[11px] text-gray-500 dark:text-gray-400">
+                            {formatRUT(user.rut)}
+                          </span>
+                        )}
+                      </td>
 
-                return (
-                  <div
-                    key={user.id}
-                    data-team-member={user.id}
-                    className="px-4 py-3.5 sm:px-5 grid grid-cols-1 lg:grid-cols-12 gap-3 lg:gap-4 items-start lg:items-center hover:bg-kraft-50/70 dark:hover:bg-[#1A222D]/60 transition-colors"
-                  >
-                    {/* Integrante y Rol */}
-                    <div className="lg:col-span-4 flex items-center justify-between gap-3 min-w-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-kraft-100 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] flex items-center justify-center font-bold text-navy-900 dark:text-white font-heading text-sm shrink-0">
-                          {user.nombre.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="font-heading font-bold text-sm text-navy-900 dark:text-white truncate">
-                              {user.nombre}
-                            </h3>
-                            <span
-                              className={`inline-block text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md shrink-0 ${roleBadge}`}
-                            >
-                              {user.rol === 'admin'
-                                ? 'Administrador'
-                                : user.rol === 'supervisor'
-                                ? 'Supervisor'
-                                : 'Terreno'}
-                            </span>
-                          </div>
-                          {user.rut && (
-                            <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                              RUT {formatRUT(user.rut)}
-                            </p>
-                          )}
-                          {!!user.especialidades?.length && (
-                            <div className="mt-1.5 flex flex-wrap gap-1" aria-label={`Especialidades de ${user.nombre}`}>
-                              {user.especialidades.map((name) => (
-                                <span
-                                  key={name}
-                                  className="max-w-full break-words rounded-md border border-obra-orange/20 bg-obra-orange/10 px-1.5 py-0.5 text-[10px] font-sans text-gray-700 dark:text-gray-200"
-                                >
-                                  {name}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                      <td className="py-2.5 pr-3 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${roleBadge}`}
+                        >
+                          {user.rol === 'admin'
+                            ? 'Administrador'
+                            : user.rol === 'supervisor'
+                            ? 'Supervisor'
+                            : 'Terreno'}
+                        </span>
+                      </td>
 
-                      {/* Canal visible rápido en móvil */}
-                      <span className="lg:hidden inline-flex items-center gap-1 text-[10px] font-mono text-gray-500 dark:text-gray-400 bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] px-2 py-0.5 rounded-md shrink-0">
-                        <HardHat className="w-3 h-3 text-obra-orange" />
-                        <span>{user.rol === 'admin' || user.is_dev ? 'Panel web' : 'WhatsApp'}</span>
-                      </span>
-                    </div>
+                      <td
+                        className="py-2.5 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300"
+                        aria-label={user.especialidades?.length ? `Especialidades de ${user.nombre}` : undefined}
+                      >
+                        {user.especialidades?.length ? (
+                          <span className="inline-flex items-center gap-1">
+                            {user.especialidades.map((name, idx) => (
+                              <span key={name} className="inline-flex items-center">
+                                {idx > 0 && <span className="mr-1 text-gray-400">·</span>}
+                                <span>{name}</span>
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
 
-                    {/* Contacto / WhatsApp */}
-                    <div className="lg:col-span-3 space-y-1 text-xs font-mono text-gray-600 dark:text-gray-300 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <td className="py-2.5 pr-3 whitespace-nowrap font-mono text-gray-600 dark:text-gray-300">
                         {cleanPhone ? (
-                          <>
+                          <span className="inline-flex items-center gap-2">
                             <a
                               href={`tel:+${cleanPhone}`}
-                              className="inline-flex items-center gap-1.5 text-obra-green hover:underline truncate"
+                              className="hover:text-navy-900 dark:hover:text-white hover:underline"
                             >
-                              <Phone className="w-3.5 h-3.5 shrink-0" />
-                              <span>+{cleanPhone}</span>
+                              +{cleanPhone}
                             </a>
                             <a
                               href={`https://wa.me/${cleanPhone}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 rounded text-[10px] font-bold inline-flex items-center gap-1 shrink-0 transition-colors"
+                              className="text-emerald-700 dark:text-emerald-400 hover:underline font-sans text-[11px]"
                               title="Abrir chat de WhatsApp"
                             >
-                              <MessageSquare className="w-3 h-3" />
-                              <span>WhatsApp</span>
+                              WhatsApp
                             </a>
-                          </>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 text-gray-400">
-                            <Phone className="w-3.5 h-3.5 shrink-0" />
-                            <span>Sin teléfono</span>
                           </span>
+                        ) : user.email ? (
+                          <span className="text-gray-500 dark:text-gray-400">{user.email}</span>
+                        ) : (
+                          <span className="text-gray-400">Sin contacto</span>
                         )}
-                      </div>
+                      </td>
 
-                      {user.email && (
-                        <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 min-w-0">
-                          <Mail className="w-3 h-3 text-gray-400 shrink-0" />
-                          <span className="truncate">{user.email}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Obras Asignadas */}
-                    <div
-                      className="lg:col-span-3 flex flex-wrap items-center gap-1.5 min-w-0"
-                      aria-label={`Obras de ${user.nombre}`}
-                    >
-                      <span className="text-[10px] font-mono font-bold bg-kraft-100 dark:bg-[#0F141C] border border-kraft-200/80 dark:border-[#263040] text-navy-900 dark:text-gray-200 px-2 py-0.5 rounded-md shrink-0">
-                        {obrasAsignadas.length} {obrasAsignadas.length === 1 ? 'obra' : 'obras'}
-                      </span>
-                      {obrasAsignadas.length > 0 ? (
-                        <>
-                          {obrasAsignadas.slice(0, 2).map((p) => (
-                            <Link
-                              key={p.id}
-                              href={`/proyectos/${p.id}/gantt`}
-                              className="max-w-[160px] truncate rounded-md bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] px-2 py-0.5 text-[11px] font-mono text-gray-600 dark:text-gray-300 hover:text-obra-orange transition-colors"
-                              title={p.nombre}
-                            >
-                              {p.nombre}
-                            </Link>
-                          ))}
-                          {obrasAsignadas.length > 2 && (
-                            <details className="text-[11px] text-gray-500 dark:text-gray-400">
-                              <summary className="cursor-pointer font-mono hover:text-obra-orange">
-                                +{obrasAsignadas.length - 2} más
-                              </summary>
-                              <div className="mt-1 space-y-0.5">
-                                {obrasAsignadas.slice(2).map((p) => (
-                                  <Link
-                                    className="block py-0.5 hover:text-obra-orange font-mono"
-                                    key={p.id}
-                                    href={`/proyectos/${p.id}/gantt`}
-                                  >
-                                    {p.nombre}
-                                  </Link>
-                                ))}
-                              </div>
-                            </details>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-[11px] text-gray-400">Sin obra asignada</span>
-                      )}
-                    </div>
-
-                    {/* Canal (desktop) */}
-                    <div className="hidden lg:flex lg:col-span-1 items-center justify-center">
-                      <span className="inline-flex items-center gap-1 font-mono text-[11px] text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                        <HardHat className="w-3.5 h-3.5 text-obra-orange shrink-0" />
-                        <span>{user.rol === 'admin' || user.is_dev ? 'Web' : 'WhatsApp'}</span>
-                      </span>
-                    </div>
-
-                    {/* Acciones */}
-                    <div className="lg:col-span-1 flex items-center justify-end gap-1 pt-1 lg:pt-0 border-t border-kraft-100 dark:border-[#1E2530] lg:border-t-0">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEdit(user)}
-                        className="p-1.5 text-gray-400 hover:text-[#FF6A00] hover:bg-[#FF6A00]/10 rounded-lg transition-colors"
-                        title="Editar datos"
+                      <td
+                        className="py-2.5 pr-3 whitespace-nowrap"
+                        aria-label={`Obras de ${user.nombre}`}
                       >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      {user.rol !== 'admin' && (
-                        <button
-                          type="button"
-                          onClick={() => setUserToDelete(user)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
-                          title="Eliminar trabajador"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                        {obrasAsignadas.length > 0 ? (
+                          <span className="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+                            <Link
+                              href={`/proyectos/${obrasAsignadas[0].id}/gantt`}
+                              className="max-w-[170px] truncate hover:text-[#C2410C] dark:hover:text-obra-orange hover:underline"
+                              title={obrasAsignadas[0].nombre}
+                            >
+                              {obrasAsignadas[0].nombre}
+                            </Link>
+                            {obrasAsignadas.length > 1 && (
+                              <span
+                                className="font-mono text-[11px] text-gray-400"
+                                title={obrasAsignadas.slice(1).map((p) => p.nombre).join(', ')}
+                              >
+                                +{obrasAsignadas.length - 1}
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">Sin asignar</span>
+                        )}
+                      </td>
+
+                      <td className="py-2.5 pr-3 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                        {user.rol === 'admin' || user.is_dev ? 'Web' : 'WhatsApp'}
+                      </td>
+
+                      <td className="py-2.5 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(user)}
+                            className="p-1 text-gray-400 hover:text-[#C2410C] dark:hover:text-obra-orange rounded transition-colors"
+                            title="Editar datos"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          {user.rol !== 'admin' && (
+                            <button
+                              type="button"
+                              onClick={() => setUserToDelete(user)}
+                              className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                              title="Eliminar trabajador"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
           /* Vista en Tarjetas */

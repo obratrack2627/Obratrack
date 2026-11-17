@@ -1,7 +1,7 @@
 'use client';
 import ModalOverlay from '@/components/ModalOverlay';
 
-import React, { useId, useMemo, useState } from 'react';
+import React, { useId, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   FileSpreadsheet,
@@ -51,6 +51,7 @@ export default function EstadoPagoPdfModal({
   const [observacionEdp, setObservacionEdp] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
+  const registeringRef = useRef(false);
 
   const emisor = typeof window !== 'undefined' ? dataService.getActiveUser() : null;
   const empresa = typeof window !== 'undefined' ? dataService.getEmpresa() : null;
@@ -140,12 +141,17 @@ export default function EstadoPagoPdfModal({
   };
 
   const handleRegistrarIngreso = () => {
-    if (!onRegistrarPago || resumen.liquidoAPagarConIva <= 0) return;
-    const glosa = `${resumen.folio} (${resumen.porcentajeAvanceFisico}% avance)${
-      observacionEdp.trim() ? ` - ${observacionEdp.trim()}` : ''
-    }`;
-    onRegistrarPago(resumen.liquidoAPagarConIva, glosa);
-    onClose();
+    if (registeringRef.current || !onRegistrarPago || resumen.liquidoAPagarConIva <= 0) return;
+    registeringRef.current = true;
+    try {
+      const glosa = `${resumen.folio} (${resumen.porcentajeAvanceFisico}% avance)${
+        observacionEdp.trim() ? ` - ${observacionEdp.trim()}` : ''
+      }`;
+      onRegistrarPago(resumen.liquidoAPagarConIva, glosa);
+      onClose();
+    } finally {
+      setTimeout(() => { registeringRef.current = false; }, 600);
+    }
   };
 
   return (

@@ -23,6 +23,12 @@ export interface ProjectExcelExportPayload {
 
 const CLP_FORMAT = '"$"#,##0';
 
+export function sanitizeExcelCell(value: unknown): string {
+  if (value == null) return '';
+  const str = String(value);
+  return /^[\s\u0000-\u001f]*[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+}
+
 function styleHeaderRow(row: any) {
   row.eachCell((cell: any) => {
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
@@ -80,13 +86,13 @@ export async function buildProjectExcelBuffer(
   styleHeaderRow(wsResumen.getRow(1));
 
   const resumenRows: Array<[string, string | number, boolean?]> = [
-    ['Constructora', empresaNombre],
-    ['Obra / Proyecto', proyecto.nombre],
-    ['Mandante / Cliente', cliente?.nombre || 'No asignado'],
-    ['Ubicación', [proyecto.direccion, proyecto.comuna, proyecto.region].filter(Boolean).join(', ')],
-    ['Estado Operativo', projectStatusLabel(proyecto.estado)],
-    ['Fecha Inicio', proyecto.fecha_inicio],
-    ['Fecha Término Estimada', proyecto.fecha_termino_estimada],
+    ['Constructora', sanitizeExcelCell(empresaNombre)],
+    ['Obra / Proyecto', sanitizeExcelCell(proyecto.nombre)],
+    ['Mandante / Cliente', sanitizeExcelCell(cliente?.nombre || 'No asignado')],
+    ['Ubicación', sanitizeExcelCell([proyecto.direccion, proyecto.comuna, proyecto.region].filter(Boolean).join(', '))],
+    ['Estado Operativo', sanitizeExcelCell(projectStatusLabel(proyecto.estado))],
+    ['Fecha Inicio', sanitizeExcelCell(proyecto.fecha_inicio)],
+    ['Fecha Término Estimada', sanitizeExcelCell(proyecto.fecha_termino_estimada)],
     ['Avance Físico Ponderado (%)', `${proyecto.porcentaje_avance_ponderado || 0}%`],
     ['Presupuesto Contratado (IVA incl.)', montoCotizado, true],
     ['Total Recaudado (Pagos)', totalPagado, true],
@@ -117,10 +123,10 @@ export async function buildProjectExcelBuffer(
   styleHeaderRow(wsPagos.getRow(1));
   pagos.forEach((p) => {
     const r = wsPagos.addRow({
-      fecha: p.fecha,
-      metodo: p.metodo,
+      fecha: sanitizeExcelCell(p.fecha),
+      metodo: sanitizeExcelCell(p.metodo),
       monto: Math.round(Number(p.monto) || 0),
-      nota: p.nota || p.notas || '',
+      nota: sanitizeExcelCell(p.nota || p.notas || ''),
     });
     r.getCell(3).numFmt = CLP_FORMAT;
   });
@@ -142,11 +148,11 @@ export async function buildProjectExcelBuffer(
     const pu = Math.round(Number(m.precio_unitario) || 0);
     const sub = Math.round(Number(m.subtotal || m.cantidad * pu) || 0);
     const r = wsMat.addRow({
-      nombre: m.nombre,
-      categoria: m.categoria || 'General',
-      proveedor: m.proveedor || 'Por definir',
+      nombre: sanitizeExcelCell(m.nombre),
+      categoria: sanitizeExcelCell(m.categoria || 'General'),
+      proveedor: sanitizeExcelCell(m.proveedor || 'Por definir'),
       cantidad: m.cantidad,
-      unidad: m.unidad,
+      unidad: sanitizeExcelCell(m.unidad),
       pu,
       subtotal: sub,
       estado: m.comprado ? 'Comprado' : 'Pendiente',
@@ -166,10 +172,10 @@ export async function buildProjectExcelBuffer(
   styleHeaderRow(wsImp.getRow(1));
   imprevistos.forEach((imp) => {
     const r = wsImp.addRow({
-      fecha: imp.fecha,
+      fecha: sanitizeExcelCell(imp.fecha),
       origen: imp.origen === 'whatsapp_ia' ? 'WhatsApp IA' : 'Manual',
       monto: Math.round(Number(imp.monto) || 0),
-      descripcion: imp.descripcion,
+      descripcion: sanitizeExcelCell(imp.descripcion),
     });
     r.getCell(3).numFmt = CLP_FORMAT;
   });
@@ -187,18 +193,18 @@ export async function buildProjectExcelBuffer(
   actividades.forEach((a) => {
     wsOperacion.addRow({
       tipo: 'Partida Gantt',
-      nombre: a.nombre,
-      fecha: `${a.fecha_inicio} -> ${a.fecha_termino}`,
-      estado: a.estado,
+      nombre: sanitizeExcelCell(a.nombre),
+      fecha: sanitizeExcelCell(`${a.fecha_inicio} -> ${a.fecha_termino}`),
+      estado: sanitizeExcelCell(a.estado),
       metrica: `${a.porcentaje_avance}%`,
     });
   });
   asistencias.forEach((asist) => {
     wsOperacion.addRow({
       tipo: 'Asistencia',
-      nombre: asist.trabajador_nombre,
-      fecha: asist.fecha,
-      estado: asist.estado,
+      nombre: sanitizeExcelCell(asist.trabajador_nombre),
+      fecha: sanitizeExcelCell(asist.fecha),
+      estado: sanitizeExcelCell(asist.estado),
       metrica: `${asist.horas_trabajadas || 0} hrs`,
     });
   });

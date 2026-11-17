@@ -323,25 +323,22 @@ export default function ProjectMaterials({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] overflow-hidden shadow-sm">
-        <div className="hidden md:grid md:grid-cols-12 gap-3 items-center px-4 py-2.5 bg-[#FAF8F5] dark:bg-[#1A222D] border-b border-kraft-200 dark:border-[#263040] text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-          <div className="md:col-span-5">Material</div>
-          <div className="md:col-span-2 md:text-right">Cantidad y total</div>
-          <div className="md:col-span-3">Recepción en obra</div>
-          <div className="md:col-span-2 md:text-right">Acciones</div>
+      <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] px-4 py-3 sm:px-5 shadow-sm overflow-hidden">
+        <div className="hidden lg:grid lg:grid-cols-12 gap-3 items-center pb-2 border-b border-kraft-200 dark:border-[#263040] text-[11px] font-mono uppercase text-gray-500 dark:text-gray-400">
+          <div className="lg:col-span-4">Material</div>
+          <div className="lg:col-span-2 lg:text-right">Cantidad y total</div>
+          <div className="lg:col-span-2">Recepción</div>
+          <div className="lg:col-span-2">Compra / Pago</div>
+          <div className="lg:col-span-2 lg:text-right">Acciones</div>
         </div>
 
-        <ul className="divide-y divide-kraft-100 dark:divide-[#1E2530]">
+        <ul className="divide-y divide-kraft-200/70 dark:divide-[#263040]">
           {materials.map((material) => {
             const delivered = receivedByMaterial.get(material.id) || 0;
             const totalQty = Number(material.cantidad || 0);
             const pending = Math.max(0, totalQty - delivered);
             const complete = totalQty > 0 && pending <= 0.000001;
             const partial = !complete && delivered > 0;
-            const pct =
-              totalQty > 0
-                ? Math.min(100, Math.round((delivered / totalQty) * 100))
-                : 0;
 
             const receptionLabel = complete
               ? 'Recibido completo'
@@ -350,10 +347,10 @@ export default function ProjectMaterials({
                 : 'Por recibir';
 
             const receptionTone = complete
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60'
+              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
               : partial
-                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60'
-                : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-[#1D2532] dark:text-gray-300 dark:border-[#2C3748]';
+                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                : 'bg-gray-100 text-gray-600 dark:bg-[#1E2530] dark:text-gray-300';
 
             const linkedActivity = material.actividad_id
               ? activityById.get(material.actividad_id)
@@ -364,129 +361,58 @@ export default function ProjectMaterials({
             return (
               <li
                 key={material.id}
-                className="px-3.5 sm:px-4 py-3 transition-colors hover:bg-[#FCFBF9] dark:hover:bg-[#19212C]"
+                className="py-2.5 transition-colors hover:bg-kraft-50/50 dark:hover:bg-[#19212C]/50 text-xs"
               >
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-2.5 md:gap-3 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:gap-3 items-start lg:items-center min-w-0">
                   {/* Material + metadata */}
-                  <div className="md:col-span-5 min-w-0">
-                    <div className="flex items-start justify-between gap-2 md:block">
-                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white break-words">
-                          {material.nombre}
-                        </span>
-                        {isUrgent && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-2 py-0.5 text-[10px] font-semibold">
-                            Faena próxima
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 md:hidden shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(material)}
-                          aria-label={`Editar ${material.nombre}`}
-                          title={`Editar ${material.nombre}`}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#232D3B] transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(material)}
-                          aria-label={`Eliminar ${material.nombre}`}
-                          title={`Eliminar ${material.nombre}`}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1 text-xs text-gray-500 dark:text-gray-400 min-w-0">
-                      <span className="inline-flex items-center rounded bg-kraft-100/80 dark:bg-[#1E2633] px-1.5 py-0.5 text-[11px] font-medium text-gray-700 dark:text-gray-300">
-                        {formatMaterialCategory(material.categoria)}
+                  <div className="lg:col-span-4 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
+                      <span className="font-semibold text-navy-900 dark:text-white break-words">
+                        {material.nombre}
                       </span>
-                      <span className="break-words">
-                        · {material.proveedor?.trim() || 'Proveedor por definir'}
-                      </span>
-                      {linkedActivity && (
-                        <span className="break-words text-gray-600 dark:text-gray-300">
-                          · Partida: {linkedActivity.nombre}
+                      {isUrgent && (
+                        <span className="rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-2 py-0.5 text-[10px] font-semibold">
+                          Faena próxima
                         </span>
                       )}
                     </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                      {formatMaterialCategory(material.categoria)} ·{' '}
+                      {material.proveedor?.trim() || 'Proveedor por definir'}
+                      {linkedActivity ? ` · ${linkedActivity.nombre}` : ''}
+                    </p>
                   </div>
 
                   {/* Cantidad y costo */}
-                  <div className="md:col-span-2 md:text-right min-w-0 flex items-baseline justify-between md:block gap-2">
-                    <div className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">
+                  <div className="lg:col-span-2 lg:text-right min-w-0 flex items-baseline justify-between lg:block gap-2">
+                    <span className="font-mono font-semibold text-navy-900 dark:text-white tabular-nums">
                       {clp(material.subtotal)}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-                      {formatQty(material.cantidad)} {material.unidad} ×{' '}
-                      {clp(material.precio_unitario)}
-                    </div>
+                    </span>
+                    <span className="block text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                      {formatQty(material.cantidad)} {material.unidad} × {clp(material.precio_unitario)}
+                    </span>
                   </div>
 
                   {/* Recepción en obra */}
-                  <div className="md:col-span-3 min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${receptionTone}`}
-                      >
-                        {complete ? (
-                          <CheckCircle2 className="w-3 h-3 shrink-0" />
-                        ) : partial ? (
-                          <Clock className="w-3 h-3 shrink-0" />
-                        ) : null}
-                        {receptionLabel}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-300 tabular-nums">
-                      Recibido: {formatQty(delivered)} / {formatQty(material.cantidad)}{' '}
-                      {material.unidad}
-                    </p>
-                    <div className="h-1 w-full max-w-[180px] rounded-full bg-gray-100 dark:bg-[#232D3B] overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          complete
-                            ? 'bg-emerald-500'
-                            : partial
-                              ? 'bg-amber-500'
-                              : 'bg-gray-300 dark:bg-gray-600'
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
+                  <div className="lg:col-span-2 min-w-0 flex flex-wrap lg:flex-col items-center lg:items-start justify-between gap-1">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${receptionTone}`}
+                    >
+                      {complete ? (
+                        <CheckCircle2 className="w-3 h-3 shrink-0" />
+                      ) : partial ? (
+                        <Clock className="w-3 h-3 shrink-0" />
+                      ) : null}
+                      {receptionLabel}
+                    </span>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                      Recibido: {formatQty(delivered)} / {formatQty(material.cantidad)} {material.unidad}
+                    </span>
                   </div>
 
-                  {/* Acciones desktop */}
-                  <div className="hidden md:flex md:col-span-2 items-center justify-end gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onEdit(material)}
-                      aria-label={`Editar ${material.nombre}`}
-                      title={`Editar ${material.nombre}`}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#232D3B] transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(material)}
-                      aria-label={`Eliminar ${material.nombre}`}
-                      title={`Eliminar ${material.nombre}`}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Barra compacta de compra, pago y recepción */}
-                <div className="mt-2.5 pt-2 border-t border-kraft-100/80 dark:border-[#1E2734] flex flex-wrap items-center justify-between gap-2 min-w-0">
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 min-w-0">
-                    <label className="inline-flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  {/* Compra y pago inline */}
+                  <div className="lg:col-span-2 min-w-0 flex flex-wrap lg:flex-col gap-x-3 gap-y-1">
+                    <label className="inline-flex items-center gap-1.5 text-[11px] text-gray-700 dark:text-gray-300 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={Boolean(material.comprado)}
@@ -495,10 +421,10 @@ export default function ProjectMaterials({
                         }
                         className="h-3.5 w-3.5 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                       />
-                      <span className="font-medium">Compra registrada</span>
+                      <span>Compra registrada</span>
                     </label>
 
-                    <label className="inline-flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                    <label className="inline-flex items-center gap-1.5 text-[11px] text-gray-700 dark:text-gray-300 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={material.pagado === true}
@@ -507,42 +433,54 @@ export default function ProjectMaterials({
                         }
                         className="h-3.5 w-3.5 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                       />
-                      <span className="font-medium">Pago confirmado</span>
+                      <span>Pago confirmado</span>
                     </label>
 
                     {material.pagado === false && (
-                      <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/50 rounded-full px-2 py-0.5">
+                      <span className="text-[10px] font-semibold text-amber-800 dark:text-amber-300">
                         Por pagar
                       </span>
                     )}
-                    {material.comprado && material.pagado == null && (
-                      <span className="text-[11px] text-gray-500 dark:text-gray-400">
-                        Pago por confirmar
-                      </span>
-                    )}
                     {isSaving && (
-                      <span className="text-[11px] text-gray-400 dark:text-gray-500">
-                        Guardando…
-                      </span>
+                      <span className="text-[10px] text-gray-400">Guardando…</span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  {/* Acciones */}
+                  <div className="lg:col-span-2 flex flex-wrap items-center lg:justify-end gap-1.5 shrink-0">
                     {pending > 0 ? (
                       <button
                         type="button"
                         onClick={() => openReceptionModal(material)}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-kraft-300 dark:border-[#324054] bg-white dark:bg-[#1B2330] hover:bg-[#FAF8F5] dark:hover:bg-[#232D3D] px-2.5 py-1 text-xs font-semibold text-gray-700 dark:text-gray-200 transition-colors"
+                        className="inline-flex items-center gap-1 rounded-lg border border-kraft-300 dark:border-[#324054] bg-white dark:bg-[#1B2330] hover:bg-[#FAF8F5] dark:hover:bg-[#232D3D] px-2 py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200 transition-colors whitespace-nowrap"
                       >
                         <PackageCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
                         <span>Registrar recepción</span>
                       </button>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                        <Check className="w-3.5 h-3.5 shrink-0" />
-                        Recepción al día
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                        <Check className="w-3 h-3 shrink-0" />
+                        Al día
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => onEdit(material)}
+                      aria-label={`Editar ${material.nombre}`}
+                      title={`Editar ${material.nombre}`}
+                      className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(material)}
+                      aria-label={`Eliminar ${material.nombre}`}
+                      title={`Eliminar ${material.nombre}`}
+                      className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               </li>
