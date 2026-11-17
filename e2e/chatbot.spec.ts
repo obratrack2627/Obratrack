@@ -1690,7 +1690,7 @@ test('la app instalada desde Chrome no impone colores a las barras del sistema',
  await page.goto('/dashboard');
  await expect(page.locator('meta[name="theme-color"]')).toHaveCount(0);
  const manifest=await(await page.request.get('/manifest.webmanifest')).json();
- expect(manifest.theme_color).toBeUndefined();expect(manifest.background_color).toBeUndefined();expect(manifest.id).toBe('/proyectos');expect(manifest.scope).toBe('/');expect(manifest.start_url).toBe('/dashboard');
+ expect(manifest.theme_color).toBeUndefined();expect(manifest.background_color).toBe('#07151E');expect(manifest.id).toBe('/proyectos');expect(manifest.scope).toBe('/');expect(manifest.start_url).toBe('/dashboard');
  await page.getByRole('button',{name:'Abrir menú',exact:true}).click();
  await page.locator('aside').getByRole('link',{name:'Obras y proyectos',exact:true}).click();
  await page.getByRole('link',{name:'Terraza',exact:true}).click();

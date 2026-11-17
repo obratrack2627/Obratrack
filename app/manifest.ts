@@ -11,6 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     start_url: '/dashboard',
     display: 'standalone',
+    // Native Android launch surface, matching the animated web splash.
+    background_color: '#07151E',
     orientation: 'portrait',
     lang: 'es-CL',
     categories: ['business', 'productivity', 'finance'],
