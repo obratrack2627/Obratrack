@@ -46,11 +46,13 @@ Rollback: volver al código previo requiere retirar primero las políticas restr
 
 | Alcance | Llamadas diarias | Unidades diarias | Llamadas/minuto | Concurrencia |
 |---|---:|---:|---:|---:|
-| Pro | 50 | 250.000 | 8 | 2 |
-| Pro IA | 100 | 500.000 | 12 | 2 |
-| Cuenta completa | 500 | 2.000.000 | 40 | 10 |
+| Pro | Sin tope | Sin tope | 8 | 2 |
+| Pro IA | Sin tope | Sin tope | 12 | 2 |
+| Cuenta completa | Sin tope | Sin tope | 40 | 10 |
 
-Se reserva una estimación conservadora antes de cada llamada; se concilia con tokens informados cuando están disponibles. Fotos/audio incorporan una reserva adicional y los reintentos consumen su propia reserva. Las reservas fallidas o no conciliadas conservan el consumo estimado y dejan de ocupar concurrencia al expirar. Las unidades son una protección operativa, **no un límite monetario exacto**, y deben ajustarse con uso real y tarifas del proveedor. El límite de la cuenta completa evita que cada empresa disponga independientemente de toda la cuota compartida.
+Actualización solicitada por el usuario el 2026-11-17: `20261117_obrabot_unlimited_daily.sql` elimina los topes diarios por empresa y globales. Las columnas históricas `daily_requests` y `daily_units` se conservan por compatibilidad y no se usan para bloquear solicitudes. Se mantienen límites por minuto y concurrencia para ordenar las ráfagas.
+
+Se registra una estimación antes de cada llamada y se concilia con tokens informados cuando están disponibles; las notas Opus usan duración medida. Las reservas no conciliadas conservan el consumo estimado y dejan de ocupar concurrencia al expirar. Las unidades son contabilidad operativa, **no un límite monetario exacto ni un tope diario**. Los créditos y restricciones del proveedor siguen siendo independientes.
 
 Sin la migración o sin configuración de servicio, el asistente falla antes de consumir. No desactivar el control para ocultar un error. No se almacenan prompts, contactos, fotos ni audios en la tabla de uso. El mantenimiento periódico elimina registros de uso antiguos y claves de Sync vencidas, sin eliminar eventos financieros.
 

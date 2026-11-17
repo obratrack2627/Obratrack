@@ -60,9 +60,9 @@ test('peticiones concurrentes mantienen aisladas la empresa y la identidad de la
  const actors=[];admin.getSupabaseAdmin=()=>({rpc:async(name,args)=>{if(name==='reservar_uso_obrabot')actors.push(args.p_actor);return {data:{id:'r'},error:null};}});
  await Promise.all(['a','b'].map(id=>withAIRequest(async()=>{setAIUsageActor({id,empresa_id:'company-'+id});await new Promise(r=>setImmediate(r));await reserveAIUsage(100,'generation');})()));assert.deepEqual(actors.sort(),['a','b']);
 });
-test('cuota agotada corta antes de cualquier llamada pagada y muestra un error de ObraBot',async()=>{
- let calls=0;admin.getSupabaseAdmin=()=>({rpc:async()=>({data:null,error:{message:'AI_QUOTA_DAILY'}})});
- await assert.rejects(withAIRequest(async()=>{setAIUsageActor({id:'a',empresa_id:'c'});await reserveAIUsage(100,'generation');calls++;})(),e=>e.code==='AI_QUOTA_DAILY'&&e.status===429);assert.equal(calls,0);
+test('una ráfaga o concurrencia excesiva espera sin iniciar otra llamada pagada',async()=>{
+ let calls=0;admin.getSupabaseAdmin=()=>({rpc:async()=>({data:null,error:{message:'AI_QUOTA_BUSY'}})});
+ await assert.rejects(withAIRequest(async()=>{setAIUsageActor({id:'a',empresa_id:'c'});await reserveAIUsage(100,'generation');calls++;})(),e=>e.code==='AI_QUOTA_BUSY'&&e.status===429);assert.equal(calls,0);
 });
 
 test('las revisiones de WhatsApp provienen del snapshot del servidor, no de lo propuesto por IA',()=>{

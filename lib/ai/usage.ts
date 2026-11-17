@@ -29,7 +29,6 @@ export async function reserveAIUsage(units:number,kind:'generation'|'audio'|'emb
  }
  const {data,error}=reservation;
  if(error||!data?.id){
-  if(/AI_QUOTA_DAILY/.test(error?.message||''))throw new AIError('AI_QUOTA_DAILY','Tu empresa alcanzó el límite diario de uso del asistente. Podrás continuar mañana.',429);
   if(/AI_QUOTA_BUSY/.test(error?.message||''))throw new AIError('AI_QUOTA_BUSY','Hay varias consultas en curso. Espera unos segundos y vuelve a intentar.',429);
   throw new AIError('AI_USAGE_UNAVAILABLE','No se pudo comprobar la disponibilidad del asistente. Intenta más tarde.',503);
  }

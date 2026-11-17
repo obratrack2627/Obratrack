@@ -15,6 +15,14 @@ afterEach(()=>{for(const k of keys){if(original[k]===undefined)delete process.en
 const response=(text,extra={})=>new Response(JSON.stringify({status:'completed',output:[{type:'reasoning',summary:[]},{type:'message',content:[{type:'output_text',text}]}],...extra}),{headers:{'Content-Type':'application/json'}});
 const verifySchema=(s)=>{if(s.properties){assert.equal(s.additionalProperties,false);assert.deepEqual(s.required,Object.keys(s.properties));for(const p of Object.values(s.properties))verifySchema(p);}if(s.items)verifySchema(s.items);for(const p of s.anyOf||[])verifySchema(p);};
 
+test('chat y cotizador indican la política sin topes diarios aunque el historial contenga una negativa antigua',()=>{
+ const {chatGenerationRequest}=require('../lib/gemini.ts');
+ const history=[{rol:'model',texto:'Se alcanzó el límite diario. Espera hasta mañana.'}];
+ for(const message of ['¿Puedes asignar personas?','Cotiza un radier de 20 m2 en Maipú']){
+  const request=chatGenerationRequest(history,message,{});assert.match(request.options.instructions,/No hay topes diarios internos/);assert.match(request.options.instructions,/no implica saldo ilimitado/);
+ }
+});
+
 test('los cuatro contratos estrictos conservan campos requeridos y convierten opcionales a null sin mutar el original',()=>{
   for(const source of [CHAT_RESPONSE_SCHEMA,QUOTE_RESPONSE_SCHEMA,WHATSAPP_RESPONSE_SCHEMA,MATERIAL_QUERY_SCHEMA]){
     const saved=JSON.stringify(source);verifySchema(strictOutputSchema(source));assert.equal(JSON.stringify(source),saved);

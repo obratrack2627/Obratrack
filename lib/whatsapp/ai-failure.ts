@@ -1,7 +1,7 @@
 import { AIError } from '@/lib/ai/errors';
 
 const recoverable = new Set([
-  'AI_QUOTA_DAILY', 'AI_QUOTA_BUSY', 'AI_RATE_LIMIT', 'AI_USAGE_UNAVAILABLE',
+  'AI_QUOTA_BUSY', 'AI_RATE_LIMIT', 'AI_USAGE_UNAVAILABLE',
   'AI_TIMEOUT', 'AI_NETWORK', 'AI_UNAVAILABLE', 'AI_CREDENTIALS',
   'AI_NOT_CONFIGURED', 'AI_MODEL_INVALID',
   'AI_INVALID_RESPONSE',
@@ -14,9 +14,7 @@ export async function persistWhatsAppAIFailure(
 ) {
   if (!(error instanceof AIError) || !recoverable.has(error.code)) return null;
   console.warn('whatsapp_ai_unavailable', { code: error.code, messageId: message.id });
-  const response = error.code === 'AI_QUOTA_DAILY'
-    ? 'Tu empresa alcanzó el límite diario del asistente. Se renueva a medianoche de Chile. No ejecuté esta solicitud. Las consultas y asignaciones que se resuelven directamente siguen disponibles; las que necesitan IA deberán esperar.'
-    : `${error.message}\n\nNo ejecuté esta solicitud. Puedes volver a intentarlo con un mensaje nuevo o enviarlo como texto si era un audio.`;
+  const response = `${error.message}\n\nNo ejecuté esta solicitud. Puedes volver a intentarlo con un mensaje nuevo o enviarlo como texto si era un audio.`;
   const { data, error: saveError } = await sb.rpc('aplicar_lote_copiloto', {
     p_id: message.id, p_empresa: user.empresa_id, p_actor: user.id, p_phone: phone,
     p_texto: items.map(item => item.text?.body || `[${item.type || 'mensaje'} recibido]`).join('\n'),

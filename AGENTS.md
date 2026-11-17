@@ -62,7 +62,7 @@
 - Guardado web mediante `sincronizar_lote_web`: transaccional, con versiones y request_id estable para reintentos. No restaurar escrituras secuenciales ni rebasar conflictos sin una decisión explícita del usuario.
 - Activación de pagos mediante RPCs service_role, después de verificar Flow; no marcar un evento completado antes de activar el plan. Un enrolamiento remoto ambiguo requiere conciliación, nunca repetir a ciegas la creación/cobro.
 - Los límites por plan, importes y pertenencia se comprueban en BD. Las lecturas completas paginan y acotan las listas de IDs.
-- Las rutas IA crean un contexto de consumo; cuotas y reservas se verifican antes de cada llamada pagada. La liberación de cuota es exclusiva del servidor. Nunca desactivar cuotas para resolver un error de configuración.
+- Las rutas IA crean un contexto de consumo y reservas de servidor antes de cada llamada pagada. Por petición explícita del usuario (2026-11-17), ObraBot no tiene topes diarios de llamadas ni unidades, tampoco globales. Conservar los controles de frecuencia/concurrencia, los permisos de plan/rol y la contabilización. Aplicar `20261117_obrabot_unlimited_daily.sql`; no reintroducir avisos de esperar hasta mañana ni límites diarios.
 - Scripts SQL de prueba crean una BD efímera; no ejecutar fixtures con escrituras contra producción. Claves de respaldo y copias con datos personales quedan fuera de Git.
 
 - Preferencia visual del usuario: mantener el naranjo original `#FF6A00` en botones, texto de marca y acentos. No sustituirlo por tonos marrones ni naranjos aclarados durante ajustes de accesibilidad.
