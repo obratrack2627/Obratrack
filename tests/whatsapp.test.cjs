@@ -3,6 +3,7 @@ const { test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const { createHmac } = require("node:crypto");
 const { NextRequest } = require("next/server");
+const { AIError } = require('../lib/ai/errors.ts');
 const {
   canonicalPhone,
   validMetaSignature,
@@ -70,6 +71,25 @@ const event = (messages) => ({
       ],
     },
   ],
+});
+
+test('la cuota diaria responde por WhatsApp, conserva el borrador y no repite IA ni cotizaciones en reintentos',async()=>{
+ const sb=database();
+ const draft={nombre:'Quincho',cliente_nombre:'Cliente'};
+ sb.db.whatsapp_mensajes=[{message_id:'draft-before-quota',empresa_id:user.empresa_id,actor_id:user.id,texto:'Crea Quincho',respuesta:'Faltan datos',borrador_obra:draft,acciones:{rol_actor:'admin',borrador_registro:null}}];
+ let calls=0,params;
+ const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{params=p;return rpc(name,p)};
+ const message={id:'quota-message',from:'56912345678',type:'text',text:{body:'Necesito consultar el avance'}};
+ const deps={chat:async()=>{calls++;throw new AIError('AI_QUOTA_DAILY','Límite diario',429)}};
+ const first=await processPersonalMessage(sb,message,deps);
+ assert.equal(first.persistido,true);assert.match(first.respuesta,/límite diario/);assert.match(first.respuesta,/medianoche de Chile/);assert.equal(first.cotizacion,null);assert.deepEqual(params.p_changed,{});assert.deepEqual(params.p_deleted,{});assert.deepEqual(first.borrador_obra,draft);assert.equal(first.acciones.error_ia,'AI_QUOTA_DAILY');
+ const replay=await processPersonalMessage(sb,message,deps);assert.equal(calls,1);assert.equal(replay.respuesta,first.respuesta);
+});
+test('una nota de voz con IA ocupada recibe un aviso guardado sin inventar la transcripción ni acciones',async()=>{
+ const sb=database();let calls=0,params;const rpc=sb.rpc.bind(sb);sb.rpc=async(name,p)=>{params=p;return rpc(name,p)};
+ const message={id:'audio-unavailable',from:'56912345678',type:'audio',audio:{id:'fake'}};
+ const out=await processPersonalMessage(sb,message,{media:async()=>({mimeType:'audio/ogg',data:'fixture'}),transcribe:async()=>{calls++;throw new AIError('AI_QUOTA_BUSY','Hay consultas en curso.',429)},chat:async()=>{throw Error('No hay transcripción')}});
+ assert.equal(out.persistido,true);assert.match(out.respuesta,/consultas en curso/);assert.match(out.respuesta,/No ejecuté/);assert.equal(out.texto,'[audio recibido]');assert.deepEqual(params.p_changed,{});assert.equal(out.cotizacion,null);assert.equal(calls,1);
 });
 function database() {
   const delivery = require('./helpers/reply-delivery.cjs')();

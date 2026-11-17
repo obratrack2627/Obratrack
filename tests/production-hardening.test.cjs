@@ -4,7 +4,32 @@ const {completeRows,completeProjectRows}=require('../lib/supabase/pagination.ts'
 const {validateFileContent}=require('../lib/supabase/file-validation.ts');
 const admin=require('../lib/supabase/admin.ts');const original=admin.getSupabaseAdmin;
 const {withAIRequest,setAIUsageActor,reserveAIUsage}=require('../lib/ai/usage.ts');
+const {generateOpenAI}=require('../lib/ai/openai-provider.ts');
 afterEach(()=>{admin.getSupabaseAdmin=original;});
+async function providerFixture(fetcher,run){
+ const previousFetch=global.fetch,previousKey=process.env.OPENAI_API_KEY,previousProxy=process.env.NO_PROXY;
+ const calls=[];admin.getSupabaseAdmin=()=>({rpc:async(name,args)=>{calls.push({name,args});return {data:{id:'fixture-reservation'},error:null};}});
+ global.fetch=fetcher;process.env.OPENAI_API_KEY='fixture-key';process.env.NO_PROXY='*';
+ try{return await withAIRequest(async()=>{setAIUsageActor({id:'actor',empresa_id:'company'});return run(calls);})()}
+ finally{global.fetch=previousFetch;if(previousKey===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=previousKey;if(previousProxy===undefined)delete process.env.NO_PROXY;else process.env.NO_PROXY=previousProxy;}
+}
+test('el audio Opus reserva por duración medida y no decenas de miles de unidades por una nota breve',async()=>{
+ await providerFixture(async()=>new Response(JSON.stringify({text:'Avance registrado',usage:{type:'duration',seconds:1}})),async(calls)=>{
+  const text=await generateOpenAI('Transcribe',{image:{mimeType:'audio/ogg',data:fs.readFileSync('tests/fixtures/voice-tone.ogg').toString('base64')}});
+  assert.equal(text,'Avance registrado');assert.equal(calls[0].args.p_tipo,'audio');assert.ok(calls[0].args.p_unidades>0&&calls[0].args.p_unidades<1000);assert.equal(calls[1].args.p_unidades,calls[0].args.p_unidades);
+ });
+});
+test('un rechazo HTTP explícito libera las unidades reservadas sin eliminar el intento',async()=>{
+ await providerFixture(async()=>new Response('',{status:429}),async(calls)=>{
+  await assert.rejects(generateOpenAI('Consulta'),e=>e.code==='AI_RATE_LIMIT');assert.equal(calls.length,2);assert.ok(calls[0].args.p_unidades>0);assert.equal(calls[1].args.p_unidades,0);
+ });
+});
+test('un timeout ambiguo conserva la reserva y un audio inválido no consume una llamada de IA',async()=>{
+ await providerFixture(async()=>{throw new DOMException('timeout','TimeoutError')},async(calls)=>{
+  await assert.rejects(generateOpenAI('Consulta'),e=>e.code==='AI_TIMEOUT');assert.equal(calls[1].args.p_unidades,null);
+  calls.length=0;await assert.rejects(generateOpenAI('Transcribe',{image:{mimeType:'audio/ogg',data:'aW52YWxpZA=='}}),e=>e.code==='AI_AUDIO_INVALID');assert.equal(calls.length,0);
+ });
+});
 test('paginar recupera más de 1000 filas y usa un orden estable en cada página',async()=>{
  const rows=Array.from({length:1501},(_,id)=>({id}));const ranges=[],order=[];
  const result=await completeRows(()=>({order(c){order.push(c);return this;},range(start,end){ranges.push([start,end]);return Promise.resolve({data:rows.slice(start,end+1),error:null});}}));

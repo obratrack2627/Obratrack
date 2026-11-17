@@ -58,7 +58,10 @@ export async function transcriptionFile(media: { mimeType: string; data: string 
   const bytes = Buffer.from(media.data, 'base64');
   if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw invalidAudio();
   if (mime === 'audio/ogg' || mime === 'audio/opus') {
-    try { return { bytes: await opusToWav(bytes, deadline), mime: 'audio/wav', filename: 'nota.wav' }; }
+    try {
+      const wav = await opusToWav(bytes, deadline);
+      return { bytes: wav, mime: 'audio/wav', filename: 'nota.wav', durationSeconds: (wav.byteLength - 44) / 32000 };
+    }
     catch (error) { if (error instanceof AIError) throw error; throw invalidAudio(); }
   }
   const formats: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/mp4': 'mp4', 'audio/m4a': 'm4a', 'audio/x-m4a': 'm4a', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/webm': 'webm', 'audio/flac': 'flac' };

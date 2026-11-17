@@ -39,6 +39,7 @@ import { isMaterialComparison } from "@/lib/materials/types";
 import { contactDatabaseMessage } from '@/lib/ai/contacts';
 import { personIntake } from './person-intake';
 import { createdProjectTeamDraft } from '@/lib/ai/team-assignment';
+import { persistWhatsAppAIFailure } from './ai-failure';
 import { activeWhatsAppProject, workerHistory, projectContextForRole } from './project-context';
 import {
   collectWhatsAppBurst,
@@ -172,6 +173,7 @@ export async function processPersonalMessage(
     }
   };
 
+  const failureContext: { actions: any; draft: any } = { actions: {}, draft: null };
   try {
   const loaded = await loadWhatsAppContext(sb, user, users);
   const { company, tables } = loaded;
@@ -223,6 +225,14 @@ export async function processPersonalMessage(
         : null);
   let nextDraft = pendingProject;
   let candidateDraft: any = null;
+  failureContext.draft = pendingProject;
+  failureContext.actions = {
+    rol_actor: user.rol,
+    proyecto_contexto_id: activeWhatsAppProject(tables.proyectos, '', staleHistory ? [] : history),
+    borrador_registro: pendingPerson,
+    preferencias_conversacion: history[0]?.acciones?.preferencias_conversacion || null,
+    edicion_nombre_pendiente: history[0]?.acciones?.edicion_nombre_pendiente || null,
+  };
 
   const textParts: string[] = [];
   const attachments: any[] = [];
@@ -885,6 +895,16 @@ export async function processPersonalMessage(
   });
   return { ...data, persistido: true };
   } catch (batchError) {
+    try {
+      const unavailable = await persistWhatsAppAIFailure(sb, batchError, user, message, senderPhone, batchItems, failureContext);
+      if (unavailable) {
+        await finalizeBatch(true, unavailable.message_id);
+        return unavailable;
+      }
+    } catch (saveError) {
+      await finalizeBatch(false);
+      throw saveError;
+    }
     await finalizeBatch(false);
     throw batchError;
   }
