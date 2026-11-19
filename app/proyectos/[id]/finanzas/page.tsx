@@ -322,6 +322,9 @@ export default function ProyectoFinanzasPage() {
     setDescImprevisto('');
     setMontoImprevisto('');
     setFotoUrlImprevisto('');
+    setCostCategory('imprevisto');
+    setCostWorker('');
+    setCostPaid(null);
     loadData();
     showToast(`Imprevisto de ${formatCLP(parsed)} registrado.`);
   };
@@ -1311,6 +1314,59 @@ export default function ProyectoFinanzasPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <label htmlFor="nuevo-gasto-categoria" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Categoría
+                  </label>
+                  <select
+                    id="nuevo-gasto-categoria"
+                    value={costCategory || 'imprevisto'}
+                    onChange={(e) => setCostCategory(e.target.value as Imprevisto['categoria_gasto'])}
+                    className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  >
+                    <option value="imprevisto">Imprevisto</option>
+                    <option value="mano_obra">Mano de obra</option>
+                    <option value="gasto_general">Gasto general</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="nuevo-gasto-trabajador" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Trabajador
+                  </label>
+                  <select
+                    id="nuevo-gasto-trabajador"
+                    value={costWorker}
+                    onChange={(e) => setCostWorker(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  >
+                    <option value="">Sin asignar</option>
+                    {(proyecto?.trabajadores?.length ? proyecto.trabajadores : dataService.getUsuarios()).map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="nuevo-gasto-pagado" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Estado pago
+                  </label>
+                  <select
+                    id="nuevo-gasto-pagado"
+                    value={costPaid === true ? 'true' : costPaid === false ? 'false' : ''}
+                    onChange={(e) =>
+                      setCostPaid(e.target.value === 'true' ? true : e.target.value === 'false' ? false : null)
+                    }
+                    className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  >
+                    <option value="">Por confirmar</option>
+                    <option value="true">Pagado</option>
+                    <option value="false">Pendiente de pago</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
                   Fotografía Respaldo (Opcional)
@@ -1412,6 +1468,59 @@ export default function ProyectoFinanzasPage() {
                     onChange={(e) => setEditImpFecha(e.target.value)}
                     className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <label htmlFor="editar-gasto-categoria" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Categoría
+                  </label>
+                  <select
+                    id="editar-gasto-categoria"
+                    value={editCostCategory || 'imprevisto'}
+                    onChange={(e) => setEditCostCategory(e.target.value as Imprevisto['categoria_gasto'])}
+                    className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  >
+                    <option value="imprevisto">Imprevisto</option>
+                    <option value="mano_obra">Mano de obra</option>
+                    <option value="gasto_general">Gasto general</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="editar-gasto-trabajador" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Trabajador
+                  </label>
+                  <select
+                    id="editar-gasto-trabajador"
+                    value={editCostWorker}
+                    onChange={(e) => setEditCostWorker(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  >
+                    <option value="">Sin asignar</option>
+                    {(proyecto?.trabajadores?.length ? proyecto.trabajadores : dataService.getUsuarios()).map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="editar-gasto-pagado" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
+                    Estado pago
+                  </label>
+                  <select
+                    id="editar-gasto-pagado"
+                    value={editCostPaid === true ? 'true' : editCostPaid === false ? 'false' : ''}
+                    onChange={(e) =>
+                      setEditCostPaid(e.target.value === 'true' ? true : e.target.value === 'false' ? false : null)
+                    }
+                    className="w-full px-2.5 py-1.5 bg-kraft-50 border border-kraft-200 rounded-xl text-xs"
+                  >
+                    <option value="">Por confirmar</option>
+                    <option value="true">Pagado</option>
+                    <option value="false">Pendiente de pago</option>
+                  </select>
                 </div>
               </div>
 

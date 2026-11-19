@@ -133,7 +133,7 @@ export async function DELETE(request: NextRequest) {
     const db = getSupabaseAdmin() || client;
     const { data: existing, error: readError } = await db
       .from("whatsapp_mensajes")
-      .select("message_id, empresa_id")
+      .select("message_id, empresa_id, adjunto")
       .eq("empresa_id", user.empresa_id)
       .eq("message_id", messageId)
       .maybeSingle();
@@ -151,6 +151,28 @@ export async function DELETE(request: NextRequest) {
       .eq("message_id", messageId);
     if (deleteError) {
       throw new AIError("WHATSAPP_INBOX", "No se pudo eliminar el reporte. Intenta nuevamente.", 503);
+    }
+
+    // Limpiar archivo en Storage solo si ya no está referenciado por bitácora, documentos ni otros mensajes.
+    const adjPath = typeof existing?.adjunto?.path === "string" ? existing.adjunto.path : "";
+    if (adjPath && adjPath.startsWith(`${user.empresa_id}/`) && db.storage?.from) {
+      try {
+        const evidenceRef = `whatsapp-evidencias:${adjPath}`;
+        const [bitRef, docRef, msgRef] = await Promise.all([
+          db.from("bitacora_entradas").select("id").eq("foto_url", evidenceRef).limit(1),
+          db.from("documentos_obra").select("id").eq("empresa_id", user.empresa_id).eq("archivo_url", evidenceRef).limit(1),
+          db.from("whatsapp_mensajes").select("message_id").eq("empresa_id", user.empresa_id).contains("adjunto", { path: adjPath }).limit(1),
+        ]);
+        const stillReferenced =
+          Boolean(bitRef?.data?.length) ||
+          Boolean(docRef?.data?.length) ||
+          Boolean(msgRef?.data?.length);
+        if (!stillReferenced) {
+          await db.storage.from("whatsapp-evidencias").remove([adjPath]);
+        }
+      } catch {
+        // Limpieza best-effort para no fallar una eliminación ya confirmada.
+      }
     }
 
     await recordSecurityEvent(db, {

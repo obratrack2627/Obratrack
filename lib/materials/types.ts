@@ -43,7 +43,7 @@ export function safeOfferURL(value: unknown): string | undefined {
     if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) return undefined;
     const host = url.hostname;
     const allowed = (["www.easy.cl", "www.dimaco.cl", "www.imperial.cl"].includes(host) && url.pathname.endsWith('/p'))
-      || (host === 'www.sodimac.cl' && /^\/sodimac-cl\/articulo\/\d+\/[a-zA-Z0-9-]+\/?$/.test(url.pathname))
+      || ((host === 'www.sodimac.cl' || host === 'sodimac.falabella.com' || host === 'www.sodimac.falabella.com') && /^\/sodimac-cl\/(?:articulo|product)\/\d+\/[a-zA-Z0-9._%-]+(?:\/\d+)?\/?$/.test(url.pathname))
       || (host === 'www.construmart.cl' && /^\/[a-zA-Z0-9-]+\/?$/.test(url.pathname));
     return allowed ? url.href : undefined;
   } catch {

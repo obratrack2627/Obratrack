@@ -144,7 +144,11 @@ export default function EstadoPagoPdfModal({
     if (registeringRef.current || !onRegistrarPago || resumen.liquidoAPagarConIva <= 0) return;
     registeringRef.current = true;
     try {
-      const glosa = `${resumen.folio} (${resumen.porcentajeAvanceFisico}% avance)${
+      const retencionTag =
+        resumen.retencionMonto > 0
+          ? ` · Retención ${resumen.retencionPorcentaje}% ($${resumen.retencionMonto.toLocaleString('es-CL')})`
+          : '';
+      const glosa = `${resumen.folio} (${resumen.porcentajeAvanceFisico}% avance)${retencionTag}${
         observacionEdp.trim() ? ` - ${observacionEdp.trim()}` : ''
       }`;
       onRegistrarPago(resumen.liquidoAPagarConIva, glosa);

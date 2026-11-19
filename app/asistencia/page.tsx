@@ -51,12 +51,35 @@ export default function ControlAsistenciaGlobalPage() {
     return () => window.removeEventListener('obratrack_cloud_synced', onSync);
   }, []);
 
-  const handleMarcarObraCompleta = (proyectoId: string) => {
+  const handleMarcarObraCompleta = async (proyectoId: string) => {
+    const hoy = chileToday();
+    const fechaObjetivo = fechaFiltro || hoy;
+    if (fechaObjetivo > hoy) {
+      showToast('No puedes marcar asistencia en una fecha futura.');
+      return;
+    }
     try {
-      const regs = dataService.marcarCuadrillaPresente(proyectoId, fechaFiltro, '', '');
+      const regs = dataService.marcarCuadrillaPresente(proyectoId, fechaObjetivo, '', '');
       loadData();
-      showToast(`✅ ${regs.length} obreros marcados presentes en la obra seleccionada.`);
-    } catch(error){showToast(error instanceof Error?error.message:'No se pudo registrar la asistencia.');}
+      if (regs.length === 0) {
+        showToast('No hay trabajadores asignados en esta obra para pasar lista.');
+        return;
+      }
+      try {
+        await dataService.confirmarCambios();
+        showToast(`✅ ${regs.length} obreros marcados presentes en la obra seleccionada.`);
+      } catch (syncError) {
+        showToast(
+          syncError instanceof Error
+            ? syncError.message
+            : `✅ ${regs.length} obreros marcados localmente; pendiente de sincronización.`,
+        );
+      } finally {
+        loadData();
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo registrar la asistencia.');
+    }
   };
 
   const handleExportarConsolidado = () => {
@@ -102,16 +125,23 @@ export default function ControlAsistenciaGlobalPage() {
     return matchEstado && matchQuery;
   });
 
-  const presentesHoy = asistencias.filter(
-    (a) => a.fecha === fechaFiltro && (a.estado === 'presente' || a.estado === 'atraso')
+  const presentesHoy = asistenciasBase.filter(
+    (a) => a.estado === 'presente' || a.estado === 'atraso'
   ).length;
-  const atrasosHoy = asistencias.filter(
-    (a) => a.fecha === fechaFiltro && a.estado === 'atraso'
+  const atrasosHoy = asistenciasBase.filter(
+    (a) => a.estado === 'atraso'
   ).length;
-  const ausenciasHoy = asistencias.filter(
-    (a) => a.fecha === fechaFiltro && (a.estado === 'ausente' || a.estado === 'licencia')
+  const ausenciasHoy = asistenciasBase.filter(
+    (a) => a.estado === 'ausente' || a.estado === 'licencia' || a.estado === 'permiso'
   ).length;
-  const totalHorasMes = asistencias.reduce((acc, a) => acc + (Number(a.horas_trabajadas) || 0), 0);
+  const mesActivo = (fechaFiltro || chileToday()).slice(0, 7);
+  const totalHorasMes = asistencias
+    .filter(
+      (a) =>
+        (obraFiltro === 'todas' || a.proyecto_id === obraFiltro) &&
+        (a.fecha || '').startsWith(mesActivo)
+    )
+    .reduce((acc, a) => acc + (Number(a.horas_trabajadas) || 0), 0);
 
   const activeProjects = proyectos.filter((p) => p.estado === 'activo');
   const presentesPorProyecto = new Map<string, number>();
@@ -302,8 +332,9 @@ export default function ControlAsistenciaGlobalPage() {
                 <input
                   type="date"
                   aria-label="Filtrar por fecha"
+                  max={chileToday()}
                   value={fechaFiltro}
-                  onChange={(e) => setFechaFiltro(e.target.value)}
+                  onChange={(e) => setFechaFiltro(e.target.value || chileToday())}
                   className="bg-transparent text-xs font-mono text-navy-900 dark:text-white focus:outline-none min-w-0"
                 />
               </div>

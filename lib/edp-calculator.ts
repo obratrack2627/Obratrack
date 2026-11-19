@@ -16,6 +16,7 @@ export interface CalculoEstadoPagoInput {
   cambios?: ReclamoCambioObra[];
   montoPersonalizadoConIva?: number;
   retencionPorcentaje?: number;
+  retencionesAcumuladasAnteriores?: number;
 }
 
 export interface ResumenEstadoPago {
@@ -27,6 +28,7 @@ export interface ResumenEstadoPago {
   porcentajeAvanceFisico: number;
   valorAvanceAcumulado: number;
   totalPagadoAnterior: number;
+  totalRetenidoAnterior: number;
   saldoPendienteContrato: number;
   cobroSugeridoSegunAvance: number;
   montoBrutoPeriodoConIva: number;
@@ -38,9 +40,17 @@ export interface ResumenEstadoPago {
   saldoRemanenteTrasEdp: number;
 }
 
+function extractRetencionFromNota(nota?: string | null): number {
+  if (!nota) return 0;
+  const match = /Retenci[oó]n\s+\d+(?:[.,]\d+)?%\s*\(\s*\$?\s*([\d.]+)\s*\)/i.exec(nota);
+  if (!match) return 0;
+  const parsed = Number(match[1].replace(/\./g, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : 0;
+}
+
 /**
  * Calcula de forma determinística el Estado de Pago (EDP) de una obra en CLP (sin decimales),
- * considerando avance físico de Carta Gantt, pagos anteriores, adicionales aprobados, retención opcional e IVA 19%.
+ * considerando avance físico de Carta Gantt, pagos y retenciones anteriores, adicionales/deductivos aprobados, retención opcional e IVA 19%.
  */
 export function calcularEstadoPago(
   input: CalculoEstadoPagoInput,
@@ -52,6 +62,7 @@ export function calcularEstadoPago(
     cambios = [],
     montoPersonalizadoConIva,
     retencionPorcentaje = 0,
+    retencionesAcumuladasAnteriores,
   } = input;
 
   const pagosValidos = pagos.filter(
@@ -72,7 +83,8 @@ export function calcularEstadoPago(
       c.tipo === "solicitud_cambio" &&
       c.ajuste_presupuesto_aplicado === true &&
       c.estado === "aprobado" &&
-      Number(c.impacto_monto) > 0,
+      Number.isFinite(Number(c.impacto_monto)) &&
+      Number(c.impacto_monto) !== 0,
   );
   const adicionalesAprobadosMonto = cambiosAprobados.reduce(
     (sum, c) => sum + Math.round(Number(c.impacto_monto) || 0),
@@ -93,10 +105,21 @@ export function calcularEstadoPago(
     (sum, p) => sum + Math.max(0, Math.round(Number(p.monto) || 0)),
     0,
   );
+  const totalRetenidoAnterior =
+    typeof retencionesAcumuladasAnteriores === "number" &&
+    Number.isFinite(retencionesAcumuladasAnteriores) &&
+    retencionesAcumuladasAnteriores >= 0
+      ? Math.round(retencionesAcumuladasAnteriores)
+      : pagosValidos.reduce((sum, p) => sum + extractRetencionFromNota(p.nota), 0);
+  const totalAcreditadoAnterior = totalPagadoAnterior + totalRetenidoAnterior;
 
   const saldoPendienteContrato = Math.max(
     0,
     montoContratadoVigente - totalPagadoAnterior,
+  );
+  const saldoPendienteAvance = Math.max(
+    0,
+    montoContratadoVigente - totalAcreditadoAnterior,
   );
   const valorAvanceAcumulado = Math.round(
     (montoContratadoVigente * porcentajeAvanceFisico) / 100,
@@ -104,10 +127,10 @@ export function calcularEstadoPago(
 
   const cobroSegunAvanceRaw = Math.max(
     0,
-    valorAvanceAcumulado - totalPagadoAnterior,
+    valorAvanceAcumulado - totalAcreditadoAnterior,
   );
   const cobroSugeridoSegunAvance = Math.min(
-    saldoPendienteContrato,
+    saldoPendienteAvance,
     cobroSegunAvanceRaw,
   );
 
@@ -146,6 +169,7 @@ export function calcularEstadoPago(
     porcentajeAvanceFisico,
     valorAvanceAcumulado,
     totalPagadoAnterior,
+    totalRetenidoAnterior,
     saldoPendienteContrato,
     cobroSugeridoSegunAvance,
     montoBrutoPeriodoConIva: montoBaseSeleccionado,

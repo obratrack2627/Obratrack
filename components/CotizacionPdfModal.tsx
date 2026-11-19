@@ -222,12 +222,12 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
           <p className="quote-intro">A continuación, presentamos nuestra cotización según los requerimientos del proyecto.</p>
           <table className="quote-table" aria-label="Detalle de materiales y partidas">
             <colgroup><col style={{ width: '6.5%' }} /><col style={{ width: '42.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '8%' }} /><col style={{ width: '17%' }} /><col style={{ width: '18.5%' }} /></colgroup>
-            <thead><tr>{['ÍTEM', 'DESCRIPCIÓN', 'UNIDAD', 'CANT.', 'PRECIO UNIT.', 'TOTAL'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+            <thead><tr>{['ÍTEM', 'DESCRIPCIÓN', 'UNIDAD', 'CANT.', 'PRECIO UNIT.', document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
             <tbody>{document.items.map((item, index) => <tr key={index}><td>{String(index + 1).padStart(2, '0')}</td><td><strong>{item.nombre}</strong>{item.descripcion && <small>{item.descripcion}</small>}</td><td>{item.unidad}</td><td>{item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })}</td><td>{quoteMoney(item.precioUnit)}</td><td><strong>{quoteMoney(item.total)}</strong></td></tr>)}</tbody>
           </table>
           <div className="quote-closing">
             <div><section className="quote-notes"><h2 className="quote-section-title"><FileText />OBSERVACIONES</h2><ul>{document.observaciones.map((note) => <li key={note}>{note}</li>)}</ul></section><section><h2 className="quote-section-title"><DollarSign />CONDICIONES DE PAGO</h2><p className="quote-payment">{document.condiciones}</p></section></div>
-            <div><div className="quote-totals"><div><span>SUBTOTAL</span><strong>{quoteMoney(document.subtotal)}</strong></div><div><span>IVA (19%)</span><strong>{quoteMoney(document.iva)}</strong></div><div className="quote-total"><span>TOTAL</span><strong>{quoteMoney(document.total)}</strong></div></div><div className="quote-signature"><div>Firma y sello<strong>{document.emisor.firma || 'ObraTrack'}</strong></div></div></div>
+            <div><div className="quote-totals"><div><span>{document.ivaIncluidoEnPartidas ? 'NETO (DESGLOSE)' : 'SUBTOTAL'}</span><strong>{quoteMoney(document.subtotal)}</strong></div><div><span>{document.ivaIncluidoEnPartidas ? 'IVA INCLUIDO (19%)' : 'IVA (19%)'}</span><strong>{quoteMoney(document.iva)}</strong></div><div className="quote-total"><span>TOTAL</span><strong>{quoteMoney(document.total)}</strong></div></div><div className="quote-signature"><div>Firma y sello<strong>{document.emisor.firma || 'ObraTrack'}</strong></div></div></div>
           </div>
           <footer className="quote-footer">
             <div>

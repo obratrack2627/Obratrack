@@ -202,6 +202,19 @@ export default function Sidebar() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <button
+            type="button"
+            aria-label="Mi perfil"
+            title="Mi perfil y empresa"
+            onClick={() => {
+              setProfileInitialTab('perfil');
+              setProfileOpen(true);
+            }}
+            className="p-1.5 rounded bg-[#2A2A2A] hover:bg-[#353535] text-gray-200 border border-[#3A3A3A]"
+          >
+            <UserCog className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
             aria-label="Ver mi cuenta" onClick={() => setIsPlanModalOpen(true)}
             className="px-2 py-1 rounded bg-[#FF6A00]/20 text-[#FF6A00] border border-[#FF6A00]/40 text-[10px] font-bold font-mono"
           >

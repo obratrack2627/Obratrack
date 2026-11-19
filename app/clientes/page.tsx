@@ -191,9 +191,13 @@ export default function ClientesPage() {
     }
 
     const activeUser = dataService.getActiveUser();
+    if (!activeUser?.empresa_id) {
+      showToast('Inicia sesión nuevamente para registrar clientes.');
+      return;
+    }
 
     const created = dataService.createCliente({
-      empresa_id: activeUser?.empresa_id || 'e1111111-1111-4111-a111-111111111111',
+      empresa_id: activeUser.empresa_id,
       nombre: nombre.trim(),
       telefono: checked.phoneValue,
       email: email.trim(),
@@ -533,27 +537,34 @@ export default function ClientesPage() {
         </div>
 
         {/* Listado de Clientes */}
-        {filteredClientes.length === 0 ? (
+        {filteredClientes.length === 0 ? (() => {
+          const hasFilters = Boolean(searchTerm.trim() || statusFilter !== 'todos');
+          return (
           <div className="bg-white dark:bg-[#141A23] border-2 border-dashed border-[#E5DFC9] dark:border-[#263040] rounded-3xl p-10 text-center max-w-xl mx-auto space-y-4">
             <div className="w-16 h-16 rounded-3xl bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] flex items-center justify-center mx-auto text-[#FF6A00]">
               <Building className="w-8 h-8" />
             </div>
             <div>
               <h3 className="font-heading font-black text-xl text-[#1E1E1E] dark:text-white">
-                {searchTerm ? 'No se encontraron clientes' : 'No tienes clientes registrados aún'}
+                {hasFilters ? 'No se encontraron clientes' : 'No tienes clientes registrados aún'}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 font-sans mt-1.5 max-w-md mx-auto leading-relaxed">
-                {searchTerm
-                  ? `No hay coincidencias para "${searchTerm}". Prueba con otro término.`
+                {searchTerm.trim()
+                  ? `No hay coincidencias para "${searchTerm}". Prueba con otro término o limpia los filtros.`
+                  : statusFilter !== 'todos'
+                  ? 'Ningún cliente coincide con el estado seleccionado.'
                   : 'Agrega mandantes o personas particulares para asociarlos a tus cotizaciones y obras.'}
               </p>
             </div>
-            {searchTerm ? (
+            {hasFilters ? (
               <button
-                onClick={() => setSearchTerm('')}
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('todos');
+                }}
                 className="px-4 py-2 bg-kraft-100 hover:bg-kraft-200 dark:bg-[#1E2530] dark:hover:bg-[#263040] text-navy-900 dark:text-white text-xs font-bold rounded-xl transition-all font-heading"
               >
-                Limpiar búsqueda
+                Limpiar filtros
               </button>
             ) : (
               <button
@@ -565,7 +576,8 @@ export default function ClientesPage() {
               </button>
             )}
           </div>
-        ) : viewMode === 'list' ? (
+          );
+        })() : viewMode === 'list' ? (
           /* Vista Minimalista en Lista (estilo Planes y Suscripción) */
           <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">

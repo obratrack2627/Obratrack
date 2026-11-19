@@ -160,7 +160,7 @@ export default function ChangeApprovalModal({
             Entrega: <strong>{formatDate(next)}</strong>
           </p>
           <p>
-            {item.materiales_requeridos.length} materiales por incorporar a la
+            {(item.materiales_requeridos || []).length} materiales por incorporar a la
             obra.
           </p>
         </div>

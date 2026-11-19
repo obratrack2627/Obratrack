@@ -91,6 +91,7 @@ export default function ProjectCrewPage() {
   const params = useParams();
   const projectId = params?.id as string;
   const [project, setProject] = useState<Proyecto | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [users, setUsers] = useState<Usuario[]>([]);
   const [records, setRecords] = useState<AsistenciaObrero[]>([]);
   const [revision, setRevision] = useState(0);
@@ -117,13 +118,32 @@ export default function ProjectCrewPage() {
     setUsers(dataService.getUsuarios());
     setRecords(dataService.getAsistencias(projectId));
     setRevision((value) => value + 1);
+    setLoaded(true);
   }, [projectId]);
   useEffect(() => {
     refresh();
     window.addEventListener("obratrack_cloud_synced", refresh);
     return () => window.removeEventListener("obratrack_cloud_synced", refresh);
   }, [refresh]);
-  if (!project) return <div className="p-6">Cargando cuadrilla…</div>;
+  if (!loaded) return <div className="p-6">Cargando cuadrilla…</div>;
+  if (!project) {
+    return (
+      <div className="p-6 max-w-lg mx-auto my-12 text-center space-y-3 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl">
+        <h2 className="text-lg font-heading font-bold text-navy-900 dark:text-white">
+          Obra no encontrada
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          La obra seleccionada no existe o tu cuenta no tiene acceso a ella.
+        </p>
+        <Link
+          href="/proyectos"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FF6A00] text-white text-xs font-bold"
+        >
+          Volver a Obras y Proyectos
+        </Link>
+      </div>
+    );
+  }
   const crew = assignedCrew(project, users);
   const daily = records.filter((row) => row.fecha === date);
   const attendance = (user: Usuario) => crewAttendance(user, daily, users);

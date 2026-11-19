@@ -18,6 +18,7 @@ import {
   scheduleBounds,
   todayDay,
 } from "@/lib/gantt/timeline";
+import { projectProgress } from "@/lib/work-calendar";
 import ModalOverlay from "./ModalOverlay";
 import ActivityEditor from "./ActivityEditor";
 import GanttTimeline from "./GanttTimeline";
@@ -86,19 +87,7 @@ export default function GanttChart({
     terminada: ordered.filter((a) => a.estado === "terminada").length,
   };
   const bounds = scheduleBounds(ordered);
-  const totalDays = ordered.reduce(
-    (sum, activity) => sum + (activityDates(activity)?.days || 1),
-    0,
-  );
-  const weighted = totalDays
-    ? ordered.reduce(
-        (sum, activity) =>
-          sum +
-          progressValue(activity.porcentaje_avance) *
-            (activityDates(activity)?.days || 1),
-        0,
-      ) / totalDays
-    : 0;
+  const weighted = projectProgress(ordered).percentage;
   const overall = Math.round(progressValue(progress ?? weighted));
   const quickProgress = (activity: Actividad, value: number) => {
     const next = progressValue(value);

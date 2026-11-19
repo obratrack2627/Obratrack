@@ -133,7 +133,7 @@ export default function EquipoPage() {
     setEditEspecialidades((user.especialidades || []).join(", "));
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
     if (!editNombre.trim()) {
@@ -195,9 +195,21 @@ export default function EquipoPage() {
       is_dev: editingUser.is_dev,
     });
 
+    const savedName = editNombre.trim();
     setEditingUser(null);
     loadData();
-    showToast(`Datos de "${editNombre.trim()}" actualizados con éxito.`);
+    try {
+      await dataService.confirmarCambios();
+      showToast(`Datos de "${savedName}" actualizados con éxito.`);
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : `Datos de "${savedName}" guardados localmente; pendientes de sincronización.`,
+      );
+    } finally {
+      loadData();
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -655,7 +667,7 @@ export default function EquipoPage() {
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
-                          {user.rol !== 'admin' && (
+                          {user.rol !== 'admin' && !user.auth_user_id && !user.is_dev && (
                             <button
                               type="button"
                               onClick={() => setUserToDelete(user)}
@@ -722,7 +734,7 @@ export default function EquipoPage() {
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
-                        {user.rol !== 'admin' && (
+                        {user.rol !== 'admin' && !user.auth_user_id && !user.is_dev && (
                           <button
                             type="button"
                             onClick={() => setUserToDelete(user)}
@@ -748,6 +760,9 @@ export default function EquipoPage() {
                               masked={maskPhone(cleanPhone)}
                               label={`teléfono de ${user.nombre}`}
                               href={`tel:+${cleanPhone}`}
+                              actionHref={`https://wa.me/${cleanPhone}`}
+                              actionLabel="WhatsApp"
+                              actionTitle="Abrir chat de WhatsApp"
                               resourceType="usuario"
                               resourceId={user.id}
                               fieldName="telefono_whatsapp"
@@ -756,18 +771,6 @@ export default function EquipoPage() {
                             <span className="text-gray-400">Sin teléfono</span>
                           )}
                         </div>
-                        {cleanPhone && (
-                          <a
-                            href={`https://wa.me/${cleanPhone}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50 rounded text-[10px] font-bold flex items-center gap-1 shrink-0 transition-colors"
-                            title="Abrir chat de WhatsApp"
-                          >
-                            <MessageSquare className="w-3 h-3" />
-                            <span>WhatsApp</span>
-                          </a>
-                        )}
                       </div>
 
                       <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
@@ -991,11 +994,11 @@ export default function EquipoPage() {
 
               <div>
                 <label className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1" htmlFor="equipo-editTelefono">
-                  Teléfono WhatsApp (formato E.164) *
+                  Teléfono WhatsApp (opcional, formato E.164)
                 </label>
                 <input
- id="equipo-editTelefono"                  type="tel"
-                  required
+                  id="equipo-editTelefono"
+                  type="tel"
                   value={editTelefono}
                   onChange={(e) => setEditTelefono(e.target.value)}
                   className="w-full px-3.5 py-2 bg-kraft-50 border border-kraft-200 rounded-xl text-xs font-mono focus:outline-none focus:border-obra-orange"

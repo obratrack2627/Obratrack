@@ -1,5 +1,6 @@
 import { dataService, DataService } from './data-service';
 import { getCoordenadasComuna, REGIONES_CHILE } from './chile-locations';
+import { addWorkingDays } from './work-calendar';
 import type {
   Cliente,
   CotizacionEstimacion,
@@ -124,10 +125,9 @@ export function convertirPresupuestoEnObra(
     1
   );
 
+  const diasLaborales = [1, 2, 3, 4, 5];
   const fechaInicio = options?.fechaInicio || new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Santiago' }).format(new Date());
-  const terminoDate = new Date(`${fechaInicio}T12:00:00`);
-  terminoDate.setDate(terminoDate.getDate() + duracionTotal);
-  const fechaTermino = terminoDate.toISOString().split('T')[0];
+  const fechaTermino = addWorkingDays(fechaInicio, duracionTotal, diasLaborales, []);
 
   const rawTotalConIva = Number(cotizacion.estructura_financiera?.precio_total_con_iva);
   const montoTotalConIva = Number.isFinite(rawTotalConIva) && rawTotalConIva >= 0 ? rawTotalConIva : 0;

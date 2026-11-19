@@ -50,6 +50,30 @@ export async function GET(request: NextRequest) {
         if (!error && data) allowed = true;
       }
     }
+    if (!allowed) {
+      // Si el mensaje de bandeja fue eliminado, permitir acceso si la evidencia sigue vinculada a bitácora o documentos autorizados.
+      const evidenceRef = `whatsapp-evidencias:${path}`;
+      const [{ data: bitRows }, { data: docRows }] = await Promise.all([
+        client.from("bitacora_entradas").select("proyecto_id").eq("foto_url", evidenceRef).limit(5),
+        client.from("documentos_obra").select("proyecto_id").eq("empresa_id", user.empresa_id).eq("archivo_url", evidenceRef).limit(5),
+      ]);
+      const linkedProjects = Array.from(
+        new Set([...(bitRows || []), ...(docRows || [])].map((r: any) => r.proyecto_id).filter(Boolean)),
+      );
+      if (linkedProjects.length > 0) {
+        if (["admin", "supervisor"].includes(user.rol)) {
+          allowed = true;
+        } else if (user.rol === "terreno") {
+          const { data: assignment } = await client
+            .from("proyecto_trabajadores")
+            .select("usuario_id")
+            .eq("usuario_id", user.id)
+            .in("proyecto_id", linkedProjects)
+            .limit(1);
+          if (assignment?.length) allowed = true;
+        }
+      }
+    }
     if (!allowed)
       throw new AIError(
         "IMAGE_FORBIDDEN",

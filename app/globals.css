@@ -170,66 +170,66 @@ html[data-mobile-nav-open] .obrabot-launcher {
   color: #222A37 !important;
 }
 
-/* Soporte Dark Mode automático para elementos estándar (excluyendo .pdf-paper) */
-.dark .bg-white:where(:not(.pdf-paper):not(.pdf-paper *)) {
+/* Soporte Dark Mode automático para elementos estándar sin variantes dark:* explícitas (excluyendo .pdf-paper) */
+.dark .bg-white:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:bg-"])) {
   background-color: #141A23 !important;
 }
 
-.dark .bg-kraft-50:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .bg-kraft-100:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .bg-gray-50:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .bg-slate-50:where(:not(.pdf-paper):not(.pdf-paper *)) {
+.dark .bg-kraft-50:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:bg-"])),
+.dark .bg-kraft-100:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:bg-"])),
+.dark .bg-gray-50:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:bg-"])),
+.dark .bg-slate-50:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:bg-"])) {
   background-color: #0F141C !important;
 }
 
-.dark .bg-gray-100:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .bg-slate-100:where(:not(.pdf-paper):not(.pdf-paper *)) {
+.dark .bg-gray-100:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:bg-"])),
+.dark .bg-slate-100:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:bg-"])) {
   background-color: #1A2230 !important;
 }
 
-.dark .bg-\[\#FAF8F5\]:where(:not(.pdf-paper):not(.pdf-paper *)) {
+.dark .bg-\[\#FAF8F5\]:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:bg-"])) {
   background-color: #0B0E14 !important;
 }
 
-.dark .border-kraft-100:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .border-kraft-200:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .border-\[\#E5DFC9\]:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .border-gray-100:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .border-gray-200:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .border-slate-200:where(:not(.pdf-paper):not(.pdf-paper *)) {
+.dark .border-kraft-100:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:border-"])),
+.dark .border-kraft-200:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:border-"])),
+.dark .border-\[\#E5DFC9\]:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:border-"])),
+.dark .border-gray-100:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:border-"])),
+.dark .border-gray-200:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:border-"])),
+.dark .border-slate-200:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:border-"])) {
   border-color: #263040 !important;
 }
 
-.dark .divide-gray-100:where(:not(.pdf-paper):not(.pdf-paper *)) > :not([hidden]) ~ :not([hidden]),
-.dark .divide-gray-200:where(:not(.pdf-paper):not(.pdf-paper *)) > :not([hidden]) ~ :not([hidden]),
-.dark .divide-kraft-100:where(:not(.pdf-paper):not(.pdf-paper *)) > :not([hidden]) ~ :not([hidden]),
-.dark .divide-kraft-200:where(:not(.pdf-paper):not(.pdf-paper *)) > :not([hidden]) ~ :not([hidden]) {
+.dark .divide-gray-100:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:divide-"])) > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-200:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:divide-"])) > :not([hidden]) ~ :not([hidden]),
+.dark .divide-kraft-100:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:divide-"])) > :not([hidden]) ~ :not([hidden]),
+.dark .divide-kraft-200:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:divide-"])) > :not([hidden]) ~ :not([hidden]) {
   border-color: #263040 !important;
 }
 
-.dark .text-navy-900:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .text-navy-800:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .text-\[\#1E1E1E\]:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .text-gray-900:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .text-slate-900:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .text-black:where(:not(.pdf-paper):not(.pdf-paper *)) {
+.dark .text-navy-900:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])),
+.dark .text-navy-800:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])),
+.dark .text-\[\#1E1E1E\]:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])),
+.dark .text-gray-900:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])),
+.dark .text-slate-900:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])),
+.dark .text-black:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])) {
   color: #F9FAFB !important;
 }
 
-.dark .text-gray-800:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .text-slate-800:where(:not(.pdf-paper):not(.pdf-paper *)) {
+.dark .text-gray-800:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])),
+.dark .text-slate-800:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])) {
   color: #E5E7EB !important;
 }
 
-.dark .text-gray-700:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .text-gray-600:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .text-slate-700:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .text-slate-600:where(:not(.pdf-paper):not(.pdf-paper *)) {
+.dark .text-gray-700:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])),
+.dark .text-gray-600:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])),
+.dark .text-slate-700:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])),
+.dark .text-slate-600:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])) {
   color: #D1D5DB !important;
 }
 
-.dark .text-gray-500:where(:not(.pdf-paper):not(.pdf-paper *)),
-.dark .text-slate-500:where(:not(.pdf-paper):not(.pdf-paper *)) {
+.dark .text-gray-500:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])),
+.dark .text-slate-500:where(:not(.pdf-paper):not(.pdf-paper *):not([class*="dark:text-"])) {
   color: #9CA3AF !important;
 }
 

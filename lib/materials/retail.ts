@@ -10,9 +10,9 @@ export function sodimacProducts(html: string) {
     const amount = /^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(raw) ? Number(raw.replace(/\./g, '')) : 0;
     const link = (() => {
       const raw = typeof p.url === 'string' ? p.url.trim() : '';
-      const falabella = /^https?:\/\/(?:www\.)?falabella\.com\/falabella-cl\/product\/([^?#]+)/i.exec(raw);
+      const falabella = /^https?:\/\/(?:www\.)?(?:(?:sodimac\.)?falabella\.com\/(?:falabella|sodimac)-cl|sodimac\.cl\/sodimac-cl)\/(?:product|articulo)\/([^?#]+)/i.exec(raw);
       if (falabella) {
-        const parts = falabella[1].replace(/^\/+|\/+$/g, '').split('/');
+        const parts = falabella[1].replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
         const slug = parts.length >= 2 && /^\d+$/.test(parts[parts.length - 1]) && parts.length > 2 ? parts.slice(0, 2).join('/') : parts.join('/');
         return `https://www.sodimac.cl/sodimac-cl/articulo/${slug}`;
       }

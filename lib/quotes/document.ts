@@ -90,6 +90,7 @@ export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDo
     },
     proyecto: { nombre: quote.titulo_proyecto, ubicacion: quote.comuna_region || 'Por definir', descripcion: [quote.nombre_alternativa ? `Alternativa: ${quote.nombre_alternativa}` : '', quote.resumen_ejecutivo || 'Según detalle de partidas.'].filter(Boolean).join('\n') },
     items,
+    ivaIncluidoEnPartidas: quote.modo_presupuesto === 'precio_acordado' && quote.tratamiento_iva === 'incluido',
     subtotal: f.precio_sugerido_neto,
     iva: f.iva_19,
     total: f.precio_total_con_iva,

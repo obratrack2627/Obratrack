@@ -9,7 +9,10 @@ export async function POST(
   const params = await parameters;
   try {
     const { client, user } = await authorizeAI(request);
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new AIError("INVALID_REQUEST", "Revisa los datos enviados para aprobar el cambio.", 400);
+    }
     const current = await client
       .from("reclamos_cambios_obra")
       .select("id,titulo")
@@ -28,14 +31,23 @@ export async function POST(
       p_presupuesto: body.ajustar_presupuesto === true,
       p_plazo: body.ajustar_plazo === true,
       p_reprogramar: body.reprogramar === true,
-      p_respaldo: body.respaldo_mandante || "",
+      p_respaldo: typeof body.respaldo_mandante === "string" ? body.respaldo_mandante : "",
     });
-    if (result.error)
+    if (result.error) {
+      const msg = String(result.error.message || "");
+      const status = msg.includes("FORBIDDEN")
+        ? 403
+        : msg.includes("NOT_FOUND")
+          ? 404
+          : result.error.code === "22P02" || msg.includes("INVALID")
+            ? 422
+            : 409;
       throw new AIError(
         "CHANGE_SAVE",
         "No se pudo confirmar la resolución. Reintenta; no se duplicarán los materiales.",
-        409,
+        status,
       );
+    }
     notifyPushOnChangeApproval(client, {
       empresaId: user.empresa_id,
       projectId: params.id,

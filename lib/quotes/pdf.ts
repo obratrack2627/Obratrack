@@ -107,7 +107,7 @@ export function createQuotePdf(document: QuoteDocument) {
     startY: bottom + 10,
     margin: { left: MARGIN, right: MARGIN, top: 27, bottom: 23 },
     tableWidth: WIDTH,
-    head: [['ÍTEM', 'DESCRIPCIÓN', 'UNIDAD', 'CANT.', 'PRECIO UNIT.', 'TOTAL']],
+    head: [['ÍTEM', 'DESCRIPCIÓN', 'UNIDAD', 'CANT.', 'PRECIO UNIT.', document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL']],
     body,
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2.2, lineColor: '#E8E8E8', lineWidth: 0.15, textColor: INK, overflow: 'linebreak', valign: 'middle' },
@@ -132,7 +132,10 @@ export function createQuotePdf(document: QuoteDocument) {
   // Totales y firma ocupan la derecha; el texto puede continuar en otra página.
   const tx = 111;
   pdf.setFillColor('#F7F7F6').rect(tx, y, 87, 16, 'F');
-  for (const [label, value, dy] of [['SUBTOTAL', document.subtotal, 6], ['IVA (19%)', document.iva, 12]] as [string, number, number][]) {
+  const breakdownRows: [string, number, number][] = document.ivaIncluidoEnPartidas
+    ? [['NETO (DESGLOSE)', document.subtotal, 6], ['IVA INCLUIDO (19%)', document.iva, 12]]
+    : [['SUBTOTAL', document.subtotal, 6], ['IVA (19%)', document.iva, 12]];
+  for (const [label, value, dy] of breakdownRows) {
     pdf.setFont('helvetica', 'normal').setFontSize(8).setTextColor(INK).text(label, tx + 4, y + dy);
     pdf.text(quoteMoney(value), 194, y + dy, { align: 'right' });
   }

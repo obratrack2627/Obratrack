@@ -65,10 +65,11 @@ function resolveCanonicalClient(
     const rawNorm = normText(cot.cliente_nombre);
     matched = clients.find((c) => normText(c.nombre) === rawNorm);
     if (!matched) {
-      const firstToken = rawNorm.split(/\s+/)[0] || "";
-      if (firstToken.length >= 4) {
+      const tokens = rawNorm.split(/\s+/).filter(Boolean);
+      // Solo coincidir por primer nombre si la cotización ingresó un único nombre (sin apellido distinto).
+      if (tokens.length === 1 && tokens[0].length >= 4) {
         const byFirst = clients.filter(
-          (c) => (normText(c.nombre).split(/\s+/)[0] || "") === firstToken,
+          (c) => (normText(c.nombre).split(/\s+/)[0] || "") === tokens[0],
         );
         if (byFirst.length === 1) matched = byFirst[0];
       }

@@ -472,7 +472,9 @@ export async function POST(request: NextRequest) {
               fecha_inicio: a.fecha_inicio,
               fecha_termino: a.fecha_termino,
               porcentaje_avance: Number(a.porcentaje_avance) || 0,
-              monto_contratado: a.monto_contratado ?? tables.actividades.find((row:any)=>row.id===a.id)?.monto_contratado ?? null,
+              monto_contratado: Object.hasOwn(a, "monto_contratado")
+                ? (a.monto_contratado ?? null)
+                : (tables.actividades.find((row: any) => row.id === a.id)?.monto_contratado ?? null),
               estado: ["pendiente", "en_curso", "terminada"].includes(a.estado)
                 ? a.estado
                 : "pendiente",

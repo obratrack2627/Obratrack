@@ -320,12 +320,15 @@ export async function processOutbox(
         }),
       );
     } catch (error) {
+      const isTransientAIError =
+        error instanceof AIError && (error.status === 429 || error.status >= 500);
       const e =
         error instanceof DispatchError
           ? error
           : new DispatchError(
               error instanceof AIError ? error.code : "ENVIO_SIN_CONFIRMACION",
               !(error instanceof AIError),
+              isTransientAIError,
             );
       const retry = e.transient && job.reintentos < 4;
       await update(job, {
@@ -356,8 +359,25 @@ export async function processOutbox(
       });
     }
   };
-  for (let i = 0; i < jobs.length; i += 3)
-    await Promise.all(jobs.slice(i, i + 3).map(run));
+  for (let i = 0; i < jobs.length; i += 3) {
+    const batch = jobs.slice(i, i + 3);
+    const settled = await Promise.allSettled(batch.map(run));
+    for (let idx = 0; idx < settled.length; idx += 1) {
+      if (settled[idx].status === "rejected") {
+        const failedJob = batch[idx];
+        try {
+          await update(failedJob, {
+            estado: "pendiente",
+            proximo_intento: new Date(Date.now() + 60000).toISOString(),
+            error_codigo: "PROCESO_INTERRUMPIDO",
+            error_detalle: "El envío se reintentará automáticamente.",
+          });
+        } catch {
+          // Best-effort para evitar trabajos atrapados en 'procesando'.
+        }
+      }
+    }
+  }
   // Continuar la cola por lotes sin esperar el siguiente minuto del cron.
   if (jobs.length === 6) {
     const next = await sb.rpc("solicitar_proceso_avisos");

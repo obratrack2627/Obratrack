@@ -164,9 +164,13 @@ export default function ProyectosPage() {
   const totalCobrado = proyectosActivos.reduce((sum, p) => sum + (Number(p.total_pagado) || 0), 0);
   const porCobrar = Math.max(0, cotizadoTotal - totalCobrado);
 
-  const handleCreateProject = (e: React.FormEvent) => {
+  const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombre.trim()) return;
+    if (fechaInicio && fechaTermino && fechaTermino < fechaInicio) {
+      setCreateError('La fecha de término estimada no puede ser anterior a la fecha de inicio.');
+      return;
+    }
 
     // Procesar actividades iniciales
     const initialActivities = actividadesTexto
@@ -174,9 +178,9 @@ export default function ProyectosPage() {
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => {
-        const daysMatch = line.match(/\((\d+)\s*d[ií]as?\)/i);
-        const dias = daysMatch ? parseInt(daysMatch[1], 10) : 7;
-        const cleanName = line.replace(/\(\d+\s*d[ií]as?\)/i, '').trim();
+        const daysMatch = line.match(/\((\d+)(?:\s*d[ií]as?)?\)/i);
+        const dias = daysMatch ? Math.max(1, parseInt(daysMatch[1], 10)) : 7;
+        const cleanName = line.replace(/\(\d+(?:\s*d[ií]as?)?\)/i, '').trim();
         return { nombre: cleanName || line, dias };
       });
 
@@ -228,6 +232,7 @@ export default function ProyectosPage() {
         initialActivities
       );
 
+      const createdName = nombre.trim();
       setIsModalOpen(false);
       setNombre('');
       setClienteId('');
@@ -239,9 +244,20 @@ export default function ProyectosPage() {
       setLugarReferencia('');
       setMontoCotizado('');
       setSelectedTrabajadores([]);
-      setToastMessage(`Obra "${nombre.trim()}" creada con ubicación geográfica exitosamente.`);
       loadData();
-      setTimeout(() => setToastMessage(null), 3000);
+      try {
+        await dataService.confirmarCambios();
+        setToastMessage(`Obra "${createdName}" creada con ubicación geográfica exitosamente.`);
+      } catch (syncErr) {
+        setToastMessage(
+          syncErr instanceof Error
+            ? syncErr.message
+            : `Obra "${createdName}" creada localmente; pendiente de sincronización.`,
+        );
+      } finally {
+        loadData();
+        setTimeout(() => setToastMessage(null), 3500);
+      }
     } catch (err: any) {
       setCreateError(err.message || 'Error al crear la obra.');
     }
@@ -275,6 +291,10 @@ export default function ProyectosPage() {
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProject || !editNombre.trim() || savingEdit) return;
+    if (editFechaInicio && editFechaTermino && editFechaTermino < editFechaInicio) {
+      setEditError('La fecha de término estimada no puede ser anterior a la fecha de inicio.');
+      return;
+    }
     setSavingEdit(true);
     setEditError('');
     try {
@@ -352,13 +372,25 @@ export default function ProyectosPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!projectToDelete) return;
+    const deletedName = projectToDelete.nombre;
     dataService.deleteProyecto(projectToDelete.id);
-    setToastMessage(`Obra "${projectToDelete.nombre}" eliminada exitosamente.`);
     setProjectToDelete(null);
     loadData();
-    setTimeout(() => setToastMessage(null), 3000);
+    try {
+      await dataService.confirmarCambios();
+      setToastMessage(`Obra "${deletedName}" eliminada exitosamente.`);
+    } catch (error) {
+      setToastMessage(
+        error instanceof Error
+          ? error.message
+          : `Eliminación de "${deletedName}" pendiente de sincronización.`,
+      );
+    } finally {
+      loadData();
+      setTimeout(() => setToastMessage(null), 3500);
+    }
   };
 
   const toggleTrabajadorSelection = (userId: string, isEditing: boolean = false) => {
@@ -1073,7 +1105,6 @@ export default function ProyectosPage() {
                       return (
                         <label
                           key={u.id}
-                          onClick={() => toggleTrabajadorSelection(u.id, false)}
                           className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer text-xs transition-colors select-none ${
                             isChecked ? 'bg-white border border-[#FF6A00] shadow-sm' : 'hover:bg-white/70'
                           }`}
@@ -1081,7 +1112,7 @@ export default function ProyectosPage() {
                           <input
                             type="checkbox"
                             checked={isChecked}
-                            onChange={() => {}}
+                            onChange={() => toggleTrabajadorSelection(u.id, false)}
                             className="rounded text-[#FF6A00] focus:ring-0"
                           />
                           <div className="overflow-hidden">
@@ -1172,10 +1203,10 @@ export default function ProyectosPage() {
                 />
                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                   {[
-                    'Preparación de terreno (2)',
-                    'Obra gruesa / Estructura (5)',
-                    'Instalaciones (3)',
-                    'Terminaciones y entrega (3)',
+                    'Preparación de terreno (2 días)',
+                    'Obra gruesa / Estructura (5 días)',
+                    'Instalaciones (3 días)',
+                    'Terminaciones y entrega (3 días)',
                   ].map((preset) => (
                     <button
                       key={preset}
@@ -1309,7 +1340,6 @@ export default function ProyectosPage() {
                       return (
                         <label
                           key={u.id}
-                          onClick={() => toggleTrabajadorSelection(u.id, true)}
                           className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer text-xs transition-colors select-none ${
                             isChecked ? 'bg-white border border-[#FF6A00] shadow-sm' : 'hover:bg-white/70'
                           }`}
@@ -1317,7 +1347,7 @@ export default function ProyectosPage() {
                           <input
                             type="checkbox"
                             checked={isChecked}
-                            onChange={() => {}}
+                            onChange={() => toggleTrabajadorSelection(u.id, true)}
                             className="rounded text-[#FF6A00] focus:ring-0"
                           />
                           <div className="overflow-hidden">

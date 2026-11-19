@@ -96,7 +96,7 @@ export async function PATCH(request: NextRequest) {
     if (Object.hasOwn(body, "estado")) updates.estado = body.estado;
     if (Object.hasOwn(body, "cotizacion")) {
       const { data: current, error: readError } = await client.from("presupuestos")
-        .select("cotizacion").eq("empresa_id", user.empresa_id).eq("id", body.id).maybeSingle();
+        .select("cotizacion").eq("empresa_id", user.empresa_id).eq("id", existing.id).maybeSingle();
       if (readError) throw new AIError("BUDGET_READ", "No se pudo consultar el presupuesto guardado.", 503);
       if (!current) throw new AIError("BUDGET_FORBIDDEN", "El presupuesto no está disponible para tu cuenta.", 403);
       if (body.cotizacion?.id !== current.cotizacion.id) throw new AIError("INVALID_REQUEST", "La cotización no corresponde al presupuesto.", 400);
@@ -132,7 +132,7 @@ export async function PATCH(request: NextRequest) {
     const { data, error } = await client
       .from("presupuestos")
       .update(updates)
-      .eq("id", body.id)
+      .eq("id", existing.id)
       .eq("empresa_id", user.empresa_id)
       .eq("updated_at", body.updated_at)
       .select("*")
