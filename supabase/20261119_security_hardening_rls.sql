@@ -8,6 +8,7 @@
 BEGIN;
 
 -- 1. Endurecer INSERT en security_audit_logs: exige que actor_id corresponda al usuario autenticado
+-- Usa get_auth_empresa_id() y get_auth_usuario_id() (SECURITY DEFINER) para no chocar con RLS restrictivo de usuarios.
 DROP POLICY IF EXISTS "rls_security_audit_logs_insert_tenant" ON public.security_audit_logs;
 CREATE POLICY "rls_security_audit_logs_insert_tenant"
   ON public.security_audit_logs
@@ -17,15 +18,10 @@ CREATE POLICY "rls_security_audit_logs_insert_tenant"
     OR (
       empresa_id = public.get_auth_empresa_id()
       AND actor_id IS NOT NULL
-      AND EXISTS (
-        SELECT 1
-        FROM public.usuarios u
-        WHERE u.id = actor_id
-          AND u.empresa_id = public.get_auth_empresa_id()
-          AND (u.auth_user_id = auth.uid()::text OR u.id = auth.uid()::text)
-      )
+      AND actor_id = public.get_auth_usuario_id()
     )
   );
+GRANT SELECT, INSERT ON public.security_audit_logs TO authenticated;
 
 -- 2. Alinear mask_rut, mask_phone y mask_email con lib/privacy/mask.ts y fijar search_path
 CREATE OR REPLACE FUNCTION public.mask_rut(raw_rut TEXT)
