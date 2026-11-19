@@ -136,29 +136,79 @@ test("buildWhatsAppInteractivePayload cubre menú de obra por rol, foto ambigua 
   assert.equal(photoMenu.kind, "buttons");
   assert.deepEqual(photoMenu.buttons.map((b) => b.id), ["ot:photo:progress", "ot:photo:incident", "ot:photo:doc"]);
 
-  // Avance registrado por admin -> botones Cierre diario PDF / Ver pendientes
+  // Avance registrado por admin -> botones Cierre diario PDF / Ver pendientes / Más acciones
   const afterProgress = buildWhatsAppInteractivePayload(
     { acciones: { tipo: "actualizar_avance", proyecto_contexto_id: "p-1" } },
     { role: "admin" },
   );
   assert.equal(afterProgress.kind, "buttons");
-  assert.deepEqual(afterProgress.buttons.map((b) => b.id), ["ot:act:close", "ot:act:gantt"]);
+  assert.deepEqual(afterProgress.buttons.map((b) => b.id), ["ot:act:close", "ot:act:gantt", "ot:act:menu"]);
 
-  // Consulta de asistencia por admin -> Todos presentes / Ver partidas
+  // Consulta de asistencia por admin -> Todos presentes / Ver partidas / Más acciones
   const afterAttendance = buildWhatsAppInteractivePayload(
     { acciones: { proyecto_contexto_id: "p-1" } },
     { role: "admin", userText: "Muéstrame la asistencia de hoy" },
   );
   assert.equal(afterAttendance.kind, "buttons");
-  assert.deepEqual(afterAttendance.buttons.map((b) => b.id), ["ot:act:attendance_all", "ot:act:gantt"]);
+  assert.deepEqual(afterAttendance.buttons.map((b) => b.id), ["ot:act:attendance_all", "ot:act:gantt", "ot:act:menu"]);
 
-  // Consulta de materiales pendientes -> Buscar precios / Ver saldo
+  // Consulta de materiales pendientes -> Buscar precios / Marcar comprado / Más acciones
   const afterMaterials = buildWhatsAppInteractivePayload(
     { acciones: { proyecto_contexto_id: "p-1" } },
     { role: "admin", userText: "¿Qué materiales faltan por comprar?" },
   );
   assert.equal(afterMaterials.kind, "buttons");
-  assert.deepEqual(afterMaterials.buttons.map((b) => b.id), ["ot:act:compare", "ot:act:balance"]);
+  assert.deepEqual(afterMaterials.buttons.map((b) => b.id), ["ot:act:compare", "ot:act:mat_bought", "ot:act:menu"]);
+
+  // Alternativas de cotización -> botones directos Opción 1 / Opción 2
+  const withAlts = buildWhatsAppInteractivePayload(
+    {
+      cotizacion: {
+        id: "q-1",
+        nombre_alternativa: "Estándar",
+        alternativas: [{ id: "q-2", nombre_alternativa: "Premium" }],
+      },
+      acciones: {},
+    },
+    { role: "admin" },
+  );
+  assert.equal(withAlts.kind, "buttons");
+  assert.deepEqual(withAlts.buttons.map((b) => b.id), ["ot:alt:1", "ot:alt:2"]);
+
+  // Cotización pactada pidiendo IVA -> botones IVA incluido / Más IVA / Menú
+  const agreedIva = buildWhatsAppInteractivePayload(
+    { respuesta: "Perfecto, preparemos una cotización pactada. Indícame el precio y si incluye IVA.", acciones: {} },
+    { role: "admin" },
+  );
+  assert.equal(agreedIva.kind, "buttons");
+  assert.deepEqual(agreedIva.buttons.map((b) => b.id), ["ot:agreed:iva_inc", "ot:agreed:iva_net", "ot:menu:open"]);
+
+  // Selección de trabajador por lista cuando pide nombres
+  const workerPicker = buildWhatsAppInteractivePayload(
+    {
+      respuesta: "¿A quiénes quieres añadir? Indica los nombres de los trabajadores.",
+      acciones: { borrador_registro: { asignacion: { nombres: [], proyecto_id: "p-1" } } },
+    },
+    { role: "admin", workers: [{ id: "u-w1", nombre: "Nicolás Paredes", rol: "terreno" }] },
+  );
+  assert.equal(workerPicker.kind, "list");
+  assert.equal(workerPicker.rows[0].id, "ot:worker:u-w1");
+
+  // Comparador de precios -> Buscar otro / Hacer cotización / Menú principal
+  const afterPrices = buildWhatsAppInteractivePayload(
+    { comparacion_materiales: { ofertas: [] }, acciones: {} },
+    { role: "admin" },
+  );
+  assert.equal(afterPrices.kind, "buttons");
+  assert.deepEqual(afterPrices.buttons.map((b) => b.id), ["ot:menu:prices", "ot:menu:quote", "ot:menu:open"]);
+
+  // Finanzas / saldo -> Registrar pago / Ver partidas / Más acciones
+  const afterBalance = buildWhatsAppInteractivePayload(
+    { acciones: { proyecto_contexto_id: "p-1" } },
+    { role: "admin", userText: "¿Cuál es el saldo por cobrar?" },
+  );
+  assert.equal(afterBalance.kind, "buttons");
+  assert.deepEqual(afterBalance.buttons.map((b) => b.id), ["ot:act:pay_prompt", "ot:act:gantt", "ot:act:menu"]);
 });
 
 test("buildWhatsAppInteractivePayload genera botones/listas válidos dentro de los límites estrictos de Meta Cloud API", () => {

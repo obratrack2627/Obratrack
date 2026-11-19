@@ -99,37 +99,34 @@ export function quoteWhatsApp(q: CotizacionEstimacion, canCreate = true) {
   const meta = [
     q.comuna_region ? `📍 ${q.comuna_region}` : "",
     q.metros_cuadrados ? `📐 ${q.metros_cuadrados.toLocaleString("es-CL")} m²` : "",
-    q.duracion_dias_estimada ? `⏱️ Plazo sugerido: ${count(q.duracion_dias_estimada, "día", "días")}` : "",
+    q.duracion_dias_estimada ? `⏱️ ${count(q.duracion_dias_estimada, "día", "días")}` : "",
   ].filter(Boolean).join(" · ");
+  const indirectos = (f.gastos_generales_monto || 0) + (f.imprevistos_monto || 0);
   const sections = [
     meta,
     q.resumen_ejecutivo,
     q.modo_presupuesto === 'precio_acordado'
-      ? ['*PRECIOS ACORDADOS*', ...(q.partidas_venta || []).map((p) => `• ${line(p.nombre)}: ${formatCLP(p.subtotal)}`)].join('\n')
+      ? ['*PARTIDAS*', ...(q.partidas_venta || []).map((p) => `• ${line(p.nombre)}: ${formatCLP(p.subtotal)}`)].join('\n')
       : [
-          "*RESUMEN FINANCIERO*",
-          `• Materiales: ${formatCLP(f.costo_materiales_total)}`,
-          `• Mano de obra: ${formatCLP(f.costo_mano_obra_total)}`,
-          `• Gastos generales: ${formatCLP(f.gastos_generales_monto)}`,
-          `• Imprevistos: ${formatCLP(f.imprevistos_monto)}`,
+          "*RESUMEN*",
+          `• Materiales: ${formatCLP(f.costo_materiales_total)} · Mano de obra: ${formatCLP(f.costo_mano_obra_total)}`,
+          ...(indirectos > 0 ? [`• Gastos e imprevistos: ${formatCLP(indirectos)}`] : []),
           `• ${profitLabel(q)}: ${formatCLP(f.margen_utilidad_monto)}`,
         ].join("\n"),
-    ["──────────────", `Neto: ${formatCLP(f.precio_sugerido_neto)}`, `IVA (19%): ${formatCLP(f.iva_19)}`, `*TOTAL: ${formatCLP(f.precio_total_con_iva)}*`, "──────────────"].join("\n"),
+    `Neto: ${formatCLP(f.precio_sugerido_neto)} · IVA (19%): ${formatCLP(f.iva_19)}\n*TOTAL: ${formatCLP(f.precio_total_con_iva)}*`,
     q.materiales.length
-      ? `*MATERIALES COTIZADOS (${q.materiales.length}) · NETO*\n` + q.materiales.map((m) =>
-          `• *${line(m.nombre)}*\n  ${m.cantidad.toLocaleString("es-CL")} ${m.unidad} × ${formatCLP(m.precio_unitario_estimado)} = ${formatCLP(m.subtotal)}`).join("\n")
+      ? `*MATERIALES (${q.materiales.length})*\n` + q.materiales.map((m) =>
+          `• ${line(m.nombre)} (${m.cantidad.toLocaleString("es-CL")} ${m.unidad}): ${formatCLP(m.subtotal)}`).join("\n")
       : "",
     q.mano_de_obra.length
-      ? `*MANO DE OBRA (${q.mano_de_obra.length})*\n` + q.mano_de_obra.map((m) =>
-          `• *${line(m.rol)}*\n  ${count(m.cantidad_personas, "persona", "personas")} × ${count(m.dias_estimados, "día", "días")} = ${formatCLP(m.subtotal)}`).join("\n")
+      ? `*MANO DE OBRA*\n` + q.mano_de_obra.map((m) =>
+          `• ${line(m.rol)} (${count(m.cantidad_personas, "persona", "personas")} × ${count(m.dias_estimados, "día", "días")}): ${formatCLP(m.subtotal)}`).join("\n")
       : "",
-    q.actividades_gantt?.length ? "*GANTT SUGERIDO*\n" + q.actividades_gantt.map((a, i) => `${i + 1}. ${line(a.nombre)} — ${count(a.dias, "día", "días")}`).join("\n") : "",
-    q.observaciones ? `*OBSERVACIONES*\n${q.observaciones}` : "",
-    q.condiciones_pago ? `*CONDICIONES DE PAGO*\n${q.condiciones_pago}` : "",
-    q.hitos_pago?.length ? '*PLAN DE COBRO*\n' + q.hitos_pago.map((h) => `• ${h.nombre} (${h.porcentaje}%): ${formatCLP(h.monto)}`).join('\n') : '',
-    (q.modo_presupuesto === 'precio_acordado' ? 'Precios proporcionados para esta propuesta.' : 'Precios estimados, sujetos a confirmación.') + '\nPDF disponible en ObraTrack → WhatsApp / Presupuestos.',
-    ["*¿Cómo seguimos?*", ...(canCreate ? [createOption] : []), modifyOption, compareOption,
-      ...(canCreate ? ["", "Para aprobarla y crear la obra responde *1* o *sí*. Se incorporarán el Gantt sugerido y sus materiales, y al confirmar recibirás aquí el *PDF oficial*."] : [])].join("\n"),
+    q.actividades_gantt?.length ? "*PLAZOS*\n" + q.actividades_gantt.map((a, i) => `${i + 1}. ${line(a.nombre)} — ${count(a.dias, "día", "días")}`).join("\n") : "",
+    q.observaciones ? `*Nota:* ${q.observaciones}` : "",
+    q.condiciones_pago ? `*Pago:* ${q.condiciones_pago}` : "",
+    q.hitos_pago?.length ? '*Hitos:* ' + q.hitos_pago.map((h) => `${h.nombre} ${h.porcentaje}% (${formatCLP(h.monto)})`).join(' · ') : '',
+    [...(canCreate ? [createOption] : []), modifyOption, compareOption].join("  |  "),
   ];
   return whatsappCard(`Cotización · ${q.titulo_proyecto}`, sections.filter(Boolean).join("\n\n"));
 }

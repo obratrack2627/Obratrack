@@ -931,7 +931,10 @@ export async function processPersonalMessage(
     campaign:confirmedCampaign,
   });
   const selectedProjectTap = batchItems.some(
-    (item) => item?.type === "interactive" && item?.interactive?.list_reply?.id?.startsWith("ot:project:"),
+    (item) =>
+      item?.type === "interactive" &&
+      (item?.interactive?.list_reply?.id?.startsWith("ot:project:") ||
+        item?.interactive?.button_reply?.id === "ot:act:menu"),
   );
   const ambiguousPhoto = Boolean(attachment && !textParts.length);
   const showGreetingMenu =
@@ -941,6 +944,7 @@ export async function processPersonalMessage(
   const interactive = buildWhatsAppInteractivePayload(data, {
     role: user.rol,
     projects: tables.proyectos,
+    workers: tables.usuarios,
     showGreetingMenu,
     showProjectList: Boolean(projectListing),
     selectedProjectMenu: selectedProjectTap && Boolean(contextProjectId),

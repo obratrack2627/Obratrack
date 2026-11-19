@@ -84,6 +84,18 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
         return "Menú";
       case "ot:quote:standard":
         return "Cotízalo ahora con estándar profesional y preparación básica incluida";
+      case "ot:agreed:iva_inc":
+        return "El precio acordado es con IVA incluido";
+      case "ot:agreed:iva_net":
+        return "El precio acordado es neto más IVA";
+      case "ot:alt:1":
+        return "1";
+      case "ot:alt:2":
+        return "2";
+      case "ot:alt:3":
+        return "3";
+      case "ot:alt:4":
+        return "4";
       case "ot:quote:create":
         return "Crea la obra con esta cotización";
       case "ot:quote:compare":
@@ -98,12 +110,18 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
         return "Sí";
       case "ot:team:skip":
         return "Ahora no";
+      case "ot:act:menu":
+        return "Acciones de esta obra";
       case "ot:act:balance":
         return "¿Cuál es el saldo por cobrar y el resumen de pagos de esta obra?";
+      case "ot:act:pay_prompt":
+        return "Quiero registrar un pago en esta obra; pregúntame el monto y el método de pago.";
       case "ot:act:gantt":
         return "Muéstrame las partidas, avances y fechas de esta obra";
       case "ot:act:materials":
         return "¿Qué materiales faltan por comprar en esta obra?";
+      case "ot:act:mat_bought":
+        return "Quiero marcar un material como comprado en esta obra; muéstrame cuáles están pendientes.";
       case "ot:act:attendance":
         return "Muéstrame la asistencia de hoy en esta obra";
       case "ot:act:attendance_all":
@@ -128,6 +146,10 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
         if (id.startsWith("ot:project:")) {
           const projectName = title || id.slice("ot:project:".length);
           return projectName ? `Trabajar en la obra ${projectName}` : null;
+        }
+        if (id.startsWith("ot:worker:")) {
+          const workerId = id.slice("ot:worker:".length).trim();
+          return workerId || title || null;
         }
         return title || id || null;
     }
@@ -183,6 +205,10 @@ export function directInteractiveMenuReply(batchItems: any[]): { respuesta: stri
         respuesta:
           "Dime qué material necesitas cotizar (por ejemplo: 20 sacos de cemento de 25 kg o 10 planchas de yeso cartón) y comparo precios reales en tiendas.",
       };
+    case "ot:act:menu":
+      return {
+        respuesta: "Selecciona qué gestión deseas realizar en esta obra:",
+      };
     default:
       return null;
   }
@@ -196,6 +222,7 @@ export function buildWhatsAppInteractivePayload(
   options?: {
     role?: string;
     projects?: Array<{ id: string; nombre: string; estado?: string; comuna?: string | null }>;
+    workers?: Array<{ id: string; nombre: string; rol?: string }>;
     showGreetingMenu?: boolean;
     showProjectList?: boolean;
     selectedProjectMenu?: boolean;
@@ -207,6 +234,12 @@ export function buildWhatsAppInteractivePayload(
   const actions = result.acciones || {};
   const role = options?.role || actions?.rol_actor || "admin";
   const isManager = role === "admin" || role === "supervisor";
+  const rawReply = String(result.respuesta || "");
+  const normalizedReply = rawReply.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const normalizedText = String(options?.userText || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 
   // 0. Menú principal al saludar ("Hola", "Buenos días", "Menú", etc.).
   if (options?.showGreetingMenu) {
@@ -238,12 +271,28 @@ export function buildWhatsAppInteractivePayload(
     };
   }
 
-  // 1. Seguimiento opcional de asignación de cuadrilla tras crear obra.
+  // 1. Seguimiento de asignación de cuadrilla tras crear obra o cuando pide elegir trabajador.
   if (
     actions?.borrador_registro?.asignacion &&
     Array.isArray(actions.borrador_registro.asignacion.nombres) &&
     actions.borrador_registro.asignacion.nombres.length === 0
   ) {
+    const asksWorkerNames = /\b(?:a quienes|indica los nombres)\b/.test(normalizedReply);
+    const availableWorkers = (options?.workers || []).filter((w) => w?.id && w?.nombre && w.rol !== "admin").slice(0, 10);
+    if (asksWorkerNames && availableWorkers.length >= 1) {
+      return {
+        kind: "list",
+        body: "Selecciona un integrante del equipo para asignarlo a la obra o escribe varios nombres:",
+        footer: "ObraBot · Cuadrilla",
+        buttonText: "👷 Elegir persona",
+        sectionTitle: "Equipo disponible",
+        rows: availableWorkers.map((w) => ({
+          id: `ot:worker:${w.id}`,
+          title: clip(w.nombre, META_LIST_ROW_TITLE_MAX),
+          description: w.rol === "supervisor" ? "Jefe de obra / Supervisor" : "Trabajador de terreno",
+        })),
+      };
+    }
     return {
       kind: "buttons",
       body: "¿Quieres asignar trabajadores o jefes de obra ahora?",
@@ -258,8 +307,7 @@ export function buildWhatsAppInteractivePayload(
   // 2. Borrador de creación de obra pendiente de datos o confirmación.
   const pendingDraft = result.borrador_obra || (actions?.tipo === "solicitar_datos_obra" ? actions.detalles?.borrador : null);
   if (pendingDraft && typeof pendingDraft === "object") {
-    const responseText = String(result.respuesta || "");
-    const asksConfirmation = /\b(?:confirmas|confirmar|creo la obra|quieres que la cree|responde\s+[«"]?s[ií])\b/i.test(responseText);
+    const asksConfirmation = /\b(?:confirmas|confirmar|creo la obra|quieres que la cree|responde\s+[«"]?s[ií])\b/i.test(rawReply);
     return {
       kind: "buttons",
       body: asksConfirmation ? "¿Confirmas la creación de esta obra?" : "Puedes completar los datos o cancelar este borrador.",
@@ -273,8 +321,35 @@ export function buildWhatsAppInteractivePayload(
     };
   }
 
-  // 3. Cotización recién generada (sin haber sido convertida en este turno).
+  // 3. Cotización recién generada (con alternativas o propuesta única).
   if (result.cotizacion && !actions?.presupuesto_proyecto_id && !actions?.presupuesto_seleccion_id) {
+    const alts = Array.isArray(result.cotizacion.alternativas) ? result.cotizacion.alternativas : [];
+    if (alts.length >= 1) {
+      const allOptions = [result.cotizacion, ...alts].slice(0, 4);
+      if (allOptions.length <= 3) {
+        return {
+          kind: "buttons",
+          body: "Elige la alternativa que quieres aprobar para crear la obra y recibir el PDF:",
+          footer: "ObraBot · Alternativas",
+          buttons: allOptions.map((opt, idx) => ({
+            id: `ot:alt:${idx + 1}`,
+            title: clip(`✅ ${opt.nombre_alternativa || `Opción ${idx + 1}`}`, META_BUTTON_TITLE_MAX),
+          })),
+        };
+      }
+      return {
+        kind: "list",
+        body: "Selecciona cuál de las alternativas quieres aprobar:",
+        footer: "ObraBot · Alternativas",
+        buttonText: "✅ Elegir opción",
+        sectionTitle: "Alternativas cotizadas",
+        rows: allOptions.map((opt, idx) => ({
+          id: `ot:alt:${idx + 1}`,
+          title: clip(`${idx + 1}. ${opt.nombre_alternativa || `Opción ${idx + 1}`}`, META_LIST_ROW_TITLE_MAX),
+          description: opt.resumen_ejecutivo ? clip(opt.resumen_ejecutivo, META_LIST_ROW_DESC_MAX) : undefined,
+        })),
+      };
+    }
     return {
       kind: "buttons",
       body: "¿Qué quieres hacer con esta cotización?",
@@ -287,8 +362,27 @@ export function buildWhatsAppInteractivePayload(
     };
   }
 
-  // 3b. Pregunta intermedia de cotización (permite cotizar directo con estándar profesional o volver al menú).
-  const rawReply = String(result.respuesta || "");
+  // 3b. Pregunta de IVA en cotización pactada (IVA incluido vs + IVA neto).
+  if (
+    isManager &&
+    !result.cotizacion &&
+    !actions?.tipo &&
+    (/\bcotizacion pactada\b/.test(normalizedReply) ||
+      (/\biva\b/.test(normalizedReply) && /\b(?:incluido|neto|mas iva|\+ iva|acordado)\b/.test(normalizedReply)))
+  ) {
+    return {
+      kind: "buttons",
+      body: "Si ya tienes el monto acordado, puedes elegir el tratamiento de IVA:",
+      footer: "ObraBot · Cotización pactada",
+      buttons: [
+        { id: "ot:agreed:iva_inc", title: "✅ IVA incluido" },
+        { id: "ot:agreed:iva_net", title: "➕ Más IVA (neto)" },
+        { id: "ot:menu:open", title: "📋 Menú principal" },
+      ],
+    };
+  }
+
+  // 3c. Pregunta intermedia de cotización estándar.
   if (
     isManager &&
     !result.cotizacion &&
@@ -321,7 +415,7 @@ export function buildWhatsAppInteractivePayload(
     };
   }
 
-  // 5. Menú rápido al seleccionar una obra desde la lista interactiva.
+  // 5. Menú rápido al seleccionar una obra desde la lista interactiva (o al tocar "Más acciones").
   if (options?.selectedProjectMenu) {
     if (isManager) {
       return {
@@ -352,7 +446,7 @@ export function buildWhatsAppInteractivePayload(
     };
   }
 
-  // 6. Lista interactiva de obras cuando el usuario lista sus obras o entra sin obra activa.
+  // 6. Lista interactiva de obras cuando el usuario pide ver sus obras.
   if (options?.showProjectList && Array.isArray(options.projects)) {
     const active = options.projects
       .filter((p) => p?.id && p?.nombre && p.estado !== "cancelado")
@@ -379,16 +473,60 @@ export function buildWhatsAppInteractivePayload(
         })),
       };
     }
+    if (active.length === 1) {
+      return buildWhatsAppInteractivePayload(result, { ...options, showProjectList: false, selectedProjectMenu: true });
+    }
+    if (isManager) {
+      return {
+        kind: "buttons",
+        body: "¿Quieres registrar tu primera obra o preparar una cotización?",
+        footer: "ObraBot · Comenzar",
+        buttons: [
+          { id: "ot:menu:create_project", title: "🏗️ Crear obra" },
+          { id: "ot:menu:quote", title: "📐 Hacer cotización" },
+          { id: "ot:menu:open", title: "📋 Menú principal" },
+        ],
+      };
+    }
   }
 
-  // 7. Acciones rápidas contextuales para jefatura tras avances, asistencia o materiales.
-  if (isManager && actions?.proyecto_contexto_id) {
-    const actionType = actions?.tipo;
-    const normalizedText = String(options?.userText || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
+  // 7. Comparador de precios en tiendas (cuando entrega resultados o pide el material a buscar).
+  if (
+    result.comparacion_materiales ||
+    result.comparaciones_materiales ||
+    /\bferreterias consultadas\b/.test(normalizedReply)
+  ) {
+    return {
+      kind: "buttons",
+      body: "¿Qué deseas hacer ahora?",
+      footer: "ObraBot · Precios retail",
+      buttons: [
+        { id: "ot:menu:prices", title: "🛒 Buscar otro" },
+        ...(isManager ? [{ id: "ot:menu:quote", title: "📐 Hacer cotización" }] : []),
+        { id: "ot:menu:open", title: "📋 Menú principal" },
+      ],
+    };
+  }
 
+  // 8. Sub-flujos de gestión dentro de una obra activa.
+  if (actions?.proyecto_contexto_id) {
+    const actionType = actions?.tipo;
+
+    // 8a. Para terreno: después de consultar partidas o registrar avance/incidente
+    if (!isManager) {
+      return {
+        kind: "buttons",
+        body: "Acciones rápidas en tu obra:",
+        footer: "ObraBot · Terreno",
+        buttons: [
+          { id: "ot:act:progress", title: "📈 Subir avance" },
+          { id: "ot:act:incident", title: "⚠️ Incidente" },
+          { id: "ot:act:gantt", title: "📋 Mis partidas" },
+        ],
+      };
+    }
+
+    // 8b. Tras registrar avance o bitácora (jefatura)
     if (actionType === "actualizar_avance" || actionType === "crear_bitacora") {
       return {
         kind: "buttons",
@@ -397,11 +535,27 @@ export function buildWhatsAppInteractivePayload(
         buttons: [
           { id: "ot:act:close", title: "📄 Cierre diario PDF" },
           { id: "ot:act:gantt", title: "📊 Ver pendientes" },
+          { id: "ot:act:menu", title: "⚙️ Más acciones" },
         ],
       };
     }
 
-    if (!actionType && /\basistencia\b/.test(normalizedText)) {
+    // 8c. Tras emitir el cierre diario
+    if (actionType === "registrar_documento" || /\bcierre de jornada guardado\b/.test(normalizedReply)) {
+      return {
+        kind: "buttons",
+        body: "¿Qué deseas hacer después del cierre?",
+        footer: "ObraBot · Cierre diario",
+        buttons: [
+          { id: "ot:act:notify", title: "📢 Avisar al equipo" },
+          { id: "ot:menu:list_projects", title: "📂 Ver obras" },
+          { id: "ot:menu:open", title: "📋 Menú principal" },
+        ],
+      };
+    }
+
+    // 8d. Consulta o registro de asistencia
+    if (actionType === "registrar_asistencia" || (!actionType && /\basistencia\b/.test(normalizedText))) {
       return {
         kind: "buttons",
         body: "Acciones rápidas de asistencia:",
@@ -409,18 +563,56 @@ export function buildWhatsAppInteractivePayload(
         buttons: [
           { id: "ot:act:attendance_all", title: "✅ Todos presentes" },
           { id: "ot:act:gantt", title: "📊 Ver partidas" },
+          { id: "ot:act:menu", title: "⚙️ Más acciones" },
         ],
       };
     }
 
-    if (!actionType && /\bmaterial(?:es)?\b/.test(normalizedText) && /\b(?:falta|pendiente|comprar|lista)\b/.test(normalizedText)) {
+    // 8e. Consulta o registro de materiales
+    if (
+      actionType === "agregar_material" ||
+      actionType === "actualizar_material" ||
+      (!actionType && /\bmaterial(?:es)?\b/.test(normalizedText) && /\b(?:falta|pendiente|comprar|lista)\b/.test(normalizedText))
+    ) {
       return {
         kind: "buttons",
         body: "Acciones rápidas de materiales:",
         footer: "ObraBot · Compras",
         buttons: [
           { id: "ot:act:compare", title: "🛒 Buscar precios" },
-          { id: "ot:act:balance", title: "💰 Ver saldo obra" },
+          { id: "ot:act:mat_bought", title: "✅ Marcar comprado" },
+          { id: "ot:act:menu", title: "⚙️ Más acciones" },
+        ],
+      };
+    }
+
+    // 8f. Consulta de saldo / pagos o registro de pago
+    if (
+      actionType === "registrar_pago" ||
+      (!actionType && /\b(?:saldo|cobrar|pagos?|recaudado|abono)\b/.test(normalizedText))
+    ) {
+      return {
+        kind: "buttons",
+        body: "Acciones rápidas de finanzas:",
+        footer: "ObraBot · Finanzas",
+        buttons: [
+          { id: "ot:act:pay_prompt", title: "💵 Registrar pago" },
+          { id: "ot:act:gantt", title: "📊 Ver partidas" },
+          { id: "ot:act:menu", title: "⚙️ Más acciones" },
+        ],
+      };
+    }
+
+    // 8g. Consulta de partidas / Gantt / avance
+    if (!actionType && /\b(?:partidas?|avance|gantt|fechas?|plazos?)\b/.test(normalizedText)) {
+      return {
+        kind: "buttons",
+        body: "Acciones rápidas de planificación:",
+        footer: "ObraBot · Carta Gantt",
+        buttons: [
+          { id: "ot:act:progress", title: "📈 Subir avance" },
+          { id: "ot:act:close", title: "📄 Cierre diario PDF" },
+          { id: "ot:act:menu", title: "⚙️ Más acciones" },
         ],
       };
     }
