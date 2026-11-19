@@ -40,13 +40,17 @@ const TOOL_BUSCAR_PRECIOS = fn(
 const WORKER_TOOLS: OpenAIFunctionTool[] = [
   fn(
     'actualizar_avance',
-    'Actualiza el porcentaje de avance (0 a 100) y/o asigna el trabajador responsable de una o todas las partidas de la Carta Gantt.',
+    'Actualiza el porcentaje de avance (0 a 100), fechas, duración, nombre y/o el trabajador responsable de una o todas las partidas de la Carta Gantt.',
     {
       proyecto_id: { type: 'string', description: 'ID exacto de la obra del contexto.' },
       actividad_id: { type: 'string', description: 'ID exacto de la partida si figura en el contexto, o "todas" si aplica a todas las partidas de la obra.' },
       nombre: { type: 'string', description: 'Nombre de la partida, o "todas" si se asigna el mismo responsable a todas las partidas de la Carta Gantt.' },
-      porcentaje_avance: { type: 'number', description: 'Avance total de 0 a 100. Omítelo si solo estás asignando el responsable de la partida sin modificar su avance.' },
+      nuevo_nombre: { type: 'string', description: 'Nuevo nombre de la partida solo si pidieron renombrarla.' },
+      porcentaje_avance: { type: 'number', description: 'Avance total de 0 a 100. Omítelo si solo estás asignando el responsable o cambiando fechas.' },
       responsable_nombre: { type: 'string', description: 'Nombre o ID del trabajador/jefe de obra asignado como responsable de la partida (solo jefatura).' },
+      fecha_inicio: { type: 'string', description: 'Nueva fecha de inicio YYYY-MM-DD de la partida.' },
+      fecha_termino: { type: 'string', description: 'Nueva fecha de término YYYY-MM-DD de la partida.' },
+      dias: { type: 'number', description: 'Duración en días enteros si pidieron extender o acortar la partida.' },
       nota: { type: 'string', description: 'Observación breve del avance.' },
     },
     ['proyecto_id'],
@@ -72,7 +76,7 @@ const WORKER_TOOLS: OpenAIFunctionTool[] = [
       proyecto_id: { type: 'string' },
       titulo: { type: 'string' },
       descripcion: { type: 'string' },
-      tipo: { type: 'string', enum: ['solicitud_cambio', 'reclamo', 'incidente', 'accidente'] },
+      subtipo: { type: 'string', enum: ['solicitud_cambio', 'reclamo', 'incidente', 'accidente'] },
       prioridad: { type: 'string', enum: ['baja', 'media', 'alta', 'critica'] },
       impacto_monto: { type: 'number', description: 'Impacto estimado en CLP (entero).' },
       impacto_dias: { type: 'number', description: 'Impacto estimado en días.' },
@@ -100,15 +104,38 @@ const WORKER_TOOLS: OpenAIFunctionTool[] = [
 const MANAGER_TOOLS: OpenAIFunctionTool[] = [
   fn(
     'actualizar_proyecto',
-    'Actualiza campos específicos de una obra existente (estado, fechas, nuevo_nombre, descripción o monto solo si el usuario lo pidió expresamente).',
+    'Actualiza únicamente los campos de la obra que el usuario pidió cambiar (no envíes nuevo_nombre, estado ni descripcion si no pidieron modificarlos). Al cambiar fechas o reprogramar, reprogramar_gantt ajusta automáticamente las partidas de la Carta Gantt.',
     {
       proyecto_id: { type: 'string' },
-      nuevo_nombre: { type: 'string' },
-      estado: { type: 'string', enum: ['pendiente', 'activo', 'pausado', 'terminado', 'cancelada'] },
+      nuevo_nombre: { type: 'string', description: 'Solo si pidió renombrar la obra.' },
+      estado: { type: 'string', enum: ['pendiente', 'activo', 'pausado', 'terminado', 'cancelada'], description: 'Solo si pidió cambiar el estado.' },
       fecha_inicio: { type: 'string', description: 'YYYY-MM-DD' },
       fecha_termino_estimada: { type: 'string', description: 'YYYY-MM-DD' },
-      monto_cotizado: { type: 'number' },
-      descripcion: { type: 'string' },
+      reprogramar_gantt: { type: 'boolean', description: 'True para ajustar automáticamente las fechas de las partidas de la Carta Gantt al plazo de la obra.' },
+      monto_cotizado: { type: 'number', description: 'Solo si pidió cambiar el presupuesto.' },
+      descripcion: { type: 'string', description: 'Solo si pidió cambiar la descripción.' },
+    },
+    ['proyecto_id'],
+  ),
+  fn(
+    'crear_actividad',
+    'Agrega una o varias partidas nuevas a la Carta Gantt de una obra existente.',
+    {
+      proyecto_id: { type: 'string' },
+      nombre: { type: 'string', description: 'Nombre de la partida.' },
+      dias: { type: 'number', description: 'Duración estimada en días enteros.' },
+      partidas: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            nombre: { type: 'string' },
+            dias: { type: 'number' },
+          },
+          required: ['nombre', 'dias'],
+        },
+      },
     },
     ['proyecto_id'],
   ),
@@ -160,7 +187,7 @@ const MANAGER_TOOLS: OpenAIFunctionTool[] = [
   ),
   fn(
     'registrar_imprevisto',
-    'Registra un gasto adicional o imprevisto en CLP asociado a una obra.',
+    'Registra un gasto adicional, jornal de mano de obra o imprevisto en CLP asociado a una obra.',
     {
       proyecto_id: { type: 'string' },
       titulo: { type: 'string' },
@@ -168,19 +195,25 @@ const MANAGER_TOOLS: OpenAIFunctionTool[] = [
       monto: { type: 'number', description: 'Monto entero en CLP.' },
       categoria_gasto: { type: 'string', enum: ['imprevisto', 'mano_obra', 'gasto_general'] },
       usuario_id: { type: 'string' },
+      asistencia_id: { type: 'string', description: 'ID de asistencia confirmada si se liquida un jornal.' },
+      valor_diario: { type: 'number' },
+      jornada: { type: 'string', enum: ['completa', 'media'] },
+      horas_extra: { type: 'number' },
+      valor_hora_extra: { type: 'number' },
       pagado: { type: 'boolean' },
       estado: { type: 'string', enum: ['pendiente', 'aprobado', 'rechazado'] },
       fecha: { type: 'string' },
     },
-    ['proyecto_id', 'descripcion', 'monto'],
+    ['proyecto_id', 'descripcion'],
   ),
   fn(
     'registrar_asistencia',
-    'Registra la asistencia diaria de trabajadores en una obra (solo jefatura).',
+    'Registra la asistencia diaria de un trabajador o de toda la cuadrilla (todos_presentes=true) en una obra (solo jefatura).',
     {
       proyecto_id: { type: 'string' },
       fecha: { type: 'string', description: 'YYYY-MM-DD' },
-      trabajador_nombre: { type: 'string' },
+      todos_presentes: { type: 'boolean', description: 'True para marcar presentes a todos los trabajadores asignados a la obra.' },
+      trabajador_nombre: { type: 'string', description: 'Nombre del trabajador si es individual.' },
       usuario_id: { type: 'string' },
       estado: { type: 'string', enum: ['presente', 'atraso', 'ausente', 'licencia', 'permiso'] },
       hora_entrada: { type: 'string' },
@@ -188,7 +221,7 @@ const MANAGER_TOOLS: OpenAIFunctionTool[] = [
       horas_trabajadas: { type: 'number' },
       observacion: { type: 'string' },
     },
-    ['proyecto_id', 'trabajador_nombre', 'estado'],
+    ['proyecto_id'],
   ),
   fn(
     'asignar_trabajador',
@@ -223,6 +256,21 @@ const MANAGER_TOOLS: OpenAIFunctionTool[] = [
     ['nombre'],
   ),
   fn(
+    'actualizar_cliente',
+    'Actualiza los datos de contacto o nombre de un cliente existente.',
+    {
+      cliente_id: { type: 'string' },
+      nombre: { type: 'string', description: 'Nombre actual del cliente a identificar.' },
+      nuevo_nombre: { type: 'string' },
+      rut: { type: 'string' },
+      telefono: { type: 'string' },
+      email: { type: 'string' },
+      direccion: { type: 'string' },
+      comuna: { type: 'string' },
+    },
+    [],
+  ),
+  fn(
     'agregar_trabajador',
     'Propone registrar una nueva persona en el equipo de la empresa.',
     {
@@ -235,6 +283,32 @@ const MANAGER_TOOLS: OpenAIFunctionTool[] = [
       proyecto_id: { type: 'string' },
     },
     ['nombre'],
+  ),
+  fn(
+    'actualizar_trabajador',
+    'Actualiza teléfono, correo, RUT, nombre o especialidades de un integrante existente del equipo.',
+    {
+      usuario_id: { type: 'string' },
+      trabajador_nombre: { type: 'string' },
+      nuevo_nombre: { type: 'string' },
+      rut: { type: 'string' },
+      telefono: { type: 'string' },
+      email: { type: 'string' },
+      especialidades: { type: 'array', items: { type: 'string' } },
+    },
+    [],
+  ),
+  fn(
+    'agendar_evento',
+    'Agenda una visita técnica, reunión o hito en el calendario de la obra.',
+    {
+      proyecto_id: { type: 'string' },
+      titulo: { type: 'string' },
+      fecha: { type: 'string', description: 'YYYY-MM-DD' },
+      hora: { type: 'string', description: 'HH:MM (24h)' },
+      tipo: { type: 'string', enum: ['reunion', 'hito', 'inspeccion', 'entrega'] },
+    },
+    ['titulo', 'fecha', 'hora'],
   ),
   fn(
     'enviar_mensaje_equipo',
@@ -356,23 +430,23 @@ export function buildToolChatInstructions(context: Record<string, any>): string 
   const isWhatsApp = Boolean(context.creacion_obra_whatsapp);
   const actionsEnabled = context.acciones_habilitadas !== false;
   return [
-    'Eres ObraBot, el asistente experto de ObraTrack para gestionar obras de construcción en Chile.',
-    'Responde siempre en español claro, directo y profesional, en pesos chilenos (CLP).',
+    'Eres ObraBot, asistente experto de ObraTrack para gestionar obras de construcción en Chile (CLP).',
     'Política de uso: No hay topes diarios internos en ObraBot; un servicio sin tope diario no implica saldo ilimitado si el proveedor externo limita temporalmente la capacidad.',
     'Reglas críticas:',
-    '1. Usa exclusivamente IDs, nombres, montos, avances y fechas presentes en el contexto entregado. Nunca inventes datos ni supongas valores faltantes.',
-    '2. Si la solicitud es solo una consulta o pregunta, responde directamente en texto natural SIN invocar herramientas de escritura.',
-    '3. Si el usuario pide ejecutar una o más acciones autorizadas, invoca las herramientas correspondientes (puedes invocar varias en paralelo si es una orden compuesta) y redacta una respuesta breve indicando lo que vas a preparar. Nunca afirmes que ya quedó guardado.',
-    '4. Si falta un dato indispensable o hay ambigüedad (ej. dos obras o clientes homónimos), NO invoques la herramienta: pregunta concretamente qué dato falta.',
-    '5. Nunca uses enviar_mensaje_equipo para mensajes dirigidos a un cliente o mandante; usa generar_mensaje_whatsapp.',
-    '6. Para precios de materiales en ferreterías chilenas, invoca buscar_precios_materiales.',
+    '1. Usa exclusivamente IDs, nombres, montos, avances y fechas del contexto entregado. No inventes datos.',
+    '2. Si es solo consulta, responde en texto natural SIN invocar herramientas de escritura.',
+    '3. Si el usuario pide ejecutar acciones (o responde un dato faltante que le preguntaste, como fecha, monto o nombre), invoca las herramientas de inmediato en ese mismo turno SIN pedir confirmaciones intermedias ("¿Confirmas...?"), salvo para eliminar_proyecto. Nunca afirmes que ya quedó guardado.',
+    '4. Si falta un dato indispensable o hay homónimos ambiguos, NO invoques la herramienta: pregunta qué dato falta.',
+    '5. Nunca uses enviar_mensaje_equipo para clientes/mandantes; usa generar_mensaje_whatsapp.',
+    '6. Para precios en ferreterías chilenas invoca buscar_precios_materiales.',
     isWhatsApp
-      ? '7. En WhatsApp, para crear una obra nueva usa siempre proponer_obra_whatsapp (nunca creación directa).'
-      : '7. En web, para crear una obra usa crear_proyecto solo si el usuario lo pidió expresamente.',
+      ? '7. En WhatsApp, para crear obra nueva usa proponer_obra_whatsapp.'
+      : '7. En web, para crear obra usa crear_proyecto solo por orden expresa.',
     actionsEnabled
       ? '8. Respeta las preferencias explícitas del usuario en el contexto.'
-      : '8. Las acciones de escritura requieren plan Pro IA (acciones_habilitadas=false); explica eso si piden cambios.',
-    '9. Para asignar un trabajador a una obra (cuadrilla general) usa asignar_trabajador. Para asignar un responsable a una o todas las partidas/tareas de la Carta Gantt, usa actualizar_avance pasando responsable_nombre (y nombre="todas" si aplica a todas las partidas de la Carta Gantt, sin enviar porcentaje_avance a menos que también pidan cambiar el % de avance).',
+      : '8. Las acciones requieren plan Pro IA (acciones_habilitadas=false).',
+    '9. Para asignar trabajador a la obra usa asignar_trabajador; para asignar responsable, fechas o avance de una o todas las partidas de la Carta Gantt usa actualizar_avance.',
+    '10. En actualizar_proyecto envía SOLO los campos que pidieron cambiar (no repitas nuevo_nombre, estado ni descripcion actuales) y usa reprogramar_gantt=true al cambiar fechas de la obra o actualizar la Carta Gantt.',
   ].join('\n');
 }
 
@@ -461,7 +535,14 @@ export function toolCallsToChatEnvelope(
         }
       }
     }
-    acciones.push({ tipo: call.name, ...args });
+    if (call.name === 'actualizar_proyecto' && (args.fecha_inicio || args.fecha_termino_estimada) && args.reprogramar_gantt === undefined) {
+      args.reprogramar_gantt = true;
+    }
+    if (call.name === 'crear_solicitud_cambio' && args.tipo && !args.subtipo) {
+      args.subtipo = args.tipo;
+      delete args.tipo;
+    }
+    acciones.push({ ...args, tipo: call.name });
   }
 
   const defaultReply =

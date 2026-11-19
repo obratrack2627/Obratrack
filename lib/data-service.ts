@@ -1803,6 +1803,48 @@ export class DataService {
       + (action.tipo === 'actualizar_trabajador' && action.email !== undefined ? '\nEl correo de inicio de sesión se conserva; este cambio actualiza la ficha de contacto.' : '');
   }
 
+  private rescheduleProjectActivities(proyectoId: string, startIso?: string, endIso?: string): Actividad[] {
+    const acts = this.getActividades(proyectoId);
+    if (!acts.length || !startIso || !endIso) return [];
+    const startMs = Date.parse(`${startIso}T12:00:00Z`);
+    const endMs = Date.parse(`${endIso}T12:00:00Z`);
+    if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs < startMs) return [];
+    const totalDays = Math.max(1, Math.round((endMs - startMs) / 86400000));
+    const weights = acts.map((act) => {
+      const aStart = Date.parse(`${act.fecha_inicio}T12:00:00Z`);
+      const aEnd = Date.parse(`${act.fecha_termino}T12:00:00Z`);
+      if (!Number.isNaN(aStart) && !Number.isNaN(aEnd) && aEnd > aStart) {
+        return Math.max(1, Math.round((aEnd - aStart) / 86400000));
+      }
+      return 1;
+    });
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0) || acts.length;
+    const addDaysIso = (baseMs: number, days: number) =>
+      new Date(baseMs + days * 86400000).toISOString().slice(0, 10);
+
+    let cumulativeWeight = 0;
+    const updatedActs: Actividad[] = [];
+    for (let i = 0; i < acts.length; i++) {
+      const startOffset =
+        i === 0 ? 0 : Math.min(totalDays, Math.round((cumulativeWeight * totalDays) / totalWeight));
+      cumulativeWeight += weights[i];
+      const rawEndOffset =
+        i === acts.length - 1 ? totalDays : Math.round((cumulativeWeight * totalDays) / totalWeight);
+      const endOffset = Math.min(
+        totalDays,
+        Math.max(startOffset + (totalDays >= acts.length ? 1 : 0), rawEndOffset),
+      );
+      const nextInicio = addDaysIso(startMs, startOffset);
+      const nextTermino = addDaysIso(startMs, Math.max(startOffset, endOffset));
+      const saved = this.updateActividad(acts[i].id, {
+        fecha_inicio: nextInicio,
+        fecha_termino: nextTermino,
+      });
+      if (saved) updatedActs.push(saved);
+    }
+    return updatedActs;
+  }
+
   /** Motor de ejecución de acciones de IA. */
   ejecutarAccionGlobalIA(accion: any, contextProyectoId?: string): AccionAsistenteIA | null {
     if (!accion || !accion.tipo) return null;
@@ -1835,15 +1877,47 @@ export class DataService {
         if (!proj) return null;
         const previousName = proj.nombre;
         const updates: Partial<Proyecto> = {};
-        if (typeof accion.nuevo_nombre === 'string' && accion.nuevo_nombre.trim()) {
+        if (
+          typeof accion.nuevo_nombre === 'string' &&
+          accion.nuevo_nombre.trim() &&
+          accion.nuevo_nombre.trim() !== previousName
+        ) {
           updates.nombre = accion.nuevo_nombre.trim();
         }
-        if (accion.estado) updates.estado = accion.estado;
-        if (accion.monto != null || accion.monto_cotizado != null) updates.monto_cotizado = Number(accion.monto_cotizado ?? accion.monto);
+        const hasNonStateField = Boolean(
+          updates.nombre ||
+            accion.fecha_inicio ||
+            accion.fecha_termino_estimada ||
+            accion.reprogramar_gantt ||
+            accion.monto != null ||
+            accion.monto_cotizado != null ||
+            (typeof accion.descripcion === 'string' &&
+              accion.descripcion.trim() &&
+              accion.descripcion.trim() !== (proj.descripcion || '').trim()),
+        );
+        if (accion.estado && (!hasNonStateField || accion.estado !== proj.estado)) {
+          updates.estado = accion.estado;
+        }
+        if (accion.monto != null || accion.monto_cotizado != null) {
+          updates.monto_cotizado = Number(accion.monto_cotizado ?? accion.monto);
+        }
         if (accion.fecha_inicio) updates.fecha_inicio = accion.fecha_inicio;
         if (accion.fecha_termino_estimada) updates.fecha_termino_estimada = accion.fecha_termino_estimada;
-        if (accion.descripcion) updates.descripcion = accion.descripcion;
-        const updated = this.updateProyecto(proj.id, updates);
+        if (
+          typeof accion.descripcion === 'string' &&
+          accion.descripcion.trim() &&
+          accion.descripcion.trim() !== (proj.descripcion || '').trim()
+        ) {
+          updates.descripcion = accion.descripcion.trim();
+        }
+        const updated = Object.keys(updates).length ? this.updateProyecto(proj.id, updates) : proj;
+        const targetStart = updates.fecha_inicio || proj.fecha_inicio;
+        const targetEnd = updates.fecha_termino_estimada || proj.fecha_termino_estimada;
+        const shouldRescheduleGantt =
+          accion.reprogramar_gantt === true && Boolean(targetStart && targetEnd);
+        const rescheduledActs = shouldRescheduleGantt
+          ? this.rescheduleProjectActivities(proj.id, targetStart, targetEnd)
+          : [];
         const finalName = updates.nombre || previousName;
         return {
           tipo: 'actualizar_proyecto',
@@ -1861,6 +1935,9 @@ export class DataService {
             updates.monto_cotizado !== undefined ? `El presupuesto quedó en $${updates.monto_cotizado.toLocaleString('es-CL')}.` : '',
             updates.fecha_inicio ? `El inicio quedó para el ${updates.fecha_inicio.split('-').reverse().join('/')}.` : '',
             updates.fecha_termino_estimada ? `La entrega quedó para el ${updates.fecha_termino_estimada.split('-').reverse().join('/')}.` : '',
+            rescheduledActs.length
+              ? `Ajusté automáticamente las ${rescheduledActs.length} partidas de la Carta Gantt del ${targetStart.split('-').reverse().join('/')} al ${targetEnd.split('-').reverse().join('/')}.`
+              : '',
             updates.descripcion ? 'Actualicé la descripción.' : '',
           ].filter(Boolean).join(' '),
           link_destino: `/proyectos/${proj.id}/gantt`,
@@ -2141,40 +2218,79 @@ export class DataService {
         }
         const match = resolveEntity(acts, accion.actividad_id || accion.nombre);
         if (match) {
-          const onlyResponsible =
-            Boolean(worker) &&
+          const hasDateOrNameChange = Boolean(
+            accion.fecha_inicio ||
+              accion.fecha_termino ||
+              accion.dias !== undefined ||
+              (typeof accion.nuevo_nombre === 'string' &&
+                accion.nuevo_nombre.trim() &&
+                accion.nuevo_nombre.trim() !== match.nombre),
+          );
+          const onlyMetaOrResponsible =
+            (Boolean(worker) || hasDateOrNameChange) &&
             (accion.porcentaje_avance === undefined ||
               Number(accion.porcentaje_avance) === (match.porcentaje_avance ?? 0));
-          const avance = onlyResponsible
+          const avance = onlyMetaOrResponsible
             ? (match.porcentaje_avance ?? 0)
             : Math.min(100, Math.max(0, Number(accion.porcentaje_avance) || 0));
-          const estado = onlyResponsible
+          const estado = onlyMetaOrResponsible
             ? match.estado
             : avance === 100
               ? 'terminada'
               : avance > 0
                 ? 'en_curso'
                 : 'pendiente';
+          const nextInicio = accion.fecha_inicio || match.fecha_inicio;
+          const nextTermino =
+            accion.fecha_termino ||
+            (accion.dias !== undefined && nextInicio
+              ? new Date(Date.parse(`${nextInicio}T12:00:00Z`) + Number(accion.dias) * 86400000)
+                  .toISOString()
+                  .slice(0, 10)
+              : match.fecha_termino);
+          const nextNombre =
+            typeof accion.nuevo_nombre === 'string' && accion.nuevo_nombre.trim()
+              ? accion.nuevo_nombre.trim()
+              : match.nombre;
           const updated = this.updateActividad(match.id, {
+            nombre: nextNombre,
+            fecha_inicio: nextInicio,
+            fecha_termino: nextTermino,
             porcentaje_avance: avance,
             estado,
             ...(worker ? { responsable_id: worker.id } : {}),
           });
+          if (hasDateOrNameChange) {
+            const projPatch: Partial<Proyecto> = {};
+            if (nextInicio && proj.fecha_inicio && nextInicio < proj.fecha_inicio) {
+              projPatch.fecha_inicio = nextInicio;
+            }
+            if (nextTermino && proj.fecha_termino_estimada && nextTermino > proj.fecha_termino_estimada) {
+              projPatch.fecha_termino_estimada = nextTermino;
+            }
+            if (Object.keys(projPatch).length) this.updateProyecto(proj.id, projPatch);
+          }
           const statusSuffix =
-            !onlyResponsible && proj.estado !== this.getProyectoById(proj.id)?.estado
+            !onlyMetaOrResponsible && proj.estado !== this.getProyectoById(proj.id)?.estado
               ? this.getProyectoById(proj.id)?.estado === 'terminado'
                 ? ' Todas las partidas están completas: la obra quedó terminada y pendiente de recepción del mandante.'
                 : ' La obra volvió a En curso porque queda trabajo pendiente.'
               : '';
+          const scheduleNote =
+            accion.fecha_inicio || accion.fecha_termino || accion.dias !== undefined
+              ? ` Fechas: ${nextInicio.split('-').reverse().join('/')} al ${nextTermino.split('-').reverse().join('/')}.`
+              : '';
           const resultadoTexto =
-            onlyResponsible && worker
-              ? `Asigné a ${worker.nombre} como responsable de la partida "${match.nombre}".`
-              : worker
-                ? `Dejé "${match.nombre}" al ${avance}% y asigné a ${worker.nombre} como responsable.${statusSuffix}`
-                : `Dejé "${match.nombre}" al ${avance}%.${statusSuffix}`;
+            onlyMetaOrResponsible && worker && !hasDateOrNameChange
+              ? `Asigné a ${worker.nombre} como responsable de la partida "${nextNombre}".`
+              : onlyMetaOrResponsible && hasDateOrNameChange
+                ? `Actualicé la partida "${nextNombre}"${worker ? ` (responsable: ${worker.nombre})` : ''}.${scheduleNote}`
+                : worker
+                  ? `Dejé "${nextNombre}" al ${avance}% y asigné a ${worker.nombre} como responsable.${scheduleNote}${statusSuffix}`
+                  : `Dejé "${nextNombre}" al ${avance}%.${scheduleNote}${statusSuffix}`;
           return {
             tipo: 'actualizar_avance',
-            titulo: onlyResponsible ? `Responsable de Partida Actualizado` : `Avance Actualizado`,
+            titulo: onlyMetaOrResponsible ? `Partida Actualizada` : `Avance Actualizado`,
             detalles: updated || match,
             resultado_texto: resultadoTexto,
             link_destino: `/proyectos/${proj.id}/gantt`,

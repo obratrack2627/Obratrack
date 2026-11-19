@@ -69,9 +69,54 @@ export function checkActionPermissions(
       delete action.monto_cotizado;
       validateAction(action);
     }
+    if (action.tipo === 'actualizar_proyecto') {
+      const hasOtherUpdate = Boolean(
+        action.fecha_inicio ||
+          action.fecha_termino_estimada ||
+          action.reprogramar_gantt ||
+          action.monto !== undefined ||
+          action.monto_cotizado !== undefined,
+      );
+      if (
+        action.nuevo_nombre !== undefined &&
+        hasOtherUpdate &&
+        !/\b(?:renombr\w*|llamar\w*|llamad[oa]|cambia\w*\s+el\s+nombre|nuevo\s+nombre)\b/.test(current)
+      ) {
+        delete action.nuevo_nombre;
+      }
+      if (
+        action.descripcion !== undefined &&
+        hasOtherUpdate &&
+        !/\b(?:descripcion|alcance|detalle|resumen)\b/.test(current)
+      ) {
+        delete action.descripcion;
+      }
+      if (
+        action.estado !== undefined &&
+        hasOtherUpdate &&
+        !/\b(?:estado|activ[oa]|en curso|pausad[oa]|terminad[oa]|finalizad[oa]|cancelad[oa]|pendiente|reanuda\w*|reactiva\w*|pausa\w*|termina\w*|cancela\w*)\b/.test(
+          current,
+        )
+      ) {
+        delete action.estado;
+      }
+      if (
+        (action.fecha_inicio || action.fecha_termino_estimada || action.reprogramar_gantt) &&
+        !/\b(?:sin|no)\s+(?:cambiar|mover|ajustar|modificar|tocar)\s+(?:el\s+|la\s+|las\s+)?(?:gantt|carta\s+gant+|partidas?|actividades?|tareas?)\b/.test(
+          current,
+        )
+      ) {
+        action.reprogramar_gantt = true;
+      }
+    }
     if (
       action.tipo === 'actualizar_avance' &&
-      (action.responsable_id || action.responsable_nombre) &&
+      (action.responsable_id ||
+        action.responsable_nombre ||
+        action.fecha_inicio ||
+        action.fecha_termino ||
+        action.dias !== undefined ||
+        action.nuevo_nombre) &&
       !/\b(?:\d+\s*%|porcentaje|avance|terminad[oa]s?|completad[oa]s?|al\s+\d+)\b/.test(current)
     ) {
       delete action.porcentaje_avance;

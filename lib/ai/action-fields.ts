@@ -12,6 +12,7 @@ const scoped: Record<string, string[]> = {
     "crear_proyecto",
     "crear_proyecto_completo",
     "crear_actividad",
+    "actualizar_avance",
     "crear_solicitud_cambio",
   ],
   monto: [
@@ -52,7 +53,13 @@ const scoped: Record<string, string[]> = {
     "crear_proyecto",
     "crear_proyecto_completo",
     "crear_actividad",
+    "actualizar_avance",
   ],
+  fecha_termino: [
+    "crear_actividad",
+    "actualizar_avance",
+  ],
+  reprogramar_gantt: ["actualizar_proyecto"],
   fecha_termino_estimada: [
     "crear_proyecto",
     "crear_proyecto_completo",

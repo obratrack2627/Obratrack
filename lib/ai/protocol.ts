@@ -294,6 +294,7 @@ export function validateAction(raw: any): AIAction {
   for (const field of [
     "fecha",
     "fecha_inicio",
+    "fecha_termino",
     "fecha_termino_estimada",
     "fecha_documento",
   ]) {
@@ -345,6 +346,7 @@ export function validateAction(raw: any): AIAction {
       "fecha_termino_estimada",
       "descripcion",
       "nuevo_nombre",
+      "reprogramar_gantt",
     ].some((k) => a[k] !== undefined)
   )
     fail("Indica qué dato de la obra quieres actualizar.");
@@ -405,12 +407,17 @@ export function validateAction(raw: any): AIAction {
       a.responsable_nombre = normalizedRaw.trabajador_nombre.trim();
     }
     const hasResponsible = text(a.responsable_nombre) || text(a.responsable_id);
+    const hasScheduleOrRename =
+      text(a.fecha_inicio) ||
+      text(a.fecha_termino) ||
+      a.dias !== undefined ||
+      text(a.nuevo_nombre);
     if (!text(a.nombre) && !text(a.actividad_id) && !hasResponsible)
       fail("Indica la actividad que quieres actualizar.");
     if (a.porcentaje_avance !== undefined) {
       amount(a.porcentaje_avance, "el avance");
-    } else if (!hasResponsible) {
-      fail("Indica el porcentaje de avance o el responsable de la partida.");
+    } else if (!hasResponsible && !hasScheduleOrRename) {
+      fail("Indica el porcentaje de avance, fechas o el responsable de la partida.");
     }
   }
   if (a.materiales !== undefined && a.tipo !== "actualizar_material") {
@@ -456,7 +463,7 @@ export function validateAction(raw: any): AIAction {
   }
   if (a.tipo === "registrar_pago") {
     amount(a.monto, "el pago", true);
-    if (a.metodo && !["transferencia", "efectivo", "debito"].includes(a.metodo))
+    if (a.metodo && !["transferencia", "efectivo", "debito", "credito"].includes(a.metodo))
       fail("Forma de pago no válida.");
   }
   if (a.tipo === "registrar_imprevisto") {

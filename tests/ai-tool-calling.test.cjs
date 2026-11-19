@@ -184,3 +184,73 @@ test('asignar responsable a partidas/tareas de la Carta Gantt persiste responsab
   assert.equal(planAll.changed.actividades.length, 3);
   assert.match(actionReply(planAll.result), /Asigné a Felipe Poblete como responsable de las 3 partidas de la Carta Gantt/);
 });
+
+test('actualizar_proyecto reprograma automáticamente las partidas de la Carta Gantt al cambiar fechas y descarta campos repetidos no solicitados', () => {
+  const { checkActionPermissions } = require('../lib/ai/permissions.ts');
+  const { isolatedState, planWhatsAppActions } = require('../lib/whatsapp/state.ts');
+  const { actionReply } = require('../lib/ai/action-reply.ts');
+
+  const admin = { id: 'u-admin', empresa_id: 'e-1', nombre: 'Jorge', rol: 'admin' };
+  const project = {
+    id: 'p-sb',
+    empresa_id: 'e-1',
+    nombre: 'Pintura de pieza 2 × 3 m — San Bernardo',
+    descripcion: 'Pintura interior en San Bernardo',
+    estado: 'activo',
+    fecha_inicio: '2026-11-19',
+    fecha_termino_estimada: '2026-11-22',
+    monto_cotizado: 250000,
+  };
+  const activities = [
+    { id: 'act-1', proyecto_id: 'p-sb', nombre: 'Limpieza, protección y lijado de muros', fecha_inicio: '2026-11-19', fecha_termino: '2026-11-20', porcentaje_avance: 0, estado: 'pendiente', orden: 1, responsable_id: 'u-felipe' },
+    { id: 'act-2', proyecto_id: 'p-sb', nombre: 'Reparación localizada de dos grietas y aplicación de base látex', fecha_inicio: '2026-11-20', fecha_termino: '2026-11-21', porcentaje_avance: 0, estado: 'pendiente', orden: 2, responsable_id: 'u-felipe' },
+    { id: 'act-3', proyecto_id: 'p-sb', nombre: 'Aplicación de esmalte al agua, terminaciones y limpieza', fecha_inicio: '2026-11-21', fecha_termino: '2026-11-22', porcentaje_avance: 0, estado: 'pendiente', orden: 3, responsable_id: 'u-felipe' },
+  ];
+
+  // Aunque el modelo envíe nuevo_nombre, estado y descripcion repetidos al cambiar las fechas:
+  const envelope = JSON.parse(
+    toolCallsToChatEnvelope('Actualizaré las fechas.', [
+      {
+        name: 'actualizar_proyecto',
+        arguments: JSON.stringify({
+          proyecto_id: 'p-sb',
+          nuevo_nombre: 'Pintura de pieza 2 × 3 m — San Bernardo',
+          estado: 'activo',
+          descripcion: 'Pintura interior en San Bernardo',
+          fecha_inicio: '2026-12-25',
+          fecha_termino_estimada: '2026-12-29',
+        }),
+      },
+    ]),
+  );
+
+  const permitted = checkActionPermissions(
+    admin,
+    envelope.acciones,
+    'quiero cambies el inicio y termino, iniciara el dia 25 de diciembre hasta el 29',
+  );
+  const service = isolatedState(admin, { usuarios: [admin], proyectos: [project], actividades: activities }, 'pro_ia');
+  const plan = planWhatsAppActions(service, permitted);
+
+  // 1) Actualizó inicio y término de la obra
+  assert.equal(plan.changed.proyectos[0].fecha_inicio, '2026-12-25');
+  assert.equal(plan.changed.proyectos[0].fecha_termino_estimada, '2026-12-29');
+
+  // 2) Reprogramó automáticamente las 3 partidas de la Carta Gantt dentro del rango 2026-12-25..2026-12-29
+  assert.equal(plan.changed.actividades.length, 3);
+  const sorted = plan.changed.actividades.slice().sort((a, b) => a.orden - b.orden);
+  assert.equal(sorted[0].fecha_inicio, '2026-12-25');
+  assert.equal(sorted[2].fecha_termino, '2026-12-29');
+  for (const act of sorted) {
+    assert.equal(act.responsable_id, 'u-felipe');
+  }
+
+  // 3) El mensaje de respuesta NO dice "Renombré la obra... a ...", "El estado quedó como en curso" ni "Actualicé la descripción"
+  const reply = actionReply(plan.result);
+  assert.doesNotMatch(reply, /Renombré la obra/);
+  assert.doesNotMatch(reply, /El estado quedó como/);
+  assert.doesNotMatch(reply, /Actualicé la descripción/);
+  assert.match(reply, /El inicio quedó para el 25\/12\/2026/);
+  assert.match(reply, /La entrega quedó para el 29\/12\/2026/);
+  assert.match(reply, /Ajusté automáticamente las 3 partidas de la Carta Gantt/);
+});
