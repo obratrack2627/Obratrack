@@ -327,4 +327,17 @@ test('auditoría de gestión integral: resumen financiero, responsable_nombre en
   assert.equal(plan.changed.pagos[0].notas, 'Pago con tarjeta');
   assert.equal(plan.changed.asistencia_obreros[0].usuario_id, 'u-felipe');
   assert.equal(plan.changed.asistencia_obreros[0].estado, 'presente');
+
+  // 3) Prevención de colisiones entre interceptores (estado de obra vs tareas plurales, nombre de contacto vs tarea, preguntas de obra vs revisión de cotización)
+  const { projectStatusCommand } = require('../lib/ai/project-status-command.ts');
+  const { contactNameCommand } = require('../lib/ai/contact-name-command.ts');
+  const { isQuoteRevision, requestsPlatformAction, hasOtherWorkBeyondStatus } = require('../lib/ai/prompt.ts');
+
+  assert.equal(projectStatusCommand('Deja las tareas terminadas', [project], 'p-sb'), null);
+  assert.equal(projectStatusCommand('Marca las partidas como terminadas', [project], 'p-sb'), null);
+  assert.equal(hasOtherWorkBeyondStatus('Marca las tareas como terminadas'), true);
+  assert.equal(contactNameCommand('Cambia el nombre de la tarea Limpieza a Preparación', [admin, felipe], [], 'u-admin').handled, false);
+  assert.equal(requestsPlatformAction('quiero cambies el inicio y termino, iniciara el dia 25 de diciembre'), true);
+  assert.equal(isQuoteRevision('¿Cuál es el presupuesto de la obra?'), false);
+  assert.equal(isQuoteRevision('¿Cuánto hemos gastado en mano de obra en el proyecto?'), false);
 });

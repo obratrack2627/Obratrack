@@ -54,13 +54,13 @@ function userMentions(users: any[], text: string, exceptName?: string) {
 function otherSubject(message: string) {
   const text = norm(message);
   if (
-    /\bnombre (?:de la|del|de el|de) (?:obra|proyecto|cliente|mandante|empresa|actividad|partida|material|documento)\b/.test(
+    /\bnombre (?:de la|del|de el|de) (?:obra|proyecto|cliente|mandante|empresa|actividad|partida|tarea|gant+|material|documento)\b/.test(
       text,
     )
   )
     return true;
   return (
-    /\b(?:obra|proyecto|cliente|mandante|empresa|actividad|partida|material|documento)\b/.test(
+    /\b(?:obra|proyecto|cliente|mandante|empresa|actividad|partida|tarea|gant+|material|documento)\b/.test(
       text,
     ) &&
     !/\b(?:trabajador|maestro|supervisor|integrante|persona)\b/.test(text) &&

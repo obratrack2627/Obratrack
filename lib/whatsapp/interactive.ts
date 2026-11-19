@@ -275,7 +275,8 @@ export function buildWhatsAppInteractivePayload(
   if (
     actions?.borrador_registro?.asignacion &&
     Array.isArray(actions.borrador_registro.asignacion.nombres) &&
-    actions.borrador_registro.asignacion.nombres.length === 0
+    actions.borrador_registro.asignacion.nombres.length === 0 &&
+    (!rawReply || /\b(?:trabajadores|jefes de obra|a quienes|indica los nombres|cuadrilla)\b/.test(normalizedReply))
   ) {
     const asksWorkerNames = /\b(?:a quienes|indica los nombres)\b/.test(normalizedReply);
     const availableWorkers = (options?.workers || []).filter((w) => w?.id && w?.nombre && w.rol !== "admin").slice(0, 10);

@@ -370,7 +370,16 @@ export async function processPersonalMessage(
       persistido: false,
     };
   }
-  if (pendingPerson?.asignacion && (requestsNewProject(text) || isQuoteRequest(text) || isQuoteRevision(text) || isAlternativeRequest(text))) {
+  if (
+    pendingPerson?.asignacion &&
+    (requestsNewProject(text) ||
+      isQuoteRequest(text) ||
+      isQuoteRevision(text) ||
+      isAlternativeRequest(text) ||
+      (Array.isArray(pendingPerson.asignacion.nombres) &&
+        pendingPerson.asignacion.nombres.length === 0 &&
+        isGreetingOrMenuRequest(text)))
+  ) {
     pendingPerson = null;
     nextPerson = null;
     candidatePerson = null;
@@ -485,7 +494,7 @@ export async function processPersonalMessage(
   ]);
   const preferences = conversationPreferences(contactHistory, user, activeProject || undefined, attachment ? '' : text);
   const preferenceReply = !attachment && preferences.respuesta ? {respuesta:preferences.respuesta,accion:null,cotizacion:null,sugerencias:[]} : null;
-  const nameCommand = !attachment && !pendingPerson && !/\b(?:obra|proyecto)\b/i.test(text) && ['admin','supervisor'].includes(user.rol) ? contactNameCommand(text,tables.usuarios,contactHistory,user.id) : null;
+  const nameCommand = !attachment && !pendingPerson && !/\b(?:obra|proyecto|partida|tarea|actividad|gant|cliente|material)\b/i.test(text) && ['admin','supervisor'].includes(user.rol) ? contactNameCommand(text,tables.usuarios,contactHistory,user.id) : null;
   const creationRequest = requestsNewProject(text);
   const projectRefusal = user.rol === 'terreno' && !attachment && creationRequest ? {respuesta:'Solo administradores y jefes de obra pueden crear o editar obras. Tu teléfono está registrado como trabajador de terreno; puedes subir avances y reportes de incidentes de tus obras asignadas.',accion:null,cotizacion:null,sugerencias:[]} : null;
   const attendanceRefusal = user.rol === 'terreno' && !attachment && isAttendanceManagementRequest(text) ? {respuesta:ATTENDANCE_MANAGEMENT_MESSAGE,accion:null,cotizacion:null,sugerencias:[]} : null;

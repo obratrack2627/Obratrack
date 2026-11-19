@@ -122,12 +122,12 @@ Solicitud: ${JSON.stringify(message)}`;
 export function requestsPlatformAction(message: string) {
   const text = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/\bno\s+(?:crees?|crear|generes?|generar)\s+(?:(?:una?|la|el)\s+)?(?:obra|proyecto)s?\b/g, '');
-  const dateChange=/\b(?:cambia|cambiar|modifica|modificar|reprograma|reprogramar|mueve|mover|pospone|posponer)\b.*\b(?:fechas?|inicio|termino|obra|proyecto)\b/.test(text);
+  const dateChange=/\b(?:cambi\w*|modific\w*|reprogram\w*|muev\w*|pospon\w*|ajust\w*)\b.*\b(?:fechas?|inicio|termino|obra|proyecto|partidas?|tareas?|actividad(?:es)?|gant+|responsables?)\b/.test(text);
   const markAction =
     /(?:^|[,;]\s*|\b(?:y|luego|ademas|tambien|por favor)\s+)marca\b|\bmarca\s+(?:como\b|asistencia\b|presente\b|ausente\b|atraso\b|permiso\b|licencia\b|comprad[oa]s?\b|pagad[oa]s?\b|terminad[oa]s?\b|completad[oa]s?\b|pendientes?\b|list[oa]s?\b|el\b|la\b|los\b|las\b|al\b|a\s+)/.test(
       text,
     );
-  return dateChange || markAction || /\b(?:crea|crear|creame|creanos|crees|creala|crealo|crealas|crealos|convierte|convertir|conviertela|conviertelo|registra|registrar|asigna|asignar|desasigna|agenda|agendar|actualiza|actualizar|elimina|eliminar|borra|borrar|agrega|agregar|anade|anadir|incorpora|incorporar|marcar|pausa|pausar|cancela|cancelar|reactiva|reactivar|envia|enviar|manda|notifica)\b|\b(?:genera|generar)\s+(?:(?:una?|la|el|esta|esa)\s+)?(?:obra|proyecto)\b|\b(?:haz|hazme|hacer|arma|armame|abre)\s+(?:(?:una?|la|el|nueva?|esta|esa)\s+){0,3}(?:obra|proyecto)\b|\b(?:pasa|pasar)\b.*\b(?:cotizacion|presupuesto)\b.*\b(?:a|en)\s+(?:una?\s+)?(?:obra|proyecto)\b/.test(text);
+  return dateChange || markAction || /\b(?:crea|crear|creame|creanos|crees|creala|crealo|crealas|crealos|convierte|convertir|conviertela|conviertelo|registra|registrar|registres|asigna|asignar|asignes|desasigna|agenda|agendar|agendes|actualiza|actualizar|actualices|elimina|eliminar|borra|borrar|agrega|agregar|agregues|anade|anadir|incorpora|incorporar|marcar|marques|pausa|pausar|cancela|cancelar|reactiva|reactivar|envia|enviar|manda|notifica)\b|\b(?:genera|generar)\s+(?:(?:una?|la|el|esta|esa)\s+)?(?:obra|proyecto)\b|\b(?:haz|hazme|hacer|arma|armame|abre)\s+(?:(?:una?|la|el|nueva?|esta|esa)\s+){0,3}(?:obra|proyecto)\b|\b(?:pasa|pasar)\b.*\b(?:cotizacion|presupuesto)\b.*\b(?:a|en)\s+(?:una?\s+)?(?:obra|proyecto)\b/.test(text);
 }
 
 export function isQuoteRequest(message: string) {
@@ -270,7 +270,11 @@ export function isQuoteRevision(message: string) {
   const text = message
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+    .toLowerCase()
+    .trim();
+  if (/^[¿?]*(?:cual(?:es)?|cuanto(?:s|as)?|que|como|quien(?:es)?)\b/.test(text) && /\b(?:obra|proyecto|gastad[oa]|pagad[oa]|cobrad[oa]|saldo)\b/.test(text) && !/\bcotiz/.test(text)) {
+    return false;
+  }
   return (
     !requestsPlatformAction(message) &&
     /margen|utilidad|desperdicio|cotizacion|presupuesto|gastos generales|mano de obra|superficie|espesor|iva|saca|quita|incluye|materiales incluidos|precio acordado|cambia.*(?:metro|m2|cantidad|precio)/.test(
@@ -319,7 +323,7 @@ export function hasOtherWorkBeyondStatus(message: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
   const hasEntity =
-    /\b(?:material|pago|abono|saldo|por cobrar|gasto|imprevisto|bitacora|partida|actividad|avance|asistencia|trabajador|cliente|agenda|visita|evento|reporte|whatsapp|aviso|mensaje|precio|internet|cotizacion|presupuesto|reclamo|solicitud)\w*\b/.test(
+    /\b(?:material|pago|abono|saldo|por cobrar|gasto|imprevisto|bitacora|partida|actividad|tarea|gant|fecha|inicio|termino|jornada|cierre|avance|asistencia|trabajador|cliente|agenda|visita|evento|reporte|whatsapp|aviso|mensaje|precio|internet|cotizacion|presupuesto|reclamo|solicitud)\w*\b/.test(
       text,
     );
   const hasExtraVerb =
