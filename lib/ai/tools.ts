@@ -50,7 +50,6 @@ const WORKER_TOOLS: OpenAIFunctionTool[] = [
       responsable_nombre: { type: 'string', description: 'Nombre o ID del trabajador/jefe de obra asignado como responsable de la partida (solo jefatura).' },
       fecha_inicio: { type: 'string', description: 'Nueva fecha de inicio YYYY-MM-DD de la partida.' },
       fecha_termino: { type: 'string', description: 'Nueva fecha de término YYYY-MM-DD de la partida.' },
-      dias: { type: 'number', description: 'Duración en días enteros si pidieron extender o acortar la partida.' },
       nota: { type: 'string', description: 'Observación breve del avance.' },
     },
     ['proyecto_id'],
