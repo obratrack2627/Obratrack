@@ -96,4 +96,4 @@ test('sanitiza correos vigentes y distingue correo no autorizado por SMTP de cor
   assert.match(dup.error,/ya está registrado/);
 });
 
-test('el alta nueva rechaza claves menores a doce caracteres',()=>{assert.match(validateSignUpFields({nombre:'QA Admin',rut:'',email:'qa@example.test',telefono:'+56912345678',signupPassword:'123456',signupConfirmPassword:'123456',acceptTerms:true}),/12 caracteres/);});
+test('el alta nueva rechaza claves menores a ocho caracteres y acepta desde 8',()=>{assert.match(validateSignUpFields({nombre:'QA Admin',rut:'',email:'qa@example.test',telefono:'+56912345678',signupPassword:'1234567',signupConfirmPassword:'1234567',acceptTerms:true}),/8 caracteres/);assert.equal(validateSignUpFields({nombre:'QA Admin',rut:'',email:'qa@example.test',telefono:'+56912345678',signupPassword:'12345678',signupConfirmPassword:'12345678',acceptTerms:true}),null);});

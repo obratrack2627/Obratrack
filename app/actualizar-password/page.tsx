@@ -106,11 +106,11 @@ export default function ActualizarPasswordPage() {
     };
   }, []);
 
-  // Calcular fortaleza de contraseña (0 a 3) alineada al mínimo de 12 caracteres
+  // Calcular fortaleza de contraseña (0 a 3) alineada al mínimo de 8 caracteres
   const getPasswordStrength = (pass: string) => {
     if (!pass) return 0;
     let score = 0;
-    if (pass.length >= 12) score++;
+    if (pass.length >= 8) score++;
     if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) score++;
     if (/[0-9]/.test(pass) || /[^A-Za-z0-9]/.test(pass)) score++;
     return score;
@@ -123,8 +123,8 @@ export default function ActualizarPasswordPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    if (newPassword.length < 12) {
-      setErrorMsg('La nueva contraseña debe tener al menos 12 caracteres.');
+    if (newPassword.length < 8) {
+      setErrorMsg('La nueva contraseña debe tener al menos 8 caracteres.');
       return;
     }
 
@@ -248,9 +248,9 @@ export default function ActualizarPasswordPage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full pl-10 pr-10 py-2.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/20 font-sans transition-all"
-                  placeholder="Mínimo 12 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   required
-                  minLength={12}
+                  minLength={8}
                 />
                 <button
                   type="button"
@@ -306,7 +306,7 @@ export default function ActualizarPasswordPage() {
                   className="w-full pl-10 pr-10 py-2.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/20 font-sans transition-all"
                   placeholder="Repite la nueva contraseña"
                   required
-                  minLength={12}
+                  minLength={8}
                 />
               </div>
             </div>

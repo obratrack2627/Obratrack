@@ -1,5 +1,9 @@
 BEGIN;
 INSERT INTO public.empresas(id,nombre,plan_id) VALUES('qa-sec-emp','QA Seguridad','pro_ia');
+INSERT INTO auth.users(id,email,raw_app_meta_data,raw_user_meta_data,email_confirmed_at)
+VALUES
+  ('00000000-0000-0000-0000-000000000101','admin-acceso@qa.test','{"provider":"email","providers":["email"]}','{}',now()),
+  ('00000000-0000-0000-0000-000000000102','terreno@qa.test','{"provider":"email","providers":["email"]}','{}',now());
 INSERT INTO public.usuarios(id,auth_user_id,empresa_id,nombre,rut,email,email_acceso,telefono_whatsapp,rol)
 VALUES
   ('00000000-0000-0000-0000-000000000101','00000000-0000-0000-0000-000000000101','qa-sec-emp','Admin QA','12.345.678-5','admin@qa.test','admin-acceso@qa.test','+56912345678','admin'),
@@ -63,12 +67,11 @@ BEGIN
     RAISE EXCEPTION 'PROFILE_SELF_CONFLICT: %', res;
   END IF;
 END $$;
+RESET ROLE;
+
 -- 4. RLS DELETE en whatsapp_avisos bloquea a terreno y permite admin dentro de su empresa
-SELECT set_config('request.jwt.claims','{"sub":"00000000-0000-0000-0000-000000000101","role":"authenticated"}',true);
-SET LOCAL ROLE authenticated;
 INSERT INTO public.whatsapp_avisos(id,empresa_id,actor_id,request_key,mensaje,origen)
 VALUES('11111111-1111-4111-a111-111111111999','qa-sec-emp','00000000-0000-0000-0000-000000000101','qa-del-aviso','Aviso QA','plataforma');
-RESET ROLE;
 
 SELECT set_config('request.jwt.claims','{"sub":"00000000-0000-0000-0000-000000000102","role":"authenticated"}',true);
 SET LOCAL ROLE authenticated;

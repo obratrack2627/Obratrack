@@ -59,7 +59,7 @@ export function mapSupabaseAuthError(message: string, code?: string): string {
     return 'Tu correo aún no ha sido confirmado. Revisa tu bandeja de entrada o solicita un nuevo correo de activación.';
   }
   if (lower.includes('password should be at least')) {
-    return 'La contraseña debe tener al menos 12 caracteres.';
+    return 'La contraseña debe tener al menos 8 caracteres.';
   }
   if (
     normalizedCode === 'same_password' ||
@@ -73,7 +73,7 @@ export function mapSupabaseAuthError(message: string, code?: string): string {
     lower.includes('weak_password') ||
     lower.includes('weak password')
   ) {
-    return 'La contraseña es muy débil. Usa al menos 12 caracteres combinando letras y números.';
+    return 'La contraseña es muy débil. Usa al menos 8 caracteres combinando letras y números.';
   }
   if (
     normalizedCode === 'email_address_not_authorized' ||
@@ -435,10 +435,10 @@ export async function resetPasswordWithSupabase(email: string): Promise<AuthResu
  */
 export async function updatePasswordWithSupabase(newPassword: string): Promise<AuthResult> {
   try {
-    if (!newPassword || newPassword.length < 12) {
+    if (!newPassword || newPassword.length < 8) {
       return {
         success: false,
-        error: 'La nueva contraseña debe tener al menos 12 caracteres.',
+        error: 'La nueva contraseña debe tener al menos 8 caracteres.',
       };
     }
 
