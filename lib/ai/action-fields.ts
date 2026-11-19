@@ -33,6 +33,9 @@ const scoped: Record<string, string[]> = {
   monto_documento: ["registrar_documento"],
   impacto_monto: ["crear_solicitud_cambio"],
   porcentaje_avance: ["actualizar_avance"],
+  responsable_id: ["actualizar_avance", "crear_actividad"],
+  responsable_nombre: ["actualizar_avance", "crear_actividad"],
+  todas_las_partidas: ["actualizar_avance"],
   partidas: ["crear_proyecto", "crear_proyecto_completo", "crear_actividad"],
   actividades: ["crear_proyecto", "crear_proyecto_completo", "crear_actividad"],
   materiales: [

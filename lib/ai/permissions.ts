@@ -69,6 +69,13 @@ export function checkActionPermissions(
       delete action.monto_cotizado;
       validateAction(action);
     }
+    if (
+      action.tipo === 'actualizar_avance' &&
+      (action.responsable_id || action.responsable_nombre) &&
+      !/\b(?:\d+\s*%|porcentaje|avance|terminad[oa]s?|completad[oa]s?|al\s+\d+)\b/.test(current)
+    ) {
+      delete action.porcentaje_avance;
+    }
   }
   if (actions.some((a) => a.tipo === "enviar_mensaje_equipo")) {
     const command = message
@@ -98,7 +105,10 @@ export function checkActionPermissions(
       "La eliminación debe solicitarse expresamente.",
       403,
     );
-  if (user.rol === "terreno" && actions.some((a) => !workerActions.has(a.tipo)))
+  if (
+    user.rol === "terreno" &&
+    actions.some((a) => !workerActions.has(a.tipo) || (a.tipo === "actualizar_avance" && (a.responsable_id || a.responsable_nombre)))
+  )
     throw new AIError(
       "ACTION_FORBIDDEN",
       "Tu perfil de terreno puede registrar avances, bitácora y solicitudes de cambio en sus obras asignadas.",

@@ -40,15 +40,16 @@ const TOOL_BUSCAR_PRECIOS = fn(
 const WORKER_TOOLS: OpenAIFunctionTool[] = [
   fn(
     'actualizar_avance',
-    'Actualiza el porcentaje de avance (0 a 100) de una partida de la Carta Gantt.',
+    'Actualiza el porcentaje de avance (0 a 100) y/o asigna el trabajador responsable de una o todas las partidas de la Carta Gantt.',
     {
       proyecto_id: { type: 'string', description: 'ID exacto de la obra del contexto.' },
-      actividad_id: { type: 'string', description: 'ID exacto de la partida si figura en el contexto.' },
-      nombre: { type: 'string', description: 'Nombre de la partida.' },
-      porcentaje_avance: { type: 'number', description: 'Avance total de 0 a 100.' },
+      actividad_id: { type: 'string', description: 'ID exacto de la partida si figura en el contexto, o "todas" si aplica a todas las partidas de la obra.' },
+      nombre: { type: 'string', description: 'Nombre de la partida, o "todas" si se asigna el mismo responsable a todas las partidas de la Carta Gantt.' },
+      porcentaje_avance: { type: 'number', description: 'Avance total de 0 a 100. Omítelo si solo estás asignando el responsable de la partida sin modificar su avance.' },
+      responsable_nombre: { type: 'string', description: 'Nombre o ID del trabajador/jefe de obra asignado como responsable de la partida (solo jefatura).' },
       nota: { type: 'string', description: 'Observación breve del avance.' },
     },
-    ['proyecto_id', 'porcentaje_avance'],
+    ['proyecto_id'],
   ),
   fn(
     'crear_bitacora',
@@ -371,6 +372,7 @@ export function buildToolChatInstructions(context: Record<string, any>): string 
     actionsEnabled
       ? '8. Respeta las preferencias explícitas del usuario en el contexto.'
       : '8. Las acciones de escritura requieren plan Pro IA (acciones_habilitadas=false); explica eso si piden cambios.',
+    '9. Para asignar un trabajador a una obra (cuadrilla general) usa asignar_trabajador. Para asignar un responsable a una o todas las partidas/tareas de la Carta Gantt, usa actualizar_avance pasando responsable_nombre (y nombre="todas" si aplica a todas las partidas de la Carta Gantt, sin enviar porcentaje_avance a menos que también pidan cambiar el % de avance).',
   ].join('\n');
 }
 
@@ -444,10 +446,20 @@ export function toolCallsToChatEnvelope(
       obra_propuesta = args;
       continue;
     }
-    if (call.name === 'actualizar_avance' && !args.nombre && (args.actividad || args.actividad_nombre)) {
-      args.nombre = args.actividad || args.actividad_nombre;
-      delete args.actividad;
-      delete args.actividad_nombre;
+    if (call.name === 'actualizar_avance') {
+      if (!args.nombre && (args.actividad || args.actividad_nombre)) {
+        args.nombre = args.actividad || args.actividad_nombre;
+        delete args.actividad;
+        delete args.actividad_nombre;
+      }
+      const rawResp = args.responsable_nombre || args.responsable_id || args.trabajador_nombre;
+      if (typeof rawResp === 'string' && rawResp.trim()) {
+        args.responsable_nombre = rawResp.trim();
+        delete args.trabajador_nombre;
+        if (!args.nombre && !args.actividad_id) {
+          args.nombre = 'todas';
+        }
+      }
     }
     acciones.push({ tipo: call.name, ...args });
   }

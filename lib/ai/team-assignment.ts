@@ -85,9 +85,12 @@ function acceptsTeamReply(text: string, plain: string, projects: any[], users: a
 }
 
 function needsRegistrationOrAgent(text: string, plain: string, starts: boolean) {
-  return isCompoundTeamInstruction(text) || starts && (
-    /\b(?:nuevo|nueva)\s+(?:trabajador|maestro|supervisor|jefe|jefa)\b/.test(plain)
-    || /@|\b(?:rut|correo|telefono)\b/.test(plain)
+  return (
+    isCompoundTeamInstruction(text) ||
+    /\b(?:partida(?:s)?|actividad(?:es)?|tarea(?:s)?|gant+|responsable(?:s)?\s+de)\b/.test(plain) ||
+    (starts &&
+      (/\b(?:nuevo|nueva)\s+(?:trabajador|maestro|supervisor|jefe|jefa)\b/.test(plain) ||
+        /@|\b(?:rut|correo|telefono)\b/.test(plain)))
   );
 }
 

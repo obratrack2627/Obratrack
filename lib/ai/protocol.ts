@@ -147,6 +147,9 @@ export function validateAction(raw: any): AIAction {
   if (
     normalizedRaw.tipo === "actualizar_avance" &&
     normalizedRaw.porcentaje_avance === undefined &&
+    !text(normalizedRaw.responsable_nombre) &&
+    !text(normalizedRaw.responsable_id) &&
+    !text(normalizedRaw.trabajador_nombre) &&
     (text(normalizedRaw.nota) ||
       text(normalizedRaw.descripcion) ||
       text(normalizedRaw.titulo) ||
@@ -398,9 +401,17 @@ export function validateAction(raw: any): AIAction {
     });
   }
   if (a.tipo === "actualizar_avance") {
-    if (!text(a.nombre) && !text(a.actividad_id))
+    if (text(normalizedRaw.trabajador_nombre) && !text(a.responsable_nombre)) {
+      a.responsable_nombre = normalizedRaw.trabajador_nombre.trim();
+    }
+    const hasResponsible = text(a.responsable_nombre) || text(a.responsable_id);
+    if (!text(a.nombre) && !text(a.actividad_id) && !hasResponsible)
       fail("Indica la actividad que quieres actualizar.");
-    amount(a.porcentaje_avance, "el avance");
+    if (a.porcentaje_avance !== undefined) {
+      amount(a.porcentaje_avance, "el avance");
+    } else if (!hasResponsible) {
+      fail("Indica el porcentaje de avance o el responsable de la partida.");
+    }
   }
   if (a.materiales !== undefined && a.tipo !== "actualizar_material") {
     if (!Array.isArray(a.materiales) || a.materiales.length > 150)

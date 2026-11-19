@@ -148,12 +148,32 @@ export function prepareActionPlan(
       }
       a.proyecto_nombre = p.nombre;
       if (a.tipo === 'actualizar_avance') {
-        const act = resolveEntity(
-          activities.filter((x) => x.proyecto_id === p.id),
-          a.actividad_id || a.nombre,
-        );
-        a.nombre = act.nombre;
-        if (!act.id.startsWith('planned-')) a.actividad_id = act.id;
+        const respRef =
+          (typeof a.responsable_id === 'string' && a.responsable_id.trim()) ||
+          (typeof a.responsable_nombre === 'string' && a.responsable_nombre.trim()) ||
+          '';
+        if (respRef) {
+          const worker = resolveEntity(users, respRef);
+          a.responsable_id = worker.id;
+          a.responsable_nombre = worker.nombre;
+        }
+        const targetRef = String(a.actividad_id || a.nombre || '').trim();
+        const isAllPartidas =
+          Boolean(respRef) &&
+          (!targetRef ||
+            /^(?:todas?|todas las partidas|todas las tareas|todas las actividades|carta gantt|gantt)$/i.test(
+              targetRef,
+            ));
+        if (isAllPartidas) {
+          a.todas_las_partidas = true;
+        } else {
+          const act = resolveEntity(
+            activities.filter((x) => x.proyecto_id === p.id),
+            targetRef,
+          );
+          a.nombre = act.nombre;
+          if (!act.id.startsWith('planned-')) a.actividad_id = act.id;
+        }
       }
       if (a.tipo === 'crear_actividad')
         (a.partidas || a.actividades || [a]).forEach((act: any, j: number) =>

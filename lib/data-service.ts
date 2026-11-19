@@ -2101,16 +2101,82 @@ export class DataService {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;
         const acts = this.getActividades(proj.id);
-        const match = resolveEntity(acts, accion.actividad_id || accion.nombre);
-        if (match) {
-          const avance = Math.min(100, Math.max(0, Number(accion.porcentaje_avance) || 0));
-          const estado = avance === 100 ? 'terminada' : avance > 0 ? 'en_curso' : 'pendiente';
-          const updated = this.updateActividad(match.id, { porcentaje_avance: avance, estado });
+        const respIdent = accion.responsable_id || accion.responsable_nombre;
+        const worker = respIdent ? resolveEntity(this.getUsuarios(), respIdent) : null;
+        if (worker) {
+          this.asignarTrabajadorAProyecto(worker.id, proj.id);
+        }
+        if (accion.todas_las_partidas && worker) {
+          if (!acts.length) throw new Error(`La obra "${proj.nombre}" no tiene partidas en la Carta Gantt.`);
+          const updatedActs = acts.map((act) => {
+            const hasExplicitAvance =
+              typeof accion.porcentaje_avance === 'number' &&
+              accion.porcentaje_avance !== (act.porcentaje_avance ?? 0);
+            const avance = hasExplicitAvance
+              ? Math.min(100, Math.max(0, Number(accion.porcentaje_avance)))
+              : (act.porcentaje_avance ?? 0);
+            const estado = hasExplicitAvance
+              ? avance === 100
+                ? 'terminada'
+                : avance > 0
+                  ? 'en_curso'
+                  : 'pendiente'
+              : act.estado;
+            return (
+              this.updateActividad(act.id, {
+                responsable_id: worker.id,
+                porcentaje_avance: avance,
+                estado,
+              }) || { ...act, responsable_id: worker.id }
+            );
+          });
           return {
             tipo: 'actualizar_avance',
-            titulo: `Avance Actualizado`,
+            titulo: `Responsable Asignado en Carta Gantt`,
+            detalles: { partidas: updatedActs, responsable_id: worker.id, responsable_nombre: worker.nombre },
+            resultado_texto: `Asigné a ${worker.nombre} como responsable de las ${updatedActs.length} partidas de la Carta Gantt en "${proj.nombre}".`,
+            link_destino: `/proyectos/${proj.id}/gantt`,
+            link_texto: 'Ver Carta Gantt ➔',
+          };
+        }
+        const match = resolveEntity(acts, accion.actividad_id || accion.nombre);
+        if (match) {
+          const onlyResponsible =
+            Boolean(worker) &&
+            (accion.porcentaje_avance === undefined ||
+              Number(accion.porcentaje_avance) === (match.porcentaje_avance ?? 0));
+          const avance = onlyResponsible
+            ? (match.porcentaje_avance ?? 0)
+            : Math.min(100, Math.max(0, Number(accion.porcentaje_avance) || 0));
+          const estado = onlyResponsible
+            ? match.estado
+            : avance === 100
+              ? 'terminada'
+              : avance > 0
+                ? 'en_curso'
+                : 'pendiente';
+          const updated = this.updateActividad(match.id, {
+            porcentaje_avance: avance,
+            estado,
+            ...(worker ? { responsable_id: worker.id } : {}),
+          });
+          const statusSuffix =
+            !onlyResponsible && proj.estado !== this.getProyectoById(proj.id)?.estado
+              ? this.getProyectoById(proj.id)?.estado === 'terminado'
+                ? ' Todas las partidas están completas: la obra quedó terminada y pendiente de recepción del mandante.'
+                : ' La obra volvió a En curso porque queda trabajo pendiente.'
+              : '';
+          const resultadoTexto =
+            onlyResponsible && worker
+              ? `Asigné a ${worker.nombre} como responsable de la partida "${match.nombre}".`
+              : worker
+                ? `Dejé "${match.nombre}" al ${avance}% y asigné a ${worker.nombre} como responsable.${statusSuffix}`
+                : `Dejé "${match.nombre}" al ${avance}%.${statusSuffix}`;
+          return {
+            tipo: 'actualizar_avance',
+            titulo: onlyResponsible ? `Responsable de Partida Actualizado` : `Avance Actualizado`,
             detalles: updated || match,
-            resultado_texto: `Dejé \"${match.nombre}\" al ${avance}%.${proj.estado!==this.getProyectoById(proj.id)?.estado ? this.getProyectoById(proj.id)?.estado==='terminado' ? ' Todas las partidas están completas: la obra quedó terminada y pendiente de recepción del mandante.' : ' La obra volvió a En curso porque queda trabajo pendiente.' : ''}`,
+            resultado_texto: resultadoTexto,
             link_destino: `/proyectos/${proj.id}/gantt`,
             link_texto: 'Ver Carta Gantt ➔',
           };

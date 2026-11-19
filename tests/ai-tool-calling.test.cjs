@@ -122,3 +122,65 @@ test('chatGenerationRequest usa Tool Calling compacto en modo chat y conserva es
   assert.equal(searchReq.mode, 'search');
   assert.ok(searchReq.options.schema);
 });
+
+test('asignar responsable a partidas/tareas de la Carta Gantt persiste responsable_id en actividades sin dejarlas al 0% ni secuestrarlas como asignación a obra', () => {
+  const { teamAssignmentIntake } = require('../lib/ai/team-assignment.ts');
+  const { checkActionPermissions } = require('../lib/ai/permissions.ts');
+  const { isolatedState, planWhatsAppActions } = require('../lib/whatsapp/state.ts');
+  const { actionReply } = require('../lib/ai/action-reply.ts');
+
+  const admin = { id: 'u-admin', empresa_id: 'e-1', nombre: 'Jorge', rol: 'admin' };
+  const felipe = { id: 'u-felipe', empresa_id: 'e-1', nombre: 'Felipe Poblete', rol: 'terreno' };
+  const project = { id: 'p-sb', empresa_id: 'e-1', nombre: 'Pintura de pieza 2 × 3 m — San Bernardo', estado: 'activo' };
+  const activities = [
+    { id: 'act-1', proyecto_id: 'p-sb', nombre: 'Limpieza, protección y lijado de muros', porcentaje_avance: 25, estado: 'en_curso', orden: 1 },
+    { id: 'act-2', proyecto_id: 'p-sb', nombre: 'Reparación localizada de dos grietas y aplicación de base látex', porcentaje_avance: 0, estado: 'pendiente', orden: 2 },
+    { id: 'act-3', proyecto_id: 'p-sb', nombre: 'Aplicación de esmalte al agua, terminaciones y limpieza', porcentaje_avance: 0, estado: 'pendiente', orden: 3 },
+  ];
+
+  // 1) teamAssignmentIntake no debe secuestrar órdenes que mencionan partidas, tareas, actividades o carta gantt
+  assert.equal(
+    teamAssignmentIntake('asigna como responsable de esas tareas a felipe poblete', [project], [admin, felipe], 'p-sb'),
+    null,
+  );
+  assert.equal(
+    teamAssignmentIntake('asigna a felipe poblete como responsable de las partidas de la carta gantt', [project], [admin, felipe], 'p-sb'),
+    null,
+  );
+
+  // 2) Aunque el modelo envíe porcentaje_avance: 0 en las 3 partidas, si el usuario solo pidió asignar responsable se conserva el avance y se guarda responsable_id
+  const userMessage = 'asiga a felipe poblete como responsable de las partidas de la carta gantt';
+  const envelope = JSON.parse(
+    toolCallsToChatEnvelope('Asignaré a Felipe Poblete a las partidas.', [
+      { name: 'actualizar_avance', arguments: JSON.stringify({ proyecto_id: 'p-sb', actividad_id: 'act-1', porcentaje_avance: 0, responsable_nombre: 'Felipe Poblete' }) },
+      { name: 'actualizar_avance', arguments: JSON.stringify({ proyecto_id: 'p-sb', actividad_id: 'act-2', porcentaje_avance: 0, responsable_nombre: 'Felipe Poblete' }) },
+      { name: 'actualizar_avance', arguments: JSON.stringify({ proyecto_id: 'p-sb', actividad_id: 'act-3', porcentaje_avance: 0, responsable_nombre: 'Felipe Poblete' }) },
+    ]),
+  );
+
+  const permitted = checkActionPermissions(admin, envelope.acciones, userMessage);
+  const service = isolatedState(admin, { usuarios: [admin, felipe], proyectos: [project], actividades: activities }, 'pro_ia');
+  const plan = planWhatsAppActions(service, permitted);
+
+  assert.equal(plan.changed.actividades.length, 3);
+  for (const act of plan.changed.actividades) {
+    assert.equal(act.responsable_id, 'u-felipe');
+  }
+  // Conservó el 25% de la partida 1 en vez de reiniciar al 0%
+  assert.equal(plan.changed.actividades.find((a) => a.id === 'act-1').porcentaje_avance, 25);
+
+  const reply = actionReply(plan.result);
+  assert.doesNotMatch(reply, /al 0%/);
+  assert.match(reply, /Asigné a Felipe Poblete como responsable de la partida "Limpieza, protección y lijado de muros"/);
+
+  // 3) Si el modelo invoca actualizar_avance una sola vez con nombre="todas" (o sin nombre), actualiza las 3 partidas de una vez
+  const serviceAll = isolatedState(admin, { usuarios: [admin, felipe], proyectos: [project], actividades: activities }, 'pro_ia');
+  const singleEnvelope = JSON.parse(
+    toolCallsToChatEnvelope('Asignaré a Felipe Poblete.', [
+      { name: 'actualizar_avance', arguments: JSON.stringify({ proyecto_id: 'p-sb', nombre: 'todas', responsable_nombre: 'Felipe Poblete' }) },
+    ]),
+  );
+  const planAll = planWhatsAppActions(serviceAll, checkActionPermissions(admin, singleEnvelope.acciones, 'asigna como responsable de esas tareas a felipe poblete'));
+  assert.equal(planAll.changed.actividades.length, 3);
+  assert.match(actionReply(planAll.result), /Asigné a Felipe Poblete como responsable de las 3 partidas de la Carta Gantt/);
+});
