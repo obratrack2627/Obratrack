@@ -812,7 +812,7 @@ export class DataService {
         window.dispatchEvent(new Event('obratrack_sync_conflict'));
         throw new Error('Otro dispositivo actualizó esta obra. Recarga los datos antes de guardar.');
       }
-      throw new Error(payload?.error || 'No se pudo confirmar el guardado. Conservamos el formulario para que puedas reintentar.');
+      throw new Error('No se pudo confirmar el guardado. Conservamos el formulario para que puedas reintentar.');
     }
     const confirmed = await response.json().catch(() => null);
     const nextVersion = confirmed?.versiones?.proyectos?.[id];
