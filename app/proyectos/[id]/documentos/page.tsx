@@ -36,6 +36,24 @@ import {
 } from '@/types/database';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 
+function safeDocumentHref(raw?: string | null, allowDataImage = false): string | null {
+  const value = (raw || '').trim();
+  if (!value) return null;
+  if (value.startsWith('blob:')) return value;
+  if (allowDataImage && /^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(value)) {
+    return value;
+  }
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      return parsed.href;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export default function ProyectoDocumentosPage() {
   const params = useParams();
   const projectId = params?.id as string;
@@ -142,6 +160,12 @@ export default function ProyectoDocumentosPage() {
   const handleGuardarDocumento = (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectId) return;
+    const trimmedUrl = archivoUrl.trim();
+    const safeUrl = trimmedUrl ? safeDocumentHref(trimmedUrl, true) : null;
+    if (trimmedUrl && !safeUrl) {
+      showToast('La URL del archivo debe comenzar con https:// o http://.');
+      return;
+    }
     const tituloFinal =
       nombre.trim() || correoAsunto.trim() || archivoNombre || 'Documento de Obra';
 
@@ -150,7 +174,7 @@ export default function ProyectoDocumentosPage() {
       categoria,
       nombre: tituloFinal,
       descripcion: descripcion.trim() || undefined,
-      archivo_url: archivoUrl || undefined,
+      archivo_url: safeUrl || undefined,
       archivo_nombre: archivoNombre || undefined,
       archivo_tamano: archivoTamano,
       mime_type: mimeType || undefined,
@@ -601,17 +625,21 @@ export default function ProyectoDocumentosPage() {
                         <span>Ver detalle</span>
                       </button>
 
-                      {doc.archivo_url && (
-                        <a
-                          href={doc.archivo_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FF6A00]/10 text-[#FF6A00] hover:bg-[#FF6A00] hover:text-white text-xs font-bold transition-colors"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Abrir / Descargar</span>
-                        </a>
-                      )}
+                      {(() => {
+                        const safeHref = safeDocumentHref(doc.archivo_url);
+                        if (!safeHref) return null;
+                        return (
+                          <a
+                            href={safeHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#FF6A00]/10 text-[#FF6A00] hover:bg-[#FF6A00] hover:text-white text-xs font-bold transition-colors"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Abrir / Descargar</span>
+                          </a>
+                        );
+                      })()}
                     </div>
 
                     <button
@@ -891,35 +919,42 @@ export default function ProyectoDocumentosPage() {
               </div>
             )}
 
-            {docPreview.archivo_url && (
-              <div className="space-y-3">
-                {docPreview.mime_type?.startsWith('image/') ? (
-                  <img
-                    src={docPreview.archivo_url}
-                    alt={docPreview.nombre}
-                    className="w-full max-h-[60vh] object-contain rounded-xl border border-kraft-200"
-                  />
-                ) : docPreview.mime_type === 'application/pdf' ? (
-                  <iframe
-                    src={docPreview.archivo_url}
-                    title={docPreview.nombre}
-                    className="w-full h-[60vh] rounded-xl border border-kraft-200"
-                  />
-                ) : null}
+            {(() => {
+              const safeImgSrc = safeDocumentHref(docPreview.archivo_url, true);
+              const safeLinkHref = safeDocumentHref(docPreview.archivo_url, false);
+              if (!safeImgSrc && !safeLinkHref) return null;
+              return (
+                <div className="space-y-3">
+                  {docPreview.mime_type?.startsWith('image/') && safeImgSrc ? (
+                    <img
+                      src={safeImgSrc}
+                      alt={docPreview.nombre}
+                      className="w-full max-h-[60vh] object-contain rounded-xl border border-kraft-200"
+                    />
+                  ) : docPreview.mime_type === 'application/pdf' && safeLinkHref ? (
+                    <iframe
+                      src={safeLinkHref}
+                      title={docPreview.nombre}
+                      className="w-full h-[60vh] rounded-xl border border-kraft-200"
+                    />
+                  ) : null}
 
-                <div className="flex justify-end">
-                  <a
-                    href={docPreview.archivo_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF6A00] text-white text-xs font-bold"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Abrir archivo original en nueva pestaña</span>
-                  </a>
+                  {safeLinkHref && (
+                    <div className="flex justify-end">
+                      <a
+                        href={safeLinkHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF6A00] text-white text-xs font-bold"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Abrir archivo original en nueva pestaña</span>
+                      </a>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </ModalOverlay>
       )}

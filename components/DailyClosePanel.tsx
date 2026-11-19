@@ -19,7 +19,8 @@ import ModalOverlay from "@/components/ModalOverlay";
 import { dataService } from "@/lib/data-service";
 import { dailySummary, type DailyClose } from "@/lib/daily-close";
 import { chileToday } from "@/lib/work-calendar";
-import { formatCLP, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import MaskedMoneyAmount from "@/components/MaskedMoneyAmount";
 import type { Proyecto } from "@/types/database";
 import {
   crewInput,
@@ -88,12 +89,24 @@ export function DailyCloseSummary({ summary }: { summary: DailyClose }) {
           { label: "Horas-hombre", value: summary.horas, Icon: Clock3 },
           {
             label: "Ingresos",
-            value: formatCLP(summary.ingresos),
+            value: (
+              <MaskedMoneyAmount
+                value={summary.ingresos}
+                label="Ingresos del día"
+                compact
+              />
+            ),
             Icon: TrendingUp,
           },
           {
             label: "Gastos del día",
-            value: formatCLP(summary.gastos),
+            value: (
+              <MaskedMoneyAmount
+                value={summary.gastos}
+                label="Gastos del día"
+                compact
+              />
+            ),
             Icon: Wallet,
           },
         ].map(({ label, value, Icon }) => (

@@ -169,7 +169,7 @@ async function performDeviceSubscribe(options: {
     };
   }
 
-  const sub =
+  let sub =
     existingSub ||
     (await reg.pushManager.subscribe({
       userVisibleOnly: true,
@@ -182,15 +182,31 @@ async function performDeviceSubscribe(options: {
     ...(options.prefsOverride || {}),
   };
 
-  const saveRes = await fetch('/api/notificaciones/push', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      subscription: sub.toJSON(),
-      preferencias: mergedPrefs,
-      userAgent: navigator.userAgent,
-    }),
-  });
+  const postSubscription = (targetSub: PushSubscription) =>
+    fetch('/api/notificaciones/push', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        subscription: targetSub.toJSON(),
+        preferencias: mergedPrefs,
+        userAgent: navigator.userAgent,
+      }),
+    });
+
+  let saveRes = await postSubscription(sub);
+  // Si el navegador conservó un endpoint de una sesión previa cerrada sin red (409), rotar suscripción local.
+  if (saveRes.status === 409 && existingSub) {
+    try {
+      await existingSub.unsubscribe();
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(info.publicKey),
+      });
+      saveRes = await postSubscription(sub);
+    } catch {
+      // Continuar con el manejo estándar del error 409.
+    }
+  }
   const saveBody = (await saveRes.json().catch(() => null)) as { error?: string } | null;
   if (!saveRes.ok) {
     return { ok: false, error: saveBody?.error || 'No se pudo guardar la suscripción en el servidor.' };

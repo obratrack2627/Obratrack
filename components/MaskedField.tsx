@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { dataService } from '@/lib/data-service';
+import { aiHeaders } from '@/lib/ai/client';
 
 interface MaskedFieldProps {
   value: string;
@@ -10,6 +11,10 @@ interface MaskedFieldProps {
   label: string;
   href?: string;
   external?: boolean;
+  actionHref?: string;
+  actionLabel?: string;
+  actionTitle?: string;
+  actionClassName?: string;
   prefix?: string;
   className?: string;
   resourceType?: string;
@@ -28,6 +33,10 @@ export default function MaskedField({
   label,
   href,
   external = false,
+  actionHref,
+  actionLabel,
+  actionTitle,
+  actionClassName = 'text-emerald-700 dark:text-emerald-400 hover:underline font-sans text-[11px] ml-1',
   prefix,
   className = '',
   resourceType,
@@ -52,17 +61,21 @@ export default function MaskedField({
 
     if (next && !auditedOnceRef.current && typeof window !== 'undefined' && dataService.getActiveUser()) {
       auditedOnceRef.current = true;
-      fetch('/api/auditoria/evento', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        keepalive: true,
-        body: JSON.stringify({
-          event_type: 'privacy.pii_revealed',
-          resource_type: resourceType || 'pii',
-          resource_id: resourceId || null,
-          metadata: { field: fieldName || label },
-        }),
-      }).catch(() => {});
+      void aiHeaders()
+        .then((headers) =>
+          fetch('/api/auditoria/evento', {
+            method: 'POST',
+            headers,
+            keepalive: true,
+            body: JSON.stringify({
+              event_type: 'privacy.pii_revealed',
+              resource_type: resourceType || 'pii',
+              resource_id: resourceId || null,
+              metadata: { field: fieldName || label },
+            }),
+          }),
+        )
+        .catch(() => {});
     }
   };
 
@@ -88,6 +101,17 @@ export default function MaskedField({
         </a>
       ) : (
         <span className="font-mono truncate tracking-tight">{fullText}</span>
+      )}
+      {revealed && actionHref && actionLabel && (
+        <a
+          href={actionHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={actionTitle || actionLabel}
+          className={actionClassName}
+        >
+          {actionLabel}
+        </a>
       )}
       <button
         type="button"

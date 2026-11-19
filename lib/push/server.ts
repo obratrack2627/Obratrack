@@ -55,7 +55,12 @@ export function sanitizePushPreferences(raw: unknown): PushPreferences {
 
 export function buildPushPayload(input: PushPayloadInput) {
   const safeUrl =
-    typeof input.url === "string" && input.url.startsWith("/") ? input.url : "/dashboard";
+    typeof input.url === "string" &&
+    input.url.startsWith("/") &&
+    !input.url.startsWith("//") &&
+    !/[\x00-\x1f\x7f\\]/.test(input.url)
+      ? input.url
+      : "/dashboard";
   return {
     title: String(input.title || "ObraTrack").slice(0, 120),
     body: String(input.body || "").slice(0, 260),
@@ -149,8 +154,7 @@ export async function getVapidConfig(sb?: any): Promise<VapidConfig | null> {
       };
       return cachedVapid;
     }
-    cachedVapid = { subject: envSubject, publicKey: keys.publicKey, privateKey: keys.privateKey };
-    return cachedVapid;
+    return null;
   } catch (err) {
     console.error("push_vapid_config_error", {
       message: err instanceof Error ? err.message : String(err),
@@ -289,13 +293,50 @@ export async function sendPushIdempotent(
   const admin = sb || getSupabaseAdmin();
   if (!admin) return { skipped: true, sent: 0 };
 
+  const built = buildPushPayload({ ...params.payload, categoria: params.categoria || params.payload.categoria });
+  const recordPayload = {
+    dedup_key: dedupKey,
+    empresa_id: params.empresaId,
+    usuario_id: params.userIds?.length === 1 ? params.userIds[0] : null,
+    categoria: String(built.categoria),
+    titulo: built.title,
+    cuerpo: built.body,
+    url: built.url,
+    enviadas: 0,
+  };
+
+  const tableClient = admin.from("notificaciones_push_enviadas");
+  const supportsAtomicInsert = typeof tableClient?.insert === "function";
+
+  if (supportsAtomicInsert) {
+    try {
+      const claim = await tableClient.insert(recordPayload);
+      if (claim?.error) {
+        return { skipped: true, sent: 0 };
+      }
+    } catch {
+      return { skipped: true, sent: 0 };
+    }
+
+    const res = await sendPushToUsers(admin, params, sender);
+    try {
+      await admin
+        .from("notificaciones_push_enviadas")
+        .update({ enviadas: res.sent })
+        .eq("dedup_key", dedupKey);
+    } catch {
+      // Actualización de contador best-effort.
+    }
+    return { skipped: false, sent: res.sent };
+  }
+
   try {
     const existing = await admin
       .from("notificaciones_push_enviadas")
       .select("dedup_key")
       .eq("dedup_key", dedupKey)
       .maybeSingle();
-    if (existing?.data?.dedup_key) {
+    if (existing?.error || existing?.data?.dedup_key) {
       return { skipped: true, sent: 0 };
     }
   } catch {
@@ -303,20 +344,10 @@ export async function sendPushIdempotent(
   }
 
   const res = await sendPushToUsers(admin, params, sender);
-  const built = buildPushPayload({ ...params.payload, categoria: params.categoria || params.payload.categoria });
 
   try {
     await admin.from("notificaciones_push_enviadas").upsert(
-      {
-        dedup_key: dedupKey,
-        empresa_id: params.empresaId,
-        usuario_id: params.userIds?.length === 1 ? params.userIds[0] : null,
-        categoria: String(built.categoria),
-        titulo: built.title,
-        cuerpo: built.body,
-        url: built.url,
-        enviadas: res.sent,
-      },
+      { ...recordPayload, enviadas: res.sent },
       { onConflict: "dedup_key", ignoreDuplicates: true },
     );
   } catch {

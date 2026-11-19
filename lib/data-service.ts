@@ -134,22 +134,62 @@ export class DataService {
   private deletedKey() { return `obratrack_deleted_v1_${this.getActiveUser()?.empresa_id || ''}`; }
   private versionsKey() { return `obratrack_sync_versions_v1_${this.getActiveUser()?.empresa_id || ''}`; }
   private conflictKey() { return `obratrack_sync_conflict_v1_${this.getActiveUser()?.empresa_id || ''}`; }
+  private conflictSnapshotKey() { return `obratrack_sync_conflict_snapshot_v1_${this.getActiveUser()?.empresa_id || ''}`; }
   private requestKey() { return `obratrack_sync_request_v1_${this.getActiveUser()?.empresa_id || ''}`; }
   private conflictSnapshot: Record<string, any[]> | null = null;
+  private readConflictSnapshot(): Record<string, any[]> | null {
+    if (this.conflictSnapshot) return this.conflictSnapshot;
+    if (!this.isBrowser()) return null;
+    try {
+      const raw = window.sessionStorage?.getItem(this.conflictSnapshotKey());
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        this.conflictSnapshot = parsed;
+        return parsed;
+      }
+    } catch { /* Ignorar almacenamiento no disponible */ }
+    return null;
+  }
+  private persistConflictSnapshot(cloud: Record<string, any[]> | null) {
+    this.conflictSnapshot = cloud;
+    if (!this.isBrowser()) return;
+    try {
+      if (!cloud) {
+        window.sessionStorage?.removeItem(this.conflictSnapshotKey());
+        return;
+      }
+      const pending = this.getItem<Record<string, Record<string, any>>>(this.dirtyKey(), {});
+      const deleted = this.getItem<Record<string, Record<string, string>>>(this.deletedKey(), {});
+      const relevant: Record<string, any[]> = {};
+      for (const table of Array.from(new Set([...Object.keys(pending), ...Object.keys(deleted)]))) {
+        const ids = new Set([...Object.keys(pending[table] || {}), ...Object.keys(deleted[table] || {})]);
+        const rows = Array.isArray(cloud[table]) ? cloud[table].filter((r: any) => ids.has(r.id)) : [];
+        if (rows.length) relevant[table] = rows;
+      }
+      window.sessionStorage?.setItem(this.conflictSnapshotKey(), JSON.stringify(relevant));
+    } catch { /* Quota o sessionStorage no disponible */ }
+  }
   hasSyncConflict() { return this.isBrowser() && localStorage.getItem(this.conflictKey()) === 'true'; }
   syncConflictRows() {
+    const snapshot = this.readConflictSnapshot();
     const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});
     const deleted=this.getItem<Record<string,Record<string,string>>>(this.deletedKey(),{});
     const rows: {name:string;local:any;remote:any;deleting:boolean}[]=[];
     for(const table of Array.from(new Set([...Object.keys(pending),...Object.keys(deleted)])))
       for(const id of Array.from(new Set([...Object.keys(pending[table]||{}),...Object.keys(deleted[table]||{})]))) {
-        const local=pending[table]?.[id];const remote=this.conflictSnapshot?.[table]?.find(row=>row.id===id);
+        const local=pending[table]?.[id];const remote=snapshot?.[table]?.find(row=>row.id===id);
         rows.push({name:local?.nombre||local?.titulo||remote?.nombre||remote?.titulo||'Registro pendiente',local,remote,deleting:!!deleted[table]?.[id]});
       }
     return rows;
   }
   async resolveSyncConflict(keep: 'local'|'remote') {
-    if(!this.conflictSnapshot) throw new Error('No se pudo consultar la versión actual. Reintenta cuando tengas conexión.');
+    let snapshot = this.readConflictSnapshot();
+    if (!snapshot) {
+      await this.pullFromCloudServer();
+      snapshot = this.readConflictSnapshot();
+    }
+    if (!snapshot) throw new Error('No se pudo consultar la versión actual. Reintenta cuando tengas conexión.');
     if(keep==='remote') {
       localStorage.setItem(this.dirtyKey(),'{}');localStorage.setItem(this.deletedKey(),'{}');localStorage.setItem(this.versionsKey(),'{}');
     } else {
@@ -159,11 +199,12 @@ export class DataService {
       for(const table of Array.from(new Set([...Object.keys(pending),...Object.keys(deleted)]))) {
         versions[table]={};
         for(const id of Array.from(new Set([...Object.keys(pending[table]||{}),...Object.keys(deleted[table]||{})])))
-          versions[table][id]=this.conflictSnapshot[table]?.find(row=>row.id===id)?.sync_version??null;
+          versions[table][id]=snapshot[table]?.find(row=>row.id===id)?.sync_version??null;
       }
       localStorage.setItem(this.versionsKey(),JSON.stringify(versions));
     }
     localStorage.removeItem(this.conflictKey());localStorage.removeItem(this.requestKey());
+    this.persistConflictSnapshot(null);
     if(keep==='local') {const saved=await this.pushToCloudServer();if(!saved.success)throw new Error(saved.message);}
     await this.pullFromCloudServer();window.dispatchEvent(new Event('obratrack_pending_changed'));
   }
@@ -338,7 +379,7 @@ export class DataService {
     try {
       this.clearChatSessionHistory();
       for(const key of Object.keys(localStorage))if(key.startsWith('obratrack_') && key!=='obratrack_theme')localStorage.removeItem(key);
-      this.conflictSnapshot=null;
+      this.persistConflictSnapshot(null);
       if(this.cloudSyncTimeout)clearTimeout(this.cloudSyncTimeout);
     } catch (e) {
       console.error(e);
@@ -3047,11 +3088,22 @@ export class DataService {
       const {data,error}=await supabase.auth.getSession();
       if(error||!data.session?.access_token) return {success:false,message:'Inicia sesión para sincronizar.'};
       if(!sameSession()) return {success:false,message:'La sesión cambió durante la actualización.'};
-      const res = await fetch(`/api/supabase/sync?empresaId=${encodeURIComponent(empresaId)}`, {
-        cache: 'no-store',
-        signal: AbortSignal.timeout(20000),
-        headers:{Authorization:`Bearer ${data.session.access_token}`},
-      });
+      const fetchCloud = (token: string) =>
+        fetch(`/api/supabase/sync?empresaId=${encodeURIComponent(empresaId)}`, {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(20000),
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      let res = await fetchCloud(data.session.access_token);
+      if (res.status === 401) {
+        try {
+          const refreshed = await supabase.auth.refreshSession();
+          if (!sameSession()) return { success: false, message: 'La sesión cambió durante la actualización.' };
+          if (!refreshed.error && refreshed.data.session?.access_token) {
+            res = await fetchCloud(refreshed.data.session.access_token);
+          }
+        } catch { /* Mantener error 401 si no se puede renovar sesión */ }
+      }
       if (!res.ok) {
         return { success: false, message: res.status===401 || res.status===403 ? 'Tu sesión necesita renovarse. Vuelve a iniciar sesión.' : 'No se pudieron actualizar los datos. Mostrando la última información guardada.' };
       }
@@ -3059,7 +3111,7 @@ export class DataService {
       const cloud = await res.json();
       if(!sameSession()) return {success:false,message:'La sesión cambió durante la actualización.'};
       if(cloud.empresaId !== empresaId) return {success:false,message:'La cuenta cambió. Vuelve a iniciar sesión para actualizar tus obras.'};
-      this.conflictSnapshot=cloud;
+      this.persistConflictSnapshot(cloud);
       const localProjs = this.getProyectos();
 
       const pending=this.getItem<Record<string,Record<string,any>>>(this.dirtyKey(),{});

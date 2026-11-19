@@ -10,7 +10,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 import { loadAIContext, checkedRows } from "@/lib/ai/context";
-import { persistentFile, signRows } from "@/lib/supabase/private-files";
+import { persistentFile, signRows, storedFile } from "@/lib/supabase/private-files";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyPushOnSyncChanges } from "@/lib/push/events";
 const mapping: Record<string, string> = {
   proyectos: "proyectos",
@@ -110,6 +111,27 @@ async function validateSync(client: any, user: any, body: any) {
       if(key==='bitacora' && row.material_id && (!Number.isFinite(Number(row.cantidad_recibida)) || Number(row.cantidad_recibida)<=0)) throw new AIError('SYNC_INVALID','Revisa la cantidad recibida.',422);
       if(key==='imprevistos' && row.categoria_gasto && !['imprevisto','mano_obra','gasto_general'].includes(row.categoria_gasto)) throw new AIError('SYNC_INVALID','Revisa la categoría del gasto.',422);
       if(key==='proyectos' && row.dias_laborales && (!Array.isArray(row.dias_laborales)||!row.dias_laborales.length||row.dias_laborales.some((day:any)=>!Number.isInteger(day)||day<0||day>6))) throw new AIError('SYNC_INVALID','Selecciona días válidos para trabajar.',422);
+      if (user.rol === "terreno") {
+        for (const mediaField of ["foto_url", "archivo_url", "comprobante_url"]) {
+          const parsed = storedFile(row[mediaField]);
+          if (parsed?.bucket === "whatsapp-evidencias") {
+            const ownPrefix = `${user.empresa_id}/${user.id}/`;
+            const existingTable = (tables as Record<string, any[]>)[mapping[key]] || [];
+            const existingRow = existingTable.find((item) => item.id === row.id);
+            const existingParsed = existingRow ? storedFile(existingRow[mediaField]) : null;
+            const keepsSameRef =
+              existingParsed?.bucket === "whatsapp-evidencias" &&
+              existingParsed.path === parsed.path;
+            if (!parsed.path.startsWith(ownPrefix) && !keepsSameRef) {
+              throw new AIError(
+                "SYNC_FORBIDDEN",
+                "No puedes vincular evidencias de WhatsApp de otros usuarios o proyectos.",
+                403,
+              );
+            }
+          }
+        }
+      }
       if (key === "usuarios") {
         const existing = tables.usuarios.find((u) => u.id === row.id);
         const editableTeamRole =
@@ -153,6 +175,67 @@ export async function GET(request: NextRequest) {
       : [];
     const mediaClient = client;
     const allowed = new Set<string>(ids);
+    const imprevistosRows = service.getImprevistos();
+    const pagosRows = service.getPagos();
+
+    let validateEvidence: ((path: string, projectId: string) => boolean) | undefined;
+    if (user.rol === "terreno") {
+      const evidencePaths = new Set<string>();
+      const collectEvidence = (rows: any[], fields: string[]) => {
+        for (const row of rows) {
+          for (const field of fields) {
+            const parsed = storedFile(row?.[field]);
+            if (parsed?.bucket === "whatsapp-evidencias") evidencePaths.add(parsed.path);
+          }
+          for (const photo of row?.recepcion_resumen?.fotos || []) {
+            const parsed = storedFile(photo);
+            if (parsed?.bucket === "whatsapp-evidencias") evidencePaths.add(parsed.path);
+          }
+        }
+      };
+      collectEvidence(tables.documentos_obra, ["archivo_url"]);
+      collectEvidence(tables.bitacora_entradas, ["foto_url"]);
+      collectEvidence(imprevistosRows, ["foto_url"]);
+      collectEvidence(tables.reclamos_cambios_obra, ["foto_url"]);
+      collectEvidence(reports, ["foto_url"]);
+      collectEvidence(pagosRows, ["comprobante_url"]);
+
+      const evidenceOwners = new Map<string, { actorIds: Set<string>; projectIds: Set<string> }>();
+      if (evidencePaths.size > 0) {
+        const lookupClient = getSupabaseAdmin() || client;
+        try {
+          const { data: waMsgs, error: waErr } = await lookupClient
+            .from("whatsapp_mensajes")
+            .select("actor_id,adjunto")
+            .eq("empresa_id", user.empresa_id)
+            .not("adjunto", "is", null)
+            .limit(1000);
+          if (!waErr && Array.isArray(waMsgs)) {
+            for (const msg of waMsgs) {
+              const adjPath = typeof msg?.adjunto?.path === "string" ? msg.adjunto.path : "";
+              if (!adjPath || !evidencePaths.has(adjPath)) continue;
+              let entry = evidenceOwners.get(adjPath);
+              if (!entry) {
+                entry = { actorIds: new Set<string>(), projectIds: new Set<string>() };
+                evidenceOwners.set(adjPath, entry);
+              }
+              if (msg.actor_id) entry.actorIds.add(String(msg.actor_id));
+              if (msg.adjunto?.proyecto_id) entry.projectIds.add(String(msg.adjunto.proyecto_id));
+            }
+          }
+        } catch {
+          // Falla cerrado: solo permitirá archivos propios del usuario.
+        }
+      }
+      const ownPrefix = `${user.empresa_id}/${user.id}/`;
+      validateEvidence = (path: string, projectId: string) => {
+        if (path.startsWith(ownPrefix)) return true;
+        const meta = evidenceOwners.get(path);
+        if (!meta) return false;
+        return meta.actorIds.has(user.id) || Boolean(projectId && meta.projectIds.has(projectId));
+      };
+    }
+
     const [documents, log, incidents, changes, reportFiles, payments] =
       await Promise.all([
         signRows(
@@ -161,6 +244,7 @@ export async function GET(request: NextRequest) {
           user.empresa_id,
           allowed,
           mediaClient,
+          validateEvidence,
         ),
         signRows(
           tables.bitacora_entradas,
@@ -168,13 +252,15 @@ export async function GET(request: NextRequest) {
           user.empresa_id,
           allowed,
           mediaClient,
+          validateEvidence,
         ),
         signRows(
-          service.getImprevistos(),
+          imprevistosRows,
           ["foto_url"],
           user.empresa_id,
           allowed,
           mediaClient,
+          validateEvidence,
         ),
         signRows(
           tables.reclamos_cambios_obra,
@@ -182,14 +268,16 @@ export async function GET(request: NextRequest) {
           user.empresa_id,
           allowed,
           mediaClient,
+          validateEvidence,
         ),
-        signRows(reports, ["foto_url"], user.empresa_id, allowed, mediaClient),
+        signRows(reports, ["foto_url"], user.empresa_id, allowed, mediaClient, validateEvidence),
         signRows(
-          service.getPagos(),
+          pagosRows,
           ["comprobante_url"],
           user.empresa_id,
           allowed,
           mediaClient,
+          validateEvidence,
         ),
       ]);
     return NextResponse.json(

@@ -39,6 +39,7 @@ export async function signStoredFile(
   projects: Set<string>,
   client: any,
   projectId?: string,
+  validateEvidence?: (path: string, projectId: string) => boolean,
 ) {
   const file = storedFile(value);
   if (!file) return value;
@@ -48,6 +49,12 @@ export async function signStoredFile(
     !projects.has(
       file.bucket === "whatsapp-evidencias" ? projectId || "" : parts[1],
     )
+  )
+    return null;
+  if (
+    file.bucket === "whatsapp-evidencias" &&
+    validateEvidence &&
+    !validateEvidence(file.path, projectId || "")
   )
     return null;
   const key = file.bucket + "/" + file.path;
@@ -70,6 +77,7 @@ export async function signRows(
   company: string,
   projects: Set<string>,
   client: any,
+  validateEvidence?: (path: string, projectId: string) => boolean,
 ) {
   return Promise.all(
     rows.map(async (row) => {
@@ -82,6 +90,7 @@ export async function signRows(
             projects,
             client,
             row.proyecto_id,
+            validateEvidence,
           );
       if (row.recepcion_resumen?.fotos?.length)
         result.recepcion_resumen = {
@@ -95,6 +104,7 @@ export async function signRows(
                   projects,
                   client,
                   row.proyecto_id,
+                  validateEvidence,
                 ),
               ),
             )

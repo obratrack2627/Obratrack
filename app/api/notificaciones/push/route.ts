@@ -179,12 +179,13 @@ export async function POST(request: NextRequest) {
 
     const { data: existingSub } = await db
       .from("push_suscripciones")
-      .select("empresa_id,usuario_id")
+      .select("empresa_id,usuario_id,activo")
       .eq("endpoint", endpoint)
       .maybeSingle();
 
     if (
       existingSub &&
+      existingSub.activo !== false &&
       (existingSub.empresa_id !== user.empresa_id || existingSub.usuario_id !== user.id)
     ) {
       throw new AIError(

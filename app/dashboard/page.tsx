@@ -306,7 +306,9 @@ export default function DashboardPage() {
           </div>
           <div className="mt-3 space-y-1 text-xs font-mono text-gray-500">
             <span className="block">Saldo por cobrar:</span>
-            <strong className="block min-w-0 text-[#FF6A00]"><MoneyAmount value={saldoPendiente} /></strong>
+            <strong className="block min-w-0 text-[#FF6A00]">
+              <MaskedMoneyAmount value={saldoPendiente} label="Saldo por cobrar" compact />
+            </strong>
           </div>
         </div>
 
@@ -419,7 +421,14 @@ export default function DashboardPage() {
                           </span>
                         )}
                         <span>Entrega: {formatDate(p.fecha_termino_estimada)}</span>
-                        <span>Monto: {formatCLP(p.monto_cotizado)}</span>
+                        <span className="inline-flex items-center gap-1">
+                          <span>Monto:</span>
+                          <MaskedMoneyAmount
+                            value={p.monto_cotizado || 0}
+                            label={`Monto de ${p.nombre}`}
+                            compact
+                          />
+                        </span>
                       </div>
                     </div>
 

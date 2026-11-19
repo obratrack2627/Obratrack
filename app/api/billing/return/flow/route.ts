@@ -6,10 +6,15 @@ import { handleFlowPaymentCallback, handleFlowRegisterReturn } from '@/lib/billi
 
 export const dynamic = 'force-dynamic';
 
-function mapPaymentOutcome(outcome: string): string {
+function mapPaymentOutcome(outcome: string, gatewayStatus?: number): string {
   if (outcome === 'paid') return 'success';
   if (outcome === 'failed') return 'failed';
   if (outcome === 'canceled') return 'canceled';
+  if (outcome === 'duplicate') {
+    if (gatewayStatus === 2) return 'success';
+    if (gatewayStatus === 3) return 'failed';
+    if (gatewayStatus === 4) return 'canceled';
+  }
   return 'pending';
 }
 
@@ -39,7 +44,7 @@ async function handleReturn(request: NextRequest): Promise<NextResponse> {
     }
 
     const result = await handleFlowPaymentCallback({ admin, flow, token });
-    return buildRedirect(mapPaymentOutcome(result.outcome));
+    return buildRedirect(mapPaymentOutcome(result.outcome, result.status));
   } catch (error) {
     console.error('flow_return_error', {
       kind,

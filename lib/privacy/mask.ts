@@ -1,5 +1,5 @@
 const SENSITIVE_KEY_PATTERN =
-  /^(password|pass|token|secret|apikey|api_key|authorization|cookie|p256dh|auth|private_key|service_role)$/i;
+  /(password|passwd|passphrase|secret|token|api[_-]?key|authorization|cookie|p256dh|private[_-]?key|service[_-]?role)|^(pass|auth)$/i;
 
 const JWT_PATTERN = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{6,}\b/g;
 const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi;
@@ -65,7 +65,8 @@ export function redactSensitiveText(text: string): string {
 }
 
 export function sanitizeLogData(value: unknown, depth = 0): unknown {
-  if (depth > 4 || value == null) return value;
+  if (value == null) return value;
+  if (depth > 4) return '[REDACTED_DEPTH]';
   if (typeof value === 'string') return redactSensitiveText(value.slice(0, 400));
   if (typeof value === 'number' || typeof value === 'boolean') return value;
   if (Array.isArray(value)) {

@@ -28,40 +28,67 @@ export default function ActualizarPasswordPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Verificar si existe sesión activa o token de recuperación de Supabase
+  // Verificar si existe sesión activa o código/token de recuperación de Supabase
   useEffect(() => {
     let isMounted = true;
+    let authSubscription: { unsubscribe: () => void } | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     async function checkAuth() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (isMounted) {
-          if (session) {
-            setHasValidSession(true);
-          } else {
-            // Esperar evento onAuthStateChange por si Supabase está procesando el hash de la URL
-            const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
-              if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || !!newSession) {
-                if (isMounted) {
-                  setHasValidSession(true);
-                  setIsCheckingSession(false);
-                }
-              }
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const code = params.get('code');
+          const tokenHash = params.get('token_hash');
+          const type = params.get('type');
+
+          if (code) {
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+            window.history.replaceState({}, '', '/actualizar-password');
+            if (!error && data.session && isMounted) {
+              setHasValidSession(true);
+              setIsCheckingSession(false);
+              return;
+            }
+          } else if (tokenHash && type) {
+            const { data, error } = await supabase.auth.verifyOtp({
+              token_hash: tokenHash,
+              type: type as any,
             });
-
-            // Si tras 1.5s no hay sesión, advertir al usuario
-            setTimeout(() => {
-              if (isMounted) {
-                setIsCheckingSession(false);
-              }
-            }, 1500);
-
-            return () => {
-              authListener.subscription.unsubscribe();
-            };
+            window.history.replaceState({}, '', '/actualizar-password');
+            if (!error && data.session && isMounted) {
+              setHasValidSession(true);
+              setIsCheckingSession(false);
+              return;
+            }
           }
-          setIsCheckingSession(false);
         }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        if (session) {
+          setHasValidSession(true);
+          setIsCheckingSession(false);
+          return;
+        }
+
+        // Esperar evento onAuthStateChange por si Supabase está procesando el hash de la URL
+        const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
+          if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || !!newSession) {
+            if (isMounted) {
+              setHasValidSession(true);
+              setIsCheckingSession(false);
+            }
+          }
+        });
+        authSubscription = authListener.subscription;
+
+        // Si tras 1.5s no hay sesión, advertir al usuario
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            setIsCheckingSession(false);
+          }
+        }, 1500);
       } catch (err) {
         console.error('Error verificando sesión en actualizar-password:', err);
         if (isMounted) {
@@ -74,14 +101,16 @@ export default function ActualizarPasswordPage() {
 
     return () => {
       isMounted = false;
+      authSubscription?.unsubscribe();
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
 
-  // Calcular fortaleza de contraseña (0 a 3)
+  // Calcular fortaleza de contraseña (0 a 3) alineada al mínimo de 12 caracteres
   const getPasswordStrength = (pass: string) => {
     if (!pass) return 0;
     let score = 0;
-    if (pass.length >= 6) score++;
+    if (pass.length >= 12) score++;
     if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) score++;
     if (/[0-9]/.test(pass) || /[^A-Za-z0-9]/.test(pass)) score++;
     return score;

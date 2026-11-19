@@ -483,15 +483,30 @@ async function resolvePaymentTarget(
   }
 
   const payerEmail = (payment.payer || '').trim().toLowerCase();
-  if (!payerEmail) return null;
+  if (!payerEmail || !payerEmail.includes('@')) return null;
 
-  const { data: users } = await admin
-    .from('usuarios')
-    .select('empresa_id')
-    .ilike('email', payerEmail)
-    .limit(5);
+  // Buscar primero por coincidencia exacta en email_acceso y email (sin wildcards SQL LIKE)
+  const [{ data: usersByAccess }, { data: usersByContact }] = await Promise.all([
+    admin.from('usuarios').select('empresa_id,email,email_acceso').eq('email_acceso', payerEmail).limit(5),
+    admin.from('usuarios').select('empresa_id,email,email_acceso').eq('email', payerEmail).limit(5),
+  ]);
 
-  const companyIds = (users || []).map((u) => u.empresa_id).filter(Boolean);
+  let matchedUsers = [...(usersByAccess || []), ...(usersByContact || [])];
+  if (matchedUsers.length === 0) {
+    // Respaldo case-insensitive escapando wildcards % y _ de ILIKE + verificación exacta en JS
+    const escapedEmail = payerEmail.replace(/[\\%_]/g, '\\$&');
+    const [{ data: ciAccess }, { data: ciContact }] = await Promise.all([
+      admin.from('usuarios').select('empresa_id,email,email_acceso').ilike('email_acceso', escapedEmail).limit(5),
+      admin.from('usuarios').select('empresa_id,email,email_acceso').ilike('email', escapedEmail).limit(5),
+    ]);
+    matchedUsers = [...(ciAccess || []), ...(ciContact || [])].filter(
+      (u: any) =>
+        String(u.email_acceso || '').trim().toLowerCase() === payerEmail ||
+        String(u.email || '').trim().toLowerCase() === payerEmail,
+    );
+  }
+
+  const companyIds = Array.from(new Set(matchedUsers.map((u: any) => u.empresa_id).filter(Boolean)));
   if (companyIds.length !== 1) return null;
 
   const { data: sub } = await admin
@@ -504,6 +519,13 @@ async function resolvePaymentTarget(
 
   const remoteSub = await flow.getSubscription(sub.gateway_subscription_id);
   if (remoteSub.subscriptionId !== sub.gateway_subscription_id) return null;
+  if (
+    remoteSub.customerId &&
+    sub.gateway_customer_id &&
+    remoteSub.customerId !== sub.gateway_customer_id
+  ) {
+    return null;
+  }
 
   const resolvedPlanId =
     parseFlowPlanId(remoteSub.planId) || (isPaidPlanId(sub.plan_id) ? sub.plan_id : null);
@@ -642,7 +664,14 @@ export async function cancelCompanySubscription(params: {
     throw new AIError('BILLING_NO_SUBSCRIPTION', 'Tu empresa no tiene una suscripción pagada activa.', 404);
   }
 
-  if (sub.gateway_subscription_id && flow) {
+  if (sub.gateway_subscription_id) {
+    if (!flow) {
+      throw new AIError(
+        'BILLING_NOT_CONFIGURED',
+        'No se pudo conectar con Flow para cancelar la renovación automática. Reintenta más tarde.',
+        503,
+      );
+    }
     await flow.cancelSubscription({
       subscriptionId: sub.gateway_subscription_id,
       atPeriodEnd: true,
@@ -720,13 +749,21 @@ export async function reconcileExpiredSubscriptions(
     return { downgraded: 0 };
   }
 
+  const RECURRING_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
   let downgraded = 0;
   for (const sub of candidates) {
+    const periodEndMs = sub.current_period_end ? Date.parse(sub.current_period_end) : NaN;
+    const recurringGraceExceeded =
+      sub.modalidad === 'recurrente' &&
+      Number.isFinite(periodEndMs) &&
+      now.getTime() - periodEndMs >= RECURRING_GRACE_MS;
+
     const shouldExpire =
       sub.estado === 'canceled' ||
       sub.estado === 'past_due' ||
       sub.cancel_at_period_end === true ||
-      sub.modalidad === 'prepago';
+      sub.modalidad === 'prepago' ||
+      recurringGraceExceeded;
     if (!shouldExpire) continue;
 
     const { data: empresa } = await admin
@@ -735,7 +772,7 @@ export async function reconcileExpiredSubscriptions(
       .eq('id', sub.empresa_id)
       .maybeSingle();
 
-    await admin
+    const { error: subUpdateErr } = await admin
       .from('suscripciones')
       .update({
         estado: sub.cancel_at_period_end ? 'canceled' : 'expired',
@@ -743,13 +780,16 @@ export async function reconcileExpiredSubscriptions(
         updated_at: nowIso,
       })
       .eq('id', sub.id);
+    if (subUpdateErr) continue;
 
     if (empresa && empresa.plan_id !== 'ilimitado' && empresa.plan_id !== 'gratis') {
-      await admin
+      const { error: empUpdateErr } = await admin
         .from('empresas')
         .update({ plan_id: 'gratis', updated_at: nowIso })
         .eq('id', empresa.id);
-      downgraded += 1;
+      if (!empUpdateErr) {
+        downgraded += 1;
+      }
     }
   }
 

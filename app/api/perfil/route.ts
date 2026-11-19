@@ -215,32 +215,64 @@ export async function PATCH(request: NextRequest) {
       }
 
       if (Object.keys(userUpdates).length > 0) {
-        const admin = getSupabaseAdmin();
-        const checkClient = admin || client;
-        const { data: existingUsers } = await checkClient
-          .from('usuarios')
-          .select('id,rut,email,telefono_whatsapp')
-          .limit(5000);
-        if (Array.isArray(existingUsers)) {
-          const others = existingUsers.filter((row: any) => row.id !== user.id);
-          const conflicts: RegistrationConflictField[] = [];
-          const nextRutKey = Object.hasOwn(userUpdates, 'rut') ? normalizeRutKey(userUpdates.rut) : '';
-          const nextPhoneKey = Object.hasOwn(userUpdates, 'telefono_whatsapp')
-            ? normalizePhoneKeyDigits(userUpdates.telefono_whatsapp)
-            : '';
-          const nextEmailKey = Object.hasOwn(userUpdates, 'email') && userUpdates.email
-            ? String(userUpdates.email).toLowerCase()
-            : '';
+        const nextRutKey = Object.hasOwn(userUpdates, 'rut') ? normalizeRutKey(userUpdates.rut) : '';
+        const nextPhoneKey = Object.hasOwn(userUpdates, 'telefono_whatsapp')
+          ? normalizePhoneKeyDigits(userUpdates.telefono_whatsapp)
+          : '';
+        const nextEmailKey = Object.hasOwn(userUpdates, 'email') && userUpdates.email
+          ? String(userUpdates.email).toLowerCase()
+          : '';
 
-          if (nextRutKey && others.some((row: any) => normalizeRutKey(row.rut) === nextRutKey)) {
-            conflicts.push('rut');
+        if (nextRutKey || nextPhoneKey || nextEmailKey) {
+          const conflicts: RegistrationConflictField[] = [];
+          const admin = getSupabaseAdmin();
+          let checkedViaRpc = false;
+
+          if (admin) {
+            const { data: rpcData, error: rpcErr } = await admin.rpc('verificar_conflictos_perfil', {
+              p_usuario_id: user.id,
+              p_rut: nextRutKey || null,
+              p_phone: nextPhoneKey || null,
+              p_email: nextEmailKey || null,
+            });
+            if (!rpcErr && Array.isArray(rpcData?.conflicts)) {
+              checkedViaRpc = true;
+              for (const field of rpcData.conflicts) {
+                if (field === 'rut' || field === 'telefono' || field === 'email') {
+                  conflicts.push(field);
+                }
+              }
+            }
           }
-          if (nextPhoneKey && others.some((row: any) => normalizePhoneKeyDigits(row.telefono_whatsapp) === nextPhoneKey)) {
-            conflicts.push('telefono');
+
+          if (!checkedViaRpc) {
+            // Fallback acotado a la propia empresa (sin escanear 5.000 filas cross-tenant)
+            const { data: tenantUsers } = await client
+              .from('usuarios')
+              .select('id,rut,email,email_acceso,telefono_whatsapp')
+              .eq('empresa_id', user.empresa_id)
+              .limit(500);
+            if (Array.isArray(tenantUsers)) {
+              const others = tenantUsers.filter((row: any) => row.id !== user.id);
+              if (nextRutKey && others.some((row: any) => normalizeRutKey(row.rut) === nextRutKey)) {
+                conflicts.push('rut');
+              }
+              if (nextPhoneKey && others.some((row: any) => normalizePhoneKeyDigits(row.telefono_whatsapp) === nextPhoneKey)) {
+                conflicts.push('telefono');
+              }
+              if (
+                nextEmailKey &&
+                others.some(
+                  (row: any) =>
+                    sanitizeEmail(row.email).toLowerCase() === nextEmailKey ||
+                    sanitizeEmail(row.email_acceso).toLowerCase() === nextEmailKey,
+                )
+              ) {
+                conflicts.push('email');
+              }
+            }
           }
-          if (nextEmailKey && others.some((row: any) => sanitizeEmail(row.email).toLowerCase() === nextEmailKey)) {
-            conflicts.push('email');
-          }
+
           if (conflicts.length > 0) {
             throw new AIError('CONTACT_CONFLICT', formatRegistrationConflictMessage(conflicts), 409);
           }

@@ -12,7 +12,6 @@ const ALLOWED_PUSH_SUFFIXES = [
   '.notify.windows.com',
   '.push.apple.com',
   '.push.services.mozilla.com',
-  '.googleapis.com',
 ];
 
 export function isAllowedPushEndpoint(endpoint: string): boolean {
@@ -28,5 +27,5 @@ export function isAllowedPushEndpoint(endpoint: string): boolean {
   }
   const host = parsed.hostname.toLowerCase();
   if (ALLOWED_PUSH_EXACT_HOSTS.has(host)) return true;
-  return ALLOWED_PUSH_SUFFIXES.some((suffix) => host.endsWith(suffix));
+  return ALLOWED_PUSH_SUFFIXES.some((suffix) => host.length > suffix.length && host.endsWith(suffix));
 }

@@ -587,26 +587,18 @@ export default function EquipoPage() {
 
                       <td className="py-2.5 pr-3 whitespace-nowrap font-mono text-gray-600 dark:text-gray-300">
                         {cleanPhone ? (
-                          <span className="inline-flex items-center gap-2">
-                            <MaskedField
-                              value={`+${cleanPhone}`}
-                              masked={maskPhone(cleanPhone)}
-                              label={`teléfono de ${user.nombre}`}
-                              href={`tel:+${cleanPhone}`}
-                              resourceType="usuario"
-                              resourceId={user.id}
-                              fieldName="telefono_whatsapp"
-                            />
-                            <a
-                              href={`https://wa.me/${cleanPhone}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-emerald-700 dark:text-emerald-400 hover:underline font-sans text-[11px]"
-                              title="Abrir chat de WhatsApp"
-                            >
-                              WhatsApp
-                            </a>
-                          </span>
+                          <MaskedField
+                            value={`+${cleanPhone}`}
+                            masked={maskPhone(cleanPhone)}
+                            label={`teléfono de ${user.nombre}`}
+                            href={`tel:+${cleanPhone}`}
+                            actionHref={`https://wa.me/${cleanPhone}`}
+                            actionLabel="WhatsApp"
+                            actionTitle="Abrir chat de WhatsApp"
+                            resourceType="usuario"
+                            resourceId={user.id}
+                            fieldName="telefono_whatsapp"
+                          />
                         ) : user.email ? (
                           <MaskedField
                             value={user.email}

@@ -19,6 +19,8 @@ const PUBLIC_PAGES = [
 // Endpoints de API específicamente públicos (ej. webhooks externos de Meta o Flow)
 const PUBLIC_API_ROUTES = [
   '/api/auth/session',
+  '/api/auth/login-rut',
+  '/api/auth/validar-registro',
   '/api/whatsapp/procesar-envios',
   '/api/webhook/whatsapp', // Webhook entrante de Meta WhatsApp Cloud API
   '/api/billing/webhook/flow', // Webhook server-to-server de Flow.cl

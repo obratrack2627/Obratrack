@@ -882,20 +882,22 @@ export default function ProyectosPage() {
                         </div>
                       ) : (
                         <div className="bg-kraft-50 border border-kraft-200/60 rounded-lg p-3 space-y-1.5 mb-4">
-                          <div className="flex justify-between text-xs">
+                          <div className="flex items-center justify-between gap-2 text-xs">
                             <span className="text-gray-500 font-mono">Cotizado:</span>
-                            <span className="min-w-0 max-w-[62%] flex-1 text-right font-mono font-bold text-navy-900"><MoneyAmount value={cotizado} /></span>
-                          </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-gray-500 font-mono">Pagado ({percentPago}%):</span>
-                            <span className="min-w-0 max-w-[62%] flex-1 text-right font-mono font-bold text-obra-green">
-                              <MoneyAmount value={pagado} />
+                            <span className="font-mono font-bold text-navy-900">
+                              <MaskedMoneyAmount value={cotizado} label={`Cotizado de ${proj.nombre}`} compact />
                             </span>
                           </div>
-                          <div className="flex justify-between text-xs pt-1 border-t border-kraft-200/60">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-gray-500 font-mono">Pagado ({percentPago}%):</span>
+                            <span className="font-mono font-bold text-obra-green">
+                              <MaskedMoneyAmount value={pagado} label={`Pagado de ${proj.nombre}`} compact />
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs pt-1 border-t border-kraft-200/60">
                             <span className="text-gray-500 font-mono">Saldo:</span>
-                            <span className="min-w-0 max-w-[62%] flex-1 text-right font-mono font-semibold text-obra-red">
-                              <MoneyAmount value={proj.saldo_pendiente ?? 0} />
+                            <span className="font-mono font-semibold text-obra-red">
+                              <MaskedMoneyAmount value={proj.saldo_pendiente ?? 0} label={`Saldo de ${proj.nombre}`} compact />
                             </span>
                           </div>
                         </div>

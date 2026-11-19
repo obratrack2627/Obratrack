@@ -6,6 +6,14 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+function safePushPath(raw) {
+  if (typeof raw !== 'string') return '/dashboard';
+  if (!raw.startsWith('/') || raw.startsWith('//') || /[\x00-\x1f\x7f\\]/.test(raw)) {
+    return '/dashboard';
+  }
+  return raw;
+}
+
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
@@ -22,9 +30,7 @@ self.addEventListener('push', (event) => {
   const body = typeof payload.body === 'string' ? payload.body : '';
   const icon = payload.icon || '/app-icons/obratrack-mobile-v3-192.png?v=4';
   const badge = payload.badge || '/app-icons/obratrack-mobile-v3-192.png?v=4';
-  const url = typeof payload.url === 'string' && payload.url.startsWith('/')
-    ? payload.url
-    : '/dashboard';
+  const url = safePushPath(payload.url);
   const tag = typeof payload.tag === 'string' && payload.tag ? payload.tag : 'obratrack-aviso';
 
   event.waitUntil(
@@ -46,13 +52,13 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const rawUrl = event.notification?.data?.url;
-  const targetUrl = typeof rawUrl === 'string' && rawUrl.startsWith('/') ? rawUrl : '/dashboard';
+  const targetUrl = safePushPath(event.notification?.data?.url);
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       const origin = self.location.origin;
-      const fullTarget = new URL(targetUrl, origin).href;
+      const parsedTarget = new URL(targetUrl, origin);
+      const fullTarget = parsedTarget.origin === origin ? parsedTarget.href : `${origin}/dashboard`;
       for (const client of clients) {
         if (client.url.startsWith(origin)) {
           if ('navigate' in client && typeof client.navigate === 'function') {

@@ -22,7 +22,13 @@ export async function GET(req: NextRequest) {
 }
 export async function POST(req: NextRequest) {
   try {
-    await access(req);
+    const { user } = await authorizeAI(req);
+    if (user.is_dev !== true)
+      throw new AIError(
+        "ROLE_FORBIDDEN",
+        "Solo el equipo técnico de ObraTrack puede gestionar plantillas globales de Meta.",
+        403,
+      );
     return NextResponse.json(await ensureAvisoTemplate());
   } catch (e) {
     return errorJSON(e);

@@ -265,40 +265,65 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
   const cleanInput = (emailOrRut.includes('@') ? sanitizeEmail(emailOrRut) : emailOrRut.trim()).toLowerCase();
   let resolvedEmail = cleanInput;
 
-  // Si no es un email pero parece RUT chileno, resolver el email correspondiente
-  if (!cleanInput.includes('@')) {
-    const cleanDigits = cleanInput.replace(/[^a-z0-9]/g, '');
-    try {
-      const storedUsers = dataService.getUsuarios();
-      const match = storedUsers.find((u) => {
-        const uRut = (u.rut || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        return uRut.length >= 7 && uRut === cleanDigits;
-      });
-      if (match && (match.email_acceso || match.email)) {
-        resolvedEmail = (match.email_acceso || match.email).toLowerCase();
-      } else {
-        // Fallback robusto: consultar directamente a Supabase PostgreSQL
-        const dbUser = await supabaseService.getUsuarioByRut(cleanDigits);
-        if (dbUser && (dbUser.email_acceso || dbUser.email)) {
-          resolvedEmail = (dbUser.email_acceso || dbUser.email).toLowerCase();
-        }
-      }
-    } catch (err) {
-      console.warn('Error resolviendo usuario por RUT:', sanitizeErrorForLog(err));
-    }
-  }
-
   try {
-    // 1. Iniciar sesión contra Supabase Auth
+    // 1. Iniciar sesión contra Supabase Auth (por RUT vía endpoint controlado bajo RLS, o por email directo)
     let authData: any = null;
     let authError: any = null;
 
-    const initialAttempt = await supabase.auth.signInWithPassword({
-      email: resolvedEmail,
-      password: pass,
-    });
-    authData = initialAttempt.data;
-    authError = initialAttempt.error;
+    if (!cleanInput.includes('@')) {
+      let handledByServer = false;
+      if (typeof fetch === 'function') {
+        try {
+          const rutRes = await fetch('/api/auth/login-rut', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rut: cleanInput, password: pass }),
+          });
+          const rutPayload = await rutRes.json().catch(() => null);
+          if (rutRes.ok && rutPayload?.session?.access_token && rutPayload?.session?.refresh_token) {
+            const setRes = await supabase.auth.setSession({
+              access_token: rutPayload.session.access_token,
+              refresh_token: rutPayload.session.refresh_token,
+            });
+            authData = setRes.data;
+            authError = setRes.error;
+            handledByServer = true;
+          } else if (rutRes.status !== 503) {
+            return {
+              success: false,
+              error: rutPayload?.error || 'Correo, RUT o contraseña incorrectos.',
+            };
+          }
+        } catch (err) {
+          console.warn('Error en login por RUT:', sanitizeErrorForLog(err));
+        }
+      }
+
+      if (!handledByServer) {
+        const cleanDigits = cleanInput.replace(/[^a-z0-9]/g, '');
+        const storedUsers = dataService.getUsuarios();
+        const match = storedUsers.find((u) => {
+          const uRut = (u.rut || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          return uRut.length >= 7 && uRut === cleanDigits;
+        });
+        if (match && (match.email_acceso || match.email)) {
+          resolvedEmail = (match.email_acceso || match.email).toLowerCase();
+        }
+        const initialAttempt = await supabase.auth.signInWithPassword({
+          email: resolvedEmail,
+          password: pass,
+        });
+        authData = initialAttempt.data;
+        authError = initialAttempt.error;
+      }
+    } else {
+      const initialAttempt = await supabase.auth.signInWithPassword({
+        email: resolvedEmail,
+        password: pass,
+      });
+      authData = initialAttempt.data;
+      authError = initialAttempt.error;
+    }
 
     if (authError) {
       return {
@@ -322,11 +347,45 @@ export async function signInWithSupabase(emailOrRut: string, pass: string): Prom
   }
 }
 
+async function unsubscribePushOnSignOut(): Promise<void> {
+  if (
+    typeof window === 'undefined' ||
+    typeof navigator === 'undefined' ||
+    !('serviceWorker' in navigator) ||
+    !('PushManager' in window)
+  ) {
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = await reg?.pushManager?.getSubscription();
+    if (!sub) return;
+
+    const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+    const token = data?.session?.access_token;
+    if (token) {
+      await fetch('/api/notificaciones/push', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+        signal: AbortSignal.timeout(4000),
+      }).catch(() => {});
+    }
+    await sub.unsubscribe().catch(() => {});
+  } catch {
+    // Nunca bloquear el cierre de sesión si el navegador restringe el Service Worker.
+  }
+}
+
 /**
  * Cerrar sesión en Supabase Auth y limpiar almacenamiento local
  */
 export async function signOutSupabase(discardPending = false): Promise<void> {
   if(!discardPending && dataService.pendingCloudChanges()>0)throw new Error('Hay cambios sin guardar. Sincronízalos antes de cerrar sesión.');
+  await unsubscribePushOnSignOut();
   supabase.auth.stopAutoRefresh?.();
   try {
     await supabase.auth.signOut();

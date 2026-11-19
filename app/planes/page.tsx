@@ -213,15 +213,26 @@ export default function PlanesPage() {
     }
 
     if (billingParam === 'pending') {
+      const orderParam = params.get('order');
       let attempts = 0;
       const poll = async () => {
         attempts += 1;
         const summary = await fetchBillingStatus();
         if (!active) return;
-        const confirmed =
-          summary?.suscripcion?.estado === 'active' ||
-          summary?.pagos?.[0]?.estado === 'paid';
-        if (confirmed) {
+        const targetPayment = orderParam
+          ? summary?.pagos?.find((p) => p.commerce_order === orderParam)
+          : summary?.pagos?.[0];
+        if (targetPayment?.estado === 'paid') {
+          await syncConfirmedState();
+          if (active) setReturnBanner(getBillingBannerConfig('success'));
+          return;
+        }
+        if (targetPayment?.estado === 'failed' || targetPayment?.estado === 'canceled') {
+          if (active) setReturnBanner(getBillingBannerConfig(targetPayment.estado));
+          cleanUrl();
+          return;
+        }
+        if (!orderParam && !targetPayment && summary?.suscripcion?.estado === 'active') {
           await syncConfirmedState();
           if (active) setReturnBanner(getBillingBannerConfig('success'));
           return;

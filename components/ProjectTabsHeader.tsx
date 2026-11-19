@@ -20,7 +20,7 @@ import { ProjectStatusSelect } from '@/components/ProjectStatus';
 import { Proyecto, Cliente } from '@/types/database';
 import { assignedCrew, crewAttendance } from '@/lib/crew';
 import { chileToday } from '@/lib/ai/project-deadlines';
-import { formatCLP, formatDate } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { dataService } from '@/lib/data-service';
 
 interface ProjectTabsHeaderProps {
@@ -101,7 +101,6 @@ export default function ProjectTabsHeader({
       label: 'Finanzas y materiales',
       href: `/proyectos/${proyecto.id}/finanzas`,
       icon: Wallet,
-      badge: formatCLP(proyecto.monto_cotizado || 0),
     },
     {
       id: 'asistencia',

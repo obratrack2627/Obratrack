@@ -26,24 +26,28 @@ export async function GET(request: NextRequest) {
   const targetPath = isRecovery ? '/actualizar-password' : '/login';
 
   try {
-    let sessionToken: string | null = null;
-    let refreshToken: string | null = null;
-
-    // 1. Flujo PKCE moderno de Supabase Auth (código de un solo uso)
+    // 1. Flujo PKCE moderno de Supabase Auth: el code_verifier vive en el cliente (localStorage),
+    // por lo que el intercambio debe completarse en la vista destino sin filtrar tokens en Location.
     if (code) {
-      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-      if (exchangeError) {
-        console.error('Error en exchangeCodeForSession:', exchangeError.message);
-        const loginUrl = new URL('/login', request.url);
-        loginUrl.searchParams.set('error', 'enlace_expirado');
-        return NextResponse.redirect(loginUrl);
+      const redirectUrl = new URL(targetPath, request.url);
+      redirectUrl.searchParams.set('code', code);
+      if (!isRecovery) {
+        redirectUrl.searchParams.set('cuenta_confirmada', 'true');
       }
-      sessionToken = data.session?.access_token || null;
-      refreshToken = data.session?.refresh_token || null;
-    } 
+      return NextResponse.redirect(redirectUrl);
+    }
+
     // 2. Flujo clásico de OTP / Token Hash
-    else if (tokenHash && type) {
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+    if (tokenHash && type) {
+      if (isRecovery) {
+        // Delegar verifyOtp al cliente en /actualizar-password sin exponer access_token/refresh_token en Location.
+        const redirectUrl = new URL('/actualizar-password', request.url);
+        redirectUrl.searchParams.set('token_hash', tokenHash);
+        redirectUrl.searchParams.set('type', type);
+        return NextResponse.redirect(redirectUrl);
+      }
+
+      const { error: verifyError } = await supabase.auth.verifyOtp({
         token_hash: tokenHash,
         type: type as any,
       });
@@ -54,8 +58,6 @@ export async function GET(request: NextRequest) {
         loginUrl.searchParams.set('error', 'enlace_expirado');
         return NextResponse.redirect(loginUrl);
       }
-      sessionToken = data.session?.access_token || null;
-      refreshToken = data.session?.refresh_token || null;
     }
 
     // Preparar redirección exitosa
@@ -63,9 +65,6 @@ export async function GET(request: NextRequest) {
     if (!isRecovery) {
       redirectUrl.searchParams.set('cuenta_confirmada', 'true');
     }
-
-    if (isRecovery && sessionToken && refreshToken)
-      redirectUrl.hash = new URLSearchParams({ access_token: sessionToken, refresh_token: refreshToken, type: 'recovery' }).toString();
     return NextResponse.redirect(redirectUrl);
   } catch (err: any) {
     console.error('Excepción no controlada en /auth/callback:', err);

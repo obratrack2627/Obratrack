@@ -24,8 +24,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { user } = await authorizeAI(request);
-    if (user.rol !== "admin")
-      throw new AIError("ROLE_FORBIDDEN", "Solo administración puede activar la recepción de WhatsApp.", 403);
+    if (user.is_dev !== true)
+      throw new AIError(
+        "ROLE_FORBIDDEN",
+        "Solo el equipo técnico de ObraTrack puede modificar la suscripción global de WhatsApp.",
+        403,
+      );
     return NextResponse.json(await activateMetaWebhook(), {
       headers: { "Cache-Control": "private, no-store" },
     });
