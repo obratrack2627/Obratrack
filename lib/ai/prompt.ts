@@ -162,6 +162,7 @@ export function isQuoteFollowUp(
     .trim();
   if (!clean || /^(?:hol+a+|buena+s?|menu|inicio|opciones|cancelar?|no\b)/.test(clean)) return false;
   if (/\b(?:que obras|cuales obras|saldo|pagos?|asistencia|cuadrilla|bitacora|gantt)\b/.test(clean)) return false;
+  if (/\b(?:crea\w*\s+(?:la\s+|una\s+|esta\s+|esa\s+)?obra|convert\w*\s+en\s+obra|recien\s+me\s+diste|acabas\s+de\s+dar|recien\s+entregad[oa])\b/.test(clean)) return false;
 
   const recent = history.slice(-4);
   const lastModel = [...recent].reverse().find((m) => m.rol === "model");
@@ -171,6 +172,9 @@ export function isQuoteFollowUp(
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+  if (/\b(?:que cotizacion quieres usar|no creare una obra|no puedo crear la obra|quieres crear la obra|que quieres hacer con esta cotizacion)\b/.test(modelNorm)) {
+    return false;
+  }
   const asksQuestion =
     lastModel.texto.includes("?") ||
     /\b(?:necesito saber|indica(?:me)?|dime|cuentame|que\s+(?:trabajo|tipo|dimensiones|medidas|comuna|terminacion|preparacion|superficie))\b/.test(

@@ -388,7 +388,10 @@ export function buildWhatsAppInteractivePayload(
     !result.cotizacion &&
     !actions?.tipo &&
     (rawReply.includes("?") || /\b(?:necesito saber|indica(?:me)?|cuéntame|cuentame)\b/i.test(rawReply)) &&
-    /\b(?:cotiz(?:ar|acion)|presupuesto)\b/i.test(rawReply)
+    /\b(?:cotiz(?:ar|acion)|presupuesto)\b/i.test(rawReply) &&
+    !/\b(?:que cotizacion quieres usar|no creare una obra|no puedo crear la obra|que deseas modificar|no se creara una obra)\b/.test(
+      normalizedReply,
+    )
   ) {
     return {
       kind: "buttons",

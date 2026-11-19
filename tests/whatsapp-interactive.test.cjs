@@ -361,3 +361,148 @@ test("webhook envía mensaje interactivo único si cabe en 1024 chars, y texto +
     Object.assign(process.env, prevEnv);
   }
 });
+
+test("tocar [Crear obra] con context.id saliente de Meta o responder 'La que recién me diste' usa la última cotización sin caer en modo quote", async () => {
+  const { processPersonalMessage } = require("../lib/whatsapp/assistant.ts");
+  const { normalizeQuote } = require("../lib/ai/protocol.ts");
+  const delivery = require("./helpers/reply-delivery.cjs")();
+
+  const quote = normalizeQuote({
+    id: "q-pintura-lc",
+    titulo_proyecto: "Pintura de pieza 2 × 3 m",
+    comuna_region: "Las Condes",
+    duracion_dias_estimada: 2,
+    materiales: [{ nombre: "Látex blanco", cantidad: 1, unidad: "galón", precio_unitario_estimado: 24990 }],
+    mano_de_obra: [{ rol: "Pintor", cantidad_personas: 1, dias_estimados: 2, valor_jornal_diario: 45000 }],
+    actividades_gantt: [{ nombre: "Preparación y pintura", dias: 2 }],
+  });
+
+  const makeSb = (messages) => {
+    const db = {
+      usuarios: [{ id: "u-admin", empresa_id: "e-1", nombre: "Jorge", rol: "admin", telefono_whatsapp: "+56 9 1234 5678", email: "jorge@test.cl" }],
+      empresas: [{ id: "e-1", plan_id: "pro_ia" }],
+      presupuestos: [{ id: quote.id, empresa_id: "e-1", cotizacion: quote, estado: "borrador", proyecto_id: null }],
+      whatsapp_mensajes: messages,
+      proyectos: [],
+      clientes: [],
+    };
+    return {
+      db,
+      from(table) {
+        let preds = [], max = Infinity, offset = 0, single = false;
+        const q = {
+          select: () => q,
+          eq: (k, v) => { preds.push((x) => x[k] === v); return q; },
+          in: (k, v) => { preds.push((x) => v.includes(x[k])); return q; },
+          order: () => q,
+          limit: (n) => { max = n; return q; },
+          range: (s, e) => { offset = s; max = e - s + 1; return q; },
+          maybeSingle: () => { single = true; return q; },
+          then: (res, rej) => {
+            const rows = (db[table] || []).filter((x) => preds.every((p) => p(x))).slice(offset, offset + max);
+            return Promise.resolve({ data: single ? rows[0] || null : rows }).then(res, rej);
+          },
+        };
+        return q;
+      },
+      async rpc(name, p) {
+        if (name.startsWith("whatsapp_reservar_respuesta") || name === "whatsapp_finalizar_respuesta") return delivery(name, p);
+        const row = {
+          message_id: p.p_id,
+          empresa_id: p.p_empresa,
+          actor_id: p.p_actor,
+          texto: p.p_texto,
+          respuesta: p.p_respuesta,
+          cotizacion: p.p_cotizacion,
+          acciones: p.p_acciones,
+          borrador_obra: p.p_borrador ?? null,
+        };
+        db.whatsapp_mensajes.unshift(row);
+        return { data: row };
+      },
+    };
+  };
+
+  // 1) Tocar el botón interactivo [🏗️ Crear obra] cuando Meta envía context.id apuntando al WAMID saliente de la tarjeta
+  const sbButton = makeSb([
+    {
+      message_id: "wamid.user-inbound-quote",
+      empresa_id: "e-1",
+      actor_id: "u-admin",
+      texto: "Sin grietas, es pintura interior de una pieza en Las Condes de 2 x 3",
+      respuesta: "📋 *Pintura de pieza 2 × 3 m*",
+      cotizacion: quote,
+    },
+  ]);
+
+  const btnResult = await processPersonalMessage(
+    sbButton,
+    {
+      id: "wamid.tap-create-btn",
+      from: "56912345678",
+      type: "interactive",
+      context: { from: "56900000000", id: "wamid.outbound-interactive-card-id" },
+      interactive: { type: "button_reply", button_reply: { id: "ot:quote:create", title: "🏗️ Crear obra" } },
+    },
+    { chat: async () => { throw new Error("No debe invocar al modelo al iniciar el borrador desde la cotización"); } },
+  );
+
+  assert.doesNotMatch(btnResult.respuesta, /Qué cotización quieres usar/i);
+  assert.match(btnResult.respuesta, /Nombre del cliente/);
+  assert.equal(sbButton.db.whatsapp_mensajes[0].borrador_obra.presupuesto_cotizacion_id, quote.id);
+  assert.equal(sbButton.db.whatsapp_mensajes[0].borrador_obra.nombre, "Pintura de pieza 2 × 3 m");
+
+  // 2) Si el usuario escribe "La que recién me diste" tras una pregunta intermedia, recupera la cotización reciente
+  const sbFollowUp = makeSb([
+    {
+      message_id: "wamid.question-which",
+      empresa_id: "e-1",
+      actor_id: "u-admin",
+      texto: "Crea la obra con esta cotización",
+      respuesta: "¿Qué cotización quieres usar? Responde al mensaje de esa cotización o indícala en ObraTrack; no crearé una obra con un presupuesto distinto.",
+      cotizacion: null,
+    },
+    {
+      message_id: "wamid.user-inbound-quote",
+      empresa_id: "e-1",
+      actor_id: "u-admin",
+      texto: "Pintura de una pieza en Las Condes de 2 x 3",
+      respuesta: "📋 *Pintura de pieza 2 × 3 m*",
+      cotizacion: quote,
+    },
+  ]);
+
+  const recentResult = await processPersonalMessage(
+    sbFollowUp,
+    {
+      id: "wamid.la-que-recien-me-diste",
+      from: "56912345678",
+      type: "text",
+      text: { body: "La que recién me diste" },
+    },
+    { chat: async () => { throw new Error("Debe iniciar el borrador de la obra con la cotización reciente sin llamar al modelo"); } },
+  );
+
+  assert.match(recentResult.respuesta, /Nombre del cliente/);
+  assert.equal(sbFollowUp.db.whatsapp_mensajes[0].borrador_obra.presupuesto_cotizacion_id, quote.id);
+
+  // 3) No adjuntar botón [⚡ Cotizar estándar] a "¿Qué cotización quieres usar?" ni activar modo quote en "La que recién me diste"
+  const noQuoteStdButtons = buildWhatsAppInteractivePayload(
+    {
+      respuesta: "¿Qué cotización quieres usar? Responde al mensaje de esa cotización o indícala en ObraTrack; no crearé una obra con un presupuesto distinto.",
+      acciones: {},
+    },
+    { role: "admin" },
+  );
+  assert.equal(noQuoteStdButtons, null);
+
+  const reqCheck = chatGenerationRequest(
+    [
+      { rol: "user", texto: "Quisiera cotizar pintura pieza 2x3 Las Condes" },
+      { rol: "model", texto: "¿Qué cotización quieres usar? Responde al mensaje de esa cotización o indícala en ObraTrack; no crearé una obra con un presupuesto distinto." },
+    ],
+    "La que recién me diste",
+    {},
+  );
+  assert.equal(reqCheck.mode, "chat");
+});

@@ -15,7 +15,7 @@ import { projectStatusCommand } from '@/lib/ai/project-status-command';
 import { actionReply } from '@/lib/ai/action-reply';
 import { projectDeadlineAnswer } from '@/lib/ai/project-deadlines';
 import { operationsContext } from '@/lib/ai/operations-context';
-import { acceptsQuotedProject, requestsQuotedProject, cancelsProjectDraft, resumesProjectDraft, startsProjectDraft, legacyQuotedProjectMessage, quotedProjectDraft } from "./quote-intake";
+import { acceptsQuotedProject, requestsQuotedProject, selectsRecentQuotedProject, cancelsProjectDraft, resumesProjectDraft, startsProjectDraft, legacyQuotedProjectMessage, quotedProjectDraft } from "./quote-intake";
 import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib/presupuestos";
 import { budgetApplication } from '@/lib/quotes/application';
 import { chooseBudgetOption } from './budget-options';
@@ -262,13 +262,16 @@ export async function processPersonalMessage(
   const textParts: string[] = [];
   const attachments: any[] = [];
   let image: { mimeType: string; data: string } | undefined;
-  let replyContextId: string | undefined = message.context?.id;
+  let replyContextId: string | undefined =
+    message.type !== "interactive" && message.type !== "button" ? message.context?.id : undefined;
   let unsupportedCount = 0;
   let silentOrNoiseAudioCount = 0;
   const friendlyMediaWarnings: string[] = [];
 
   for (const item of batchItems) {
-    if (!replyContextId && item.context?.id) replyContextId = item.context.id;
+    if (!replyContextId && item.type !== "interactive" && item.type !== "button" && item.context?.id) {
+      replyContextId = item.context.id;
+    }
     const caption = item.text?.body || item.image?.caption || item.document?.caption || '';
     if (["image", "audio", "document"].includes(item.type)) {
       let media: { mimeType: string; data: string };
@@ -393,10 +396,11 @@ export async function processPersonalMessage(
   let acceptCreation = false;
   let alreadyConverted = false;
   let confirmationResponse = '';
-  const explicitQuoteCreation = requestsQuotedProject(text);
+  const explicitQuoteCreation =
+    requestsQuotedProject(text) || selectsRecentQuotedProject(text, history[0]?.respuesta || '');
   const replied = replyContextId ? conversationRows.find(row => row.message_id === replyContextId) : null;
   const legacyQuoteMessage = pendingProject && !pendingProject.presupuesto_cotizacion_id ? legacyQuotedProjectMessage(conversationRows) : null;
-  const lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : explicitQuoteCreation && replyContextId ? null : conversationRows.find((m: any) => m.cotizacion));
+  const lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : explicitQuoteCreation && replied ? null : conversationRows.find((m: any) => m.cotizacion));
   const previousDraft = pendingProject;
   let nativeBudget: Presupuesto | null = null;
   let candidates: Presupuesto[] = [];
