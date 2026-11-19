@@ -51,6 +51,7 @@ import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
 import AIMessageTools from '@/components/AIMessageTools';
+import ObraBotWhatsAppLink from '@/components/ObraBotWhatsAppLink';
 import { quoteIntroText } from '@/lib/ai/quote-format';
 
 
@@ -463,6 +464,11 @@ export default function ProyectoIAPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                <ObraBotWhatsAppLink
+                  activePlan={activePlan}
+                  projectName={proyecto?.nombre}
+                  compact
+                />
                 <button
                   type="button"
                   onClick={handleLimpiarHistorial}

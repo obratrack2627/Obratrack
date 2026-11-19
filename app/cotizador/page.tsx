@@ -50,6 +50,7 @@ import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 import { CloudChatHistory } from '@/lib/ai/cloud-chat-history';
 import { aiContext, aiHeaders, requestAI, applyAIResponse } from '@/lib/ai/client';
 import AIMessageTools from '@/components/AIMessageTools';
+import ObraBotWhatsAppLink from '@/components/ObraBotWhatsAppLink';
 import { quoteIntroText } from '@/lib/ai/quote-format';
 
 
@@ -318,16 +319,19 @@ export default function CopilotoObreroPage() {
                   </div>
                 </div>
 
-                {/* Botón Nueva Conversación */}
-                <button
-                  onClick={handleResetChat}
-                  disabled={isChatLoading||isHistoryLoading}
-                  title="Iniciar nueva conversación limpia"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-gray-300 hover:text-white border border-navy-700 text-[11px] font-bold transition-all shadow-sm"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-obra-orange" />
-                  <span className="hidden sm:inline">Nueva Conversación</span>
-                </button>
+                {/* Acciones de Conversación y WhatsApp */}
+                <div className="flex items-center gap-2">
+                  <ObraBotWhatsAppLink activePlan={activePlan} showMissingPhoneHint />
+                  <button
+                    onClick={handleResetChat}
+                    disabled={isChatLoading||isHistoryLoading}
+                    title="Iniciar nueva conversación limpia"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-gray-300 hover:text-white border border-navy-700 text-[11px] font-bold transition-all shadow-sm"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-obra-orange" />
+                    <span className="hidden sm:inline">Nueva Conversación</span>
+                  </button>
+                </div>
               </div>
 
               <div className="border-b border-kraft-200 px-4 py-3">
