@@ -744,11 +744,11 @@ export default function ProyectoDocumentosPage() {
                       Monto Total (CLP)
                     </label>
                     <input
-                      type="number"
-                      min="0"
+                      type="text"
+                      inputMode="numeric"
                       value={montoDocumento}
                       onChange={(e) => setMontoDocumento(formatThousands(e.target.value))}
-                      placeholder="Ej: 345900"
+                      placeholder="Ej: 345.900"
                       className="w-full px-2.5 py-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] text-xs text-navy-900 dark:text-white"
                     />
                   </div>

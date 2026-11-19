@@ -525,3 +525,69 @@ test('endpoints HTTP /api/billing validan auth, token faltante, CRON_SECRET y re
   );
   assert.equal(badCronGet.status, 401);
 });
+
+test('cambiar de mensual recurrente a anual prepago cancela la suscripción previa en Flow y aborta si Flow falla', async () => {
+  const { db, client } = createInMemoryBillingDb({
+    empresas: [{ id: 'emp-1', nombre: 'Constructora Norte SpA', plan_id: 'pro' }],
+    suscripciones: [{
+      id: 'sub-rec-1',
+      empresa_id: 'emp-1',
+      plan_id: 'pro',
+      ciclo: 'mensual',
+      modalidad: 'recurrente',
+      estado: 'active',
+      pasarela: 'flow',
+      gateway_customer_id: 'cus_1',
+      gateway_subscription_id: 'sus_prev_1',
+      cancel_at_period_end: false,
+      current_period_end: '2026-12-30T00:00:00.000Z',
+    }],
+    pagos_suscripcion: [{
+      id: 'pay-annual-1',
+      empresa_id: 'emp-1',
+      commerce_order: 'OT-ANNUAL-1',
+      gateway_token: 'tok_annual_1',
+      plan_id: 'pro',
+      ciclo: 'anual',
+      modalidad: 'prepago',
+      monto_clp: 132480,
+      estado: 'pending',
+    }],
+  });
+
+  // 1) Si Flow falla al cancelar y la suscripción sigue activa (status 1), debe abortar 503 sin activar ni marcar webhook.
+  const failingFlow = {
+    async getPaymentStatus() {
+      return { flowOrder: 9501, commerceOrder: 'OT-ANNUAL-1', status: 2, amount: 132480, payer: 'jefe@norte.cl' };
+    },
+    async cancelSubscription() {
+      throw new Error('Flow timeout');
+    },
+    async getSubscription() {
+      return { subscriptionId: 'sus_prev_1', status: 1, cancel_at_period_end: 0 };
+    },
+  };
+  await assert.rejects(
+    handleFlowPaymentCallback({ admin: client, flow: failingFlow, token: 'tok_annual_1' }),
+    (e) => e.status === 503 && e.code === 'BILLING_PREVIOUS_SUBSCRIPTION_CANCEL_FAILED',
+  );
+  assert.equal(db.billing_webhook_events.length, 0);
+  assert.equal(db.suscripciones[0].modalidad, 'recurrente');
+
+  // 2) En el reintento exitoso, cancela la suscripción previa en Flow (atPeriodEnd: false) y activa el plan anual.
+  const cancelCalls = [];
+  const workingFlow = {
+    async getPaymentStatus() {
+      return { flowOrder: 9501, commerceOrder: 'OT-ANNUAL-1', status: 2, amount: 132480, payer: 'jefe@norte.cl' };
+    },
+    async cancelSubscription(input) {
+      cancelCalls.push(input);
+      return { subscriptionId: input.subscriptionId, status: 4 };
+    },
+  };
+  const result = await handleFlowPaymentCallback({ admin: client, flow: workingFlow, token: 'tok_annual_1' });
+  assert.equal(result.outcome, 'paid');
+  assert.deepEqual(cancelCalls, [{ subscriptionId: 'sus_prev_1', atPeriodEnd: false }]);
+  assert.equal(db.suscripciones[0].modalidad, 'prepago');
+  assert.equal(db.suscripciones[0].ciclo, 'anual');
+});

@@ -781,18 +781,54 @@ export class DataService {
     const updated = { ...row, ...changes, id, empresa_id: actor.empresa_id };
     const { data, error } = await supabase.auth.getSession();
     if (error || !data.session?.access_token || !sameSession()) throw new Error('Renueva tu sesión para guardar.');
-    const response = await fetch('/api/supabase/sync', {
+    const versions = this.getItem<Record<string, Record<string, number | null>>>(this.versionsKey(), {});
+    const expectedVersion = versions.proyectos?.[id] ?? (row as Proyecto & { sync_version?: number | null }).sync_version ?? null;
+    const requestId = crypto.randomUUID();
+    const send = (token: string) => fetch('/api/supabase/sync', {
       method: 'POST', signal: AbortSignal.timeout(20000),
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session.access_token}` },
-      body: JSON.stringify({ cambios: { proyectos: [updated] } }),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        cambios: { proyectos: [updated] },
+        versiones: { proyectos: { [id]: expectedVersion } },
+        request_id: requestId,
+      }),
     });
-    if (!response.ok) throw new Error('No se pudo confirmar el guardado. Conservamos el formulario para que puedas reintentar.');
+    let response = await send(data.session.access_token);
+    if (response.status === 401) {
+      try {
+        const refreshed = await supabase.auth.refreshSession();
+        if (!sameSession()) throw new Error('La sesión cambió durante el guardado.');
+        if (!refreshed.error && refreshed.data.session?.access_token) {
+          response = await send(refreshed.data.session.access_token);
+        }
+      } catch (refreshErr) {
+        if (!sameSession()) throw refreshErr;
+      }
+    }
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      if (response.status === 409 && payload?.code === 'SYNC_CONFLICT') {
+        localStorage.setItem(this.conflictKey(), 'true');
+        window.dispatchEvent(new Event('obratrack_sync_conflict'));
+        throw new Error('Otro dispositivo actualizó esta obra. Recarga los datos antes de guardar.');
+      }
+      throw new Error(payload?.error || 'No se pudo confirmar el guardado. Conservamos el formulario para que puedas reintentar.');
+    }
+    const confirmed = await response.json().catch(() => null);
+    const nextVersion = confirmed?.versiones?.proyectos?.[id];
     // Una lectura iniciada antes del guardado no debe sobrescribir el resultado confirmado.
     if (this.cloudPull) await this.cloudPull.promise;
     if (!sameSession()) throw new Error('La sesión cambió durante el guardado.');
     const rows = this.getItem<Proyecto[]>(key, []);
+    const nextProject = typeof nextVersion === 'number' ? { ...updated, sync_version: nextVersion } : updated;
+    if (typeof nextVersion === 'number') {
+      const currentVersions = this.getItem<Record<string, Record<string, number | null>>>(this.versionsKey(), {});
+      currentVersions.proyectos ||= {};
+      currentVersions.proyectos[id] = nextVersion;
+      localStorage.setItem(this.versionsKey(), JSON.stringify(currentVersions));
+    }
     this.confirmedProjectStates.set(`${actor.empresa_id}:${id}`, { estado: updated.estado, revision: ++this.projectStateRevision });
-    this.setItem(key, rows.map(project => project.id === id ? { ...project, ...updated } : project), false);
+    this.setItem(key, rows.map(project => project.id === id ? { ...project, ...nextProject } : project), false);
     window.dispatchEvent(new Event('obratrack_cloud_synced'));
   }
 

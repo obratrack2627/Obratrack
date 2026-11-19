@@ -13,6 +13,44 @@ export function addDaysISO(isoDate: string, days: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+function extractAgendaDateAndTime(ev: {
+  fecha_inicio?: string | null;
+  fecha?: string | null;
+  hora?: string | null;
+}): { fecha: string | null; hora: string } {
+  const raw = typeof ev.fecha_inicio === "string" ? ev.fecha_inicio.trim() : "";
+  if (raw) {
+    if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw)) {
+      const parsed = new Date(raw);
+      if (!Number.isNaN(parsed.getTime())) {
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Santiago",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).formatToParts(parsed);
+        const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+        const hour = get("hour") === "24" ? "00" : get("hour");
+        return {
+          fecha: `${get("year")}-${get("month")}-${get("day")}`,
+          hora: `${hour}:${get("minute")}`,
+        };
+      }
+    }
+    const localMatch = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?/.exec(raw);
+    if (localMatch) {
+      return { fecha: localMatch[1], hora: localMatch[2] || "08:30" };
+    }
+  }
+  return {
+    fecha: typeof ev.fecha === "string" && ev.fecha ? ev.fecha.slice(0, 10) : null,
+    hora: typeof ev.hora === "string" && ev.hora ? ev.hora.slice(0, 5) : "08:30",
+  };
+}
+
 function projectName(projects: any[], projectId?: string | null): string {
   if (!projectId) return "Obra en ObraTrack";
   const match = (projects || []).find((p) => p.id === projectId);
@@ -391,12 +429,15 @@ export async function runScheduledPushReminders(
         .in("estado", ["activo", "pendiente"]),
       admin
         .from("agenda_eventos")
-        .select("id,titulo,fecha,hora,estado,proyecto_id,comuna_lugar")
+        .select("id,titulo,fecha_inicio,fecha_fin,tipo,proyecto_id")
         .eq("empresa_id", empresaId),
     ]);
 
+    if (agendaRes?.error) {
+      console.warn("push_cron_agenda_query_error", { empresa_id: empresaId, code: agendaRes.error.code });
+    }
     const projects = projRes?.data || [];
-    const events = (agendaRes?.data || []).filter((e: any) => e.estado !== "completado");
+    const events = agendaRes?.data || [];
     const projectIds = projects.map((p: any) => p.id);
 
     const [actRes, crewRes] = projectIds.length
@@ -558,28 +599,34 @@ export async function runScheduledPushReminders(
 
     // Agenda / Visitas: día antes y mismo día en la mañana
     for (const ev of events) {
+      const { fecha: evDate, hora: evTime } = extractAgendaDateAndTime(ev);
+      if (!evDate) continue;
       const targetChiefs = ev.proyecto_id ? supervisorsForProject(ev.proyecto_id) : adminIds;
       const targetUrl = ev.proyecto_id ? `/proyectos/${ev.proyecto_id}` : "/dashboard";
-      if (ev.fecha === tomorrow) {
+      const relatedProject = ev.proyecto_id
+        ? projects.find((p: any) => p.id === ev.proyecto_id)?.nombre
+        : null;
+      const bodyText = `${ev.titulo}${relatedProject ? ` · ${relatedProject}` : ""}`;
+      if (evDate === tomorrow) {
         await dispatch(`agenda-prev:${ev.id}:${today}`, {
           empresaId,
           userIds: targetChiefs,
           categoria: "inicio_plazos",
           payload: {
-            title: `Agenda mañana · ${ev.hora || "08:30"}`,
-            body: `${ev.titulo}${ev.comuna_lugar ? ` (${ev.comuna_lugar})` : ""}`,
+            title: `Agenda mañana · ${evTime}`,
+            body: bodyText,
             url: targetUrl,
             tag: `agenda-prev-${ev.id}`,
           },
         });
-      } else if (ev.fecha === today) {
+      } else if (evDate === today) {
         await dispatch(`agenda-today:${ev.id}:${today}`, {
           empresaId,
           userIds: targetChiefs,
           categoria: "inicio_plazos",
           payload: {
-            title: `Hoy en tu agenda · ${ev.hora || "08:30"}`,
-            body: `${ev.titulo}${ev.comuna_lugar ? ` (${ev.comuna_lugar})` : ""}`,
+            title: `Hoy en tu agenda · ${evTime}`,
+            body: bodyText,
             url: targetUrl,
             tag: `agenda-today-${ev.id}`,
             requireInteraction: true,

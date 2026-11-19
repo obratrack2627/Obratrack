@@ -633,3 +633,85 @@ test('push de Sync solo se prepara después del commit y no ante fallo ni replay
   assert.equal((await POST(request(payload))).status,200);assert.equal(notices.length,1);
  }finally{push.notifyPushOnSyncChanges=original;}
 });
+
+test('guardarEdicionProyecto envía versiones, request_id y actualiza sync_version local', async () => {
+  localStorage.setItem('obratrack_proyectos_v7_a', JSON.stringify([{ ...p1, sync_version: 3 }]));
+  localStorage.setItem('obratrack_sync_versions_v1_a', JSON.stringify({ proyectos: { p1: 3 } }));
+  let sentBody = null;
+  global.fetch = async (_url, options) => {
+    sentBody = JSON.parse(options.body);
+    return Response.json({ success: true, versiones: { proyectos: { p1: 4 } } });
+  };
+
+  await dataService.guardarEdicionProyecto('p1', { nombre: 'Obra Editada' });
+  assert.equal(sentBody.cambios.proyectos[0].nombre, 'Obra Editada');
+  assert.deepEqual(sentBody.versiones, { proyectos: { p1: 3 } });
+  assert.match(sentBody.request_id, /^[a-f0-9-]{36}$/i);
+  assert.equal(JSON.parse(localStorage.getItem('obratrack_sync_versions_v1_a')).proyectos.p1, 4);
+  assert.equal(dataService.getProyectos()[0].sync_version, 4);
+
+  global.fetch = async () =>
+    Response.json({ code: 'SYNC_CONFLICT', error: 'Conflicto de versión' }, { status: 409 });
+  await assert.rejects(
+    dataService.guardarEdicionProyecto('p1', { nombre: 'Otro cambio' }),
+    /Otro dispositivo actualizó esta obra/i,
+  );
+  assert.equal(dataService.hasSyncConflict(), true);
+});
+
+test('allowlist SQL de sincronizar_lote_web incluye todas las columnas enviadas por sync/route.ts para imprevistos, cambios y documentos', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const sql = fs.readFileSync(path.resolve(__dirname, '../supabase/20261119_sync_allowlist_fix.sql'), 'utf8');
+  const extractAllowed = (table) => {
+    const match = sql.match(new RegExp(`WHEN '${table}' THEN ARRAY\\[([^\\]]+)\\]`));
+    assert.ok(match, `Falta allowlist SQL para ${table}`);
+    return new Set(match[1].split(',').map((s) => s.trim().replace(/^'|'$/g, '')));
+  };
+
+  let capturedOps = [];
+  fixture.handleRPC('sincronizar_lote_web', async ({ p_operaciones }) => {
+    capturedOps = p_operaciones;
+    return { data: { success: true, versiones: {} }, error: null };
+  });
+
+  const res = await POST(
+    request({
+      cambios: {
+        imprevistos: [{ id: 'imp-1', proyecto_id: 'p1', titulo: 'Filtración', descripcion: 'Tubería', monto: 45000, pagado: true, estado: 'aprobado', fecha: '2026-11-19' }],
+        reclamos_cambios: [{ id: 'rc-1', proyecto_id: 'p1', tipo: 'solicitud_cambio', prioridad: 'alta', estado: 'pendiente', titulo: 'Extra', descripcion: 'Detalle', solicitado_por: 'Cliente', impacto_monto: 50000, impacto_dias: 1, materiales_requeridos: [], materiales_inyectados: false, origen: 'web', resolucion_notas: 'OK', fecha: '2026-11-19' }],
+        documentos: [{ id: 'doc-1', proyecto_id: 'p1', subido_por_nombre: 'Admin', categoria: 'factura_boleta', nombre: 'F1', descripcion: 'Desc', archivo_nombre: 'f1.pdf', archivo_tamano: 100, mime_type: 'application/pdf', numero_documento: '123', proveedor_entidad: 'Sodimac', monto_documento: 10000, correo_remitente: null, correo_destinatario: null, correo_asunto: null, correo_cuerpo: null, fecha_documento: '2026-11-19' }],
+      },
+    }),
+  );
+  assert.equal(res.status, 200);
+  for (const op of capturedOps) {
+    const allowed = extractAllowed(op.table);
+    for (const col of Object.keys(op.row || {})) {
+      assert.ok(allowed.has(col), `Columna "${col}" en tabla "${op.table}" falta en sincronizar_lote_web`);
+    }
+  }
+});
+
+test('formatThousands redondea floats sin inflar dígitos y no existen inputs type="number" con formatThousands ni WorkCalendarEditor duplicado', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { formatThousands } = require('../lib/utils.ts');
+  assert.equal(formatThousands(150000.5), '150.001');
+  assert.equal(formatThousands(1250000), '1.250.000');
+  assert.equal(formatThousands(Number.NaN), '');
+  assert.equal(formatThousands('1250000'), '1.250.000');
+
+  for (const rel of ['../app/proyectos/[id]/documentos/page.tsx', '../app/proyectos/[id]/cambios/page.tsx']) {
+    const src = fs.readFileSync(path.resolve(__dirname, rel), 'utf8');
+    assert.doesNotMatch(src, /type="number"[^<]{0,260}formatThousands/, `${rel} mezcla type="number" con formatThousands`);
+  }
+
+  const proyectosSrc = fs.readFileSync(path.resolve(__dirname, '../app/proyectos/page.tsx'), 'utf8');
+  const editStart = proyectosSrc.indexOf('onSubmit={handleSaveEdit}');
+  assert.ok(editStart > 0, 'Debe existir formulario onSubmit={handleSaveEdit}');
+  const editSection = proyectosSrc.slice(editStart, proyectosSrc.indexOf('</form>', editStart));
+  const calendarMatches = editSection.match(/<WorkCalendarEditor\b/g) || [];
+  assert.equal(calendarMatches.length, 1, 'El modal de Editar Obra debe renderizar exactamente un WorkCalendarEditor');
+  assert.doesNotMatch(editSection, /<WorkCalendarEditor[^>]*calendarDays/, 'El modal de Editar Obra no debe usar estado calendarDays del modal Crear');
+});

@@ -32,6 +32,18 @@ function createPushDb(seed = {}) {
     push_vapid_config: seed.push_vapid_config || [],
   };
 
+  const AGENDA_REAL_COLUMNS = new Set([
+    "id",
+    "empresa_id",
+    "proyecto_id",
+    "usuario_id",
+    "titulo",
+    "fecha_inicio",
+    "fecha_fin",
+    "tipo",
+    "created_at",
+  ]);
+
   return {
     db,
     from(table) {
@@ -39,9 +51,16 @@ function createPushDb(seed = {}) {
       let updatePatch = null;
       let single = false;
       let op = "select";
+      let columnError = null;
 
       const query = {
-        select() { return query; },
+        select(cols) {
+          if (table === "agenda_eventos" && typeof cols === "string" && cols !== "*") {
+            const bad = cols.split(",").map((c) => c.trim()).filter((c) => c && !AGENDA_REAL_COLUMNS.has(c));
+            if (bad.length) columnError = { code: "42703", message: `column ${bad[0]} does not exist` };
+          }
+          return query;
+        },
         eq(k, v) { predicates.push((r) => r[k] === v); return query; },
         in(k, vals) { predicates.push((r) => vals.includes(r[k])); return query; },
         maybeSingle() { single = true; return query; },
@@ -64,6 +83,9 @@ function createPushDb(seed = {}) {
           return query;
         },
         then(resolve, reject) {
+          if (columnError) {
+            return Promise.resolve({ data: null, error: columnError }).then(resolve, reject);
+          }
           if (op === "update" && updatePatch) {
             for (const row of db[table] || []) {
               if (predicates.every((p) => p(row))) Object.assign(row, updatePatch);
@@ -203,7 +225,7 @@ test("runScheduledPushReminders avisa el día previo (19 nov) y el mismo día (2
       { proyecto_id: "p-norte", usuario_id: "u-w1" },
     ],
     agenda_eventos: [
-      { id: "ev-1", empresa_id: "e1", titulo: "Reunión arranque Casa Norte", fecha: "2026-11-20", hora: "08:30", estado: "pendiente", proyecto_id: "p-norte" },
+      { id: "ev-1", empresa_id: "e1", titulo: "Reunión arranque Casa Norte", fecha_inicio: "2026-11-20T11:30:00.000Z", fecha_fin: "2026-11-20T12:30:00.000Z", tipo: "visita", proyecto_id: "p-norte" },
     ],
   });
 
@@ -216,7 +238,7 @@ test("runScheduledPushReminders avisa el día previo (19 nov) y el mismo día (2
   const day19 = new Date("2026-11-19T11:00:00.000Z");
   await runScheduledPushReminders(sb, day19, fakeSend);
   assert.ok(delivered.some((d) => d.endpoint === "https://push/admin" && /Inicio mañana · Casa Norte/.test(d.title)));
-  assert.ok(delivered.some((d) => d.endpoint === "https://push/admin" && /Agenda mañana/.test(d.title)));
+  assert.ok(delivered.some((d) => d.endpoint === "https://push/admin" && /Agenda mañana · 08:30/.test(d.title)));
   assert.ok(delivered.some((d) => d.endpoint === "https://push/w1" && /Mañana inicias en Casa Norte/.test(d.title)));
   assert.ok(!delivered.some((d) => d.endpoint === "https://push/w2"));
 
@@ -231,7 +253,7 @@ test("runScheduledPushReminders avisa el día previo (19 nov) y el mismo día (2
   const day20 = new Date("2026-11-20T11:00:00.000Z");
   await runScheduledPushReminders(sb, day20, fakeSend);
   assert.ok(delivered.some((d) => d.endpoint === "https://push/admin" && /Inicio hoy · Casa Norte/.test(d.title)));
-  assert.ok(delivered.some((d) => d.endpoint === "https://push/admin" && /Hoy en tu agenda/.test(d.title)));
+  assert.ok(delivered.some((d) => d.endpoint === "https://push/admin" && /Hoy en tu agenda · 08:30/.test(d.title)));
   assert.ok(delivered.some((d) => d.endpoint === "https://push/w1" && /Hoy comienzas en Casa Norte/.test(d.title)));
 });
 

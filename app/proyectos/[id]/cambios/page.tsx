@@ -130,11 +130,11 @@ export default function ProyectoCambiosPage() {
       cantidad,
       unidad: matUnidad || 'unidad',
       precio_unitario,
-      subtotal: cantidad * precio_unitario,
+      subtotal: Math.round(cantidad * precio_unitario),
     };
     const nextMats = [...materiales, nuevo];
     setMateriales(nextMats);
-    const sumaMats = nextMats.reduce((acc, m) => acc + m.subtotal, 0);
+    const sumaMats = Math.round(nextMats.reduce((acc, m) => acc + m.subtotal, 0));
     if (parseThousands(impactoMonto) < sumaMats) {
       setImpactoMonto(formatThousands(sumaMats));
     }
@@ -176,12 +176,12 @@ export default function ProyectoCambiosPage() {
             cantidad: cant,
             unidad: m.unidad || 'unidad',
             precio_unitario: pu,
-            subtotal: cant * pu,
+            subtotal: Math.round(cant * pu),
           };
         });
         setMateriales(sugeridos);
         if (data.impacto_monto_sugerido > 0) {
-          setImpactoMonto(formatThousands(data.impacto_monto_sugerido));
+          setImpactoMonto(formatThousands(Math.round(Number(data.impacto_monto_sugerido))));
         }
         if (data.impacto_dias_sugerido > 0) {
           setImpactoDias(String(data.impacto_dias_sugerido));
@@ -895,8 +895,8 @@ export default function ProyectoCambiosPage() {
                     className="col-span-2 px-2 py-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] text-xs text-navy-900 dark:text-white"
                   />
                   <input
-                    type="number"
-                    min="0"
+                    type="text"
+                    inputMode="numeric"
                     placeholder="$ Unit."
                     value={matPrecio}
                     onChange={(e) => setMatPrecio(formatThousands(e.target.value))}

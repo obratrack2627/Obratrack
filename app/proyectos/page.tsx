@@ -1232,8 +1232,6 @@ export default function ProyectosPage() {
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
-              <WorkCalendarEditor days={editDays} excluded={editExcluded} onChange={(days,excluded)=>{setEditDays(days);setEditExcluded(excluded);}}/>
-
               <div>
                 <label htmlFor="edit-project-name" className="block text-xs font-mono font-semibold text-gray-700 uppercase mb-1">
                   Nombre de la Obra *
@@ -1359,7 +1357,7 @@ export default function ProyectosPage() {
                 </div>
               </div>
 
-              <WorkCalendarEditor days={calendarDays} excluded={calendarExcluded} onChange={(days,excluded)=>{setCalendarDays(days);setCalendarExcluded(excluded);}}/>
+              <WorkCalendarEditor days={editDays} excluded={editExcluded} onChange={(days,excluded)=>{setEditDays(days);setEditExcluded(excluded);}}/>
               {/* Selector Interactivo de Ubicación en Google Maps (Edición) */}
               <details className="rounded-xl border border-kraft-200 p-3 dark:border-[#263040]"><summary className="cursor-pointer text-sm font-semibold">Ubicación y referencias</summary><div className="mt-3"><GoogleMapsLocationPicker
                 direccion={editDireccion}

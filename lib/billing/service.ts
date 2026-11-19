@@ -366,14 +366,6 @@ export async function handleFlowRegisterReturn(params: {
   }
 
   const savedRegistration = pago.registro_flow_resultado as FlowSubscription | null;
-  const locked = savedRegistration || await acquireIdempotencyKey(admin, `flow:register:${createHash('sha256').update(token).digest('hex')}`, 'customer.register', {
-    empresa_id: pago.empresa_id,
-    commerce_order: pago.commerce_order,
-    customer_id: reg.customerId,
-  });
-  if (!locked) {
-    throw new AIError('BILLING_RECONCILIATION_REQUIRED', 'El enrolamiento está pendiente de confirmación. No vuelvas a contratarlo; contacta con soporte para comprobar su estado.', 503);
-  }
 
   const { data: currentSub } = await admin
     .from('suscripciones')
@@ -381,18 +373,17 @@ export async function handleFlowRegisterReturn(params: {
     .eq('empresa_id', pago.empresa_id)
     .maybeSingle();
 
-  if (!savedRegistration && currentSub?.gateway_subscription_id) {
-    try {
-      await flow.cancelSubscription({
-        subscriptionId: currentSub.gateway_subscription_id,
-        atPeriodEnd: false,
-      });
-    } catch (error) {
-      console.warn('flow_previous_subscription_cancel_warn', {
-        empresa_id: pago.empresa_id,
-        code: 'PREVIOUS_SUBSCRIPTION_CANCEL_FAILED',
-      });
-    }
+  if (!savedRegistration && currentSub?.gateway_subscription_id && currentSub.estado !== 'canceled') {
+    await ensurePreviousFlowSubscriptionCanceled(flow, currentSub.gateway_subscription_id, pago.empresa_id);
+  }
+
+  const locked = savedRegistration || await acquireIdempotencyKey(admin, `flow:register:${createHash('sha256').update(token).digest('hex')}`, 'customer.register', {
+    empresa_id: pago.empresa_id,
+    commerce_order: pago.commerce_order,
+    customer_id: reg.customerId,
+  });
+  if (!locked) {
+    throw new AIError('BILLING_RECONCILIATION_REQUIRED', 'El enrolamiento está pendiente de confirmación. No vuelvas a contratarlo; contacta con soporte para comprobar su estado.', 503);
   }
 
   const planId = pago.plan_id as PaidPlanId;
@@ -541,6 +532,41 @@ async function resolvePaymentTarget(
   };
 }
 
+async function ensurePreviousFlowSubscriptionCanceled(
+  flow: FlowGateway,
+  subscriptionId: string,
+  empresaId: string,
+): Promise<void> {
+  try {
+    await flow.cancelSubscription({
+      subscriptionId,
+      atPeriodEnd: false,
+    });
+    return;
+  } catch {
+    if (typeof flow.getSubscription === 'function') {
+      try {
+        const remote = await flow.getSubscription(subscriptionId);
+        // En Flow API v1, status 4 = cancelada; cancel_at_period_end evita cobros futuros.
+        if (Number(remote?.status) === 4 || Boolean(remote?.cancel_at_period_end)) {
+          return;
+        }
+      } catch {
+        // Sin confirmación remota de cancelación: abortar para evitar doble cobro.
+      }
+    }
+    console.error('flow_previous_subscription_cancel_failed', {
+      empresa_id: empresaId,
+      code: 'PREVIOUS_SUBSCRIPTION_CANCEL_FAILED',
+    });
+    throw new AIError(
+      'BILLING_PREVIOUS_SUBSCRIPTION_CANCEL_FAILED',
+      'No se pudo cancelar la suscripción recurrente anterior en Flow. Reintenta para evitar cobros duplicados.',
+      503,
+    );
+  }
+}
+
 /** Procesa webhooks/confirmaciones de pago de Flow verificando estado real e idempotencia. */
 export async function handleFlowPaymentCallback(params: {
   admin: SupabaseClient;
@@ -562,6 +588,23 @@ export async function handleFlowPaymentCallback(params: {
   const paidAmount = Number(payment.amount);
   if (payment.status === 2 && (!Number.isSafeInteger(paidAmount) || paidAmount !== target.expectedAmount))
     throw new AIError('BILLING_AMOUNT_MISMATCH', 'El monto informado por la pasarela no coincide.', 422);
+
+  // Si la empresa tenía una suscripción recurrente en Flow y paga modalidad prepago/anual,
+  // cancelar primero la suscripción remota para evitar doble cobro mensual.
+  if (payment.status === 2 && target.modalidad === 'prepago') {
+    const { data: currentSub, error: currentSubErr } = await admin
+      .from('suscripciones')
+      .select('gateway_subscription_id,estado')
+      .eq('empresa_id', target.empresaId)
+      .maybeSingle();
+    if (currentSubErr) {
+      throw new AIError('BILLING_DB_ERROR', 'No se pudo verificar la suscripción previa antes de activar el pago.', 503);
+    }
+    if (currentSub?.gateway_subscription_id && currentSub.estado !== 'canceled') {
+      await ensurePreviousFlowSubscriptionCanceled(flow, currentSub.gateway_subscription_id, target.empresaId);
+    }
+  }
+
   const pricing = getPlanPricing(target.planId, target.ciclo);
   const { data, error } = await admin.rpc('billing_aplicar_estado_flow', {
     p_evento: `flow:payment:${payment.flowOrder}:${payment.status}`,
