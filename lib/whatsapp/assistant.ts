@@ -28,6 +28,7 @@ import { AIError } from "@/lib/ai/errors";
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateAI } from "@/lib/ai/provider";
 import { canonicalPhone, downloadMetaMedia } from "./meta";
+import { buildWhatsAppInteractivePayload, parseWhatsAppInteractiveReply } from "./interactive";
 import { isolatedState, planWhatsAppActions, mergeWhatsAppPlans } from "./state";
 import { checkActionPermissions } from "@/lib/ai/permissions";
 import { WHATSAPP_BRAND, whatsappCard, whatsappText, quoteWhatsApp, quoteMenuChoice, materialComparisonWhatsApp, materialBatchComparisonWhatsApp, photoReceiptWhatsApp, dailyCloseWhatsApp } from "./format";
@@ -307,6 +308,10 @@ export async function processPersonalMessage(
       }
     } else if (item.type === "text") {
       if (caption.trim()) textParts.push(caption.trim());
+    } else if (item.type === "interactive" || item.type === "button") {
+      const interactiveText = parseWhatsAppInteractiveReply(item);
+      if (interactiveText) textParts.push(interactiveText);
+      else unsupportedCount++;
     } else {
       unsupportedCount++;
     }
@@ -919,7 +924,19 @@ export async function processPersonalMessage(
     projects: [...(tables.proyectos || []), ...(confirmedPlan.changed.proyectos || [])],
     campaign:confirmedCampaign,
   });
-  return { ...data, persistido: true };
+  const selectedProjectTap = batchItems.some(
+    (item) => item?.type === "interactive" && item?.interactive?.list_reply?.id?.startsWith("ot:project:"),
+  );
+  const ambiguousPhoto = Boolean(attachment && !textParts.length);
+  const interactive = buildWhatsAppInteractivePayload(data, {
+    role: user.rol,
+    projects: tables.proyectos,
+    showProjectList: Boolean(projectListing) || Boolean(introPause && authorizedProjects.length >= 2),
+    selectedProjectMenu: selectedProjectTap && Boolean(contextProjectId),
+    ambiguousPhoto,
+    userText: text,
+  });
+  return { ...data, persistido: true, ...(interactive ? { interactive } : {}) };
   } catch (batchError) {
     try {
       const unavailable = await persistWhatsAppAIFailure(sb, batchError, user, message, senderPhone, batchItems, failureContext);

@@ -7,7 +7,8 @@ import { createClient } from "@supabase/supabase-js";
 import { serverFetch } from "@/lib/server-fetch";
 import { processPersonalMessage } from "@/lib/whatsapp/assistant";
 import { DEFAULT_WHATSAPP_BURST, type WhatsAppBurstConfig } from "@/lib/whatsapp/burst";
-import { sendMetaText, sendMetaDocument, validMetaSignature } from "@/lib/whatsapp/meta";
+import { sendMetaText, sendMetaInteractive, sendMetaDocument, validMetaSignature } from "@/lib/whatsapp/meta";
+import { buildWhatsAppInteractivePayload } from "./interactive";
 import { dailyCloseDocument } from './daily-close-document';
 import { quotePdfDocument } from './quote-document';
 import { receiveDeliveryStatus } from "./outbox";
@@ -51,12 +52,14 @@ export function createWhatsAppWebhook(
   deps: {
     process: typeof processPersonalMessage;
     send: typeof sendMetaText;
+    sendInteractive?: typeof sendMetaInteractive;
     sendDocument?: typeof sendMetaDocument;
     client: () => any;
     burst?: WhatsAppBurstConfig;
   } = {
     process: processPersonalMessage,
     send: sendMetaText,
+    sendInteractive: sendMetaInteractive,
     sendDocument: sendMetaDocument,
     burst: DEFAULT_WHATSAPP_BURST,
     client: () =>
@@ -136,8 +139,19 @@ export function createWhatsAppWebhook(
                 catch(error){deliveryComplete=false;throw error;}
               };
               stage = "send";
-              for(const [index,part] of splitWhatsAppMessage(result.respuesta).entries())
-                await sendOnce(`text:${index}`,()=>deps.send(message.from,part));
+              const interactive =
+                deps.sendInteractive
+                  ? (('interactive' in result && result.interactive) || buildWhatsAppInteractivePayload(result))
+                  : null;
+              if (interactive && result.respuesta.length <= 1024) {
+                await sendOnce('text:0', () => deps.sendInteractive!(message.from, interactive, result.respuesta));
+              } else {
+                for (const [index, part] of splitWhatsAppMessage(result.respuesta).entries())
+                  await sendOnce(`text:${index}`, () => deps.send(message.from, part));
+                if (interactive) {
+                  await sendOnce('interactive:0', () => deps.sendInteractive!(message.from, interactive));
+                }
+              }
               if (deps.sendDocument) {
                 stage = 'daily_close_pdf';
                 try {

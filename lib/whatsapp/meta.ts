@@ -2,6 +2,7 @@ import { AIError } from "@/lib/ai/errors";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { serverFetch } from "@/lib/server-fetch";
 import { splitWhatsAppMessage } from "./format";
+import { buildMetaInteractiveRequestBody, type WhatsAppInteractivePayload } from "./interactive";
 import { canonicalPhone } from '@/lib/phone';
 export { canonicalPhone } from '@/lib/phone';
 
@@ -267,6 +268,42 @@ export async function sendMetaText(to: string, text: string) {
         503,
       );
     }
+  }
+}
+export async function sendMetaInteractive(
+  to: string,
+  interactive: WhatsAppInteractivePayload,
+  bodyOverride?: string,
+) {
+  const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
+  const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
+  const res = await serverFetch(
+    `https://graph.facebook.com/${version()}/${phone}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(buildMetaInteractiveRequestBody(to, interactive, bodyOverride)),
+    },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    // Si Meta rechaza el formato interactivo (4xx), caer limpiamente a texto plano para no perder la respuesta.
+    if (res.status >= 400 && res.status < 500 && bodyOverride) {
+      console.warn("whatsapp_interactive_fallback_text", { status: res.status, code: body?.error?.code });
+      await sendMetaText(to, bodyOverride);
+      return;
+    }
+    const providerCode = Number.isInteger(body.error?.code)
+      ? body.error.code
+      : "UNKNOWN";
+    throw new AIError(
+      `WHATSAPP_SEND_${providerCode}`,
+      "No se pudo enviar la respuesta interactiva por WhatsApp.",
+      503,
+    );
   }
 }
 export async function sendMetaDocument(to: string, bytes: ArrayBuffer, filename: string, caption: string) {

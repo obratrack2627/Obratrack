@@ -241,7 +241,12 @@ export async function collectWhatsAppBurst(
 
   const batchId = `batch-${crypto.randomUUID()}`;
   const startedAt = Date.now();
-  let lastWindowMs = seemsIncompleteWhatsAppMessage(message) ? incompleteMs : standardMs;
+  let lastWindowMs =
+    message?.type === "interactive" || message?.type === "button"
+      ? 0
+      : seemsIncompleteWhatsAppMessage(message)
+        ? incompleteMs
+        : standardMs;
 
   if (status === "leader" && lastWindowMs > 0) {
     await sleep(Math.min(pollMs, lastWindowMs));
