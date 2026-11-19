@@ -197,14 +197,14 @@ export function buildWhatsAppInteractivePayload(
         kind: "list",
         body: "¡Hola! ¿Qué deseas hacer hoy en ObraTrack?",
         footer: "ObraBot · Menú principal",
-        buttonText: "¿Qué deseas hacer?",
+        buttonText: "📋 ¿Qué hacer?",
         sectionTitle: "Opciones principales",
         rows: [
-          { id: "ot:menu:quote", title: "Hacer cotización", description: "Estimar materiales, mano de obra y PDF" },
-          { id: "ot:menu:agreed_quote", title: "Cotización pactada", description: "Emitir cotización con precio ya acordado" },
-          { id: "ot:menu:create_project", title: "Crear obra", description: "Registrar una obra nueva paso a paso" },
-          { id: "ot:menu:list_projects", title: "Ver obras", description: "Listar y elegir una de tus obras" },
-          { id: "ot:menu:prices", title: "Buscar precios", description: "Comparar materiales en tiendas chilenas" },
+          { id: "ot:menu:quote", title: "📐 Hacer cotización", description: "Estimar materiales, mano de obra y PDF" },
+          { id: "ot:menu:agreed_quote", title: "🤝 Cotización pactada", description: "Emitir cotización con precio ya acordado" },
+          { id: "ot:menu:create_project", title: "🏗️ Crear obra", description: "Registrar una obra nueva paso a paso" },
+          { id: "ot:menu:list_projects", title: "📂 Ver obras", description: "Listar y elegir una de tus obras" },
+          { id: "ot:menu:prices", title: "🛒 Buscar precios", description: "Comparar materiales en tiendas chilenas" },
         ],
       };
     }
@@ -213,9 +213,9 @@ export function buildWhatsAppInteractivePayload(
       body: "¡Hola! ¿Qué deseas hacer hoy en tu obra?",
       footer: "ObraBot · Terreno",
       buttons: [
-        { id: "ot:menu:list_projects", title: "Ver mis obras" },
-        { id: "ot:act:progress", title: "Subir avance" },
-        { id: "ot:act:incident", title: "Reportar incidente" },
+        { id: "ot:menu:list_projects", title: "📂 Ver mis obras" },
+        { id: "ot:act:progress", title: "📈 Subir avance" },
+        { id: "ot:act:incident", title: "⚠️ Incidente" },
       ],
     };
   }
@@ -231,8 +231,8 @@ export function buildWhatsAppInteractivePayload(
       body: "¿Quieres asignar trabajadores o jefes de obra ahora?",
       footer: "ObraBot · Selección rápida",
       buttons: [
-        { id: "ot:team:assign", title: "Asignar cuadrilla" },
-        { id: "ot:team:skip", title: "Ahora no" },
+        { id: "ot:team:assign", title: "👷 Asignar equipo" },
+        { id: "ot:team:skip", title: "⏭️ Ahora no" },
       ],
     };
   }
@@ -248,10 +248,10 @@ export function buildWhatsAppInteractivePayload(
       footer: "ObraBot · Creación de obra",
       buttons: asksConfirmation
         ? [
-            { id: "ot:draft:confirm", title: "Confirmar obra" },
-            { id: "ot:draft:cancel", title: "Cancelar" },
+            { id: "ot:draft:confirm", title: "✅ Confirmar obra" },
+            { id: "ot:draft:cancel", title: "✖️ Cancelar" },
           ]
-        : [{ id: "ot:draft:cancel", title: "Cancelar" }],
+        : [{ id: "ot:draft:cancel", title: "✖️ Cancelar" }],
     };
   }
 
@@ -262,9 +262,9 @@ export function buildWhatsAppInteractivePayload(
       body: "¿Qué quieres hacer con esta cotización?",
       footer: "ObraBot · Cotizador",
       buttons: [
-        { id: "ot:quote:create", title: "Crear obra" },
-        { id: "ot:quote:compare", title: "Ver precios retail" },
-        { id: "ot:quote:alt", title: "Otra alternativa" },
+        { id: "ot:quote:create", title: "🏗️ Crear obra" },
+        { id: "ot:quote:compare", title: "🛒 Precios retail" },
+        { id: "ot:quote:alt", title: "🔄 Otra opción" },
       ],
     };
   }
@@ -276,9 +276,9 @@ export function buildWhatsAppInteractivePayload(
       body: "¿Cómo quieres clasificar esta foto?",
       footer: "ObraBot · Evidencias",
       buttons: [
-        { id: "ot:photo:progress", title: "Avance de obra" },
-        { id: "ot:photo:incident", title: "Incidente / falla" },
-        { id: "ot:photo:doc", title: "Boleta / documento" },
+        { id: "ot:photo:progress", title: "📈 Avance de obra" },
+        { id: "ot:photo:incident", title: "⚠️ Incidente" },
+        { id: "ot:photo:doc", title: "🧾 Boleta / doc" },
       ],
     };
   }
@@ -290,15 +290,15 @@ export function buildWhatsAppInteractivePayload(
         kind: "list",
         body: "Elige una acción rápida para esta obra o escríbeme lo que necesitas.",
         footer: "ObraBot · Gestión de obra",
-        buttonText: "Acciones",
+        buttonText: "⚙️ Acciones",
         sectionTitle: "Acciones de obra",
         rows: [
-          { id: "ot:act:balance", title: "Saldo y pagos", description: "Ver cobrado y saldo por cobrar" },
-          { id: "ot:act:gantt", title: "Partidas y avance", description: "Ver progreso y fechas clave" },
-          { id: "ot:act:materials", title: "Materiales pendientes", description: "Revisar qué falta por comprar" },
-          { id: "ot:act:attendance", title: "Asistencia de hoy", description: "Ver cuadrilla registrada hoy" },
-          { id: "ot:act:close", title: "Cierre diario (PDF)", description: "Emitir reporte oficial de jornada" },
-          { id: "ot:act:notify", title: "Avisar al equipo", description: "Enviar aviso por WhatsApp" },
+          { id: "ot:act:balance", title: "💰 Saldo y pagos", description: "Ver cobrado y saldo por cobrar" },
+          { id: "ot:act:gantt", title: "📊 Partidas y avance", description: "Ver progreso y fechas clave" },
+          { id: "ot:act:materials", title: "🧱 Materiales", description: "Revisar qué falta por comprar" },
+          { id: "ot:act:attendance", title: "👷 Asistencia hoy", description: "Ver cuadrilla registrada hoy" },
+          { id: "ot:act:close", title: "📄 Cierre diario PDF", description: "Emitir reporte oficial de jornada" },
+          { id: "ot:act:notify", title: "📢 Avisar al equipo", description: "Enviar aviso por WhatsApp" },
         ],
       };
     }
@@ -307,9 +307,9 @@ export function buildWhatsAppInteractivePayload(
       body: "¿Qué quieres registrar en esta obra?",
       footer: "ObraBot · Terreno",
       buttons: [
-        { id: "ot:act:progress", title: "Subir avance" },
-        { id: "ot:act:incident", title: "Reportar incidente" },
-        { id: "ot:act:gantt", title: "Mis partidas" },
+        { id: "ot:act:progress", title: "📈 Subir avance" },
+        { id: "ot:act:incident", title: "⚠️ Incidente" },
+        { id: "ot:act:gantt", title: "📋 Mis partidas" },
       ],
     };
   }
@@ -324,13 +324,16 @@ export function buildWhatsAppInteractivePayload(
         kind: "list",
         body: "Selecciona una obra para consultarla o registrar avances.",
         footer: "ObraBot · Tus obras",
-        buttonText: "Elegir obra",
+        buttonText: "📂 Elegir obra",
         sectionTitle: "Obras disponibles",
         rows: active.map((p) => ({
           id: `ot:project:${p.id}`,
           title: clip(p.nombre, META_LIST_ROW_TITLE_MAX),
           description: clip(
-            [p.estado === "pausado" ? "Pausada" : p.estado === "terminado" ? "Terminada" : "En curso", p.comuna]
+            [
+              p.estado === "pausado" ? "⏸️ Pausada" : p.estado === "terminado" ? "✅ Terminada" : "🟢 En curso",
+              p.comuna,
+            ]
               .filter(Boolean)
               .join(" · "),
             META_LIST_ROW_DESC_MAX,
@@ -354,8 +357,8 @@ export function buildWhatsAppInteractivePayload(
         body: "¿Quieres emitir el cierre diario o revisar pendientes?",
         footer: "ObraBot · Siguiente paso",
         buttons: [
-          { id: "ot:act:close", title: "Cierre diario PDF" },
-          { id: "ot:act:gantt", title: "Ver pendientes" },
+          { id: "ot:act:close", title: "📄 Cierre diario PDF" },
+          { id: "ot:act:gantt", title: "📊 Ver pendientes" },
         ],
       };
     }
@@ -366,8 +369,8 @@ export function buildWhatsAppInteractivePayload(
         body: "Acciones rápidas de asistencia:",
         footer: "ObraBot · Cuadrilla",
         buttons: [
-          { id: "ot:act:attendance_all", title: "Todos presentes" },
-          { id: "ot:act:gantt", title: "Ver partidas" },
+          { id: "ot:act:attendance_all", title: "✅ Todos presentes" },
+          { id: "ot:act:gantt", title: "📊 Ver partidas" },
         ],
       };
     }
@@ -378,8 +381,8 @@ export function buildWhatsAppInteractivePayload(
         body: "Acciones rápidas de materiales:",
         footer: "ObraBot · Compras",
         buttons: [
-          { id: "ot:act:compare", title: "Buscar precios" },
-          { id: "ot:act:balance", title: "Ver saldo obra" },
+          { id: "ot:act:compare", title: "🛒 Buscar precios" },
+          { id: "ot:act:balance", title: "💰 Ver saldo obra" },
         ],
       };
     }

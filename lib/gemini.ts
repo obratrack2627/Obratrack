@@ -1,4 +1,5 @@
 import { compactAIContext, separatePrompt, ACTION_EXAMPLES } from '@/lib/ai/prompt-context';
+import { buildToolChatInput, buildToolChatInstructions, getObraBotTools } from '@/lib/ai/tools';
 import { generateValidatedChat, type ChatGenerationOptions } from '@/lib/ai/generation';
 import {CONSTRUCTION_WORKFLOW_RULES} from '@/lib/ai/prompt';
 import { getServerOpenAIKey } from "@/lib/ai/provider";
@@ -95,9 +96,35 @@ export function chatGenerationRequest(
             m.texto.includes("Precios publicados en CLP; confirma"),
         ));
   const pureSearchOnly = priceSearch && !hasNonSearchTask(mensajeUsuario) && !requestsPlatformAction(mensajeUsuario);
+  const compacted = compactAIContext(contextoDB);
+  const useToolCalling =
+    !pureSearchOnly &&
+    !quote &&
+    process.env.OBRABOT_TOOL_CALLING !== 'false';
+  if (useToolCalling) {
+    const tools = getObraBotTools({
+      role: contextoDB.rol || contextoDB.usuario_actual?.rol || 'admin',
+      actionsEnabled: contextoDB.acciones_habilitadas !== false,
+      whatsapp: Boolean(contextoDB.creacion_obra_whatsapp),
+    });
+    const extended = Boolean(options.image);
+    return {
+      mode: 'chat' as const,
+      pureSearchOnly: false,
+      input: buildToolChatInput(historial, mensajeUsuario, compacted),
+      options: {
+        ...options,
+        instructions: buildToolChatInstructions(compacted),
+        tools,
+        toolChoice: 'auto' as const,
+        budgetMs: Math.min(options.budgetMs || (extended ? 45000 : 30000), extended ? 45000 : 30000),
+        timeoutMs: Math.min(options.timeoutMs || (extended ? 40000 : 30000), extended ? 40000 : 30000),
+      },
+    };
+  }
   const prompt = (
     pureSearchOnly ? materialSearchPrompt : quote ? quotePrompt : chatPrompt
-  )(historial, mensajeUsuario, compactAIContext(contextoDB));
+  )(historial, mensajeUsuario, compacted);
   const schema = pureSearchOnly
     ? MATERIAL_QUERY_SCHEMA
     : quote ? QUOTE_RESPONSE_SCHEMA

@@ -45,7 +45,8 @@ test("parseWhatsAppInteractiveReply traduce botones y listas de Meta a instrucci
 test("menú de saludo muestra Hacer cotización, Cotización pactada, Crear obra y Ver obras para jefatura y 3 botones para terreno", () => {
   const adminGreeting = buildWhatsAppInteractivePayload({}, { role: "admin", showGreetingMenu: true });
   assert.equal(adminGreeting.kind, "list");
-  assert.equal(adminGreeting.buttonText, "¿Qué deseas hacer?");
+  assert.equal(adminGreeting.buttonText, "📋 ¿Qué hacer?");
+  assert.ok(adminGreeting.buttonText.length <= 20);
   assert.deepEqual(
     adminGreeting.rows.map((r) => r.id),
     ["ot:menu:quote", "ot:menu:agreed_quote", "ot:menu:create_project", "ot:menu:list_projects", "ot:menu:prices"],
@@ -57,6 +58,7 @@ test("menú de saludo muestra Hacer cotización, Cotización pactada, Crear obra
 
   const workerGreeting = buildWhatsAppInteractivePayload({}, { role: "terreno", showGreetingMenu: true });
   assert.equal(workerGreeting.kind, "buttons");
+  for (const b of workerGreeting.buttons) assert.ok(b.title.length <= 20);
   assert.deepEqual(workerGreeting.buttons.map((b) => b.id), ["ot:menu:list_projects", "ot:act:progress", "ot:act:incident"]);
 
   // Respuestas inmediatas sin LLM para cotización, cotización pactada y precios

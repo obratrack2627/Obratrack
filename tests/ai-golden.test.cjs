@@ -27,12 +27,17 @@ for(const item of dataset.cases){
   const context={...structuredClone(dataset.entities),...item.context,rol:item.role,acciones_habilitadas:item.plan==='pro_ia'};
   const result=await chatAsesorObrasGemini([],item.message,context,{fetcher:async(url,opts)=>{
    calls++;assert.equal(url,'https://api.openai.com/v1/responses');
-   const body=JSON.parse(opts.body);const schema=body.text.format.schema;
-   if(item.route==='chat')assert.ok(schema.properties.acciones,'no perder acciones en una solicitud combinada');
-   if(item.route==='quote')assert.ok(schema.properties.cotizaciones);
-   if(item.route==='search'){assert.ok(schema.properties.busqueda_materiales);assert.equal(schema.properties.acciones,undefined);}
-   if(item.context.creacion_obra_whatsapp)assert.ok(schema.properties.acciones.items.anyOf.every(s=>!s.properties.tipo.enum.some(t=>/^crear_proyecto/.test(t))));
-   assert.equal(body.text.format.strict,true);return completion(item.response);
+   const body=JSON.parse(opts.body);
+   if(item.route==='chat'){
+    assert.ok(Array.isArray(body.tools)&&body.tools.length>0,'chat usa Tool Calling nativo con herramientas tipadas');
+    if(item.context.creacion_obra_whatsapp)assert.ok(body.tools.every(t=>!/^crear_proyecto/.test(t.name)));
+   } else {
+    const schema=body.text.format.schema;
+    if(item.route==='quote')assert.ok(schema.properties.cotizaciones);
+    if(item.route==='search'){assert.ok(schema.properties.busqueda_materiales);assert.equal(schema.properties.acciones,undefined);}
+    assert.equal(body.text.format.strict,true);
+   }
+   return completion(item.response);
   }});
   assert.equal(calls,1);assert.equal(flattenActions(result.accion).length,flattenActions(parsed.accion).length);
   if(item.context.cotizacion_actual && flattenActions(result.accion).some(a=>/^crear_proyecto/.test(a.tipo))){
