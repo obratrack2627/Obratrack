@@ -123,7 +123,11 @@ export function requestsPlatformAction(message: string) {
   const text = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/\bno\s+(?:crees?|crear|generes?|generar)\s+(?:(?:una?|la|el)\s+)?(?:obra|proyecto)s?\b/g, '');
   const dateChange=/\b(?:cambia|cambiar|modifica|modificar|reprograma|reprogramar|mueve|mover|pospone|posponer)\b.*\b(?:fechas?|inicio|termino|obra|proyecto)\b/.test(text);
-  return dateChange || /\b(?:crea|crear|creame|creanos|crees|creala|crealo|crealas|crealos|convierte|convertir|conviertela|conviertelo|registra|registrar|asigna|asignar|desasigna|agenda|agendar|actualiza|actualizar|elimina|eliminar|borra|borrar|agrega|agregar|anade|anadir|incorpora|incorporar|marca|marcar|pausa|pausar|cancela|cancelar|reactiva|reactivar|envia|enviar|manda|notifica)\b|\b(?:genera|generar)\s+(?:(?:una?|la|el|esta|esa)\s+)?(?:obra|proyecto)\b|\b(?:haz|hazme|hacer|arma|armame|abre)\s+(?:(?:una?|la|el|nueva?|esta|esa)\s+){0,3}(?:obra|proyecto)\b|\b(?:pasa|pasar)\b.*\b(?:cotizacion|presupuesto)\b.*\b(?:a|en)\s+(?:una?\s+)?(?:obra|proyecto)\b/.test(text);
+  const markAction =
+    /(?:^|[,;]\s*|\b(?:y|luego|ademas|tambien|por favor)\s+)marca\b|\bmarca\s+(?:como\b|asistencia\b|presente\b|ausente\b|atraso\b|permiso\b|licencia\b|comprad[oa]s?\b|pagad[oa]s?\b|terminad[oa]s?\b|completad[oa]s?\b|pendientes?\b|list[oa]s?\b|el\b|la\b|los\b|las\b|al\b|a\s+)/.test(
+      text,
+    );
+  return dateChange || markAction || /\b(?:crea|crear|creame|creanos|crees|creala|crealo|crealas|crealos|convierte|convertir|conviertela|conviertelo|registra|registrar|asigna|asignar|desasigna|agenda|agendar|actualiza|actualizar|elimina|eliminar|borra|borrar|agrega|agregar|anade|anadir|incorpora|incorporar|marcar|pausa|pausar|cancela|cancelar|reactiva|reactivar|envia|enviar|manda|notifica)\b|\b(?:genera|generar)\s+(?:(?:una?|la|el|esta|esa)\s+)?(?:obra|proyecto)\b|\b(?:haz|hazme|hacer|arma|armame|abre)\s+(?:(?:una?|la|el|nueva?|esta|esa)\s+){0,3}(?:obra|proyecto)\b|\b(?:pasa|pasar)\b.*\b(?:cotizacion|presupuesto)\b.*\b(?:a|en)\s+(?:una?\s+)?(?:obra|proyecto)\b/.test(text);
 }
 
 export function isQuoteRequest(message: string) {
@@ -243,7 +247,10 @@ export function hasNonSearchTask(message: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
   const hasActionVerb =
-    /\b(?:crea|crear|registra|registrar|agrega|agregar|actualiza|actualizar|marca|marcar|agenda|agendar|asigna|asignar|desasigna|desasignar|elimina|eliminar|borra|borrar|envia|enviar|manda|mandar|avisa|avisar|notifica|notificar|pausa|pausar|cancela|cancelar|reactiva|reactivar)\b/.test(
+    /\b(?:crea|crear|registra|registrar|agrega|agregar|actualiza|actualizar|marcar|agenda|agendar|asigna|asignar|desasigna|desasignar|elimina|eliminar|borra|borrar|envia|enviar|manda|mandar|avisa|avisar|notifica|notificar|pausa|pausar|cancela|cancelar|reactiva|reactivar)\b/.test(
+      text,
+    ) ||
+    /(?:^|[,;]\s*|\b(?:y|luego|ademas|tambien|por favor)\s+)marca\b|\bmarca\s+(?:como\b|asistencia\b|presente\b|ausente\b|atraso\b|permiso\b|licencia\b|comprad[oa]s?\b|pagad[oa]s?\b|terminad[oa]s?\b|completad[oa]s?\b|pendientes?\b|list[oa]s?\b|el\b|la\b|los\b|las\b|al\b|a\s+)/.test(
       text,
     );
   const hasProjectQuery =

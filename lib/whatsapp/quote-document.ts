@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {deliverReplyOnce} from './reply-delivery';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { AIError } from "@/lib/ai/errors";
 import { findBudget } from "@/lib/presupuestos";
 import { canonicalPhone } from "@/lib/phone";
@@ -134,7 +135,8 @@ export async function sendAcceptedQuotePdfToWhatsApp(
     const phone = canonicalPhone(actor?.telefono_whatsapp || "");
     if (!phone) return false;
     const source=`web-quote:${params.cotizacion.id}:${createHash('sha256').update(JSON.stringify(params.cotizacion)).digest('hex')}`;
-    return await deliverReplyOnce(sb,{persistido:true,empresa_id:params.user.empresa_id,actor_id:params.user.id},source,'quote_pdf',async()=>{
+    const deliveryClient = getSupabaseAdmin() || sb;
+    return await deliverReplyOnce(deliveryClient,{persistido:true,empresa_id:params.user.empresa_id,actor_id:params.user.id},source,'quote_pdf',async()=>{
     const doc = await buildQuotePdfBuffer(sb, {
       cotizacion: params.cotizacion,
       empresaId: params.user.empresa_id,

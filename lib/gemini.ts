@@ -84,7 +84,7 @@ export function chatGenerationRequest(
     (/^(?:y |ahora (?:el|la|los|las) |(?:el|la|los|las) de )/i.test(
       mensajeUsuario,
     ) &&
-      !/\b(registra|asigna|agenda|elimina|borra|crea|agrega|actualiza|marca|envia)\w*\b/i.test(
+      !/\b(registra|asigna|agenda|elimina|borra|crea|agrega|actualiza|marcar|envia)\w*\b/i.test(
         mensajeUsuario,
       ) &&
       historial

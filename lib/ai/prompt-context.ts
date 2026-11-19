@@ -1,27 +1,59 @@
 import { maskEmail, maskPhone, maskRUT } from '@/lib/privacy/mask';
 
+function maskPIIFields(record: any) {
+  if (!record || typeof record !== 'object') return record;
+  const copy = { ...record };
+  for (const key of ['email', 'cliente_email']) {
+    if (typeof copy[key] === 'string' && copy[key]) copy[key] = maskEmail(copy[key]);
+  }
+  for (const key of ['telefono', 'telefono_whatsapp', 'cliente_telefono']) {
+    if (typeof copy[key] === 'string' && copy[key]) copy[key] = maskPhone(copy[key]);
+  }
+  for (const key of ['rut', 'cliente_rut']) {
+    if (typeof copy[key] === 'string' && copy[key]) copy[key] = maskRUT(copy[key]);
+  }
+  return copy;
+}
+
 // Reducir columnas, duplicados y PII en claro antes de enviar contexto a proveedores externos de IA.
 export function compactAIContext(context: Record<string, any>) {
   const pick = (row: any, fields: string[]) => Object.fromEntries(fields.filter(k => row?.[k] !== undefined).map(k => [k, row[k]]));
   const compact = { ...context };
   if (Array.isArray(context.proyectos)) compact.proyectos = context.proyectos.map((p: any) => pick(p, ['id','nombre','estado','cliente_id','comuna','direccion','descripcion','fecha_inicio','fecha_termino_estimada','monto_cotizado','porcentaje_avance']));
   if (Array.isArray(context.clientes)) {
-    compact.clientes = context.clientes.map((c: any) => {
-      const picked = pick(c, ['id','nombre','email','telefono','rut','direccion','comuna']);
-      if (picked.email) picked.email = maskEmail(picked.email);
-      if (picked.telefono) picked.telefono = maskPhone(picked.telefono);
-      if (picked.rut) picked.rut = maskRUT(picked.rut);
-      return picked;
-    });
+    compact.clientes = context.clientes.map((c: any) => maskPIIFields(pick(c, ['id','nombre','email','telefono','rut','direccion','comuna'])));
   }
   if (Array.isArray(context.trabajadores)) {
-    compact.trabajadores = context.trabajadores.map((u: any) => {
-      const picked = pick(u, ['id','nombre','rol','email','telefono_whatsapp','rut','especialidades']);
-      if (picked.email) picked.email = maskEmail(picked.email);
-      if (picked.telefono_whatsapp) picked.telefono_whatsapp = maskPhone(picked.telefono_whatsapp);
-      if (picked.rut) picked.rut = maskRUT(picked.rut);
-      return picked;
-    });
+    compact.trabajadores = context.trabajadores.map((u: any) => maskPIIFields(pick(u, ['id','nombre','rol','email','telefono_whatsapp','rut','especialidades'])));
+  }
+  if (context.cliente_actual && typeof context.cliente_actual === 'object') {
+    compact.cliente_actual = maskPIIFields(pick(context.cliente_actual, ['id','nombre','email','telefono','rut','direccion','comuna']));
+  }
+  if (context.cotizacion_actual && typeof context.cotizacion_actual === 'object') {
+    compact.cotizacion_actual = maskPIIFields(context.cotizacion_actual);
+  }
+  if (context.proyecto_actual && typeof context.proyecto_actual === 'object' && context.proyecto_actual.cotizacion_actual) {
+    compact.proyecto_actual = {
+      ...context.proyecto_actual,
+      cotizacion_actual: maskPIIFields(context.proyecto_actual.cotizacion_actual),
+    };
+  }
+  if (context.registro_persona && typeof context.registro_persona === 'object') {
+    compact.registro_persona = {
+      ...context.registro_persona,
+      ...(Array.isArray(context.registro_persona.items)
+        ? { items: context.registro_persona.items.map((item: any) => maskPIIFields(item)) }
+        : {}),
+    };
+  }
+  if (context.creacion_obra_whatsapp && typeof context.creacion_obra_whatsapp === 'object' && context.creacion_obra_whatsapp.borrador) {
+    compact.creacion_obra_whatsapp = {
+      ...context.creacion_obra_whatsapp,
+      borrador: maskPIIFields(context.creacion_obra_whatsapp.borrador),
+    };
+  }
+  if (Array.isArray(context.presupuestos_guardados)) {
+    compact.presupuestos_guardados = context.presupuestos_guardados.map((b: any) => maskPIIFields(b));
   }
   // operacion_obra ya contiene extractos, totales y avisos de recorte verificados.
   delete compact.materiales; delete compact.actividades; delete compact.pagos;

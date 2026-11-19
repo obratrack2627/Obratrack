@@ -19,7 +19,7 @@ import { acceptsQuotedProject, requestsQuotedProject, cancelsProjectDraft, resum
 import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib/presupuestos";
 import { budgetApplication } from '@/lib/quotes/application';
 import { chooseBudgetOption } from './budget-options';
-import { isAlternativeRequest, isQuoteRequest, isQuoteRevision } from '@/lib/ai/prompt';
+import { hasOtherWorkBeyondStatus, isAlternativeRequest, isQuoteRequest, isQuoteRevision } from '@/lib/ai/prompt';
 import { ragEligible, retrieveReferences } from '@/lib/ai/rag';
 import { scheduleKnowledgeIndex } from '@/lib/ai/rag-index';
 import { learnApuCommand } from '@/lib/ai/apu-learning';
@@ -90,8 +90,14 @@ export async function processPersonalMessage(
   const senderPhone = canonicalPhone(message.from || "");
   if (!message.id || !senderPhone)
     throw new Error("Mensaje inválido.");
+  const phoneSuffix = senderPhone.slice(-4);
   const [usersResult, previousResult] = await Promise.all([
-    completeRows(() => sb.from('usuarios').select('id,empresa_id,nombre,rol,telefono_whatsapp,email,rut,especialidades,auth_user_id,sync_version')),
+    completeRows(() => {
+      const base = sb.from('usuarios').select('id,empresa_id,nombre,rol,telefono_whatsapp,email,rut,especialidades,auth_user_id,sync_version');
+      return typeof base.ilike === 'function' && phoneSuffix.length === 4
+        ? base.ilike('telefono_whatsapp', `%${phoneSuffix}%`)
+        : base;
+    }),
     sb.from('whatsapp_mensajes').select('*').eq('message_id', message.id)
       .eq('sender_phone', senderPhone),
   ]);
@@ -105,7 +111,15 @@ export async function processPersonalMessage(
     if (previous.acciones?.tipo === 'agrupado_en_lote') {
       return { respuesta: '', persistido: false, ignorado: true };
     }
-    const actor = users.find((u: any) => u.id === previous.actor_id && u.empresa_id === previous.empresa_id);
+    let actor = users.find((u: any) => u.id === previous.actor_id && u.empresa_id === previous.empresa_id);
+    if (!actor && previous.actor_id && previous.empresa_id) {
+      actor = checked(
+        await sb.from('usuarios')
+          .select('id,empresa_id,nombre,rol,telefono_whatsapp,email,rut,especialidades,auth_user_id,sync_version')
+          .eq('id', previous.actor_id)
+          .eq('empresa_id', previous.empresa_id),
+      )[0];
+    }
     const matches = users.filter((u: any) => canonicalPhone(u.telefono_whatsapp || '') === senderPhone);
     const results = previous.acciones?.tipo === 'lote_acciones' ? previous.acciones.detalles?.acciones || [] : [previous.acciones];
     const changedOwnPhone = results.some((a: any) => a?.tipo === 'actualizar_trabajador' && a.detalles?.id === previous.actor_id
@@ -175,7 +189,16 @@ export async function processPersonalMessage(
 
   const failureContext: { actions: any; draft: any } = { actions: {}, draft: null };
   try {
-  const loaded = await loadWhatsAppContext(sb, user, users);
+  const companyUsers = user.rol === 'terreno'
+    ? [user]
+    : checked(
+        await completeRows(() =>
+          sb.from('usuarios')
+            .select('id,empresa_id,nombre,rol,telefono_whatsapp,email,rut,especialidades,auth_user_id,sync_version')
+            .eq('empresa_id', user.empresa_id),
+        ),
+      );
+  const loaded = await loadWhatsAppContext(sb, user, companyUsers);
   const { company, tables } = loaded;
   if (["terreno", "supervisor"].includes(user.rol)) {
     const assigned = new Set(
@@ -190,6 +213,7 @@ export async function processPersonalMessage(
       tables.clientes = [];
       tables.agenda_eventos = [];
       tables.usuarios = [user];
+      tables.asistencia_obreros = (tables.asistencia_obreros || []).filter((r) => r.usuario_id === user.id);
     }
   }
   let service = isolatedState(user, tables, company?.plan_id || "gratis");
@@ -462,7 +486,9 @@ export async function processPersonalMessage(
   let introPause: ReturnType<typeof isIntroductoryPauseOnly> = null;
   try {
     const verifiedDeadlines = !attachment ? projectDeadlineAnswer(text, deadlineProjects, activeProject || undefined) : null;
-    const statusCommand = !attachment ? projectStatusCommand(text, tables.proyectos, activeProject, conversationRows.slice().reverse().flatMap((row: any) => [{ rol: 'user' as const, texto: row.texto || '' }, { rol: 'model' as const, texto: row.respuesta || '' }])) : null;
+    const statusCommand = !attachment && !hasOtherWorkBeyondStatus(text)
+      ? projectStatusCommand(text, tables.proyectos, activeProject, conversationRows.slice().reverse().flatMap((row: any) => [{ rol: 'user' as const, texto: row.texto || '' }, { rol: 'model' as const, texto: row.respuesta || '' }]))
+      : null;
     introPause =
       !pendingProject &&
       !pendingPerson &&
@@ -612,7 +638,7 @@ export async function processPersonalMessage(
         }
         if (
           activeProject &&
-          (act.tipo === 'enviar_mensaje_equipo' || act.tipo === 'generar_mensaje_whatsapp') &&
+          act.tipo === 'enviar_mensaje_equipo' &&
           !act.proyecto_id &&
           !act.proyecto_nombre &&
           !act.roles_destino?.length &&

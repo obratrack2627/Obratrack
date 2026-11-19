@@ -42,7 +42,12 @@ export function checkActionPermissions(
       const question = /^(?:esta|estan|sigue|siguen|cuando|como|por que|que obras|cuales obras|hay obras|en que estado|que estado|cual es el estado)\b/.test(current);
       if (negated || question || negatesFieldChange(current, /^estado$/)) throw new AIError('STATUS_NOT_REQUESTED', 'No cambié el estado de la obra. Para hacerlo, indica el estado que quieres asignarle.', 422);
     }
+    const targetsClient =
+      Boolean(action.telefono || action.cliente_id || action.cliente_nombre) ||
+      (/\b(?:al|a la|para el|para la|del)?\s*(?:clientes?|mandantes?|propietari[oa]s?|duen[oa]s?)\b/.test(current) &&
+        !/\b(?:equipo|cuadrilla|trabajadores|maestros?|supervisores?|jefes? de obra|terreno)\b/.test(current));
     const explicitBroadcast =
+      !targetsClient &&
       /(?:^|(?:,|;|\by\b|\bluego\b|\bademas\b|\btambien\b)\s*)(?:por favor\s+)?(?:envi(?:a|ar|ales|ale|en|emos)?|manda(?:r|les|le|n|mos)?|avisa(?:r|les|le|n)?|notifica(?:r|les|le|n)?)\b/.test(current) &&
       !/\b(?:prepara|redacta|escribe|borrador|sin enviar|no envies|no mandar)\b/.test(current);
     if (action.tipo === 'generar_mensaje_whatsapp' && explicitBroadcast) {

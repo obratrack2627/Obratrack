@@ -404,3 +404,121 @@ test("chatAsesorObrasGemini en modo híbrido consulta + búsqueda de precios con
   assert.match(reply.respuesta, /5\.690/);
   assert.equal(reply.comparacion_materiales.ofertas.length, 1);
 });
+
+test("Fase 1 ObraBot: mensaje a cliente nunca se convierte en difusión al equipo", () => {
+  const withPhone = checkActionPermissions(
+    { id: "u-1", rol: "admin" },
+    [{ tipo: "generar_mensaje_whatsapp", proyecto_id: "p-1", telefono: "+56987654321", mensaje: "Hola don Carlos, envío el estado de pago" }],
+    "Envía un whatsapp al cliente Carlos avisando el estado de pago",
+  );
+  assert.equal(withPhone[0].tipo, "generar_mensaje_whatsapp");
+  assert.equal(withPhone[0].roles_destino, undefined);
+
+  const clientMentionOnly = checkActionPermissions(
+    { id: "u-1", rol: "admin" },
+    [{ tipo: "generar_mensaje_whatsapp", proyecto_id: "p-1", mensaje: "Estimado cliente, adjunto cotización" }],
+    "Envía al cliente el detalle de la cotización",
+  );
+  assert.equal(clientMentionOnly[0].tipo, "generar_mensaje_whatsapp");
+});
+
+test("Fase 1 ObraBot: respuestas cortas 'Ok', 'Listo', 'Perfecto' y 'Hola' no se confunden con nombres de trabajadores", () => {
+  const { teamAssignmentIntake } = require("../lib/ai/team-assignment.ts");
+  const projects = [{ id: "p-1", nombre: "Quincho", empresa_id: "company-a" }];
+  const users = [{ id: "u-2", nombre: "Nicolás Paredes", rol: "terreno" }];
+  const pending = { nombres: [], proyecto_id: "p-1" };
+
+  for (const ack of ["Ok", "Perfecto", "Listo", "Gracias", "Entendido"]) {
+    const res = teamAssignmentIntake(ack, projects, users, "p-1", pending);
+    assert.ok(res && res.draft === null && res.question === null && res.actions.length === 0, `Falló cierre limpio para "${ack}"`);
+  }
+  const greeting = teamAssignmentIntake("Hola", projects, users, "p-1", pending);
+  assert.equal(greeting, null);
+});
+
+test("Fase 1 ObraBot: collectWhatsAppBurst corta el bucle cuando el lote permanece ocupado (busy)", async () => {
+  const { collectWhatsAppBurst } = require("../lib/whatsapp/burst.ts");
+  let polls = 0;
+  const fakeSb = {
+    async rpc(name) {
+      if (name === "whatsapp_encolar_mensaje") return { data: { status: "queued_behind_processing" }, error: null };
+      if (name === "whatsapp_estado_cola_actor") {
+        polls++;
+        return { data: { ready: false, busy: true }, error: null };
+      }
+      return { data: null, error: null };
+    },
+  };
+  let nowOffset = 0;
+  const origNow = Date.now;
+  Date.now = () => origNow() + nowOffset;
+  try {
+    const res = await collectWhatsAppBurst(
+      fakeSb,
+      { id: "u-1", empresa_id: "company-a" },
+      { id: "m-1", text: "Hola" },
+      "56912345678",
+      {
+        enabled: true,
+        standardMs: 10,
+        incompleteMs: 20,
+        maxWaitMs: 30,
+        pollMs: 10,
+        sleep: async () => { nowOffset += 1500; },
+      },
+    );
+    assert.deepEqual(res, { role: "queued" });
+    assert.ok(polls <= 10, `Demasiadas iteraciones en busy loop: ${polls}`);
+  } finally {
+    Date.now = origNow;
+  }
+});
+
+test("Fase 1 ObraBot: compactAIContext enmascara PII en cliente_actual, cotizacion_actual, registro_persona y borrador", () => {
+  const { compactAIContext } = require("../lib/ai/prompt-context.ts");
+  const compacted = compactAIContext({
+    cliente_actual: { id: "c-1", nombre: "Carlos Soto", email: "carlos.soto@gmail.com", telefono: "+56987654321", rut: "12.345.678-5" },
+    cotizacion_actual: { titulo_proyecto: "Radier", cliente_email: "carlos.soto@gmail.com", cliente_telefono: "+56987654321", cliente_rut: "12.345.678-5" },
+    registro_persona: { items: [{ tipo: "trabajador", nombre: "Pedro", email: "pedro@obra.cl", telefono: "+56911112222", rut: "15.111.222-3" }] },
+    creacion_obra_whatsapp: { borrador: { nombre: "Obra", cliente_email: "ana@cliente.cl", cliente_telefono: "+56933334444", cliente_rut: "18.222.333-4" } },
+  });
+  const serialized = JSON.stringify(compacted);
+  for (const raw of ["carlos.soto@gmail.com", "87654321", "12.345.678-5", "pedro@obra.cl", "11112222", "15.111.222-3", "ana@cliente.cl", "33334444", "18.222.333-4"]) {
+    assert.ok(!serialized.includes(raw), `PII sin enmascarar filtrada al contexto IA: ${raw}`);
+  }
+});
+
+test("Fase 1 ObraBot: 'marca <producto>' no rompe cotizaciones, búsqueda de precios ni RAG, mientras 'marca como comprado' sigue siendo acción", () => {
+  const { requestsPlatformAction, isQuoteRequest } = require("../lib/ai/prompt.ts");
+  const { ragEligible } = require("../lib/ai/rag.ts");
+  const { chatGenerationRequest } = require("../lib/gemini.ts");
+
+  assert.equal(requestsPlatformAction("Cotiza un radier de 20 m2 con cemento marca Melón en Maipú"), false);
+  assert.equal(isQuoteRequest("Cotiza un radier de 20 m2 con cemento marca Melón en Maipú"), true);
+  assert.equal(ragEligible("Cotiza un radier de 20 m2 con cemento marca Melón en Maipú", "admin", true), true);
+  assert.equal(hasNonSearchTask("Busca precio de adhesivo marca Ceresita en Sodimac"), false);
+  assert.equal(chatGenerationRequest([], "Cotiza un radier de 20 m2 con cemento marca Melón en Maipú").mode, "quote");
+
+  assert.equal(requestsPlatformAction("Marca como comprado el cemento"), true);
+  assert.equal(requestsPlatformAction("Compara precios de cemento y marca Cerámicas al 30%"), true);
+  assert.equal(requestsPlatformAction("Marca asistencia de Juan hoy"), true);
+  assert.equal(hasNonSearchTask("Marca el cemento como pagado"), true);
+});
+
+test("Fase 1 ObraBot: rol terreno solo recibe su propia asistencia_obreros en loadAIContext", async () => {
+  const { loadAIContext } = require("../lib/ai/context.ts");
+  fixture.tables.set("usuarios", [
+    { id: "u-t1", empresa_id: "company-a", nombre: "Juan Terreno", rol: "terreno" },
+    { id: "u-t2", empresa_id: "company-a", nombre: "Pedro Compañero", rol: "terreno" },
+  ]);
+  fixture.tables.set("proyecto_trabajadores", [
+    { proyecto_id: "p-cisterna", usuario_id: "u-t1" },
+    { proyecto_id: "p-cisterna", usuario_id: "u-t2" },
+  ]);
+  fixture.tables.set("asistencia_obreros", [
+    { id: "a-1", proyecto_id: "p-cisterna", usuario_id: "u-t1", trabajador_nombre: "Juan Terreno", fecha: "2026-11-19", estado: "presente" },
+    { id: "a-2", proyecto_id: "p-cisterna", usuario_id: "u-t2", trabajador_nombre: "Pedro Compañero", fecha: "2026-11-19", estado: "licencia" },
+  ]);
+  const loaded = await loadAIContext(fixture.supabase, { id: "u-t1", empresa_id: "company-a", nombre: "Juan Terreno", rol: "terreno" });
+  assert.deepEqual(loaded.tables.asistencia_obreros.map((r) => r.usuario_id), ["u-t1"]);
+});

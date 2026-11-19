@@ -81,7 +81,7 @@ function assignmentProject(text: string, projects: any[], currentId?: string) {
 function acceptsTeamReply(text: string, plain: string, projects: any[], users: any[]) {
   const identifier = [...projects, ...users].some(row => row.id === text) || users.some(user => user.rut && cleanRut(user.rut) === cleanRut(text));
   if (identifier) return true;
-  return /^[\p{L}\p{M}'’., -]+$/u.test(text) && !/\b(?:que|cual|cuanto|como|cuando|dime|muestra|lista|consulta|pago|saldo|avance|cotiza|busca|gracias|registra|registrar|crea|crear|nuevo|nueva|cambia|actualiza|termina|pausa|elimina|envia|marca|saber|revisa)\b/.test(plain);
+  return /^[\p{L}\p{M}'’., -]+$/u.test(text) && !/\b(?:que|cual|cuanto|como|cuando|dime|muestra|lista|consulta|pago|saldo|avance|cotiza|busca|gracias|registra|registrar|crea|crear|nuevo|nueva|cambia|actualiza|termina|pausa|elimina|envia|marca|saber|revisa|ok|okay|oki|listo|perfecto|genial|super|excelente|entendido|bien|vale|dale|bueno|buena|buenos|buenas|hola|hey|dias|tardes|noches|dia)\b/.test(plain);
 }
 
 function needsRegistrationOrAgent(text: string, plain: string, starts: boolean) {
@@ -100,8 +100,10 @@ export function teamAssignmentIntake(
   const starts = command.test(text), correction = correctionReply.test(plain);
   if (needsRegistrationOrAgent(text, plain, starts)) return null;
   if (!starts && !correction && !pending) return null;
-  if (pending && /^(?:no|ahora no|por ahora no|mas tarde|despues|cancelar?|olvida(?:r)?)(?: la asignacion| eso)?$/.test(plain))
+  if (pending && /^(?:no|ahora no|por ahora no|no gracias|no por ahora|mas tarde|despues|cancelar?|olvida(?:r)?|sin equipo|sin trabajadores|ninguno|nadie|omitir|paso)(?: la asignacion| eso)?$/.test(plain))
     return { actions: [], draft: null, question: 'De acuerdo. No añadí personas a la obra.' };
+  if (pending && !pending.nombres?.length && /^(?:ok|okay|oki|listo|perfecto|genial|super|excelente|entendido|bien|vale|dale|bueno|ya|gracias|muchas gracias)$/.test(plain))
+    return { actions: [], draft: null, question: null };
   if (!starts && !correction && !acceptsTeamReply(text, plain, projects, users)) return null;
   const names = assignmentNames(text, starts, correction, projects, pending, previousName);
   const matches = matchTeam(users, names);

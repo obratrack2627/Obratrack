@@ -67,6 +67,7 @@ export async function loadAIContext(
     tables.usuarios = [user];
     tables.clientes = [];
     tables.agenda_eventos = [];
+    tables.asistencia_obreros = (tables.asistencia_obreros || []).filter((r) => r.usuario_id === user.id);
   }
   const service = isolatedState(user, tables, company?.plan_id || "gratis");
   return {

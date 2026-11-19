@@ -247,6 +247,7 @@ export async function collectWhatsAppBurst(
     await sleep(Math.min(pollMs, lastWindowMs));
   }
 
+  const maxBusyWaitMs = Math.max(maxWaitMs + 5000, maxWaitMs * 2);
   while (true) {
     const elapsed = Date.now() - startedAt;
     const forceClaim = elapsed >= maxWaitMs;
@@ -270,6 +271,10 @@ export async function collectWhatsAppBurst(
     }
     if (res?.empty) {
       // Otro líder ya reclamó estos mensajes mientras esperábamos.
+      return { role: "queued" };
+    }
+    if (res?.busy && elapsed >= maxBusyWaitMs) {
+      // Evita bucles infinitos quemando RPCs si otro proceso mantiene el lote ocupado hasta el timeout de Vercel.
       return { role: "queued" };
     }
     if (Array.isArray(res?.preview) && res.preview.length > 0) {
