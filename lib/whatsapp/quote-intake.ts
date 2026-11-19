@@ -10,7 +10,7 @@ export function requestsQuotedProject(text: string) {
 }
 export function cancelsProjectDraft(text: string) {
   const value = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-  return /^(?:cancela(?:r)?|olvida(?:r)?)(?:\s+(?:la\s+|el\s+)?(?:creacion|obra|proyecto|eso|borrador)(?:\s+pendiente)?)?[.!]?$/.test(value);
+  return /^(?:cancela(?:r)?|olvida(?:r)?)(?:\s+(?:la\s+|el\s+)?(?:creacion(?:\s+de\s+(?:la\s+|esta\s+)?(?:obra|proyecto))?|obra|proyecto|eso|borrador)(?:\s+pendiente)?)?[.!]?$/.test(value);
 }
 export function resumesProjectDraft(text: string) {
   const value = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();

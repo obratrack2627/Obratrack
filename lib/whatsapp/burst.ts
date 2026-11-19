@@ -119,7 +119,10 @@ export function isIntroductoryPauseOnly(
 
   const clean = norm(trimmed).replace(/[.!?¡¿,:;]+$/g, "").trim();
 
-  if (INTRO_PHRASES.has(clean)) {
+  if (
+    INTRO_PHRASES.has(clean) ||
+    /^(?:hol+a+|buena+s?|bueno+s?\s+(?:dia+s?|tarde+s?|noche+s?)|wena+s?)$/.test(clean)
+  ) {
     return {
       reply:
         "Aquí estoy. Cuéntame en qué obra quieres registrar el avance, gasto, foto o consulta.",

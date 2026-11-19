@@ -89,7 +89,7 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
       case "ot:draft:confirm":
         return "Sí, confirmar y crear la obra";
       case "ot:draft:cancel":
-        return "Cancelar creación de obra";
+        return "Cancelar borrador";
       case "ot:team:assign":
         return "Sí";
       case "ot:team:skip":

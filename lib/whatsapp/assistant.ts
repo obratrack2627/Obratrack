@@ -491,7 +491,7 @@ export async function processPersonalMessage(
   let introPause: ReturnType<typeof isIntroductoryPauseOnly> = null;
   try {
     const verifiedDeadlines = !attachment ? projectDeadlineAnswer(text, deadlineProjects, activeProject || undefined) : null;
-    const statusCommand = !attachment && !hasOtherWorkBeyondStatus(text)
+    const statusCommand = !attachment && !cancelCreation && !hasOtherWorkBeyondStatus(text)
       ? projectStatusCommand(text, tables.proyectos, activeProject, conversationRows.slice().reverse().flatMap((row: any) => [{ rol: 'user' as const, texto: row.texto || '' }, { rol: 'model' as const, texto: row.respuesta || '' }]))
       : null;
     introPause =
@@ -932,6 +932,7 @@ export async function processPersonalMessage(
   const ambiguousPhoto = Boolean(attachment && !textParts.length);
   const showGreetingMenu =
     Boolean(introPause && !introPause.projectId) ||
+    cancelCreation ||
     (!attachment && /^(?:menu|menú|inicio|opciones)$/i.test(text.trim()));
   const interactive = buildWhatsAppInteractivePayload(data, {
     role: user.rol,

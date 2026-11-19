@@ -26,7 +26,13 @@ test("parseWhatsAppInteractiveReply traduce botones y listas de Meta a instrucci
   assert.equal(parseWhatsAppInteractiveReply(button("ot:quote:compare")), "Busca precios de los materiales de esta cotización en tiendas");
   assert.equal(parseWhatsAppInteractiveReply(button("ot:quote:alt")), "Dame otra alternativa de esta cotización");
   assert.equal(parseWhatsAppInteractiveReply(button("ot:draft:confirm")), "Sí, confirmar y crear la obra");
-  assert.equal(parseWhatsAppInteractiveReply(button("ot:draft:cancel")), "Cancelar creación de obra");
+  assert.equal(parseWhatsAppInteractiveReply(button("ot:draft:cancel")), "Cancelar borrador");
+  const { cancelsProjectDraft } = require("../lib/whatsapp/quote-intake.ts");
+  assert.equal(cancelsProjectDraft("Cancelar borrador"), true);
+  assert.equal(cancelsProjectDraft("Cancelar creación de obra"), true);
+  const { isIntroductoryPauseOnly } = require("../lib/whatsapp/burst.ts");
+  assert.ok(isIntroductoryPauseOnly("Holaa", false, []));
+  assert.ok(isIntroductoryPauseOnly("Buenas", false, []));
   assert.equal(parseWhatsAppInteractiveReply(button("ot:team:assign")), "Sí");
   assert.equal(parseWhatsAppInteractiveReply(button("ot:team:skip")), "Ahora no");
   assert.equal(parseWhatsAppInteractiveReply(button("ot:act:close")), "Haz el cierre diario de hoy de esta obra");
