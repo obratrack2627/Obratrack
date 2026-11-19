@@ -15,7 +15,7 @@ import { projectStatusCommand } from '@/lib/ai/project-status-command';
 import { actionReply } from '@/lib/ai/action-reply';
 import { projectDeadlineAnswer } from '@/lib/ai/project-deadlines';
 import { operationsContext } from '@/lib/ai/operations-context';
-import { acceptsQuotedProject, requestsQuotedProject, selectsRecentQuotedProject, cancelsProjectDraft, resumesProjectDraft, startsProjectDraft, legacyQuotedProjectMessage, quotedProjectDraft } from "./quote-intake";
+import { acceptsQuotedProject, requestsQuotedProject, selectsRecentQuotedProject, appliesQuoteToExistingProject, cancelsProjectDraft, resumesProjectDraft, startsProjectDraft, legacyQuotedProjectMessage, quotedProjectDraft } from "./quote-intake";
 import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib/presupuestos";
 import { budgetApplication } from '@/lib/quotes/application';
 import { chooseBudgetOption } from './budget-options';
@@ -39,7 +39,8 @@ import { prepareCampaign } from "./campaigns";
 import { isMaterialComparison } from "@/lib/materials/types";
 import { contactDatabaseMessage } from '@/lib/ai/contacts';
 import { personIntake } from './person-intake';
-import { createdProjectTeamDraft } from '@/lib/ai/team-assignment';
+import { createdProjectTeamDraft, TEAM_FOLLOW_UP } from '@/lib/ai/team-assignment';
+import { projectMentions } from '@/lib/ai/project-reference';
 import { persistWhatsAppAIFailure } from './ai-failure';
 import { activeWhatsAppProject, workerHistory, projectContextForRole } from './project-context';
 import {
@@ -406,7 +407,9 @@ export async function processPersonalMessage(
   let alreadyConverted = false;
   let confirmationResponse = '';
   const explicitQuoteCreation =
-    requestsQuotedProject(text) || selectsRecentQuotedProject(text, history[0]?.respuesta || '');
+    requestsQuotedProject(text) ||
+    selectsRecentQuotedProject(text, history[0]?.respuesta || '') ||
+    appliesQuoteToExistingProject(text);
   const replied = replyContextId ? conversationRows.find(row => row.message_id === replyContextId) : null;
   const legacyQuoteMessage = pendingProject && !pendingProject.presupuesto_cotizacion_id ? legacyQuotedProjectMessage(conversationRows) : null;
   const lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : explicitQuoteCreation && replied ? null : conversationRows.find((m: any) => m.cotizacion));
@@ -415,6 +418,7 @@ export async function processPersonalMessage(
   let candidates: Presupuesto[] = [];
   let chosenBudget: Presupuesto | null = null;
   let budgetSelection: { row: Presupuesto; payload: any } | null = null;
+  let applyQuoteToExisting: { budget: Presupuesto; project: any; actions: any[]; summary: string } | null = null;
   if (lastQuoteMessage?.cotizacion) {
     nativeBudget = await findBudget(sb, user.empresa_id, lastQuoteMessage.cotizacion.id);
     if (nativeBudget?.grupo_id) {
@@ -480,7 +484,66 @@ export async function processPersonalMessage(
       confirmationResponse = 'Se eligió la alternativa «' + (budget.cotizacion.nombre_alternativa || budget.nombre_alternativa || budget.cotizacion.titulo_proyecto) + '» para ' + project.nombre + '. El presupuesto de la misma obra quedó actualizado.';
     }
     else if (budget.proyecto_id) { alreadyConverted = true; confirmationResponse = 'Esta cotización ya tiene una obra creada. Puedes abrir su Carta Gantt en ObraTrack.'; }
-    else { acceptCreation = true; pendingProject = quotedProjectDraft(budget.cotizacion); nextDraft = pendingProject; }
+    else {
+      const explicitMention = projectMentions(authorizedProjects, text);
+      const existingTargetId =
+        (budget.cotizacion as any)?.proyecto_objetivo_id ||
+        (appliesQuoteToExistingProject(text)
+          ? (explicitMention.length === 1 ? explicitMention[0].id : activeProject || null)
+          : null);
+      const existingTarget = existingTargetId ? service.getProyectoById(existingTargetId) : null;
+      if (existingTarget) {
+        const q = budget.cotizacion;
+        const montoTotal = q.estructura_financiera?.precio_total_con_iva ?? 0;
+        const existingActs = service.getActividades(existingTarget.id);
+        const applyActions: any[] = [
+          {
+            tipo: 'actualizar_proyecto',
+            proyecto_id: existingTarget.id,
+            monto_cotizado: montoTotal,
+          },
+        ];
+        let addedPartidas = 0;
+        if (existingActs.length === 0 && Array.isArray(q.actividades_gantt) && q.actividades_gantt.length > 0) {
+          applyActions.push({
+            tipo: 'crear_actividad',
+            proyecto_id: existingTarget.id,
+            partidas: q.actividades_gantt.map((a) => ({ nombre: a.nombre, dias: Math.max(1, Math.round(Number(a.dias) || 1)) })),
+          });
+          addedPartidas = q.actividades_gantt.length;
+        }
+        let addedMaterials = 0;
+        if (Array.isArray(q.materiales) && q.materiales.length > 0) {
+          applyActions.push({
+            tipo: 'agregar_materiales',
+            proyecto_id: existingTarget.id,
+            materiales: q.materiales.map((m) => ({
+              nombre: m.nombre,
+              cantidad: m.cantidad,
+              unidad: m.unidad || 'unidad',
+              precio_unitario: m.precio_unitario_estimado,
+            })),
+          });
+          addedMaterials = q.materiales.length;
+        }
+        const partsSummary = [
+          `el presupuesto quedó en $${montoTotal.toLocaleString('es-CL')}`,
+          addedPartidas ? `cargué ${addedPartidas} partidas en la Carta Gantt` : '',
+          addedMaterials ? `agregué ${addedMaterials} materiales` : '',
+        ].filter(Boolean).join(', ');
+        const needsTeam = !(existingTarget.trabajadores_ids && existingTarget.trabajadores_ids.length > 0);
+        applyQuoteToExisting = {
+          budget,
+          project: existingTarget,
+          actions: applyActions,
+          summary: `Apliqué la cotización a «${existingTarget.nombre}»: ${partsSummary}.${needsTeam ? `\n\n${TEAM_FOLLOW_UP}` : ''}`,
+        };
+      } else {
+        acceptCreation = true;
+        pendingProject = quotedProjectDraft(budget.cotizacion);
+        nextDraft = pendingProject;
+      }
+    }
   }
   if (explicitQuoteCreation && !pendingProject && !lastQuoteMessage && !confirmationResponse) confirmationResponse = '¿Qué cotización quieres usar? Responde al mensaje de esa cotización o indícala en ObraTrack; no crearé una obra con un presupuesto distinto.';
   if (!confirmationResponse && !pendingProject && !chosenBudget && nativeBudget?.grupo_id && !candidates.length) confirmationResponse = 'No se pudieron recuperar las alternativas. Revisa el presupuesto en ObraTrack.';
@@ -533,7 +596,7 @@ export async function processPersonalMessage(
       !pendingPerson &&
       (isGreetingOrMenuRequest(text) && (Boolean(lastQuoteMessage?.cotizacion) || Boolean(history[0]?.respuesta?.includes('?')) || !introPause));
     const simpleCreation = creationRequest && !attachment && !/[,;\n]|\b(?:y registra|y envia|y asigna)\b/i.test(text) && /(?:obra|proyecto)[.!?]*$/i.test(text.trim());
-    const directWhatsAppReply = menuDirect ? { respuesta: menuDirect.respuesta, accion: null, cotizacion: null, sugerencias: [] } : projectListing || projectRefusal || (introPause ? { respuesta: introPause.reply, accion: null, cotizacion: null, sugerencias: [] } : isExplicitMenuCommand ? { respuesta: "¡Hola! Elige qué deseas hacer hoy en ObraTrack o escríbeme tu solicitud:", accion: null, cotizacion: null, sugerencias: [] } : acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || apuReply);
+    const directWhatsAppReply = applyQuoteToExisting ? { respuesta: applyQuoteToExisting.summary, accion: { tipo: 'lote_acciones', acciones: applyQuoteToExisting.actions }, cotizacion: null, sugerencias: [] } : menuDirect ? { respuesta: menuDirect.respuesta, accion: null, cotizacion: null, sugerencias: [] } : projectListing || projectRefusal || (introPause ? { respuesta: introPause.reply, accion: null, cotizacion: null, sugerencias: [] } : isExplicitMenuCommand ? { respuesta: "¡Hola! Elige qué deseas hacer hoy en ObraTrack o escríbeme tu solicitud:", accion: null, cotizacion: null, sugerencias: [] } : acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || apuReply);
     let semanticReferences: any[] = [];
     let savedBudgetsContext: any[] = [];
     if (!directWhatsAppReply) {
@@ -681,7 +744,10 @@ export async function processPersonalMessage(
         ? result.accion.map(normalizeTurnAction)
         : normalizeTurnAction(result.accion);
     }
-    let actions = checkActionPermissions(user, result.accion, text);
+    const permissionMessage = applyQuoteToExisting
+      ? 'Aplica el presupuesto de la cotización a la obra'
+      : text;
+    let actions = checkActionPermissions(user, result.accion, permissionMessage);
     const create = actions.find((a) =>
       ["crear_proyecto", "crear_proyecto_completo"].includes(a.tipo),
     );
@@ -769,7 +835,7 @@ export async function processPersonalMessage(
       actions = evidence.actions;
       attachment = evidence.attachment;
     }
-    checkActionPermissions(user, actions, text);
+    checkActionPermissions(user, actions, permissionMessage);
     plan = planWhatsAppActions(
       service,
       actions.filter((a) => a.tipo !== "enviar_mensaje_equipo"),
@@ -817,10 +883,29 @@ export async function processPersonalMessage(
   if (result.cotizacion && nativeBudget && isAlternativeRequest(text)) {
     Object.assign(result.cotizacion, { presupuesto_origen_id: nativeBudget.id, presupuesto_origen_version: nativeBudget.updated_at, presupuesto_proyecto_id: nativeBudget.proyecto_id });
   }
+  if (result.cotizacion && user.rol !== 'terreno') {
+    const mentionedInTurn = projectMentions(authorizedProjects, text);
+    const recentUserTurns = [text, ...history.slice(0, 3).map((h: any) => h.texto || '')];
+    const mentionsExistingObraPhrase = recentUserTurns.some((t) =>
+      /\b(?:para\s+(?:la|esta|esa)\s+obra|para\s+(?:el|este|ese)\s+proyecto|obra\s+ya\s+creada|ya\s+creada|no\s+tiene\s+(?:cotizaci[oó]n|gantt|presupuesto|nada))\b/i.test(t),
+    );
+    const targetExisting =
+      mentionedInTurn.length === 1
+        ? mentionedInTurn[0]
+        : activeProject && mentionsExistingObraPhrase
+          ? service.getProyectoById(activeProject)
+          : null;
+    if (targetExisting && !(result.cotizacion as any).proyecto_objetivo_id) {
+      (result.cotizacion as any).proyecto_objetivo_id = targetExisting.id;
+      (result.cotizacion as any).proyecto_objetivo_nombre = targetExisting.nombre;
+    }
+  }
   const photoAttachment = attachment && (attachment.mime_type?.startsWith('image/') || /\.(jpg|png|webp)$/i.test(attachment.path));
   const photoReceipt = photoAttachment ? photoReceiptWhatsApp(plan.result, attachment, service.getProyectos()) : null;
   const photoQuestion = image && /\b(?:analiza|revisa|explica|dime|problema|riesgo|solucion|que se ve|que ves|que observas)\b/.test(text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase());
-  if (plan.result && !['solicitar_datos_obra','solicitar_datos_persona'].includes(plan.result.tipo))
+  if (applyQuoteToExisting && plan.result) {
+    response = applyQuoteToExisting.summary;
+  } else if (plan.result && !['solicitar_datos_obra','solicitar_datos_persona'].includes(plan.result.tipo))
     response = photoReceipt ? photoReceipt + (photoQuestion ? `\n\n*Observación de la foto*\n${result.respuesta}` : '') : dailyCloseWhatsApp(plan.result) || actionReply(plan.result) + (image ? `\n\n${result.respuesta}` : '');
   if (actionWarning && plan.result) response += `\n\nLa evidencia se conservó. El resto de la solicitud quedó pendiente: ${actionWarning}`;
   if (user.rol === 'terreno') result.cotizacion = null;
@@ -870,10 +955,19 @@ export async function processPersonalMessage(
   const newProjects = (plan.changed.proyectos || []).filter((p: any) => !tables.proyectos.some((previous: any) => previous.id === p.id));
   const teamDraft = createdProjectTeamDraft(plan.result);
   if (teamDraft) nextPerson = { items: [], asignacion: teamDraft };
+  if (applyQuoteToExisting && plan.result) {
+    Object.assign(plan.result, {
+      presupuesto_cotizacion_id: applyQuoteToExisting.budget.cotizacion.id,
+      presupuesto_proyecto_id: applyQuoteToExisting.project.id,
+    });
+    if (!(applyQuoteToExisting.project.trabajadores_ids && applyQuoteToExisting.project.trabajadores_ids.length > 0)) {
+      nextPerson = { items: [], asignacion: { nombres: [], proyecto_id: applyQuoteToExisting.project.id } };
+    }
+  }
   if (quoteOrigin && newProjects.length === 1 && plan.result) Object.assign(plan.result, { presupuesto_cotizacion_id: quoteOrigin, presupuesto_proyecto_id: newProjects[0].id });
   if (budgetSelection) plan.result = { tipo: 'actualizar_proyecto', titulo: 'Alternativa elegida', resultado_texto: confirmationResponse, detalles: {}, presupuesto_seleccion_id: budgetSelection.row.id, presupuesto_seleccion_version: budgetSelection.row.updated_at, presupuesto_ejecucion: budgetSelection.payload } as any;
   const versioned=withSnapshotVersions(plan,tables);
-  const contextProjectId = attachment?.proyecto_id || (newProjects.length === 1 ? newProjects[0].id : introPause?.projectId || activeProject) || null;
+  const contextProjectId = attachment?.proyecto_id || applyQuoteToExisting?.project.id || (newProjects.length === 1 ? newProjects[0].id : introPause?.projectId || activeProject) || null;
   const params = {
     p_id: message.id,
     p_empresa: user.empresa_id,

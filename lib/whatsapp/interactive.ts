@@ -98,6 +98,8 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
         return "4";
       case "ot:quote:create":
         return "Crea la obra con esta cotización";
+      case "ot:quote:apply":
+        return "Aplica esta cotización a la obra";
       case "ot:quote:compare":
         return "Busca precios de los materiales de esta cotización en tiendas";
       case "ot:quote:alt":
@@ -349,6 +351,20 @@ export function buildWhatsAppInteractivePayload(
           title: clip(`${idx + 1}. ${opt.nombre_alternativa || `Opción ${idx + 1}`}`, META_LIST_ROW_TITLE_MAX),
           description: opt.resumen_ejecutivo ? clip(opt.resumen_ejecutivo, META_LIST_ROW_DESC_MAX) : undefined,
         })),
+      };
+    }
+    const targetProjectId = result.cotizacion.proyecto_objetivo_id;
+    const targetProjectName = result.cotizacion.proyecto_objetivo_nombre;
+    if (targetProjectId) {
+      return {
+        kind: "buttons",
+        body: `¿Quieres aplicar esta cotización (presupuesto, Carta Gantt y materiales) a ${targetProjectName || "la obra"}?`,
+        footer: "ObraBot · Cotizador",
+        buttons: [
+          { id: "ot:quote:apply", title: "✅ Aplicar a la obra" },
+          { id: "ot:quote:compare", title: "🛒 Precios retail" },
+          { id: "ot:quote:alt", title: "🔄 Otra opción" },
+        ],
       };
     }
     return {

@@ -506,3 +506,141 @@ test("tocar [Crear obra] con context.id saliente de Meta o responder 'La que rec
   );
   assert.equal(reqCheck.mode, "chat");
 });
+
+test("crear una cotización para una obra ya existente sin cotización, gantt ni trabajadores entra a modo quote, muestra [Aplicar a la obra] y la carga directo en la obra", async () => {
+  const { processPersonalMessage } = require("../lib/whatsapp/assistant.ts");
+  const { isQuoteRequest, requestsPlatformAction } = require("../lib/ai/prompt.ts");
+  const { normalizeQuote } = require("../lib/ai/protocol.ts");
+  const delivery = require("./helpers/reply-delivery.cjs")();
+
+  const promptText = "Crea una cotización para la obra Bodega Maipú que no tiene cotización, gantt, ni trabajadores, nada asociado";
+  assert.equal(requestsPlatformAction(promptText), false);
+  assert.equal(isQuoteRequest(promptText), true);
+  assert.equal(chatGenerationRequest([], promptText, {}).mode, "quote");
+
+  const quote = normalizeQuote({
+    id: "q-bodega-maipu",
+    titulo_proyecto: "Bodega Maipú",
+    comuna_region: "Maipú",
+    duracion_dias_estimada: 4,
+    materiales: [
+      { nombre: "Plancha Zincalum", cantidad: 10, unidad: "un", precio_unitario_estimado: 12000 },
+      { nombre: "Perfil metálico", cantidad: 6, unidad: "un", precio_unitario_estimado: 15000 },
+    ],
+    mano_de_obra: [{ rol: "Maestro carpintero", cantidad_personas: 1, dias_estimados: 4, valor_jornal_diario: 50000 }],
+    actividades_gantt: [
+      { nombre: "Estructura metálica", dias: 2 },
+      { nombre: "Revestimiento y cubierta", dias: 2 },
+    ],
+  });
+
+  const existingProject = {
+    id: "p-bodega",
+    empresa_id: "e-1",
+    nombre: "Bodega Maipú",
+    comuna: "Maipú",
+    estado: "activo",
+    fecha_inicio: "2026-11-20",
+    fecha_termino_estimada: "2026-11-30",
+    monto_cotizado: 0,
+  };
+
+  const db = {
+    usuarios: [{ id: "u-admin", empresa_id: "e-1", nombre: "Jorge", rol: "admin", telefono_whatsapp: "+56 9 1234 5678", email: "jorge@test.cl" }],
+    empresas: [{ id: "e-1", plan_id: "pro_ia" }],
+    presupuestos: [],
+    whatsapp_mensajes: [],
+    proyectos: [existingProject],
+    proyecto_trabajadores: [],
+    actividades: [],
+    materiales_proyecto: [],
+    clientes: [],
+  };
+
+  let lastRpc = null;
+  const sb = {
+    db,
+    from(table) {
+      let preds = [], max = Infinity, offset = 0, single = false;
+      const q = {
+        select: () => q,
+        eq: (k, v) => { preds.push((x) => k.includes("->>") ? x[k.split("->>")[0]]?.[k.split("->>")[1]] === v : x[k] === v); return q; },
+        in: (k, v) => { preds.push((x) => v.includes(x[k])); return q; },
+        order: () => q,
+        limit: (n) => { max = n; return q; },
+        range: (s, e) => { offset = s; max = e - s + 1; return q; },
+        maybeSingle: () => { single = true; return q; },
+        then: (res, rej) => {
+          const rows = (db[table] || []).filter((x) => preds.every((p) => p(x))).slice(offset, offset + max);
+          return Promise.resolve({ data: single ? rows[0] || null : rows }).then(res, rej);
+        },
+      };
+      return q;
+    },
+    async rpc(name, p) {
+      if (name.startsWith("whatsapp_reservar_respuesta") || name === "whatsapp_finalizar_respuesta") return delivery(name, p);
+      lastRpc = p;
+      if (p.p_cotizacion) {
+        db.presupuestos.unshift({
+          id: `wa:${p.p_id}`,
+          empresa_id: p.p_empresa,
+          cotizacion: p.p_cotizacion,
+          estado: "borrador",
+          proyecto_id: null,
+        });
+      }
+      const row = {
+        message_id: p.p_id,
+        empresa_id: p.p_empresa,
+        actor_id: p.p_actor,
+        texto: p.p_texto,
+        respuesta: p.p_respuesta,
+        cotizacion: p.p_cotizacion,
+        acciones: p.p_acciones,
+        borrador_obra: p.p_borrador ?? null,
+      };
+      db.whatsapp_mensajes.unshift(row);
+      return { data: row };
+    },
+  };
+
+  // Turno 1: Pedir cotización para la obra existente Bodega Maipú
+  const turn1 = await processPersonalMessage(
+    sb,
+    { id: "wamid.quote-existing-1", from: "56912345678", type: "text", text: { body: promptText } },
+    { chat: async () => ({ respuesta: "Cotización lista.", accion: null, cotizacion: quote }) },
+  );
+
+  assert.equal(turn1.cotizacion.proyecto_objetivo_id, "p-bodega");
+  assert.equal(turn1.interactive.kind, "buttons");
+  assert.deepEqual(
+    turn1.interactive.buttons.map((b) => b.id),
+    ["ot:quote:apply", "ot:quote:compare", "ot:quote:alt"],
+  );
+
+  // Turno 2: Tocar [✅ Aplicar a la obra] aplica presupuesto, Gantt y materiales a la obra existente y ofrece asignar cuadrilla
+  const turn2 = await processPersonalMessage(
+    sb,
+    {
+      id: "wamid.apply-existing-2",
+      from: "56912345678",
+      type: "interactive",
+      context: { from: "56900000000", id: "wamid.outbound-card" },
+      interactive: { type: "button_reply", button_reply: { id: "ot:quote:apply", title: "✅ Aplicar a la obra" } },
+    },
+    { chat: async () => { throw new Error("Debe aplicar la cotización directamente sin llamar al modelo"); } },
+  );
+
+  assert.match(turn2.respuesta, /Apliqué la cotización a «Bodega Maipú»/);
+  assert.match(turn2.respuesta, /2 partidas en la Carta Gantt/);
+  assert.match(turn2.respuesta, /2 materiales/);
+  assert.match(turn2.respuesta, /¿Quieres añadir trabajadores o jefes de obra/);
+  assert.equal(lastRpc.p_changed.proyectos.length, 1);
+  assert.equal(lastRpc.p_changed.proyectos[0].id, "p-bodega");
+  assert.equal(lastRpc.p_changed.proyectos[0].monto_cotizado, quote.estructura_financiera.precio_total_con_iva);
+  assert.equal(lastRpc.p_changed.actividades.length, 2);
+  assert.equal(lastRpc.p_changed.materiales_proyecto.length, 2);
+  assert.equal(lastRpc.p_acciones.presupuesto_cotizacion_id, quote.id);
+  assert.equal(lastRpc.p_acciones.presupuesto_proyecto_id, "p-bodega");
+  assert.deepEqual(turn2.interactive.buttons.map((b) => b.id), ["ot:team:assign", "ot:team:skip"]);
+});

@@ -52,10 +52,17 @@ export function legacyQuotedProjectMessage(rows: any[]) {
   }
   return null;
 }
+export function appliesQuoteToExistingProject(text: string) {
+  const value = stripTrailingPunctuation(text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(), '.!?');
+  if (!value || /\b(?:no|sin|cancela\w*)\b/.test(value)) return false;
+  return /^(?:por favor[, ]+)?(?:(?:quiero|necesito|puedes|podrias)(?: que)?\s+)?(?:aplica\w*|asocia\w*|carga\w*|vincula\w*|incorpora\w*|usa\w*|agrega\w*)\s+(?:(?:esta|esa|la|el)\s+)?(?:cotizacion|presupuesto)?\s*(?:a|en)\s+(?:(?:la|esta|esa|el|este|ese)\s+)?(?:obra|proyecto)\b/.test(
+    value,
+  ) || /^(?:aplical[ao]|asocial[ao]|cargal[ao])(?:\s+a\s+(?:la|esta|esa)\s+(?:obra|proyecto))?$/.test(value);
+}
 export function acceptsQuotedProject(text: string, quoteJustOffered = true) {
   const value = stripTrailingPunctuation(text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(), '.!');
   if(value==='si' && !quoteJustOffered)return false;
-  return requestsQuotedProject(text) || selectsRecentQuotedProject(text) || /^(?:si|si[, ]+(?:creala|crea (?:la|esa|esta) obra)(?: con (?:el |un )?gantt(?: y (?:los |sus )?materiales)?)?|creala|crea(?:r)? (?:la |esa |esta )?obra(?: con (?:el |un )?gantt(?: y (?:los |sus )?materiales)?)?)$/.test(value);
+  return requestsQuotedProject(text) || selectsRecentQuotedProject(text) || appliesQuoteToExistingProject(text) || /^(?:si|si[, ]+(?:creala|crea (?:la|esa|esta) obra)(?: con (?:el |un )?gantt(?: y (?:los |sus )?materiales)?)?|creala|crea(?:r)? (?:la |esa |esta )?obra(?: con (?:el |un )?gantt(?: y (?:los |sus )?materiales)?)?)$/.test(value);
 }
 export function quotedProjectDraft(q: CotizacionEstimacion) {
   return {
