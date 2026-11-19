@@ -90,8 +90,11 @@ const scoped: Record<string, string[]> = {
     "registrar_documento",
   ],
   hora: ["agendar_evento", "agendar_visita"],
+  tipo_evento: ["agendar_evento", "agendar_visita"],
+  comuna_lugar: ["agendar_evento", "agendar_visita"],
   hora_entrada: ["registrar_asistencia"],
   hora_salida: ["registrar_asistencia"],
+  todos_presentes: ["registrar_asistencia"],
 };
 export function relevantActionFields(action: AIAction): AIAction {
   for (const [field, types] of Object.entries(scoped)) {

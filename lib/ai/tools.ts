@@ -124,6 +124,8 @@ const MANAGER_TOOLS: OpenAIFunctionTool[] = [
       proyecto_id: { type: 'string' },
       nombre: { type: 'string', description: 'Nombre de la partida.' },
       dias: { type: 'number', description: 'Duración estimada en días enteros.' },
+      fecha_inicio: { type: 'string', description: 'Fecha de inicio YYYY-MM-DD opcional.' },
+      responsable_nombre: { type: 'string', description: 'Nombre o ID del responsable de la partida.' },
       partidas: {
         type: 'array',
         items: {
@@ -132,6 +134,8 @@ const MANAGER_TOOLS: OpenAIFunctionTool[] = [
           properties: {
             nombre: { type: 'string' },
             dias: { type: 'number' },
+            fecha_inicio: { type: 'string' },
+            responsable_nombre: { type: 'string' },
           },
           required: ['nombre', 'dias'],
         },
@@ -306,7 +310,9 @@ const MANAGER_TOOLS: OpenAIFunctionTool[] = [
       titulo: { type: 'string' },
       fecha: { type: 'string', description: 'YYYY-MM-DD' },
       hora: { type: 'string', description: 'HH:MM (24h)' },
-      tipo: { type: 'string', enum: ['reunion', 'hito', 'inspeccion', 'entrega'] },
+      tipo_evento: { type: 'string', enum: ['visita_terreno', 'reunion', 'hito', 'inspeccion', 'entrega'] },
+      comuna_lugar: { type: 'string' },
+      descripcion: { type: 'string' },
     },
     ['titulo', 'fecha', 'hora'],
   ),
@@ -541,6 +547,13 @@ export function toolCallsToChatEnvelope(
     if (call.name === 'crear_solicitud_cambio' && args.tipo && !args.subtipo) {
       args.subtipo = args.tipo;
       delete args.tipo;
+    }
+    if ((call.name === 'agendar_evento' || call.name === 'agendar_visita') && args.tipo && !args.tipo_evento) {
+      args.tipo_evento = args.tipo;
+      delete args.tipo;
+    }
+    if (call.name === 'registrar_asistencia' && !args.todos_presentes && !args.estado) {
+      args.estado = 'presente';
     }
     acciones.push({ ...args, tipo: call.name });
   }

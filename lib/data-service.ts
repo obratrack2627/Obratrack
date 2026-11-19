@@ -2131,26 +2131,36 @@ export class DataService {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;
 
+        const respIdent = accion.responsable_id || accion.responsable_nombre;
+        const defaultWorker = respIdent ? resolveEntity(this.getUsuarios(), respIdent) : null;
+        if (defaultWorker) {
+          this.asignarTrabajadorAProyecto(defaultWorker.id, proj.id);
+        }
+
         const listaPartidas = Array.isArray(accion.partidas)
           ? accion.partidas
           : Array.isArray(accion.actividades)
           ? accion.actividades
-          : [{ nombre: accion.nombre || 'Nueva Partida', dias: Number(accion.dias) || 5 }];
+          : [{ nombre: accion.nombre || 'Nueva Partida', dias: Number(accion.dias) || 5, fecha_inicio: accion.fecha_inicio, responsable_id: defaultWorker?.id }];
 
         const acts = this.getActividades(proj.id);
-        let lastEndDate = new Date();
+        let lastEndDate = proj.fecha_inicio ? new Date(`${proj.fecha_inicio}T12:00:00Z`) : new Date();
         const lastAct = acts[acts.length - 1];
         if (lastAct && lastAct.fecha_termino) {
-          lastEndDate = new Date(lastAct.fecha_termino);
+          lastEndDate = new Date(`${lastAct.fecha_termino}T12:00:00Z`);
         }
 
         const creadas: Actividad[] = [];
         listaPartidas.forEach((p: any, idx: number) => {
           const dias = Number(p.dias) || 5;
-          const start = new Date(lastEndDate);
-          const end = new Date(start);
-          end.setDate(end.getDate() + dias);
+          const start = p.fecha_inicio ? new Date(`${p.fecha_inicio}T12:00:00Z`) : new Date(lastEndDate);
+          const end = new Date(start.getTime() + dias * 86400000);
           lastEndDate = new Date(end);
+          const itemResp = p.responsable_id || p.responsable_nombre;
+          const itemWorker = itemResp ? resolveEntity(this.getUsuarios(), itemResp) : defaultWorker;
+          if (itemWorker) {
+            this.asignarTrabajadorAProyecto(itemWorker.id, proj.id);
+          }
 
           const nueva = this.createActividad({
             proyecto_id: proj.id,
@@ -2160,9 +2170,15 @@ export class DataService {
             porcentaje_avance: Number(p.porcentaje_avance) || 0,
             estado: 'pendiente',
             orden: acts.length + idx + 1,
+            ...(itemWorker ? { responsable_id: itemWorker.id } : {}),
           });
           creadas.push(nueva);
         });
+
+        const maxTermino = creadas[creadas.length - 1]?.fecha_termino;
+        if (maxTermino && proj.fecha_termino_estimada && maxTermino > proj.fecha_termino_estimada) {
+          this.updateProyecto(proj.id, { fecha_termino_estimada: maxTermino });
+        }
 
         return {
           tipo: 'crear_actividad',
@@ -2183,16 +2199,16 @@ export class DataService {
         if (worker) {
           this.asignarTrabajadorAProyecto(worker.id, proj.id);
         }
-        if (accion.todas_las_partidas && worker) {
+        if (accion.todas_las_partidas && (worker || typeof accion.porcentaje_avance === 'number')) {
           if (!acts.length) throw new Error(`La obra "${proj.nombre}" no tiene partidas en la Carta Gantt.`);
+          const hasExplicitAvance = typeof accion.porcentaje_avance === 'number';
           const updatedActs = acts.map((act) => {
-            const hasExplicitAvance =
-              typeof accion.porcentaje_avance === 'number' &&
-              accion.porcentaje_avance !== (act.porcentaje_avance ?? 0);
-            const avance = hasExplicitAvance
+            const shouldChangeAvance =
+              hasExplicitAvance && (!worker || accion.porcentaje_avance !== (act.porcentaje_avance ?? 0));
+            const avance = shouldChangeAvance
               ? Math.min(100, Math.max(0, Number(accion.porcentaje_avance)))
               : (act.porcentaje_avance ?? 0);
-            const estado = hasExplicitAvance
+            const estado = shouldChangeAvance
               ? avance === 100
                 ? 'terminada'
                 : avance > 0
@@ -2201,17 +2217,23 @@ export class DataService {
               : act.estado;
             return (
               this.updateActividad(act.id, {
-                responsable_id: worker.id,
+                ...(worker ? { responsable_id: worker.id } : {}),
                 porcentaje_avance: avance,
                 estado,
-              }) || { ...act, responsable_id: worker.id }
+              }) || { ...act, ...(worker ? { responsable_id: worker.id } : {}), porcentaje_avance: avance, estado }
             );
           });
+          const resultText =
+            worker && !hasExplicitAvance
+              ? `Asigné a ${worker.nombre} como responsable de las ${updatedActs.length} partidas de la Carta Gantt en "${proj.nombre}".`
+              : worker && hasExplicitAvance
+                ? `Dejé las ${updatedActs.length} partidas de "${proj.nombre}" al ${Math.min(100, Math.max(0, Number(accion.porcentaje_avance)))}% y asigné a ${worker.nombre} como responsable.`
+                : `Dejé las ${updatedActs.length} partidas de la Carta Gantt en "${proj.nombre}" al ${Math.min(100, Math.max(0, Number(accion.porcentaje_avance)))}%.`;
           return {
             tipo: 'actualizar_avance',
-            titulo: `Responsable Asignado en Carta Gantt`,
-            detalles: { partidas: updatedActs, responsable_id: worker.id, responsable_nombre: worker.nombre },
-            resultado_texto: `Asigné a ${worker.nombre} como responsable de las ${updatedActs.length} partidas de la Carta Gantt en "${proj.nombre}".`,
+            titulo: worker && !hasExplicitAvance ? `Responsable Asignado en Carta Gantt` : `Partidas Actualizadas en Carta Gantt`,
+            detalles: { partidas: updatedActs, ...(worker ? { responsable_id: worker.id, responsable_nombre: worker.nombre } : {}) },
+            resultado_texto: resultText,
             link_destino: `/proyectos/${proj.id}/gantt`,
             link_texto: 'Ver Carta Gantt ➔',
           };
@@ -2349,20 +2371,32 @@ export class DataService {
         const proj = resolverProyecto(accion.proyecto_id || accion.proyecto_nombre);
         if (!proj) return null;
         const existentes = this.getMaterialesProyecto(proj.id);
+        const isAllMaterials =
+          !accion.material_id &&
+          !Array.isArray(accion.materiales) &&
+          /^(?:todos?|todos los materiales|toda la lista|materiales)$/i.test(String(accion.nombre || '').trim());
         const lista = Array.isArray(accion.materiales)
           ? accion.materiales
-          : [
-              {
-                material_id: accion.material_id,
-                nombre: accion.nombre,
-                cantidad: accion.cantidad,
-                precio_unitario: accion.precio_unitario,
-                monto: accion.monto,
+          : isAllMaterials && existentes.length > 0
+            ? existentes.map((e) => ({
+                material_id: e.id,
+                nombre: e.nombre,
                 proveedor: accion.proveedor,
                 comprado: accion.comprado,
                 pagado: accion.pagado,
-              },
-            ];
+              }))
+            : [
+                {
+                  material_id: accion.material_id,
+                  nombre: accion.nombre,
+                  cantidad: accion.cantidad,
+                  precio_unitario: accion.precio_unitario,
+                  monto: accion.monto,
+                  proveedor: accion.proveedor,
+                  comprado: accion.comprado,
+                  pagado: accion.pagado,
+                },
+              ];
 
         const targets: { item: any; target: MaterialProyecto }[] = lista.map((item: any) => {
           const byId = item.material_id ? existentes.find((e: MaterialProyecto) => e.id === item.material_id) : undefined;
@@ -2525,11 +2559,11 @@ export class DataService {
           proyecto_id: proj.id,
           monto,
           fecha: accion.fecha || chileToday(),
-          nota: accion.nota || '',
-          metodo: (['transferencia', 'efectivo', 'debito'].includes(accion.metodo || '')
+          nota: accion.nota || accion.notas || '',
+          metodo: (['transferencia', 'efectivo', 'debito', 'credito'].includes(accion.metodo || '')
             ? accion.metodo
             : 'transferencia') as PaymentMethod,
-          estado: 'completado',
+          estado: accion.estado === 'pendiente' ? 'pendiente' : 'completado',
           comprobante_url: '',
         });
         return {
@@ -2691,13 +2725,27 @@ export class DataService {
             link_texto: 'Ver Asistencia ➔',
           };
         }
-        const previous = this.getAsistencias(proj.id, fecha).find(row => row.trabajador_nombre.toLowerCase() === String(accion.trabajador_nombre || accion.nombre || '').toLowerCase());
+        const workerIdent = String(accion.usuario_id || accion.trabajador_nombre || accion.nombre || '').trim();
+        let matchedUser: Usuario | null = null;
+        if (workerIdent) {
+          try {
+            matchedUser = resolveEntity(this.getUsuarios(), workerIdent);
+          } catch {
+            matchedUser = null;
+          }
+        }
+        const canonicalName = matchedUser?.nombre || accion.trabajador_nombre || accion.nombre || 'Trabajador de Obra';
+        const previous = this.getAsistencias(proj.id, fecha).find(
+          (row) =>
+            (matchedUser?.id && row.usuario_id === matchedUser.id) ||
+            row.trabajador_nombre.toLowerCase() === String(canonicalName).toLowerCase(),
+        );
         const reg = this.upsertAsistenciaObrero({
           id: previous?.id,
-          usuario_id: previous?.usuario_id,
+          usuario_id: matchedUser?.id ?? previous?.usuario_id,
           proyecto_id: proj.id,
-          trabajador_nombre: accion.trabajador_nombre || accion.nombre || 'Trabajador de Obra',
-          trabajador_rol: accion.rol || 'terreno',
+          trabajador_nombre: canonicalName,
+          trabajador_rol: (matchedUser?.rol === 'supervisor' ? 'supervisor' : accion.rol || previous?.trabajador_rol || 'terreno') as any,
           fecha,
           estado: (['presente', 'atraso', 'ausente', 'licencia', 'permiso'].includes(accion.estado || '')
             ? accion.estado

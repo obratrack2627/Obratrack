@@ -254,3 +254,77 @@ test('actualizar_proyecto reprograma automáticamente las partidas de la Carta G
   assert.match(reply, /La entrega quedó para el 29\/12\/2026/);
   assert.match(reply, /Ajusté automáticamente las 3 partidas de la Carta Gantt/);
 });
+
+test('auditoría de gestión integral: resumen financiero, responsable_nombre en contexto, actualizar todos los materiales/partidas, crear_actividad con responsable y pagos/asistencia', () => {
+  const { operationsContext } = require('../lib/ai/operations-context.ts');
+  const { compactAIContext } = require('../lib/ai/prompt-context.ts');
+  const { checkActionPermissions } = require('../lib/ai/permissions.ts');
+  const { isolatedState, planWhatsAppActions } = require('../lib/whatsapp/state.ts');
+
+  const admin = { id: 'u-admin', empresa_id: 'e-1', nombre: 'Jorge', rol: 'admin' };
+  const felipe = { id: 'u-felipe', empresa_id: 'e-1', nombre: 'Felipe Poblete', rol: 'terreno' };
+  const project = {
+    id: 'p-sb',
+    empresa_id: 'e-1',
+    nombre: 'Pintura de pieza 2 × 3 m — San Bernardo',
+    estado: 'activo',
+    fecha_inicio: '2026-12-25',
+    fecha_termino_estimada: '2026-12-29',
+    monto_cotizado: 500000,
+    trabajadores_ids: ['u-felipe'],
+  };
+  const activities = [
+    { id: 'act-1', proyecto_id: 'p-sb', nombre: 'Limpieza', fecha_inicio: '2026-12-25', fecha_termino: '2026-12-27', porcentaje_avance: 0, estado: 'pendiente', orden: 1, responsable_id: 'u-felipe' },
+    { id: 'act-2', proyecto_id: 'p-sb', nombre: 'Pintura', fecha_inicio: '2026-12-27', fecha_termino: '2026-12-29', porcentaje_avance: 0, estado: 'pendiente', orden: 2, responsable_id: 'u-felipe' },
+  ];
+  const materials = [
+    { id: 'm-1', proyecto_id: 'p-sb', nombre: 'Látex blanco', cantidad: 2, unidad: 'galón', precio_unitario: 25000, subtotal: 50000, comprado: false, pagado: null },
+    { id: 'm-2', proyecto_id: 'p-sb', nombre: 'Rodillo', cantidad: 2, unidad: 'unidad', precio_unitario: 5000, subtotal: 10000, comprado: false, pagado: null },
+  ];
+
+  // 1) Contexto operativo enriquece responsable_nombre en actividades y resumen_financiero verificado
+  const opCtx = operationsContext(
+    { usuarios: [admin, felipe], proyectos: [project], actividades: activities, materiales_proyecto: materials, pagos: [{ id: 'pay-1', proyecto_id: 'p-sb', monto: 200000, estado: 'completado' }] },
+    'p-sb',
+    'admin',
+    'estado financiero',
+  );
+  assert.equal(opCtx.registros.actividades.incluidos[0].responsable_nombre, 'Felipe Poblete');
+  assert.equal(opCtx.resumen_financiero[0].monto_cotizado, 500000);
+  assert.equal(opCtx.resumen_financiero[0].total_pagado, 200000);
+  assert.equal(opCtx.resumen_financiero[0].saldo_por_cobrar, 300000);
+  assert.equal(opCtx.resumen_financiero[0].total_materiales_presupuestados, 60000);
+
+  const compacted = compactAIContext({ proyectos: [project] });
+  assert.deepEqual(compacted.proyectos[0].trabajadores_ids, ['u-felipe']);
+
+  // 2) Marcar todos los materiales como comprados, agregar partida con responsable (extiende plazo) y marcar todas las partidas al 100%
+  const service = isolatedState(
+    admin,
+    { usuarios: [admin, felipe], proyectos: [project], actividades: activities, materiales_proyecto: materials, proyecto_trabajadores: [{ proyecto_id: 'p-sb', usuario_id: 'u-felipe' }] },
+    'pro_ia',
+  );
+
+  const batchEnv = JSON.parse(
+    toolCallsToChatEnvelope('Ejecutando cambios.', [
+      { name: 'actualizar_material', arguments: JSON.stringify({ proyecto_id: 'p-sb', nombre: 'todos', comprado: true, proveedor: 'Sodimac' }) },
+      { name: 'crear_actividad', arguments: JSON.stringify({ proyecto_id: 'p-sb', nombre: 'Barnizado final', dias: 2, responsable_nombre: 'Felipe Poblete' }) },
+      { name: 'registrar_pago', arguments: JSON.stringify({ proyecto_id: 'p-sb', monto: 100000, metodo: 'credito', notas: 'Pago con tarjeta' }) },
+      { name: 'registrar_asistencia', arguments: JSON.stringify({ proyecto_id: 'p-sb', trabajador_nombre: 'Felipe Poblete' }) },
+    ]),
+  );
+
+  const permitted = checkActionPermissions(admin, batchEnv.acciones, 'Marca todos los materiales como comprados en Sodimac, agrega partida Barnizado final de 2 días a cargo de Felipe Poblete, registra pago de 100000 con crédito y marca presente a Felipe Poblete');
+  const plan = planWhatsAppActions(service, permitted);
+
+  assert.equal(plan.changed.materiales_proyecto.length, 2);
+  assert.ok(plan.changed.materiales_proyecto.every((m) => m.comprado === true && m.proveedor === 'Sodimac'));
+  assert.equal(plan.changed.actividades.length, 1);
+  assert.equal(plan.changed.actividades[0].nombre, 'Barnizado final');
+  assert.equal(plan.changed.actividades[0].responsable_id, 'u-felipe');
+  assert.equal(plan.changed.proyectos[0].fecha_termino_estimada, '2026-12-31');
+  assert.equal(plan.changed.pagos[0].metodo, 'credito');
+  assert.equal(plan.changed.pagos[0].notas, 'Pago con tarjeta');
+  assert.equal(plan.changed.asistencia_obreros[0].usuario_id, 'u-felipe');
+  assert.equal(plan.changed.asistencia_obreros[0].estado, 'presente');
+});

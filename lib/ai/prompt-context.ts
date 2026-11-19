@@ -19,7 +19,7 @@ function maskPIIFields(record: any) {
 export function compactAIContext(context: Record<string, any>) {
   const pick = (row: any, fields: string[]) => Object.fromEntries(fields.filter(k => row?.[k] !== undefined).map(k => [k, row[k]]));
   const compact = { ...context };
-  if (Array.isArray(context.proyectos)) compact.proyectos = context.proyectos.map((p: any) => pick(p, ['id','nombre','estado','cliente_id','comuna','direccion','descripcion','fecha_inicio','fecha_termino_estimada','monto_cotizado','porcentaje_avance']));
+  if (Array.isArray(context.proyectos)) compact.proyectos = context.proyectos.map((p: any) => pick(p, ['id','nombre','estado','cliente_id','comuna','direccion','descripcion','fecha_inicio','fecha_termino_estimada','monto_cotizado','porcentaje_avance','trabajadores_ids']));
   if (Array.isArray(context.clientes)) {
     compact.clientes = context.clientes.map((c: any) => maskPIIFields(pick(c, ['id','nombre','email','telefono','rut','direccion','comuna'])));
   }

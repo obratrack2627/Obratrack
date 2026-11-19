@@ -82,6 +82,7 @@ export function operationsContext(
         "fecha_inicio",
         "fecha_termino",
         "responsable_id",
+        "responsable_nombre",
         "orden",
         ...(role === "terreno" ? [] : ["monto_contratado"]),
       ],
@@ -146,6 +147,23 @@ export function operationsContext(
         ...(role === "terreno" ? [] : ["impacto_monto", "impacto_dias"]),
       ],
     ],
+    [
+      "agenda_eventos",
+      12,
+      ["id", "proyecto_id", "titulo", "tipo", "fecha", "hora", "fecha_inicio"],
+    ],
+    [
+      "documentos_obra",
+      12,
+      [
+        "id",
+        "proyecto_id",
+        "categoria",
+        "nombre",
+        "fecha_documento",
+        ...(role === "terreno" ? [] : ["monto_documento", "proveedor_entidad"]),
+      ],
+    ],
     ...(role === "terreno"
       ? []
       : ([
@@ -175,8 +193,59 @@ export function operationsContext(
           ],
         ] as [string, number, string[]][])),
   ];
+  const usersById = new Map<string, string>(
+    (tables.usuarios || [])
+      .filter((u: any) => u?.id && u?.nombre)
+      .map((u: any) => [String(u.id), String(u.nombre)]),
+  );
+  const financialSummary =
+    role === "terreno"
+      ? []
+      : (tables.proyectos || [])
+          .filter((p) => !projectId || p.id === projectId)
+          .map((p) => {
+            const pPagos = (tables.pagos || []).filter((x) => x.proyecto_id === p.id);
+            const pMats = (tables.materiales_proyecto || []).filter((x) => x.proyecto_id === p.id);
+            const pImps = (tables.imprevistos || []).filter((x) => x.proyecto_id === p.id);
+            const montoCotizado = Number(p.monto_cotizado || 0);
+            const totalPagado = pPagos
+              .filter((x) => x.estado !== "pendiente")
+              .reduce((sum, x) => sum + Number(x.monto || 0), 0);
+            const totalMaterialesPresupuestados = pMats.reduce(
+              (sum, x) => sum + Number(x.subtotal ?? Number(x.cantidad || 0) * Number(x.precio_unitario || 0)),
+              0,
+            );
+            const totalMaterialesComprados = pMats
+              .filter((x) => x.comprado)
+              .reduce(
+                (sum, x) => sum + Number(x.subtotal ?? Number(x.cantidad || 0) * Number(x.precio_unitario || 0)),
+                0,
+              );
+            const totalMaterialesPagados = pMats
+              .filter((x) => x.pagado === true)
+              .reduce(
+                (sum, x) => sum + Number(x.subtotal ?? Number(x.cantidad || 0) * Number(x.precio_unitario || 0)),
+                0,
+              );
+            const totalImprevistos = pImps.reduce(
+              (sum, x) => sum + Number(x.monto ?? x.monto_adicional ?? 0),
+              0,
+            );
+            return {
+              proyecto_id: p.id,
+              nombre: p.nombre,
+              monto_cotizado: montoCotizado,
+              total_pagado: totalPagado,
+              saldo_por_cobrar: Math.max(0, montoCotizado - totalPagado),
+              total_materiales_presupuestados: totalMaterialesPresupuestados,
+              total_materiales_comprados: totalMaterialesComprados,
+              total_materiales_pagados: totalMaterialesPagados,
+              total_imprevistos_y_gastos: totalImprevistos,
+            };
+          });
   return {
     fuente: "Registros actuales consultados en ObraTrack",
+    ...(financialSummary.length ? { resumen_financiero: financialSummary } : {}),
     recepciones:
       role === "terreno"
         ? []
@@ -201,6 +270,11 @@ export function operationsContext(
       specs.map(([table, limit, fields]) => {
         const rows = (tables[table] || [])
           .filter((row) => !projectId || row.proyecto_id === projectId)
+          .map((row) =>
+            table === "actividades" && row.responsable_id && !row.responsable_nombre && usersById.has(String(row.responsable_id))
+              ? { ...row, responsable_nombre: usersById.get(String(row.responsable_id)) }
+              : row,
+          )
           .slice()
           .sort((a, b) => {
             const difference = relevance(b) - relevance(a);

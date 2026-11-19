@@ -159,11 +159,10 @@ export function prepareActionPlan(
         }
         const targetRef = String(a.actividad_id || a.nombre || '').trim();
         const isAllPartidas =
-          Boolean(respRef) &&
-          (!targetRef ||
-            /^(?:todas?|todas las partidas|todas las tareas|todas las actividades|carta gantt|gantt)$/i.test(
-              targetRef,
-            ));
+          (Boolean(respRef) && !targetRef) ||
+          /^(?:todas?|todas las partidas|todas las tareas|todas las actividades|carta gantt|gantt)$/i.test(
+            targetRef,
+          );
         if (isAllPartidas) {
           a.todas_las_partidas = true;
         } else {
@@ -175,7 +174,16 @@ export function prepareActionPlan(
           if (!act.id.startsWith('planned-')) a.actividad_id = act.id;
         }
       }
-      if (a.tipo === 'crear_actividad')
+      if (a.tipo === 'crear_actividad') {
+        const respRef =
+          (typeof a.responsable_id === 'string' && a.responsable_id.trim()) ||
+          (typeof a.responsable_nombre === 'string' && a.responsable_nombre.trim()) ||
+          '';
+        if (respRef) {
+          const worker = resolveEntity(users, respRef);
+          a.responsable_id = worker.id;
+          a.responsable_nombre = worker.nombre;
+        }
         (a.partidas || a.actividades || [a]).forEach((act: any, j: number) =>
           activities.push({
             id: `planned-act-${i}-${j}`,
@@ -183,6 +191,7 @@ export function prepareActionPlan(
             proyecto_id: p.id,
           }),
         );
+      }
       if (a.tipo === 'desasignar_trabajador')
         a.trabajador_nombre = resolveEntity(
           context.usuarios,
