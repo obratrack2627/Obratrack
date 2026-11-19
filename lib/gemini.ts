@@ -12,6 +12,7 @@ import {
   chatPrompt,
   quotePrompt,
   isQuoteRequest,
+  isQuoteFollowUp,
   isQuoteRevision,
   isMaterialPriceRequest,
   isFollowUpMaterialSearch,
@@ -78,6 +79,7 @@ export function chatGenerationRequest(
     !isMaterialPriceRequest(mensajeUsuario) &&
     !followUpSearch &&
     (isQuoteRequest(mensajeUsuario) ||
+      isQuoteFollowUp(mensajeUsuario, historial) ||
       Boolean(contextoDB.cotizacion_actual && (isQuoteRevision(mensajeUsuario) || isAlternativeRequest(mensajeUsuario))));
   const priceSearch =
     isMaterialPriceRequest(mensajeUsuario) ||

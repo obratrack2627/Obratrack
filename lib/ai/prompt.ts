@@ -148,6 +148,45 @@ export function isQuoteRequest(message: string) {
   return hasQuote && !hasAction && !requestsPlatformAction(message);
 }
 
+/** Detecta si el usuario está respondiendo los datos pedidos por ObraBot para completar una cotización en curso. */
+export function isQuoteFollowUp(
+  message: string,
+  history: { rol: string; texto: string }[] = [],
+): boolean {
+  if (!Array.isArray(history) || !history.length) return false;
+  if (requestsPlatformAction(message)) return false;
+  const clean = message
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+  if (!clean || /^(?:hol+a+|buena+s?|menu|inicio|opciones|cancelar?|no\b)/.test(clean)) return false;
+  if (/\b(?:que obras|cuales obras|saldo|pagos?|asistencia|cuadrilla|bitacora|gantt)\b/.test(clean)) return false;
+
+  const recent = history.slice(-4);
+  const lastModel = [...recent].reverse().find((m) => m.rol === "model");
+  if (!lastModel?.texto) return false;
+
+  const modelNorm = lastModel.texto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const asksQuestion =
+    lastModel.texto.includes("?") ||
+    /\b(?:necesito saber|indica(?:me)?|dime|cuentame|que\s+(?:trabajo|tipo|dimensiones|medidas|comuna|terminacion|preparacion|superficie))\b/.test(
+      modelNorm,
+    );
+  if (!asksQuestion) return false;
+
+  const asksQuoteDetails =
+    /\b(?:cotiz(?:ar|acion)|presupuesto)\b/.test(modelNorm) &&
+    /\b(?:que trabajo|dimensiones|comuna|medidas|metros|m2|tipo de|terminacion|preparacion|material|alcance|superficie|necesito saber)\b/.test(
+      modelNorm,
+    );
+  const userStartedQuote = recent.some((m) => m.rol === "user" && isQuoteRequest(m.texto || ""));
+  return asksQuoteDetails || (userStartedQuote && /\b(?:cotiz(?:ar|acion)|presupuesto)\b/.test(modelNorm));
+}
+
 export function isMaterialPriceRequest(message: string) {
   const text = message
     .normalize("NFD")

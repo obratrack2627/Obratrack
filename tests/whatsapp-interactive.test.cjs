@@ -7,9 +7,11 @@ const { NextRequest } = require("next/server");
 const {
   parseWhatsAppInteractiveReply,
   directInteractiveMenuReply,
+  isGreetingOrMenuRequest,
   buildWhatsAppInteractivePayload,
   buildMetaInteractiveRequestBody,
 } = require("../lib/whatsapp/interactive.ts");
+const { chatGenerationRequest } = require("../lib/gemini.ts");
 const { createWhatsAppWebhook } = require("../lib/whatsapp/webhook.ts");
 
 test("parseWhatsAppInteractiveReply traduce botones y listas de Meta a instrucciones deterministas", () => {
@@ -78,6 +80,40 @@ test("menú de saludo muestra Hacer cotización, Cotización pactada, Crear obra
     parseWhatsAppInteractiveReply({ type: "interactive", interactive: { type: "list_reply", list_reply: { id: "ot:menu:list_projects" } } }),
     "¿Qué obras tengo?",
   );
+
+  // Saludos como "Hola obrabottt" siempre abren el menú y conversaciones de cotización multi-turno mantienen modo quote + botones
+  assert.equal(isGreetingOrMenuRequest("Hola obrabottt"), true);
+  assert.equal(isGreetingOrMenuRequest("Buenos días obrabot"), true);
+
+  const history = [
+    { rol: "user", texto: "Quisiera cotizar" },
+    { rol: "model", texto: "¿Qué trabajo necesitas cotizar y cuáles son sus dimensiones y comuna?" },
+  ];
+  const turn2 = chatGenerationRequest(
+    history,
+    "Hay que pintar una fachada en las condes, es un muro de 2 metros de alto por 5 de largo",
+    {},
+  );
+  assert.equal(turn2.mode, "quote", "El seguimiento de cotización debe mantenerse en modo quote");
+
+  const historyTurn3 = [
+    ...history,
+    { rol: "user", texto: "Hay que pintar una fachada en las condes, es un muro de 2 metros de alto por 5 de largo" },
+    { rol: "model", texto: "Para cotizar la pintura de la fachada en Las Condes, necesito saber qué tipo de pintura o terminación buscas y si el muro requiere preparación o reparación previa." },
+  ];
+  const turn3 = chatGenerationRequest(
+    historyTurn3,
+    "Es latex sintético y el muro necesita preparación previa",
+    {},
+  );
+  assert.equal(turn3.mode, "quote", "El tercer turno de cotización debe seguir en modo quote para emitir el presupuesto");
+
+  const midQuoteButtons = buildWhatsAppInteractivePayload(
+    { respuesta: "¿Qué trabajo necesitas cotizar y cuáles son sus dimensiones y comuna?", acciones: {} },
+    { role: "admin" },
+  );
+  assert.equal(midQuoteButtons.kind, "buttons");
+  assert.deepEqual(midQuoteButtons.buttons.map((b) => b.id), ["ot:quote:standard", "ot:menu:open"]);
 });
 
 test("buildWhatsAppInteractivePayload cubre menú de obra por rol, foto ambigua y acciones contextuales", () => {

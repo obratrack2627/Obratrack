@@ -80,6 +80,10 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
         return "Quiero hacer una cotización pactada";
       case "ot:menu:prices":
         return "Quiero buscar precios de materiales";
+      case "ot:menu:open":
+        return "Menú";
+      case "ot:quote:standard":
+        return "Cotízalo ahora con estándar profesional y preparación básica incluida";
       case "ot:quote:create":
         return "Crea la obra con esta cotización";
       case "ot:quote:compare":
@@ -136,6 +140,20 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
   }
 
   return null;
+}
+
+/** Detecta saludos ("Hola", "Hola obrabottt", "Buenos días", "Menú", etc.) para abrir siempre el menú interactivo. */
+export function isGreetingOrMenuRequest(text: string): boolean {
+  const clean = String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[.!?¡¿,:;]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return /^(?:hol+a+|holi+|buena+s?|bueno+s?\s+(?:dia+s?|tarde+s?|noche+s?)|buen\s+dia+|wena+s?|hey+|alo+|menu|inicio|opciones|ayuda)(?:\s+(?:obrabot+|bot+|asistente|equipo|jefe|maestro))?$/.test(
+    clean,
+  );
 }
 
 /** Respuesta inmediata sin llamar al LLM para opciones de menú que piden datos al usuario. */
@@ -265,6 +283,26 @@ export function buildWhatsAppInteractivePayload(
         { id: "ot:quote:create", title: "🏗️ Crear obra" },
         { id: "ot:quote:compare", title: "🛒 Precios retail" },
         { id: "ot:quote:alt", title: "🔄 Otra opción" },
+      ],
+    };
+  }
+
+  // 3b. Pregunta intermedia de cotización (permite cotizar directo con estándar profesional o volver al menú).
+  const rawReply = String(result.respuesta || "");
+  if (
+    isManager &&
+    !result.cotizacion &&
+    !actions?.tipo &&
+    (rawReply.includes("?") || /\b(?:necesito saber|indica(?:me)?|cuéntame|cuentame)\b/i.test(rawReply)) &&
+    /\b(?:cotiz(?:ar|acion)|presupuesto)\b/i.test(rawReply)
+  ) {
+    return {
+      kind: "buttons",
+      body: "Puedes responder con el detalle o generar una estimación estándar inmediata:",
+      footer: "ObraBot · Cotizador",
+      buttons: [
+        { id: "ot:quote:standard", title: "⚡ Cotizar estándar" },
+        { id: "ot:menu:open", title: "📋 Menú principal" },
       ],
     };
   }
