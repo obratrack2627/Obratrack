@@ -6,6 +6,7 @@ const { NextRequest } = require("next/server");
 
 const {
   parseWhatsAppInteractiveReply,
+  directInteractiveMenuReply,
   buildWhatsAppInteractivePayload,
   buildMetaInteractiveRequestBody,
 } = require("../lib/whatsapp/interactive.ts");
@@ -33,6 +34,42 @@ test("parseWhatsAppInteractiveReply traduce botones y listas de Meta a instrucci
   assert.equal(parseWhatsAppInteractiveReply(button("ot:photo:incident")), "Registra la foto anterior como incidente o falla en obra");
   assert.equal(parseWhatsAppInteractiveReply(list("ot:project:p-1", "Casa Norte")), "Trabajar en la obra Casa Norte");
   assert.equal(parseWhatsAppInteractiveReply({ type: "button", button: { text: "Confirmar", payload: "ok" } }), "Confirmar");
+});
+
+test("menú de saludo muestra Hacer cotización, Cotización pactada, Crear obra y Ver obras para jefatura y 3 botones para terreno", () => {
+  const adminGreeting = buildWhatsAppInteractivePayload({}, { role: "admin", showGreetingMenu: true });
+  assert.equal(adminGreeting.kind, "list");
+  assert.equal(adminGreeting.buttonText, "¿Qué deseas hacer?");
+  assert.deepEqual(
+    adminGreeting.rows.map((r) => r.id),
+    ["ot:menu:quote", "ot:menu:agreed_quote", "ot:menu:create_project", "ot:menu:list_projects", "ot:menu:prices"],
+  );
+  for (const r of adminGreeting.rows) {
+    assert.ok(r.title.length <= 24, `Row title excede 24 chars: ${r.title}`);
+    assert.ok((r.description || "").length <= 72);
+  }
+
+  const workerGreeting = buildWhatsAppInteractivePayload({}, { role: "terreno", showGreetingMenu: true });
+  assert.equal(workerGreeting.kind, "buttons");
+  assert.deepEqual(workerGreeting.buttons.map((b) => b.id), ["ot:menu:list_projects", "ot:act:progress", "ot:act:incident"]);
+
+  // Respuestas inmediatas sin LLM para cotización, cotización pactada y precios
+  assert.match(
+    directInteractiveMenuReply([{ type: "interactive", interactive: { type: "list_reply", list_reply: { id: "ot:menu:quote" } } }]).respuesta,
+    /cotización/i,
+  );
+  assert.match(
+    directInteractiveMenuReply([{ type: "interactive", interactive: { type: "list_reply", list_reply: { id: "ot:menu:agreed_quote" } } }]).respuesta,
+    /cotización pactada/i,
+  );
+  assert.equal(
+    parseWhatsAppInteractiveReply({ type: "interactive", interactive: { type: "list_reply", list_reply: { id: "ot:menu:create_project" } } }),
+    "Quiero crear una obra nueva",
+  );
+  assert.equal(
+    parseWhatsAppInteractiveReply({ type: "interactive", interactive: { type: "list_reply", list_reply: { id: "ot:menu:list_projects" } } }),
+    "¿Qué obras tengo?",
+  );
 });
 
 test("buildWhatsAppInteractivePayload cubre menú de obra por rol, foto ambigua y acciones contextuales", () => {
@@ -120,11 +157,12 @@ test("buildWhatsAppInteractivePayload genera botones/listas válidos dentro de l
     assert.ok((r.description || "").length <= 72);
   }
 
-  // Verificar payload JSON exacto para Meta
-  const metaBtn = buildMetaInteractiveRequestBody("56912345678", quote, "Resumen corto");
+  // Verificar payload JSON exacto para Meta (conservando saltos de línea y viñetas en body.text)
+  const multiline = "Para crear la obra falta:\n• Nombre del cliente\n• Nombre de la obra\n\nPuedes responder estos datos juntos.";
+  const metaBtn = buildMetaInteractiveRequestBody("56912345678", quote, multiline);
   assert.equal(metaBtn.type, "interactive");
   assert.equal(metaBtn.interactive.type, "button");
-  assert.equal(metaBtn.interactive.body.text, "Resumen corto");
+  assert.equal(metaBtn.interactive.body.text, multiline);
   assert.equal(metaBtn.interactive.action.buttons.length, 3);
 
   const metaList = buildMetaInteractiveRequestBody("56912345678", listPayload);

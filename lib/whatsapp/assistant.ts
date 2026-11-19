@@ -28,7 +28,7 @@ import { AIError } from "@/lib/ai/errors";
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateAI } from "@/lib/ai/provider";
 import { canonicalPhone, downloadMetaMedia } from "./meta";
-import { buildWhatsAppInteractivePayload, parseWhatsAppInteractiveReply } from "./interactive";
+import { buildWhatsAppInteractivePayload, directInteractiveMenuReply, parseWhatsAppInteractiveReply } from "./interactive";
 import { isolatedState, planWhatsAppActions, mergeWhatsAppPlans } from "./state";
 import { checkActionPermissions } from "@/lib/ai/permissions";
 import { WHATSAPP_BRAND, whatsappCard, whatsappText, quoteWhatsApp, quoteMenuChoice, materialComparisonWhatsApp, materialBatchComparisonWhatsApp, photoReceiptWhatsApp, dailyCloseWhatsApp } from "./format";
@@ -513,8 +513,10 @@ export async function processPersonalMessage(
     registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
     const apuLesson = !attachment ? await learnApuCommand(sb, user, text, 'whatsapp') : { handled: false };
     const apuReply = apuLesson.handled ? { respuesta: apuLesson.respuesta || 'Rendimiento guardado.', accion: null, cotizacion: null, sugerencias: [] } : null;
+    const menuDirect = !attachment ? directInteractiveMenuReply(batchItems) : null;
+    const isExplicitMenuCommand = !attachment && /^(?:menu|menú|inicio|opciones)$/i.test(text.trim());
     const simpleCreation = creationRequest && !attachment && !/[,;\n]|\b(?:y registra|y envia|y asigna)\b/i.test(text) && /(?:obra|proyecto)[.!?]*$/i.test(text.trim());
-    const directWhatsAppReply = projectListing || projectRefusal || (introPause ? { respuesta: introPause.reply, accion: null, cotizacion: null, sugerencias: [] } : acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || apuReply);
+    const directWhatsAppReply = menuDirect ? { respuesta: menuDirect.respuesta, accion: null, cotizacion: null, sugerencias: [] } : isExplicitMenuCommand ? { respuesta: "¡Hola! Elige qué deseas hacer hoy en ObraTrack:", accion: null, cotizacion: null, sugerencias: [] } : projectListing || projectRefusal || (introPause ? { respuesta: introPause.reply, accion: null, cotizacion: null, sugerencias: [] } : acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || apuReply);
     let semanticReferences: any[] = [];
     let savedBudgetsContext: any[] = [];
     if (!directWhatsAppReply) {
@@ -928,10 +930,14 @@ export async function processPersonalMessage(
     (item) => item?.type === "interactive" && item?.interactive?.list_reply?.id?.startsWith("ot:project:"),
   );
   const ambiguousPhoto = Boolean(attachment && !textParts.length);
+  const showGreetingMenu =
+    Boolean(introPause && !introPause.projectId) ||
+    (!attachment && /^(?:menu|menú|inicio|opciones)$/i.test(text.trim()));
   const interactive = buildWhatsAppInteractivePayload(data, {
     role: user.rol,
     projects: tables.proyectos,
-    showProjectList: Boolean(projectListing) || Boolean(introPause && authorizedProjects.length >= 2),
+    showGreetingMenu,
+    showProjectList: Boolean(projectListing),
     selectedProjectMenu: selectedProjectTap && Boolean(contextProjectId),
     ambiguousPhoto,
     userText: text,

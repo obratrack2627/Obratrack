@@ -39,6 +39,17 @@ function clip(value: string, max: number): string {
   return `${clean.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
 }
 
+/** Conserva saltos de línea y listas en el cuerpo del mensaje interactivo de WhatsApp. */
+function clipBody(value: string, max: number): string {
+  const clean = String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
+}
+
 /**
  * Traduce un toque en botón o lista interactiva de WhatsApp Cloud API
  * a una instrucción determinista que ObraBot procesa sin ambigüedad.
@@ -59,6 +70,16 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
     const title = typeof reply.title === "string" ? reply.title.trim() : "";
 
     switch (id) {
+      case "ot:menu:create_project":
+        return "Quiero crear una obra nueva";
+      case "ot:menu:list_projects":
+        return "¿Qué obras tengo?";
+      case "ot:menu:quote":
+        return "Quiero hacer una cotización";
+      case "ot:menu:agreed_quote":
+        return "Quiero hacer una cotización pactada";
+      case "ot:menu:prices":
+        return "Quiero buscar precios de materiales";
       case "ot:quote:create":
         return "Crea la obra con esta cotización";
       case "ot:quote:compare":
@@ -117,6 +138,38 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
   return null;
 }
 
+/** Respuesta inmediata sin llamar al LLM para opciones de menú que piden datos al usuario. */
+export function directInteractiveMenuReply(batchItems: any[]): { respuesta: string } | null {
+  if (!Array.isArray(batchItems) || batchItems.length !== 1) return null;
+  const item = batchItems[0];
+  if (item?.type !== "interactive") return null;
+  const id =
+    item.interactive?.type === "list_reply"
+      ? item.interactive.list_reply?.id
+      : item.interactive?.type === "button_reply"
+        ? item.interactive.button_reply?.id
+        : null;
+  switch (id) {
+    case "ot:menu:quote":
+      return {
+        respuesta:
+          "Perfecto, hagamos una cotización. Cuéntame qué trabajo quieres cotizar, medidas aproximadas (m² o unidades) y la comuna, y te preparo el presupuesto con materiales, mano de obra y PDF.",
+      };
+    case "ot:menu:agreed_quote":
+      return {
+        respuesta:
+          "Perfecto, preparemos una cotización pactada. Indícame el trabajo, el precio total ya acordado (con IVA incluido o + IVA), el cliente y los días estimados.",
+      };
+    case "ot:menu:prices":
+      return {
+        respuesta:
+          "Dime qué material necesitas cotizar (por ejemplo: 20 sacos de cemento de 25 kg o 10 planchas de yeso cartón) y comparo precios reales en tiendas.",
+      };
+    default:
+      return null;
+  }
+}
+
 /**
  * Determina si una respuesta de ObraBot debe incluir botones o lista interactiva nativa de WhatsApp.
  */
@@ -125,6 +178,7 @@ export function buildWhatsAppInteractivePayload(
   options?: {
     role?: string;
     projects?: Array<{ id: string; nombre: string; estado?: string; comuna?: string | null }>;
+    showGreetingMenu?: boolean;
     showProjectList?: boolean;
     selectedProjectMenu?: boolean;
     ambiguousPhoto?: boolean;
@@ -135,6 +189,36 @@ export function buildWhatsAppInteractivePayload(
   const actions = result.acciones || {};
   const role = options?.role || actions?.rol_actor || "admin";
   const isManager = role === "admin" || role === "supervisor";
+
+  // 0. Menú principal al saludar ("Hola", "Buenos días", "Menú", etc.).
+  if (options?.showGreetingMenu) {
+    if (isManager) {
+      return {
+        kind: "list",
+        body: "¡Hola! ¿Qué deseas hacer hoy en ObraTrack?",
+        footer: "ObraBot · Menú principal",
+        buttonText: "¿Qué deseas hacer?",
+        sectionTitle: "Opciones principales",
+        rows: [
+          { id: "ot:menu:quote", title: "Hacer cotización", description: "Estimar materiales, mano de obra y PDF" },
+          { id: "ot:menu:agreed_quote", title: "Cotización pactada", description: "Emitir cotización con precio ya acordado" },
+          { id: "ot:menu:create_project", title: "Crear obra", description: "Registrar una obra nueva paso a paso" },
+          { id: "ot:menu:list_projects", title: "Ver obras", description: "Listar y elegir una de tus obras" },
+          { id: "ot:menu:prices", title: "Buscar precios", description: "Comparar materiales en tiendas chilenas" },
+        ],
+      };
+    }
+    return {
+      kind: "buttons",
+      body: "¡Hola! ¿Qué deseas hacer hoy en tu obra?",
+      footer: "ObraBot · Terreno",
+      buttons: [
+        { id: "ot:menu:list_projects", title: "Ver mis obras" },
+        { id: "ot:act:progress", title: "Subir avance" },
+        { id: "ot:act:incident", title: "Reportar incidente" },
+      ],
+    };
+  }
 
   // 1. Seguimiento opcional de asignación de cuadrilla tras crear obra.
   if (
@@ -310,7 +394,7 @@ export function buildMetaInteractiveRequestBody(
   payload: WhatsAppInteractivePayload,
   bodyOverride?: string,
 ) {
-  const bodyText = clip(bodyOverride || payload.body, META_BODY_MAX);
+  const bodyText = clipBody(bodyOverride || payload.body, META_BODY_MAX);
   const footer = payload.footer ? { text: clip(payload.footer, META_FOOTER_MAX) } : undefined;
 
   if (payload.kind === "buttons") {
