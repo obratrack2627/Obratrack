@@ -81,3 +81,45 @@ test('reportes permite eliminar un registro con confirmación explícita', async
   await expect.poll(() => deletedId).toBe('msg-rep-1');
   await expect(page.getByRole('heading', { name: 'Avance de losa' })).toHaveCount(0);
 });
+
+test('avisos enviados permite eliminar un registro con confirmación explícita', async ({ page }) => {
+  await setup(page, {}, true);
+  let deletedAvisoId = '';
+  const initialAvisos = [
+    {
+      id: '11111111-1111-4111-a111-111111111111',
+      destinatarios: 2,
+      mensaje: 'Mañana hormigonamos a las 08:00',
+      origen: 'plataforma',
+      created_at: '2026-11-16T15:00:00Z',
+      estados: { entregado: 2 },
+    },
+  ];
+  await page.route('**/api/whatsapp/mensajes*', (r) => r.fulfill({ json: { gestion: true, total: 0, autores: [], obras: [], mensajes: [] } }));
+  await page.route('**/api/whatsapp/avisos*', async (route) => {
+    if (route.request().method() === 'DELETE') {
+      deletedAvisoId = new URL(route.request().url()).searchParams.get('id') || '';
+      await route.fulfill({ json: { deleted: true, id: deletedAvisoId } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        total: deletedAvisoId ? 0 : 1,
+        pagina: 0,
+        avisos: deletedAvisoId ? [] : initialAvisos,
+      },
+    });
+  });
+
+  await page.goto('/reportes');
+  await page.getByRole('tab', { name: 'Avisos enviados', exact: true }).click();
+  await expect(page.getByText('Mañana hormigonamos a las 08:00', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Eliminar aviso/ }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Confirmar eliminación de aviso' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Eliminar', exact: true }).click();
+
+  await expect.poll(() => deletedAvisoId).toBe('11111111-1111-4111-a111-111111111111');
+  await expect(page.getByText('Mañana hormigonamos a las 08:00', { exact: true })).toHaveCount(0);
+});

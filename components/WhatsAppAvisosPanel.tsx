@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Loader2, Trash2 } from "lucide-react";
 import { aiHeaders } from "@/lib/ai/client";
 import MaskedField from "@/components/MaskedField";
+import ModalOverlay from "@/components/ModalOverlay";
 import { maskPhone } from "@/lib/privacy/mask";
 const labels: Record<string, string> = {
   pendiente: "Pendiente",
@@ -30,6 +32,9 @@ export default function WhatsAppAvisosPanel() {
     [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null),
     [details, setDetails] = useState<any[]>([]);
+  const [avisoToDelete, setAvisoToDelete] = useState<{ id: string; preview: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   async function recipients(id: string) {
     const r = await fetch("/api/whatsapp/avisos?id=" + encodeURIComponent(id), {
       headers: await aiHeaders(),
@@ -82,6 +87,32 @@ export default function WhatsAppAvisosPanel() {
       setBusy(false);
     }
   }
+  async function confirmDeleteAviso() {
+    if (!avisoToDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const r = await fetch(
+        `/api/whatsapp/avisos?id=${encodeURIComponent(avisoToDelete.id)}`,
+        { method: "DELETE", headers: await aiHeaders() },
+      );
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        throw new Error(body.error || "No se pudo eliminar el aviso.");
+      }
+      setRows((prev) => prev.filter((item) => item.id !== avisoToDelete.id));
+      setTotal((prev) => Math.max(0, prev - 1));
+      if (open === avisoToDelete.id) {
+        setOpen(null);
+        setDetails([]);
+      }
+      setAvisoToDelete(null);
+    } catch (e) {
+      setDeleteError((e as Error).message);
+    } finally {
+      setDeleting(false);
+    }
+  }
   return (
     <section className="min-w-0 space-y-4" aria-label="Avisos enviados al equipo">
       <div className="flex flex-wrap justify-between gap-3">
@@ -132,10 +163,30 @@ export default function WhatsAppAvisosPanel() {
             <p className="font-semibold">
               Aviso a {row.destinatarios} destinatario(s)
             </p>
-            <p className="text-xs text-gray-500">
-              {date(row.created_at)} ·{" "}
-              {row.origen === "whatsapp" ? "WhatsApp" : "Plataforma"}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-gray-500">
+                {date(row.created_at)} ·{" "}
+                {row.origen === "whatsapp" ? "WhatsApp" : "Plataforma"}
+              </p>
+              <button
+                type="button"
+                aria-label={`Eliminar aviso (${String(row.mensaje || "").slice(0, 40)})`}
+                title="Eliminar aviso"
+                onClick={() => {
+                  setDeleteError("");
+                  setAvisoToDelete({
+                    id: row.id,
+                    preview:
+                      String(row.mensaje || "").length > 80
+                        ? `${String(row.mensaje).slice(0, 80)}…`
+                        : String(row.mensaje || "Aviso enviado"),
+                  });
+                }}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           </div>
           <p className="text-sm whitespace-pre-wrap break-words">
             {row.mensaje}
@@ -244,6 +295,57 @@ export default function WhatsAppAvisosPanel() {
             Siguiente
           </button>
         </div>
+      )}
+      {avisoToDelete && (
+        <ModalOverlay
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirmar eliminación de aviso"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] p-5 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 shrink-0">
+                <Trash2 className="w-4 h-4" />
+              </span>
+              <div className="min-w-0 space-y-1">
+                <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white">
+                  Eliminar aviso
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-300 break-words">
+                  Se eliminará el aviso &ldquo;{avisoToDelete.preview}&rdquo; y su historial de entregas. Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            {deleteError && (
+              <p role="alert" className="text-xs text-red-700 dark:text-red-400">
+                {deleteError}
+              </p>
+            )}
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => {
+                  setAvisoToDelete(null);
+                  setDeleteError("");
+                }}
+                className="px-3.5 py-2 rounded-xl border border-kraft-200 dark:border-[#263040] text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-kraft-50 dark:hover:bg-[#1E2530] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void confirmDeleteAviso()}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold disabled:opacity-50"
+              >
+                {deleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{deleting ? "Eliminando…" : "Eliminar"}</span>
+              </button>
+            </div>
+          </div>
+        </ModalOverlay>
       )}
     </section>
   );

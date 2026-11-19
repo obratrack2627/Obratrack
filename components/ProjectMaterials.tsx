@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Check,
   CheckCircle2,
   Clock,
   Edit2,
+  Eye,
+  EyeOff,
   Package,
   PackageCheck,
   Trash2,
@@ -17,6 +19,8 @@ import { dataService } from '@/lib/data-service';
 import { materialNeeds } from '@/lib/construction-workflow';
 import { formatMaterialCategory } from '@/lib/materials/format';
 import { chileToday } from '@/lib/work-calendar';
+import MaskedMoneyAmount from '@/components/MaskedMoneyAmount';
+import { MASKED_CLP_AMOUNT } from '@/lib/privacy/mask';
 
 type ProjectMaterialsProps = {
   projectId?: string;
@@ -48,7 +52,14 @@ export default function ProjectMaterials({
   const activeProjectId = projectId || materials[0]?.proyecto_id || '';
 
   const [savingIds, setSavingIds] = useState<Record<string, boolean>>({});
+  const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!Object.keys(revealedIds).length) return;
+    const timer = window.setTimeout(() => setRevealedIds({}), 30000);
+    return () => window.clearTimeout(timer);
+  }, [revealedIds]);
   const [receiving, setReceiving] = useState<MaterialProyecto | null>(null);
   const [receivedQty, setReceivedQty] = useState('');
   const [receivedNote, setReceivedNote] = useState('');
@@ -308,16 +319,16 @@ export default function ProjectMaterials({
           <span>{summary.receivedCount} recibidos</span>
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tabular-nums">
-          <span>
-            Presupuestado:{' '}
+          <span className="inline-flex items-center gap-1">
+            <span>Presupuestado:</span>
             <strong className="font-semibold text-gray-800 dark:text-gray-200">
-              {clp(summary.totalSubtotal)}
+              <MaskedMoneyAmount value={summary.totalSubtotal} label="Total presupuestado en materiales" compact />
             </strong>
           </span>
-          <span>
-            Pagado:{' '}
+          <span className="inline-flex items-center gap-1">
+            <span>Pagado:</span>
             <strong className="font-semibold text-emerald-700 dark:text-emerald-400">
-              {clp(summary.paidSubtotal)}
+              <MaskedMoneyAmount value={summary.paidSubtotal} label="Total pagado en materiales" compact />
             </strong>
           </span>
         </div>
@@ -384,14 +395,38 @@ export default function ProjectMaterials({
                   </div>
 
                   {/* Cantidad y costo */}
-                  <div className="lg:col-span-2 lg:text-right min-w-0 flex items-baseline justify-between lg:block gap-2">
-                    <span className="font-mono font-semibold text-navy-900 dark:text-white tabular-nums">
-                      {clp(material.subtotal)}
-                    </span>
-                    <span className="block text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
-                      {formatQty(material.cantidad)} {material.unidad} × {clp(material.precio_unitario)}
-                    </span>
-                  </div>
+                  {(() => {
+                    const isMoneyRevealed = Boolean(revealedIds[material.id]);
+                    return (
+                      <div className="lg:col-span-2 lg:text-right min-w-0 flex items-baseline justify-between lg:block gap-2">
+                        <span className="inline-flex items-center gap-1 font-mono font-semibold text-navy-900 dark:text-white tabular-nums">
+                          <span>{isMoneyRevealed ? clp(material.subtotal) : MASKED_CLP_AMOUNT}</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRevealedIds((prev) => ({
+                                ...prev,
+                                [material.id]: !prev[material.id],
+                              }))
+                            }
+                            aria-label={
+                              isMoneyRevealed
+                                ? `Ocultar montos de ${material.nombre}`
+                                : `Mostrar montos de ${material.nombre}`
+                            }
+                            aria-pressed={isMoneyRevealed}
+                            title={isMoneyRevealed ? 'Ocultar montos' : 'Mostrar montos'}
+                            className="inline-flex items-center justify-center p-0.5 rounded text-gray-400 hover:text-obra-orange hover:bg-kraft-100 dark:hover:bg-[#1E2633] transition-colors shrink-0"
+                          >
+                            {isMoneyRevealed ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          </button>
+                        </span>
+                        <span className="block text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                          {formatQty(material.cantidad)} {material.unidad} × {isMoneyRevealed ? clp(material.precio_unitario) : MASKED_CLP_AMOUNT}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Recepción en obra */}
                   <div className="lg:col-span-2 min-w-0 flex flex-wrap lg:flex-col items-center lg:items-start justify-between gap-1">

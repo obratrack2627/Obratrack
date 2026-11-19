@@ -1,11 +1,12 @@
 'use client';
 import { chileToday } from '@/lib/ai/project-deadlines';
 
-import MoneyAmount from "@/components/MoneyAmount";
+import MaskedMoneyAmount from "@/components/MaskedMoneyAmount";
 import ActionMenu from '@/components/ActionMenu';
 import ProjectMaterials from '@/components/ProjectMaterials';
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
+import { MASKED_CLP_AMOUNT } from '@/lib/privacy/mask';
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -13,6 +14,8 @@ import { useParams } from 'next/navigation';
 import {
   ArrowLeft,
   DollarSign,
+  Eye,
+  EyeOff,
   Plus,
   GanttChartSquare,
   AlertTriangle,
@@ -65,8 +68,15 @@ export default function ProyectoFinanzasPage() {
   const [imprevistos, setImprevistos] = useState<Imprevisto[]>([]);
   const [materiales, setMateriales] = useState<MaterialProyecto[]>([]);
   const [financeSection, setFinanceSection] = useState('resumen');
+  const [flowChartRevealed, setFlowChartRevealed] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const submitLockRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!flowChartRevealed) return;
+    const timer = window.setTimeout(() => setFlowChartRevealed(false), 30000);
+    return () => window.clearTimeout(timer);
+  }, [flowChartRevealed]);
   
   // Modales de Creación
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -668,7 +678,9 @@ export default function ProyectoFinanzasPage() {
                 <FileText className="w-4 h-4" />
               </div>
             </div>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white"><MoneyAmount value={montoCotizado} /></h3>
+            <div className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-white">
+              <MaskedMoneyAmount value={montoCotizado} label="Monto cotizado total" />
+            </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">Presupuesto acordado</p>
           </div>
 
@@ -679,7 +691,9 @@ export default function ProyectoFinanzasPage() {
                 <CheckCircle2 className="w-4 h-4" />
               </div>
             </div>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#6B8F72]"><MoneyAmount value={totalPagado} /></h3>
+            <div className="text-xl sm:text-2xl font-bold font-mono text-[#6B8F72]">
+              <MaskedMoneyAmount value={totalPagado} label="Total recaudado" />
+            </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">{porcentajePagado}% del total presupuestado</p>
           </div>
 
@@ -690,7 +704,9 @@ export default function ProyectoFinanzasPage() {
                 <DollarSign className="w-4 h-4" />
               </div>
             </div>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-[#FF6A00]"><MoneyAmount value={saldoPendiente} /></h3>
+            <div className="text-xl sm:text-2xl font-bold font-mono text-[#FF6A00]">
+              <MaskedMoneyAmount value={saldoPendiente} label="Saldo por cobrar" />
+            </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">Estados de pago pendientes</p>
           </div>
 
@@ -701,7 +717,9 @@ export default function ProyectoFinanzasPage() {
                 <Package className="w-4 h-4" />
               </div>
             </div>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-gray-200"><MoneyAmount value={totalCostosDirectos} /></h3>
+            <div className="text-xl sm:text-2xl font-bold font-mono text-navy-900 dark:text-gray-200">
+              <MaskedMoneyAmount value={totalCostosDirectos} label="Costos considerados" />
+            </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">Materiales e imprevistos</p>
           </div>
 
@@ -725,27 +743,39 @@ export default function ProyectoFinanzasPage() {
                 {porcentajeDisponible}%
               </span>
             </div>
-            <h3 className={`text-xl sm:text-2xl font-bold font-mono ${
+            <div className={`text-xl sm:text-2xl font-bold font-mono ${
               porcentajeDisponible >= 25
                 ? 'text-[#6B8F72]'
                 : porcentajeDisponible >= 10
                 ? 'text-amber-500'
                 : 'text-red-500'
             }`}>
-              <MoneyAmount value={saldoTrasCostos} />
-            </h3>
+              <MaskedMoneyAmount value={saldoTrasCostos} label="Saldo del presupuesto" />
+            </div>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 font-sans mt-1">
               Materiales previstos y gastos registrados. Registra los gastos de mano de obra.
             </p>
           </div>
-        </div></CompactSummary><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-gray-700 dark:bg-[#141A23]"><p className="text-xs text-gray-500">Mano de obra registrada</p><strong className="mt-1 block text-xl"><MoneyAmount value={totalJornales}/></strong></div><div className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-gray-700 dark:bg-[#141A23]"><p className="text-xs text-gray-500">Flujo registrado de la obra</p><strong className="mt-1 block text-xl"><MoneyAmount value={flujoRegistrado}/></strong><p className="mt-1 text-xs text-gray-500">Cobros menos pagos confirmados de gastos y materiales. No equivale al saldo bancario.</p></div></div>
+        </div></CompactSummary><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-gray-700 dark:bg-[#141A23]"><p className="text-xs text-gray-500">Mano de obra registrada</p><div className="mt-1 text-xl font-bold font-mono text-navy-900 dark:text-white"><MaskedMoneyAmount value={totalJornales} label="Mano de obra registrada" /></div></div><div className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-gray-700 dark:bg-[#141A23]"><p className="text-xs text-gray-500">Flujo registrado de la obra</p><div className="mt-1 text-xl font-bold font-mono text-navy-900 dark:text-white"><MaskedMoneyAmount value={flujoRegistrado} label="Flujo registrado de la obra" /></div><p className="mt-1 text-xs text-gray-500">Cobros menos pagos confirmados de gastos y materiales. No equivale al saldo bancario.</p></div></div>
 
         {/* Gráfico y Paneles de Control */}
         <div className={financeSection === 'materiales' ? 'hidden' : 'grid grid-cols-1 gap-6'}>
           
           {/* Gráfico Donut de Rentabilidad */}
           <div className={`${financeSection === 'resumen' ? 'flex' : 'hidden'} bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex-col justify-between items-center text-center`}>
-            <h4 className="font-heading font-bold text-sm text-navy-900 self-start">Distribución de Flujo</h4>
+            <div className="w-full flex items-center justify-between gap-2">
+              <h4 className="font-heading font-bold text-sm text-navy-900">Distribución de Flujo</h4>
+              <button
+                type="button"
+                onClick={() => setFlowChartRevealed((prev) => !prev)}
+                aria-label={flowChartRevealed ? 'Ocultar montos de Distribución de Flujo' : 'Mostrar montos de Distribución de Flujo'}
+                aria-pressed={flowChartRevealed}
+                title={flowChartRevealed ? 'Ocultar montos' : 'Mostrar montos'}
+                className="inline-flex items-center justify-center p-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50/80 dark:bg-[#1E2633] text-gray-500 hover:text-[#FF6A00] transition-colors shrink-0"
+              >
+                {flowChartRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
             
             <div className="w-full h-48 my-2">
               {montoCotizado === 0 && totalPagado === 0 ? (
@@ -768,7 +798,7 @@ export default function ProyectoFinanzasPage() {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => [formatCLP(value), '']} />
+                    <Tooltip formatter={(value: number) => [flowChartRevealed ? formatCLP(value) : MASKED_CLP_AMOUNT, '']} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
@@ -778,16 +808,16 @@ export default function ProyectoFinanzasPage() {
             <div className="w-full space-y-1 text-xs font-mono pt-2 border-t border-kraft-200">
               <div className="flex justify-between items-center text-obra-green">
                 <span>● Cobrado:</span>
-                <span>{formatCLP(totalPagado)}</span>
+                <span>{flowChartRevealed ? formatCLP(totalPagado) : MASKED_CLP_AMOUNT}</span>
               </div>
               <div className="flex justify-between items-center text-obra-orange">
                 <span>● Por Cobrar:</span>
-                <span>{formatCLP(saldoPendiente)}</span>
+                <span>{flowChartRevealed ? formatCLP(saldoPendiente) : MASKED_CLP_AMOUNT}</span>
               </div>
               {totalImprevistos > 0 && (
                 <div className="flex justify-between items-center text-obra-red">
                   <span>● Imprevistos:</span>
-                  <span>{formatCLP(totalImprevistos)}</span>
+                  <span>{flowChartRevealed ? formatCLP(totalImprevistos) : MASKED_CLP_AMOUNT}</span>
                 </div>
               )}
             </div>
@@ -841,7 +871,7 @@ export default function ProyectoFinanzasPage() {
                             {pago.nota ? <span className="text-gray-500 dark:text-gray-400"> · {pago.nota}</span> : null}
                           </td>
                           <td className="py-2.5 pr-3 whitespace-nowrap text-right font-mono font-semibold text-navy-900 dark:text-white">
-                            {formatCLP(pago.monto)}
+                            <MaskedMoneyAmount value={pago.monto} label={`Monto de pago del ${formatDate(pago.fecha)}`} compact />
                           </td>
                           <td className="py-2.5 text-right whitespace-nowrap">
                             <div className="inline-flex items-center justify-end gap-1">
@@ -925,7 +955,7 @@ export default function ProyectoFinanzasPage() {
                             {imp.origen === 'whatsapp_ia' ? ' · IA' : ''}
                           </td>
                           <td className="py-2.5 pr-3 whitespace-nowrap text-right font-mono font-semibold text-obra-red">
-                            {formatCLP(imp.monto)}
+                            <MaskedMoneyAmount value={imp.monto} label={`Monto de ${imp.descripcion}`} compact />
                           </td>
                           <td className="py-2.5 pr-3 whitespace-nowrap">
                             <span

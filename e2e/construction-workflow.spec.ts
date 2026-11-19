@@ -178,6 +178,8 @@ test("materiales se muestran en lista, aíslan compra/pago entre filas y permite
   await page.getByRole("button", { name: "Guardar Cambios", exact: true }).click();
 
   await expect(rows.nth(0)).toContainText("Sodimac Homecenter");
+  await expect(rows.nth(0)).toContainText("$ *******");
+  await rows.nth(0).getByRole("button", { name: "Mostrar montos de Cemento Polpaico", exact: true }).click();
   await expect(rows.nth(0)).toContainText("$60.000");
   expect(db.materiales_proyecto.find((m) => m.id === "mat-a")?.unidad).toBe("saco");
 });

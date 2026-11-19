@@ -197,3 +197,43 @@ test('Bloque 4A: outbox reintenta ante fallo transitorio 503 al consultar planti
   assert.equal(saved.estado, 'pendiente');
   assert.equal(saved.reintentos, 1);
 });
+
+test('Bloque 4A: DELETE /api/whatsapp/avisos valida rol, empresa y elimina aviso propio', async () => {
+  const avisoOwnId = '11111111-1111-4111-a111-111111111111';
+  const avisoOtherId = '22222222-2222-4222-a222-222222222222';
+  fixture.tables.set('whatsapp_avisos', [
+    { id: avisoOwnId, empresa_id: 'emp-1', actor_id: 'u1', mensaje: 'Reunión mañana' },
+    { id: avisoOtherId, empresa_id: 'emp-2', actor_id: 'u2', mensaje: 'Ajeno' },
+  ]);
+
+  let role = 'terreno';
+  server.authorizeAI = async () => ({
+    client: fixture.supabase,
+    user: { id: 'u1', empresa_id: 'emp-1', rol: role, nombre: 'Usuario' },
+  });
+
+  const avisosRoute = require('../app/api/whatsapp/avisos/route.ts');
+
+  const denied = await avisosRoute.DELETE(
+    new NextRequest(`https://example.test/api/whatsapp/avisos?id=${avisoOwnId}`, { method: 'DELETE' }),
+  );
+  assert.equal(denied.status, 403);
+
+  role = 'admin';
+  const badId = await avisosRoute.DELETE(
+    new NextRequest('https://example.test/api/whatsapp/avisos?id=invalid-id', { method: 'DELETE' }),
+  );
+  assert.equal(badId.status, 400);
+
+  const foreign = await avisosRoute.DELETE(
+    new NextRequest(`https://example.test/api/whatsapp/avisos?id=${avisoOtherId}`, { method: 'DELETE' }),
+  );
+  assert.equal(foreign.status, 404);
+
+  const ok = await avisosRoute.DELETE(
+    new NextRequest(`https://example.test/api/whatsapp/avisos?id=${avisoOwnId}`, { method: 'DELETE' }),
+  );
+  assert.equal(ok.status, 200);
+  const remaining = fixture.tables.get('whatsapp_avisos') || [];
+  assert.deepEqual(remaining.map((r) => r.id), [avisoOtherId]);
+});
