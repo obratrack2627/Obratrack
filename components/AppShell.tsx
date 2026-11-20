@@ -26,6 +26,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     pathname === '/actualizar-password' ||
     pathname.startsWith('/actualizar-password');
 
+  const isLandingPage = pathname === '/';
+
   return (
     <ThemeProvider>
       <PwaSplash />
@@ -33,9 +35,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <AppNavigation />
       {isAuthPage ? (
         <main className="min-h-screen w-full bg-[var(--bg-page)] text-[var(--text-primary)] antialiased workspace-ui page-fade-enter transition-colors duration-200">
-          <div className="fixed top-4 right-4 z-40 print:hidden">
-            <ThemeToggle />
-          </div>
+          {!isLandingPage && (
+            <div className="fixed top-4 right-4 z-40 print:hidden">
+              <ThemeToggle />
+            </div>
+          )}
           {children}
         </main>
       ) : (

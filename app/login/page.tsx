@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Eye, EyeOff, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, CheckCircle2, Loader2, ArrowLeft } from 'lucide-react';
 import BlueprintBrandPanel from '@/components/BlueprintBrandPanel';
 import LegalTermsModal from '@/components/LegalTermsModal';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
@@ -871,10 +871,20 @@ function LoginForm() {
           <rect width="100%" height="100%" fill="url(#arch-draft-grid)" />
         </svg>
 
-        {/* Distintivo de ingeniería / faena */}
-        <div className="relative z-10 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EFEBE1]/80 dark:bg-[#141B26]/80 border border-[#DDD5C5] dark:border-[#263346] text-[11px] font-mono font-medium text-[#6B6355] dark:text-gray-300 mb-6 backdrop-blur-xs">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#FF6A00]" />
-          <span>PORTAL DE ACCESO A FAENA</span>
+        {/* Acceso rápido de vuelta a la landing + distintivo de ingeniería */}
+        <div className="relative z-10 w-full max-w-[440px] flex flex-wrap items-center justify-between gap-2 mb-6">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/85 dark:bg-[#141B26]/85 border border-[#DDD5C5] dark:border-[#263346] text-[11px] font-mono font-semibold text-[#3A3835] dark:text-gray-200 hover:border-[#FF6A00] hover:text-[#FF6A00] dark:hover:text-[#FF6A00] transition-colors shadow-sm"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Volver al sitio</span>
+          </Link>
+
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EFEBE1]/80 dark:bg-[#141B26]/80 border border-[#DDD5C5] dark:border-[#263346] text-[11px] font-mono font-medium text-[#6B6355] dark:text-gray-300 backdrop-blur-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#FF6A00]" />
+            <span>PORTAL DE ACCESO A FAENA</span>
+          </div>
         </div>
 
         <div
@@ -951,6 +961,13 @@ function LoginForm() {
         </div>
 
         <footer className="relative z-10 mt-7 flex flex-wrap items-center justify-center gap-3 text-[11px] text-[#8C867C] dark:text-gray-500">
+          <Link
+            href="/"
+            className="hover:text-gray-900 dark:hover:text-gray-300 font-medium"
+          >
+            Inicio
+          </Link>
+          <span aria-hidden="true">·</span>
           <Link
             href="/precios"
             className="hover:text-gray-900 dark:hover:text-gray-300"

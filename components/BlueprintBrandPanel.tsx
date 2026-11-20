@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import Link from 'next/link';
 import Logo from '@/components/Logo';
 
 export default function BlueprintBrandPanel() {
@@ -39,7 +40,9 @@ export default function BlueprintBrandPanel() {
       <header className="lg:hidden bg-[#141920] border-b border-[#222A36] shrink-0">
         <div className="h-[2px] w-full bg-[#FF6A00]" />
         <div className="px-5 py-3.5 pr-16 flex items-center justify-between">
-          <Logo variant="horizontal" theme="dark" size="sm" />
+          <Link href="/" aria-label="Volver al inicio de ObraTrack" className="hover:opacity-90 transition-opacity">
+            <Logo variant="horizontal" theme="dark" size="sm" />
+          </Link>
           <span className="text-[11px] font-mono text-[#94A3B8] hidden sm:inline uppercase tracking-wider">
             El copiloto digital del constructor
           </span>
@@ -278,7 +281,9 @@ export default function BlueprintBrandPanel() {
         {/* Contenido centrado */}
         <div className="relative z-20 flex-1 flex flex-col items-center justify-center p-8 xl:p-12 text-center my-auto">
           <div className="max-w-sm flex flex-col items-center">
-            <Logo variant="vertical" theme="dark" size="lg" className="mb-6" />
+            <Link href="/" aria-label="Ir al sitio principal de ObraTrack" className="hover:opacity-90 transition-opacity">
+              <Logo variant="vertical" theme="dark" size="lg" className="mb-6" />
+            </Link>
 
             <h2 className="font-heading text-2xl xl:text-[28px] font-semibold text-white tracking-tight leading-tight">
               Tus obras bajo control

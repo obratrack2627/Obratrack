@@ -17,7 +17,7 @@ export default function PreciosPublicosPage() {
     <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0B0E14] text-[#1E1E1E] dark:text-gray-100">
       <header className="border-b border-kraft-200 dark:border-[#263040] bg-white/90 dark:bg-[#141A23]/90 backdrop-blur">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
-          <Link href="/login" aria-label="Volver al inicio de sesión ObraTrack">
+          <Link href="/" aria-label="Volver al inicio de ObraTrack">
             <Logo variant="horizontal" size="sm" />
           </Link>
           <div className="flex items-center gap-3">
