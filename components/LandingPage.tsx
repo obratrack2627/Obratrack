@@ -134,10 +134,40 @@ export default function LandingPage() {
   const [roiMonto, setRoiMonto] = useState(15000000);
   const [roiMeses, setRoiMeses] = useState(3);
 
-  // Billing toggle state
+  // Billing toggle & mobile plans carousel state
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('mensual');
+  const [activePlanSlide, setActivePlanSlide] = useState(0);
 
   const tiltRef = useRef<HTMLDivElement | null>(null);
+  const plansCarouselRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollToPlan = (index: number) => {
+    setActivePlanSlide(index);
+    const container = plansCarouselRef.current;
+    if (!container) return;
+    const card = container.children[index] as HTMLElement | undefined;
+    if (!card) return;
+    const targetLeft = card.offsetLeft - (container.clientWidth - card.clientWidth) / 2;
+    container.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+  };
+
+  const handlePlansScroll = () => {
+    const container = plansCarouselRef.current;
+    if (!container) return;
+    const center = container.scrollLeft + container.clientWidth / 2;
+    let closestIdx = 0;
+    let minDist = Number.POSITIVE_INFINITY;
+    Array.from(container.children).forEach((child, idx) => {
+      const el = child as HTMLElement;
+      const elCenter = el.offsetLeft + el.clientWidth / 2;
+      const dist = Math.abs(elCenter - center);
+      if (dist < minDist) {
+        minDist = dist;
+        closestIdx = idx;
+      }
+    });
+    setActivePlanSlide(closestIdx);
+  };
 
   // Derived quote math
   const quoteCalc = useMemo(() => {
@@ -417,18 +447,18 @@ export default function LandingPage() {
           headerScrolled ? 'shadow-md' : ''
         }`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-2 sm:gap-4">
           {/* Official Brand Logo + Wordmark Only */}
           <a
             href="#"
-            className="flex items-center gap-2.5 shrink-0 whitespace-nowrap group"
+            className="flex items-center gap-2 sm:gap-2.5 shrink-0 whitespace-nowrap group"
             aria-label="ObraTrack Inicio"
           >
             <ObraTrackIcon
               theme="light"
-              className="w-10 h-10 shrink-0 transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-2"
+              className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-2"
             />
-            <span className="font-heading text-2xl font-extrabold tracking-tight leading-none">
+            <span className="font-heading text-xl sm:text-2xl font-extrabold tracking-tight leading-none">
               <span className="text-[#FF6A00]">Obra</span>
               <span className="text-[#1E1E1E] dark:text-white">Track</span>
             </span>
@@ -466,10 +496,10 @@ export default function LandingPage() {
             </Link>
             <Link
               href="/login"
-              className="landing-shimmer px-4 sm:px-5 py-2.5 rounded-xl bg-[#FF6A00] text-white font-heading font-bold text-sm hover:bg-[#E05E00] transition shadow-md shadow-[#FF6A00]/25 inline-flex items-center gap-1.5 whitespace-nowrap group"
+              className="landing-shimmer px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-[#FF6A00] text-white font-heading font-bold text-xs sm:text-sm hover:bg-[#E05E00] transition shadow-md shadow-[#FF6A00]/25 inline-flex items-center gap-1.5 whitespace-nowrap group"
             >
               <span>Crear Cuenta</span>
-              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+              <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
 
             <button
@@ -536,7 +566,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
             {/* Left Column */}
             <div className="lg:col-span-7 landing-reveal landing-delay-1">
-              <h1 className="font-heading text-4xl sm:text-5xl lg:text-[54px] font-extrabold text-[#1E1E1E] dark:text-white tracking-tight leading-[1.08]">
+              <h1 className="font-heading text-[32px] sm:text-5xl lg:text-[54px] font-extrabold text-[#1E1E1E] dark:text-white tracking-tight leading-[1.1] sm:leading-[1.08]">
                 Cotiza en minutos.
                 <br />
                 <span className="text-[#FF6A00]">
@@ -621,7 +651,7 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 p-3 bg-[#FAF8F5] dark:bg-[#0B0E14] rounded-xl text-xs mb-4 border border-[#E5E7EB] dark:border-[#263040]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#FAF8F5] dark:bg-[#0B0E14] rounded-xl text-xs mb-4 border border-[#E5E7EB] dark:border-[#263040]">
                   <div>
                     <div className="font-bold text-[#FF6A00] text-[10px] flex items-center gap-1 uppercase">
                       <User className="w-3 h-3" /> CLIENTE
@@ -629,7 +659,7 @@ export default function LandingPage() {
                     <div className="font-bold text-[#1E1E1E] dark:text-white mt-0.5">Constructora del Norte S.A.</div>
                     <div className="text-[11px] text-[#64748B] dark:text-gray-400 font-mono">RUT: 76.412.890-K</div>
                   </div>
-                  <div>
+                  <div className="pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[#E5E7EB] dark:border-[#263040]">
                     <div className="font-bold text-[#FF6A00] text-[10px] flex items-center gap-1 uppercase">
                       <MapPin className="w-3 h-3" /> OBRA
                     </div>
@@ -639,12 +669,12 @@ export default function LandingPage() {
                 </div>
 
                 <div className="rounded-xl overflow-hidden border border-[#E5E7EB] dark:border-[#263040] mb-3">
-                  <div className="bg-[#141A23] text-white text-[10px] font-mono uppercase grid grid-cols-12 py-2 px-3 font-bold">
+                  <div className="bg-[#141A23] text-white text-[10px] font-mono uppercase grid grid-cols-12 py-2 px-2.5 sm:px-3 font-bold">
                     <div className="col-span-2">ÍTEM</div>
-                    <div className="col-span-6">PARTIDA (COSTO DIRECTO)</div>
+                    <div className="col-span-6">PARTIDA</div>
                     <div className="col-span-4 text-right">SUBTOTAL</div>
                   </div>
-                  <div className="text-[11px] divide-y divide-[#E5E7EB] dark:divide-[#263040]">
+                  <div className="text-[10.5px] sm:text-[11px] divide-y divide-[#E5E7EB] dark:divide-[#263040]">
                     {[
                       ['01', 'Movimiento de suelo y excavación', '$ 582.000'],
                       ['02', 'Hormigón H-21 + Moldaje (55 m³)', '$ 6.957.500'],
@@ -653,13 +683,13 @@ export default function LandingPage() {
                     ].map(([code, desc, subtotal], idx) => (
                       <div
                         key={code}
-                        className={`grid grid-cols-12 py-2 px-3 items-center ${
+                        className={`grid grid-cols-12 py-2 px-2.5 sm:px-3 items-center gap-1 ${
                           idx % 2 === 1 ? 'bg-[#FAF8F5] dark:bg-[#0F141C]' : 'bg-white dark:bg-[#141A23]'
                         }`}
                       >
                         <div className="col-span-2 font-mono font-bold text-[#FF6A00]">{code}</div>
-                        <div className="col-span-6 font-medium text-[#1E1E1E] dark:text-gray-200">{desc}</div>
-                        <div className="col-span-4 text-right font-mono font-bold text-[#1E1E1E] dark:text-white">
+                        <div className="col-span-6 font-medium text-[#1E1E1E] dark:text-gray-200 leading-snug">{desc}</div>
+                        <div className="col-span-4 text-right font-mono font-bold text-[#1E1E1E] dark:text-white whitespace-nowrap">
                           {subtotal}
                         </div>
                       </div>
@@ -702,7 +732,7 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <div className="bg-[#FF6A00] text-white rounded-xl p-3.5 flex items-center justify-between shadow-md">
+                <div className="bg-[#FF6A00] text-white rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 shadow-md">
                   <div>
                     <div className="text-[10px] uppercase font-mono tracking-wider font-bold">
                       TOTAL PRESUPUESTADO (CON IVA)
@@ -711,7 +741,7 @@ export default function LandingPage() {
                       Neto {formatCLP(quoteCalc.neto)} · {TIER_LABELS[quoteMargin]}
                     </div>
                   </div>
-                  <div className="font-heading font-extrabold text-xl sm:text-2xl font-mono">
+                  <div className="font-heading font-extrabold text-xl sm:text-2xl font-mono whitespace-nowrap">
                     {formatCLP(quoteCalc.total)}
                   </div>
                 </div>
@@ -744,7 +774,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-2.5 max-w-4xl mx-auto mb-6 font-heading font-bold text-xs sm:text-sm landing-reveal landing-delay-1">
+          <div className="flex sm:flex-wrap items-center sm:justify-center gap-2 sm:gap-2.5 max-w-4xl mx-auto mb-6 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 font-heading font-bold text-xs sm:text-sm landing-reveal landing-delay-1">
             {STORES.map((store) => {
               const selected = activeStore === store.name;
               return (
@@ -752,7 +782,7 @@ export default function LandingPage() {
                   key={store.name}
                   type="button"
                   onClick={() => setActiveStore(store.name)}
-                  className={`px-4 py-2.5 rounded-xl border-2 shadow-sm transition hover:-translate-y-0.5 flex items-center gap-2 ${
+                  className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl border-2 shadow-sm transition hover:-translate-y-0.5 flex items-center gap-2 shrink-0 whitespace-nowrap ${
                     selected
                       ? 'border-[#141A23] dark:border-[#FF6A00] bg-[#141A23] dark:bg-[#FF6A00] text-white'
                       : 'border-[#E5E7EB] dark:border-[#263040] bg-white dark:bg-[#141A23] text-[#1E1E1E] dark:text-gray-200 hover:border-[#141A23] dark:hover:border-[#FF6A00]'
@@ -766,20 +796,20 @@ export default function LandingPage() {
           </div>
 
           <div className="bg-white dark:bg-[#141A23] rounded-2xl border-2 border-[#E5E7EB] dark:border-[#263040] overflow-hidden shadow-lg max-w-5xl mx-auto landing-reveal landing-delay-2">
-            <div className="bg-[#141A23] text-white p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div className="font-mono text-xs font-bold flex items-center gap-2">
+            <div className="bg-[#141A23] text-white p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="font-mono text-[11px] sm:text-xs font-bold flex items-center gap-2">
                 <Radio className="w-4 h-4 text-[#FF6A00] animate-pulse shrink-0" />
-                <span>EJEMPLO DE COMPARATIVA DE MATERIALES (CLP CON IVA)</span>
+                <span>COMPARATIVA DE MATERIALES (CLP CON IVA)</span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex bg-white/10 rounded-lg p-0.5 text-[11px] font-mono">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
+                <div className="flex overflow-x-auto no-scrollbar bg-white/10 rounded-lg p-0.5 text-[11px] font-mono max-w-full">
                   {CATEGORIES.map((cat) => (
                     <button
                       key={cat}
                       type="button"
                       onClick={() => setActiveCategory(cat)}
-                      className={`px-2.5 py-1 rounded-md transition ${
+                      className={`px-2.5 py-1 rounded-md transition whitespace-nowrap shrink-0 ${
                         activeCategory === cat
                           ? 'bg-[#FF6A00] text-white font-bold'
                           : 'text-slate-300 hover:text-white'
@@ -789,7 +819,7 @@ export default function LandingPage() {
                     </button>
                   ))}
                 </div>
-                <div className="relative flex-1 sm:flex-none">
+                <div className="relative w-full sm:w-44">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
@@ -797,13 +827,54 @@ export default function LandingPage() {
                     onChange={(e) => setRadarSearch(e.target.value)}
                     placeholder="Buscar material..."
                     aria-label="Buscar material en el radar"
-                    className="w-full sm:w-44 pl-8 pr-3 py-1.5 rounded-lg bg-white/10 border border-white/15 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-[#FF6A00]"
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white/10 border border-white/15 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:border-[#FF6A00]"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile Card List (No cramped table scrolling on phones) */}
+            <div className="sm:hidden divide-y divide-[#E5E7EB] dark:divide-[#263040]">
+              {filteredRadar.length === 0 ? (
+                <div className="py-8 px-4 text-center text-xs text-[#64748B] dark:text-gray-400 font-mono">
+                  No hay insumos en esta muestra para el filtro seleccionado. Prueba con &quot;Todas&quot;.
+                </div>
+              ) : (
+                filteredRadar.map((item) => {
+                  const savingPct = (((item.avg - item.best) / item.avg) * 100).toFixed(1);
+                  return (
+                    <div key={item.name} className="p-3.5 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-bold text-xs text-[#1E1E1E] dark:text-white leading-snug">
+                          {item.name}
+                        </div>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-mono text-[10px] font-bold shrink-0">
+                          -{savingPct}%
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] font-mono">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-[#0B0E14] text-[#475569] dark:text-gray-300 text-[10px]">
+                          {item.cat} · {item.unit}
+                        </span>
+                        <span className="text-[#64748B] dark:text-gray-400 line-through">
+                          {formatCLP(item.avg)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pt-1 text-xs font-mono">
+                        <span className="text-[#64748B] dark:text-gray-400 text-[11px]">Mejor oferta:</span>
+                        <span className="font-bold text-obra-green">
+                          {formatCLP(item.best)}{' '}
+                          <span className="text-[#1E1E1E] dark:text-white">({item.store})</span>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-left text-xs font-sans">
                 <thead className="bg-[#FAF8F5] dark:bg-[#0B0E14] text-[#1E1E1E] dark:text-gray-200 font-mono border-b border-[#E5E7EB] dark:border-[#263040] uppercase text-[11px]">
                   <tr>
@@ -975,7 +1046,7 @@ export default function LandingPage() {
             {/* Step 2 */}
             <div
               onMouseMove={handleSpotlightMove}
-              className="landing-spotlight bg-white dark:bg-[#141A23] border-2 border-[#FF6A00] rounded-3xl p-6 shadow-xl relative landing-reveal landing-delay-1"
+              className="landing-spotlight mt-3 lg:mt-0 bg-white dark:bg-[#141A23] border-2 border-[#FF6A00] rounded-3xl p-6 shadow-xl relative landing-reveal landing-delay-1"
             >
               <div className="absolute -top-3.5 left-6 px-3 py-0.5 rounded-full bg-[#FF6A00] text-white font-mono font-bold text-[10px] uppercase tracking-wider shadow-sm">
                 2. MOTOR OBRABOT IA CHILE
@@ -1585,22 +1656,22 @@ export default function LandingPage() {
               vía Flow.cl. Ahorra 15% con suscripción anual.
             </p>
 
-            <div className="mt-8 inline-flex items-center gap-2 p-1.5 bg-white dark:bg-[#141A23] rounded-full border-2 border-[#E5E7EB] dark:border-[#263040] shadow-sm">
+            <div className="mt-8 inline-flex items-center gap-1 sm:gap-2 p-1 sm:p-1.5 bg-white dark:bg-[#141A23] rounded-full border-2 border-[#E5E7EB] dark:border-[#263040] shadow-sm max-w-full">
               <button
                 type="button"
                 onClick={() => setBillingCycle('mensual')}
-                className={`px-5 py-2 rounded-full font-heading font-bold text-xs transition inline-flex items-center ${
+                className={`px-3.5 sm:px-5 py-2 rounded-full font-heading font-bold text-[11px] sm:text-xs transition inline-flex items-center whitespace-nowrap ${
                   billingCycle === 'mensual'
                     ? 'bg-[#141A23] dark:bg-[#FF6A00] text-white'
                     : 'text-[#1E1E1E] dark:text-gray-300 hover:text-[#FF6A00]'
                 }`}
               >
-                Facturación Mensual
+                Mensual
               </button>
               <button
                 type="button"
                 onClick={() => setBillingCycle('anual')}
-                className={`px-5 py-2 rounded-full font-heading font-bold text-xs transition inline-flex items-center gap-1.5 ${
+                className={`px-3.5 sm:px-5 py-2 rounded-full font-heading font-bold text-[11px] sm:text-xs transition inline-flex items-center gap-1.5 whitespace-nowrap ${
                   billingCycle === 'anual'
                     ? 'bg-[#141A23] dark:bg-[#FF6A00] text-white'
                     : 'text-[#1E1E1E] dark:text-gray-300 hover:text-[#FF6A00]'
@@ -1608,7 +1679,7 @@ export default function LandingPage() {
               >
                 <span>Pago Anual</span>
                 <span
-                  className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${
+                  className={`px-1.5 sm:px-2 py-0.5 rounded-full font-mono text-[10px] font-bold ${
                     billingCycle === 'anual'
                       ? 'bg-[#FF6A00] dark:bg-white text-white dark:text-[#141A23]'
                       : 'bg-[#FF6A00]/15 text-[#FF6A00]'
@@ -1620,7 +1691,35 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-7 items-stretch">
+          {/* Mobile Quick Plan Switcher + Swipe Hint */}
+          <div className="md:hidden mb-2 flex flex-col items-center gap-2">
+            <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-white dark:bg-[#141A23] border border-[#E5E7EB] dark:border-[#263040]">
+              {PLANES_SUSCRIPCION.map((plan, idx) => (
+                <button
+                  key={plan.id}
+                  type="button"
+                  onClick={() => scrollToPlan(idx)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-heading font-bold transition ${
+                    activePlanSlide === idx
+                      ? 'bg-[#FF6A00] text-white shadow-sm'
+                      : 'text-[#64748B] dark:text-gray-400'
+                  }`}
+                >
+                  {plan.nombre.replace('Plan ', '')}
+                </button>
+              ))}
+            </div>
+            <span className="text-[11px] font-mono text-[#64748B] dark:text-gray-400">
+              ← Desliza para comparar planes →
+            </span>
+          </div>
+
+          {/* Mobile Horizontal Swipe Carousel / Desktop 3-Column Grid */}
+          <div
+            ref={plansCarouselRef}
+            onScroll={handlePlansScroll}
+            className="flex md:grid md:grid-cols-3 gap-4 md:gap-7 overflow-x-auto md:overflow-visible snap-x snap-mandatory no-scrollbar pt-6 pb-4 -mx-4 px-4 md:mx-0 md:px-0 md:pt-0 md:pb-0 items-stretch"
+          >
             {PLANES_SUSCRIPCION.map((plan, idx) => {
               const pricing = isPaidPlanId(plan.id) ? getPlanPricing(plan.id, billingCycle) : null;
               const monthlyPrice = pricing ? pricing.precioEfectivoMensualCLP : 0;
@@ -1631,7 +1730,7 @@ export default function LandingPage() {
                 <article
                   key={plan.id}
                   onMouseMove={handleSpotlightMove}
-                  className={`landing-spotlight bg-white dark:bg-[#141A23] rounded-3xl p-7 flex flex-col justify-between relative landing-reveal ${
+                  className={`landing-spotlight w-[85vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none md:shrink bg-white dark:bg-[#141A23] rounded-3xl p-6 sm:p-7 flex flex-col justify-between relative landing-reveal ${
                     idx === 1 ? 'landing-delay-1' : idx === 2 ? 'landing-delay-2' : ''
                   } ${
                     isPro
@@ -1717,6 +1816,25 @@ export default function LandingPage() {
                 </article>
               );
             })}
+          </div>
+
+          {/* Mobile Carousel Dot Indicators */}
+          <div className="flex md:hidden items-center justify-center gap-2 mt-2" role="tablist" aria-label="Selector de planes">
+            {PLANES_SUSCRIPCION.map((plan, idx) => (
+              <button
+                key={plan.id}
+                type="button"
+                role="tab"
+                aria-selected={activePlanSlide === idx}
+                aria-label={`Ver ${plan.nombre}`}
+                onClick={() => scrollToPlan(idx)}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  activePlanSlide === idx
+                    ? 'w-7 bg-[#FF6A00]'
+                    : 'w-2 bg-slate-300 dark:bg-slate-600'
+                }`}
+              />
+            ))}
           </div>
 
           <div className="mt-8 p-6 rounded-2xl bg-white dark:bg-[#141A23] border-2 border-[#E5E7EB] dark:border-[#263040] flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm landing-reveal">
@@ -1807,7 +1925,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer (Official Dark Logo Variant) */}
-      <footer className="bg-[#0B0E14] text-white pt-16 pb-12 border-t-4 border-[#FF6A00]">
+      <footer className="bg-[#0B0E14] text-white pt-16 pb-24 sm:pb-12 border-t-4 border-[#FF6A00]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="bg-gradient-to-r from-[#141A23] via-[#1C2432] to-[#141A23] border-2 border-[#FF6A00]/50 rounded-3xl p-8 sm:p-12 text-center max-w-4xl mx-auto shadow-2xl mb-16 landing-reveal">
             <h2 className="text-3xl sm:text-4xl font-extrabold font-heading text-white">
@@ -1927,7 +2045,7 @@ export default function LandingPage() {
           aria-modal="true"
           aria-labelledby="payment-modal-title"
         >
-          <div className="landing-modal-pop bg-white dark:bg-[#141A23] rounded-3xl border-2 border-[#E5E7EB] dark:border-[#263040] max-w-lg w-full overflow-hidden shadow-2xl">
+          <div className="landing-modal-pop bg-white dark:bg-[#141A23] rounded-3xl border-2 border-[#E5E7EB] dark:border-[#263040] max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="bg-[#141A23] text-white px-5 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <ObraTrackIcon theme="dark" className="w-7 h-7" />
@@ -2039,7 +2157,7 @@ export default function LandingPage() {
           aria-modal="true"
           aria-labelledby="wa-modal-title"
         >
-          <div className="landing-modal-pop bg-white dark:bg-[#141A23] rounded-3xl border-2 border-[#E5E7EB] dark:border-[#263040] max-w-md w-full overflow-hidden shadow-2xl">
+          <div className="landing-modal-pop bg-white dark:bg-[#141A23] rounded-3xl border-2 border-[#E5E7EB] dark:border-[#263040] max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="bg-emerald-700 text-white px-5 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <MessageCircle className="w-5 h-5" />
