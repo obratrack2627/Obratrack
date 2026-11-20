@@ -341,3 +341,86 @@ test('auditoría de gestión integral: resumen financiero, responsable_nombre en
   assert.equal(isQuoteRevision('¿Cuál es el presupuesto de la obra?'), false);
   assert.equal(isQuoteRevision('¿Cuánto hemos gastado en mano de obra en el proyecto?'), false);
 });
+
+test('cotización vía Tool Calling, detectores naturales/typos, reglas estima-primero y timeouts adaptados para WhatsApp', () => {
+  const {
+    isQuoteRequest,
+    isQuoteFollowUp,
+    isQuoteRevision,
+    isMaterialPriceRequest,
+    quotePrompt,
+  } = require('../lib/ai/prompt.ts');
+  const { buildToolChatInstructions, buildToolChatInput } = require('../lib/ai/tools.ts');
+  const { selectAIProfile } = require('../lib/ai/model-router.ts');
+  const { chileToday } = require('../lib/ai/project-deadlines.ts');
+
+  // 1) Typos ("coti6") y frases naturales ("cuánto sale instalar...") entran a cotización y no a búsqueda de ferretería
+  assert.equal(isQuoteRequest('Si, hace la coti6'), true);
+  assert.equal(isQuoteRequest('¿Cuánto sale instalar cerámica en un baño de 2x2 metros?'), true);
+  assert.equal(isMaterialPriceRequest('cuanto sale instalar ceramica en bano 2x2'), false);
+
+  // 2) Seguimiento cuando el bot preguntó usando "estimar materiales y mano de obra"
+  assert.equal(
+    isQuoteFollowUp('Solo el piso', [
+      { rol: 'user', texto: 'Instalación de cerámica en baño en San Bernardo, el baño mide 2x2 metros' },
+      { rol: 'model', texto: '¿La cerámica será solo para el piso (4 m²) o también para los muros para estimar los materiales y la mano de obra?' },
+    ]),
+    true,
+  );
+
+  // 3) No secuestrar acciones de personas/obra como revisión de cotización
+  assert.equal(isQuoteRevision('Saca a Juan de la obra'), false);
+
+  // 4) Tool Calling permite generar_cotizacion para descripciones sin la palabra "cotiza"
+  const adminWaTools = getObraBotTools({ role: 'admin', actionsEnabled: true, whatsapp: true });
+  assert.ok(adminWaTools.some((t) => t.name === 'generar_cotizacion'));
+  const envelope = JSON.parse(
+    toolCallsToChatEnvelope('', [
+      {
+        name: 'generar_cotizacion',
+        arguments: JSON.stringify({
+          titulo_proyecto: 'Instalación de cerámica baño 2x2 — San Bernardo',
+          tipo_obra: 'Terminaciones',
+          comuna_region: 'San Bernardo',
+          metros_cuadrados: 4,
+          duracion_dias_estimada: 2,
+          resumen_ejecutivo: 'Considera solo piso (4 m²), adhesivo AC, fragüe, mano de obra y 10% de pérdida. Si incluyes muros o retiro de escombros lo ajustamos.',
+          materiales: [{ nombre: 'Cerámica piso estándar', cantidad: 4.4, unidad: 'm2', precio_unitario_estimado: 10990 }],
+          mano_de_obra: [{ rol: 'Maestro ceramista', cantidad_personas: 1, dias_estimados: 2, valor_jornal_diario: 55000 }],
+          actividades_gantt: [{ nombre: 'Instalación de cerámica piso', dias: 2 }],
+        }),
+      },
+    ]),
+  );
+  const normalized = parseChatResponse(JSON.stringify(envelope));
+  assert.ok(normalized.cotizacion);
+  assert.equal(normalized.cotizacion.metros_cuadrados, 4);
+  assert.ok(normalized.cotizacion.estructura_financiera.precio_total_con_iva > 0);
+
+  // 5) Regla estima-primero en quotePrompt + instrucciones compactas con fecha Chile y sin recorte de 600 chars
+  const qp = quotePrompt([], 'Instalación de cerámica en baño 2x2', {});
+  assert.match(qp, /ESTIMA PRIMERO, AJUSTA DESPUÉS/);
+  assert.match(qp, /estima cantidades, rendimientos y precios referenciales/);
+
+  const waInstructions = buildToolChatInstructions({ creacion_obra_whatsapp: true, acciones_habilitadas: true });
+  assert.ok(waInstructions.length < 2000);
+  assert.ok(waInstructions.includes(chileToday()));
+  assert.match(waInstructions, /Estima primero, ajusta después/);
+  assert.match(waInstructions, /\*asteriscos simples\*/);
+
+  const longNote = 'Medidas exactas del baño: 2 metros de ancho por 2 metros de largo en San Bernardo. ' + 'Detalle técnico adicional. '.repeat(35);
+  const toolInput = buildToolChatInput(
+    [
+      { rol: 'user', texto: longNote },
+      ...Array.from({ length: 10 }, (_, i) => ({ rol: i % 2 === 0 ? 'model' : 'user', texto: `Turno ${i}` })),
+    ],
+    'Cotiza',
+    {},
+  );
+  assert.ok(toolInput.includes('San Bernardo'));
+  assert.ok(toolInput.includes(longNote.slice(0, 750)), 'buildToolChatInput no debe truncar mensajes relevantes a 600 caracteres');
+
+  // 6) Canal WhatsApp evita reasoning high por defecto cuando usa gpt-6-luna
+  const waProfile = selectAIProfile({ mode: 'quote', message: 'Cotiza baño 2x2', channel: 'whatsapp' });
+  assert.equal(waProfile.reasoningEffort, 'medium');
+});

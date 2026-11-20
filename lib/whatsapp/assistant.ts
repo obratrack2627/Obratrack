@@ -20,6 +20,7 @@ import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib
 import { budgetApplication } from '@/lib/quotes/application';
 import { chooseBudgetOption } from './budget-options';
 import { hasOtherWorkBeyondStatus, isAlternativeRequest, isQuoteRequest, isQuoteRevision } from '@/lib/ai/prompt';
+import { isComplexAITask } from '@/lib/ai/model-router';
 import { ragEligible, retrieveReferences } from '@/lib/ai/rag';
 import { scheduleKnowledgeIndex } from '@/lib/ai/rag-index';
 import { learnApuCommand } from '@/lib/ai/apu-learning';
@@ -661,7 +662,23 @@ export async function processPersonalMessage(
         },
         ...(image ? { foto_adjunta: true } : {}),
       },
-      { onQualityEvent: event => scheduleQualityEvent(sb,user,event,'whatsapp'), budgetMs: !image && batchItems.every((i: any) => i.type === 'text') ? 30000 : 45000, timeoutMs: !image && batchItems.every((i: any) => i.type === 'text') ? 20000 : 40000, ...(image ? { image } : {}) },
+      {
+        onQualityEvent: (event) => scheduleQualityEvent(sb, user, event, 'whatsapp'),
+        ...(() => {
+          const isPureText = !image && batchItems.every((i: any) => i.type === 'text');
+          const isComplexText =
+            isPureText &&
+            (isQuoteRequest(text) ||
+              isQuoteRevision(text) ||
+              isAlternativeRequest(text) ||
+              isComplexAITask({ mode: 'chat', message: text }));
+          return {
+            budgetMs: !isPureText || isComplexText ? 44000 : 34000,
+            timeoutMs: !isPureText || isComplexText ? 38000 : 28000,
+          };
+        })(),
+        ...(image ? { image } : {}),
+      },
     );
     if (image && attachment) attachment.descripcion = result.respuesta;
   } catch (error) {

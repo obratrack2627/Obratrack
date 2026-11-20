@@ -60,7 +60,7 @@ const actionProperties: Record<string, any> = {
   pagado: { type: "boolean" },
   cliente_rut: string,
   ...strings(
-    "nombre,titulo,descripcion,comuna,direccion,fecha_inicio,fecha_termino_estimada,estado,cliente_id,cliente_nombre,cliente_email,cliente_telefono,proyecto_id,proyecto_nombre,telefono,email,rut,rol,trabajador_nombre,actividad_id,metodo,nota,fecha,subtipo,tipo_bitacora,tipo_evento,prioridad,hora_entrada,hora_salida,categoria,correo_remitente,correo_destinatario,correo_asunto,correo_cuerpo,hora,comuna_lugar,resumen,mensaje,observacion,numero_documento,proveedor,proveedor_entidad,fecha_documento",
+    "nombre,titulo,descripcion,comuna,direccion,fecha_inicio,fecha_termino,fecha_termino_estimada,estado,cliente_id,cliente_nombre,cliente_email,cliente_telefono,proyecto_id,proyecto_nombre,telefono,email,rut,rol,trabajador_nombre,responsable_nombre,responsable_id,actividad_id,metodo,nota,fecha,subtipo,tipo_bitacora,tipo_evento,prioridad,hora_entrada,hora_salida,categoria,correo_remitente,correo_destinatario,correo_asunto,correo_cuerpo,hora,comuna_lugar,resumen,mensaje,observacion,numero_documento,proveedor,proveedor_entidad,fecha_documento",
   ),
   ...numbers(
     "monto,dias,monto_cotizado,cantidad,precio_unitario,porcentaje_avance,monto_documento",
@@ -99,7 +99,7 @@ const actionFields: Record<typeof ACTION_TYPES[number], string> = {
   "asignar_trabajadores": "trabajadores_nombres trabajadores",
   "desasignar_trabajador": "trabajador_nombre",
   "crear_actividad": "nombre dias partidas fecha_inicio",
-  "actualizar_avance": "actividad_id nombre porcentaje_avance nota",
+  "actualizar_avance": "actividad_id nombre nuevo_nombre porcentaje_avance responsable_nombre responsable_id fecha_inicio fecha_termino dias nota",
   "agregar_material": "nombre unidad cantidad precio_unitario categoria proveedor actividad_id materiales",
   "agregar_materiales": "materiales",
   "actualizar_material": "material_id nombre materiales comprado pagado proveedor precio_unitario cantidad monto",

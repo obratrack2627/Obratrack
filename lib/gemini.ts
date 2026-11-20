@@ -116,6 +116,7 @@ export function chatGenerationRequest(
       message: mensajeUsuario,
       hasImage: Boolean(options.image),
       hasActionRequest: actionRequested,
+      channel: contextoDB.creacion_obra_whatsapp ? 'whatsapp' : 'web',
     });
     const extended = Boolean(options.image) || profile.tier === 'complex';
     return {
@@ -150,6 +151,7 @@ export function chatGenerationRequest(
     message: mensajeUsuario,
     hasImage: Boolean(options.image),
     hasActionRequest: actionRequested,
+    channel: contextoDB.creacion_obra_whatsapp ? 'whatsapp' : 'web',
   });
   const extended = quote || Boolean(options.image) || profile.tier === 'complex';
   const separated = separatePrompt(prompt);

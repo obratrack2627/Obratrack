@@ -1,5 +1,7 @@
 import type { OpenAIFunctionTool } from './provider-types';
 import { chileanRequestContext } from './chilean-context';
+import { chileToday } from './project-deadlines';
+import { conversationHistory } from './conversation';
 
 export interface ParsedToolCall {
   name: string;
@@ -410,6 +412,74 @@ const ADMIN_DELETE_PROJECT_TOOL = fn(
   ['proyecto_id'],
 );
 
+const TOOL_GENERAR_COTIZACION = fn(
+  'generar_cotizacion',
+  'Genera una cotización o presupuesto estimado completo de construcción en CLP (estima materiales, jornales y fases estándar en Chile si faltan precios).',
+  {
+    titulo_proyecto: { type: 'string' },
+    tipo_obra: { type: 'string' },
+    comuna_region: { type: 'string' },
+    metros_cuadrados: { type: 'number' },
+    duracion_dias_estimada: { type: 'number' },
+    resumen_ejecutivo: { type: 'string', description: 'Alcance, supuestos chilenos usados y una frase breve con detalles opcionales ajustables.' },
+    cliente_id: { type: 'string' },
+    cliente_nombre: { type: 'string' },
+    materiales: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          nombre: { type: 'string' },
+          categoria: { type: 'string' },
+          cantidad: { type: 'number' },
+          unidad: { type: 'string' },
+          precio_unitario_estimado: { type: 'number' },
+          precio_incluye_iva: { type: 'boolean' },
+        },
+        required: ['nombre', 'cantidad', 'precio_unitario_estimado'],
+      },
+    },
+    mano_de_obra: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          rol: { type: 'string' },
+          cantidad_personas: { type: 'number' },
+          dias_estimados: { type: 'number' },
+          valor_jornal_diario: { type: 'number' },
+        },
+        required: ['rol', 'cantidad_personas', 'dias_estimados', 'valor_jornal_diario'],
+      },
+    },
+    estructura_financiera: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        gastos_generales_porcentaje: { type: 'number' },
+        imprevistos_porcentaje: { type: 'number' },
+        margen_utilidad_porcentaje: { type: 'number' },
+        tipo_utilidad: { type: 'string', enum: ['recargo_costos', 'margen_venta'] },
+      },
+    },
+    actividades_gantt: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          nombre: { type: 'string' },
+          dias: { type: 'number' },
+        },
+        required: ['nombre', 'dias'],
+      },
+    },
+  },
+  ['titulo_proyecto', 'duracion_dias_estimada', 'resumen_ejecutivo', 'materiales', 'mano_de_obra', 'actividades_gantt'],
+);
+
 /** Devuelve únicamente las herramientas autorizadas según rol, plan y canal (Tool-level RBAC). */
 export function getObraBotTools(options: {
   role?: string;
@@ -422,6 +492,7 @@ export function getObraBotTools(options: {
 
   const tools: OpenAIFunctionTool[] = [
     TOOL_BUSCAR_PRECIOS,
+    TOOL_GENERAR_COTIZACION,
     ...WORKER_TOOLS,
     ...MANAGER_TOOLS,
     whatsapp ? WHATSAPP_PROPOSE_PROJECT_TOOL : WEB_CREATE_PROJECT_TOOL,
@@ -434,24 +505,23 @@ export function getObraBotTools(options: {
 export function buildToolChatInstructions(context: Record<string, any>): string {
   const isWhatsApp = Boolean(context.creacion_obra_whatsapp);
   const actionsEnabled = context.acciones_habilitadas !== false;
+  const fecha = chileToday();
   return [
-    'Eres ObraBot, asistente experto de ObraTrack para gestionar obras de construcción en Chile (CLP).',
+    `Eres ObraBot, asesor experto de ObraTrack para construcción en Chile (CLP, IVA 19%). Hoy en Chile: ${fecha} (America/Santiago).`,
     'Política de uso: No hay topes diarios internos en ObraBot; un servicio sin tope diario no implica saldo ilimitado si el proveedor externo limita temporalmente la capacidad.',
     'Reglas críticas:',
-    '1. Usa exclusivamente IDs, nombres, montos, avances y fechas del contexto entregado. No inventes datos.',
-    '2. Si es solo consulta, responde en texto natural SIN invocar herramientas de escritura.',
-    '3. Si el usuario pide ejecutar acciones (o responde un dato faltante que le preguntaste, como fecha, monto o nombre), invoca las herramientas de inmediato en ese mismo turno SIN pedir confirmaciones intermedias ("¿Confirmas...?"), salvo para eliminar_proyecto. Nunca afirmes que ya quedó guardado.',
-    '4. Si falta un dato indispensable o hay homónimos ambiguos, NO invoques la herramienta: pregunta qué dato falta.',
-    '5. Nunca uses enviar_mensaje_equipo para clientes/mandantes; usa generar_mensaje_whatsapp.',
-    '6. Para precios en ferreterías chilenas invoca buscar_precios_materiales.',
-    isWhatsApp
-      ? '7. En WhatsApp, para crear obra nueva usa proponer_obra_whatsapp.'
-      : '7. En web, para crear obra usa crear_proyecto solo por orden expresa.',
+    '1. En acciones sobre obras/pagos/fichas usa solo IDs y montos reales del contexto; nunca inventes datos ni confirmes guardado previo. Boleta no acredita pago; comprado≠recibido≠instalado; obra al 100% cierra sola.',
     actionsEnabled
-      ? '8. Respeta las preferencias explícitas del usuario en el contexto.'
-      : '8. Las acciones requieren plan Pro IA (acciones_habilitadas=false).',
-    '9. Para asignar trabajador a la obra usa asignar_trabajador; para asignar responsable, fechas o avance de una o todas las partidas de la Carta Gantt usa actualizar_avance.',
-    '10. En actualizar_proyecto envía SOLO los campos que pidieron cambiar (no repitas nuevo_nombre, estado ni descripcion actuales) y usa reprogramar_gantt=true al cambiar fechas de la obra o actualizar la Carta Gantt.',
+      ? '2. Cotizaciones (Estima primero, ajusta después): si piden presupuesto o describen un trabajo con medidas/alcance, invoca generar_cotizacion de inmediato estimando costos netos chilenos con supuestos en resumen_ejecutivo y ofrece ajustar opcionales al cierre. Nunca rechaces por falta de precios.'
+      : '2. Solo consultas y búsqueda de precios; los cambios y presupuestos avanzados requieren Pro IA.',
+    '3. Si es solo consulta, responde directo sin tools de escritura. Si falta un dato indispensable, agrupa en una sola pregunta breve (en cotizaciones con trabajo+medida, estima sin preguntar primero).',
+    '4. Si piden ejecutar una acción o responden un dato faltante que preguntaste, invoca las tools de inmediato sin pedir confirmaciones intermedias (salvo eliminar_proyecto).',
+    '5. Precios retail de tiendas chilenas: buscar_precios_materiales. Clientes: generar_mensaje_whatsapp (nunca enviar_mensaje_equipo).',
+    '6. Personas (crear_cliente/agregar_trabajador): usa solo datos entregados (nombre, RUT, correo, teléfono; trabajador exige rol y terreno obra). Asignar a obra: asignar_trabajador. Carta Gantt (responsable/fechas/avance): actualizar_avance.',
+    '7. En actualizar_proyecto envía solo los campos modificados (reprogramar_gantt=true al cambiar fechas).',
+    isWhatsApp
+      ? '8. WhatsApp: crea obras solo vía proponer_obra_whatsapp (cliente existente no repite contactos; nuevo exige email, teléfono y RUT). Formato: párrafos cortos, *asteriscos simples*, sin **dobles**, # ni tablas.'
+      : '8. Web: crea obra con crear_proyecto solo por orden expresa y respeta preferencias_conversacion del contexto.',
   ].join('\n');
 }
 
@@ -461,10 +531,7 @@ export function buildToolChatInput(
   mensajeUsuario: string,
   compactedContext: Record<string, any>,
 ): string {
-  const recent = (historial || []).slice(-8).map((m) => ({
-    rol: m.rol,
-    texto: String(m.texto || '').slice(0, 600),
-  }));
+  const recent = conversationHistory(historial, mensajeUsuario);
   const chilean = chileanRequestContext(mensajeUsuario);
   const lines = [
     `Contexto (JSON): ${JSON.stringify(compactedContext)}`,
@@ -505,6 +572,7 @@ export function toolCallsToChatEnvelope(
   const acciones: Record<string, any>[] = [];
   let busqueda_materiales: Record<string, any> | null = null;
   let obra_propuesta: Record<string, any> | null = null;
+  let cotizacion: Record<string, any> | null = null;
 
   for (const call of calls) {
     let args: Record<string, any> = {};
@@ -519,6 +587,10 @@ export function toolCallsToChatEnvelope(
 
     if (call.name === 'buscar_precios_materiales') {
       busqueda_materiales = args;
+      continue;
+    }
+    if (call.name === 'generar_cotizacion') {
+      cotizacion = args;
       continue;
     }
     if (call.name === 'proponer_obra_whatsapp') {
@@ -560,16 +632,18 @@ export function toolCallsToChatEnvelope(
   const defaultReply =
     acciones.length > 0
       ? 'Voy a preparar los cambios solicitados.'
-      : busqueda_materiales
-        ? 'Consultando precios en tiendas...'
-        : obra_propuesta
-          ? 'Preparando el borrador de la obra.'
-          : trimmed || '¿En qué te puedo ayudar con tus obras?';
+      : cotizacion
+        ? cotizacion.resumen_ejecutivo || 'Preparé el presupuesto estimado.'
+        : busqueda_materiales
+          ? 'Consultando precios en tiendas...'
+          : obra_propuesta
+            ? 'Preparando el borrador de la obra.'
+            : trimmed || '¿En qué te puedo ayudar con tus obras?';
 
   const envelope: Record<string, any> = {
     respuesta: trimmed || defaultReply,
     acciones,
-    cotizacion: null,
+    cotizacion,
     sugerencias: [],
     ...(busqueda_materiales ? { busqueda_materiales } : {}),
     ...(obra_propuesta ? { obra_propuesta } : {}),

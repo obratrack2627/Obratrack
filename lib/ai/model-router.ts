@@ -21,6 +21,7 @@ export interface AIProfileSelectionInput {
   hasImage?: boolean;
   hasActionRequest?: boolean;
   isRetry?: boolean;
+  channel?: 'web' | 'whatsapp';
 }
 
 export interface AIProfile {
@@ -31,7 +32,7 @@ export interface AIProfile {
 }
 
 const COMPLEX_INTENT_RE =
-  /\b(?:cotiz\w*|presupuest\w*|carta\s+gantt|gantt|partidas?|cubicacion\w*|alternativ\w*|crear?\s+(?:la\s+|una\s+)?obra|proyecto\s+completo|programa\s+de\s+obra|materiales\s+y\s+(?:mano|trabajador|cuadrilla|gantt))\b/i;
+  /\b(?:cotiz\w*|coti\d*|presupuest\w*|carta\s+gantt|gantt|partidas?|cubicacion\w*|alternativ\w*|crear?\s+(?:la\s+|una\s+)?obra|proyecto\s+completo|programa\s+de\s+obra|materiales\s+y\s+(?:mano|trabajador|cuadrilla|gantt))\b/i;
 
 /**
  * Determina si la solicitud requiere el perfil complejo (modelo superior o mayor razonamiento)
@@ -75,7 +76,8 @@ export function selectAIProfile(input: AIProfileSelectionInput): AIProfile {
 
   const dedicatedComplexModel = process.env.OPENAI_MODEL_COMPLEX?.trim();
   const complexModel = dedicatedComplexModel || baseModel;
-  const fallbackComplexEffort: ReasoningEffort = dedicatedComplexModel ? 'medium' : 'high';
+  const fallbackComplexEffort: ReasoningEffort =
+    dedicatedComplexModel || input.channel === 'whatsapp' ? 'medium' : 'high';
   const complexEffort = normalizeEffort(process.env.OPENAI_REASONING_COMPLEX, fallbackComplexEffort);
 
   return {
