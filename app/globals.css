@@ -428,9 +428,9 @@ html[data-mobile-nav-open] #obrabot-widget { visibility: hidden; pointer-events:
 ============================ */
 .landing-wireframe {
   background-image:
-    radial-gradient(rgba(100, 116, 139, 0.18) 1px, transparent 1px),
-    linear-gradient(to right, rgba(229, 231, 235, 0.45) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(229, 231, 235, 0.45) 1px, transparent 1px);
+    radial-gradient(rgba(120, 108, 88, 0.2) 1px, transparent 1px),
+    linear-gradient(to right, rgba(210, 200, 182, 0.45) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(210, 200, 182, 0.45) 1px, transparent 1px);
   background-size: 24px 24px, 72px 72px, 72px 72px;
 }
 .dark .landing-wireframe {
@@ -438,6 +438,14 @@ html[data-mobile-nav-open] #obrabot-widget { visibility: hidden; pointer-events:
     radial-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px),
     linear-gradient(to right, rgba(38, 48, 64, 0.45) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(38, 48, 64, 0.45) 1px, transparent 1px);
+}
+.landing-slate-blueprint {
+  background-color: #161D27;
+  background-image:
+    radial-gradient(rgba(255, 106, 0, 0.14) 1px, transparent 1px),
+    linear-gradient(to right, rgba(44, 55, 72, 0.42) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(44, 55, 72, 0.42) 1px, transparent 1px);
+  background-size: 24px 24px, 72px 72px, 72px 72px;
 }
 
 .landing-nav-link {

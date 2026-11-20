@@ -401,7 +401,7 @@ export default function LandingPage() {
   }, [edpCalc, edpRetention]);
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] dark:bg-[#0B0E14] text-[#1E1E1E] dark:text-gray-100 font-sans antialiased selection:bg-[#FF6A00] selection:text-white overflow-x-clip">
+    <div className="min-h-screen bg-[#F3EFE6] dark:bg-[#0B0E14] text-[#1E1E1E] dark:text-gray-100 font-sans antialiased selection:bg-[#FF6A00] selection:text-white overflow-x-clip">
       {/* Top Scroll Progress Bar */}
       <div className="fixed top-0 left-0 right-0 h-[3px] z-[60] bg-transparent pointer-events-none">
         <div
@@ -443,7 +443,7 @@ export default function LandingPage() {
 
       {/* Header: Single-Row Official Navbar (Official Logo + ObraTrack Only, No Subtitle Underneath) */}
       <header
-        className={`bg-white/90 dark:bg-[#141A23]/90 backdrop-blur-md border-b border-[#E5E7EB] dark:border-[#263040] sticky top-0 z-50 transition-shadow duration-300 ${
+        className={`bg-[#FAF8F5]/95 dark:bg-[#141A23]/90 backdrop-blur-md border-b border-[#DDD5C5] dark:border-[#263040] sticky top-0 z-50 transition-shadow duration-300 ${
           headerScrolled ? 'shadow-md' : ''
         }`}
       >
@@ -552,7 +552,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="py-14 sm:py-20 lg:py-24 bg-white dark:bg-[#0B0E14] border-b border-[#E5E7EB] dark:border-[#263040] landing-wireframe relative overflow-hidden">
+      <section className="py-14 sm:py-20 lg:py-24 bg-[#F3EFE6] dark:bg-[#0B0E14] border-b border-[#DDD5C5] dark:border-[#263040] landing-wireframe relative overflow-hidden">
         <div className="landing-blob-1 pointer-events-none absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#FF6A00]/10 blur-3xl" />
         <div className="landing-blob-2 pointer-events-none absolute -bottom-28 -left-24 w-96 h-96 rounded-full bg-[#6B8F72]/15 blur-3xl" />
 
@@ -593,9 +593,9 @@ export default function LandingPage() {
                 </Link>
                 <a
                   href="#como-funciona"
-                  className="px-6 py-4 rounded-xl bg-white dark:bg-[#141A23] border-2 border-[#1E1E1E] dark:border-gray-400 text-[#1E1E1E] dark:text-white font-heading font-bold text-base hover:bg-[#1E1E1E] hover:text-white dark:hover:bg-white dark:hover:text-[#141A23] transition flex items-center justify-center gap-2 shadow-sm group"
+                  className="px-6 py-4 rounded-xl bg-[#161D27] dark:bg-[#141A23] border-2 border-[#161D27] dark:border-gray-400 text-white font-heading font-bold text-base hover:bg-[#1E2735] dark:hover:bg-white dark:hover:text-[#141A23] transition flex items-center justify-center gap-2 shadow-sm group"
                 >
-                  <PlayCircle className="w-5 h-5 text-[#6B8F72] group-hover:scale-110 transition-transform" />
+                  <PlayCircle className="w-5 h-5 text-[#FF6A00] group-hover:scale-110 transition-transform" />
                   <span>Simular ObraBot en Vivo</span>
                 </a>
               </div>
@@ -630,51 +630,51 @@ export default function LandingPage() {
                 ref={tiltRef}
                 onMouseMove={handleTiltMove}
                 onMouseLeave={handleTiltLeave}
-                className="landing-tilt bg-white dark:bg-[#141A23] rounded-2xl border-2 border-[#E5E7EB] dark:border-[#263040] p-5 shadow-2xl relative"
+                className="landing-tilt bg-[#161D27] text-white rounded-2xl border-2 border-[#2C3748] p-5 shadow-2xl relative"
               >
-                <div className="flex items-center justify-between pb-4 border-b border-[#E5E7EB] dark:border-[#263040] mb-4">
+                <div className="flex items-center justify-between pb-4 border-b border-[#2C3748] mb-4">
                   <div className="flex items-center gap-2">
-                    <ObraTrackIcon theme="light" className="w-8 h-8 shrink-0" />
+                    <ObraTrackIcon theme="dark" className="w-8 h-8 shrink-0" />
                     <span className="font-heading font-extrabold text-lg leading-none">
                       <span className="text-[#FF6A00]">Obra</span>
-                      <span className="text-[#1E1E1E] dark:text-white">Track</span>
+                      <span className="text-white">Track</span>
                     </span>
                   </div>
 
                   <div className="text-right border-l-2 border-[#FF6A00] pl-3">
-                    <div className="font-heading font-extrabold text-sm uppercase text-[#1E1E1E] dark:text-white">
+                    <div className="font-heading font-extrabold text-sm uppercase text-white">
                       COTIZACIÓN APU
                     </div>
-                    <div className="font-mono text-[10px] text-[#64748B] dark:text-gray-400">
+                    <div className="font-mono text-[10px] text-slate-400">
                       PDF CON TU MEMBRETE
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#FAF8F5] dark:bg-[#0B0E14] rounded-xl text-xs mb-4 border border-[#E5E7EB] dark:border-[#263040]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-[#10151E] rounded-xl text-xs mb-4 border border-[#2C3748]">
                   <div>
                     <div className="font-bold text-[#FF6A00] text-[10px] flex items-center gap-1 uppercase">
                       <User className="w-3 h-3" /> CLIENTE
                     </div>
-                    <div className="font-bold text-[#1E1E1E] dark:text-white mt-0.5">Constructora del Norte S.A.</div>
-                    <div className="text-[11px] text-[#64748B] dark:text-gray-400 font-mono">RUT: 76.412.890-K</div>
+                    <div className="font-bold text-white mt-0.5">Constructora del Norte S.A.</div>
+                    <div className="text-[11px] text-slate-400 font-mono">RUT: 76.412.890-K</div>
                   </div>
-                  <div className="pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[#E5E7EB] dark:border-[#263040]">
+                  <div className="pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[#2C3748]">
                     <div className="font-bold text-[#FF6A00] text-[10px] flex items-center gap-1 uppercase">
                       <MapPin className="w-3 h-3" /> OBRA
                     </div>
-                    <div className="font-bold text-[#1E1E1E] dark:text-white mt-0.5">Ampliación PAC 250 m²</div>
-                    <div className="text-[11px] text-[#64748B] dark:text-gray-400">Las Condes, Santiago</div>
+                    <div className="font-bold text-white mt-0.5">Ampliación PAC 250 m²</div>
+                    <div className="text-[11px] text-slate-400">Las Condes, Santiago</div>
                   </div>
                 </div>
 
-                <div className="rounded-xl overflow-hidden border border-[#E5E7EB] dark:border-[#263040] mb-3">
-                  <div className="bg-[#141A23] text-white text-[10px] font-mono uppercase grid grid-cols-12 py-2 px-2.5 sm:px-3 font-bold">
+                <div className="rounded-xl overflow-hidden border border-[#2C3748] mb-3">
+                  <div className="bg-[#1E2735] text-slate-200 text-[10px] font-mono uppercase grid grid-cols-12 py-2 px-2.5 sm:px-3 font-bold">
                     <div className="col-span-2">ÍTEM</div>
                     <div className="col-span-6">PARTIDA</div>
                     <div className="col-span-4 text-right">SUBTOTAL</div>
                   </div>
-                  <div className="text-[10.5px] sm:text-[11px] divide-y divide-[#E5E7EB] dark:divide-[#263040]">
+                  <div className="text-[10.5px] sm:text-[11px] divide-y divide-[#202938]">
                     {[
                       ['01', 'Movimiento de suelo y excavación', '$ 582.000'],
                       ['02', 'Hormigón H-21 + Moldaje (55 m³)', '$ 6.957.500'],
@@ -684,12 +684,12 @@ export default function LandingPage() {
                       <div
                         key={code}
                         className={`grid grid-cols-12 py-2 px-2.5 sm:px-3 items-center gap-1 ${
-                          idx % 2 === 1 ? 'bg-[#FAF8F5] dark:bg-[#0F141C]' : 'bg-white dark:bg-[#141A23]'
+                          idx % 2 === 1 ? 'bg-[#151C27]' : 'bg-[#10151E]'
                         }`}
                       >
                         <div className="col-span-2 font-mono font-bold text-[#FF6A00]">{code}</div>
-                        <div className="col-span-6 font-medium text-[#1E1E1E] dark:text-gray-200 leading-snug">{desc}</div>
-                        <div className="col-span-4 text-right font-mono font-bold text-[#1E1E1E] dark:text-white whitespace-nowrap">
+                        <div className="col-span-6 font-medium text-slate-200 leading-snug">{desc}</div>
+                        <div className="col-span-4 text-right font-mono font-bold text-white whitespace-nowrap">
                           {subtotal}
                         </div>
                       </div>
@@ -697,15 +697,15 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <div className="bg-[#FAF8F5] dark:bg-[#0B0E14] rounded-xl p-3 border border-[#E5E7EB] dark:border-[#263040] mb-3 text-[11px] font-mono space-y-1.5">
-                  <div className="flex items-center justify-between text-[#475569] dark:text-gray-300">
+                <div className="bg-[#10151E] rounded-xl p-3 border border-[#2C3748] mb-3 text-[11px] font-mono space-y-1.5">
+                  <div className="flex items-center justify-between text-slate-300">
                     <span>Subtotal Costo Directo</span>
-                    <span className="font-bold text-[#1E1E1E] dark:text-white">{formatCLP(DIRECT_COST)}</span>
+                    <span className="font-bold text-white">{formatCLP(DIRECT_COST)}</span>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[#475569] dark:text-gray-300">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-slate-300">
                     <div className="flex items-center gap-1.5">
                       <span>Tarifa:</span>
-                      <div className="inline-flex bg-white dark:bg-[#141A23] border border-[#E5E7EB] dark:border-[#263040] rounded-lg p-0.5 text-[10px]">
+                      <div className="inline-flex bg-[#161D27] border border-[#2C3748] rounded-lg p-0.5 text-[10px]">
                         {([15, 30, 40] as const).map((pct) => (
                           <button
                             key={pct}
@@ -713,8 +713,8 @@ export default function LandingPage() {
                             onClick={() => setQuoteMargin(pct)}
                             className={`px-1.5 py-0.5 rounded font-bold transition ${
                               quoteMargin === pct
-                                ? 'bg-[#141A23] dark:bg-[#FF6A00] text-white'
-                                : 'text-[#64748B] dark:text-gray-400 hover:text-[#1E1E1E] dark:hover:text-white'
+                                ? 'bg-[#FF6A00] text-white'
+                                : 'text-slate-400 hover:text-white'
                             }`}
                           >
                             {pct}%
@@ -722,13 +722,13 @@ export default function LandingPage() {
                         ))}
                       </div>
                     </div>
-                    <span className="font-bold text-[#1E1E1E] dark:text-white">
+                    <span className="font-bold text-white">
                       + {formatCLP(quoteCalc.marginAmount)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-[#475569] dark:text-gray-300">
+                  <div className="flex items-center justify-between text-slate-300">
                     <span>IVA (19% sobre Neto)</span>
-                    <span className="font-bold text-[#1E1E1E] dark:text-white">+ {formatCLP(quoteCalc.iva)}</span>
+                    <span className="font-bold text-white">+ {formatCLP(quoteCalc.iva)}</span>
                   </div>
                 </div>
 
@@ -746,8 +746,8 @@ export default function LandingPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#64748B] dark:text-gray-400 font-mono">
-                  <span className="flex items-center gap-1 text-obra-green font-bold">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 font-mono">
+                  <span className="flex items-center gap-1 text-[#9AC2A2] font-bold">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     Asesor &quot;¿Cuánto cobrar?&quot; (3 niveles)
                   </span>
@@ -759,17 +759,17 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Section 2: Interactive Radar Ferretero */}
-      <section id="radar-ferretero" className="scroll-mt-24 py-20 bg-[#FAF8F5] dark:bg-[#0F141C] border-b border-[#E5E7EB] dark:border-[#263040]">
+      {/* Section 2: Interactive Radar Ferretero (Dark Slate Band #161D27) */}
+      <section id="radar-ferretero" className="scroll-mt-24 py-20 landing-slate-blueprint text-white border-b border-[#2C3748]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-3xl mx-auto mb-12 landing-reveal">
             <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
               PROVEEDORES INTEGRADOS EN OBRABOT
             </span>
-            <h2 className="text-3xl sm:text-5xl font-extrabold font-heading text-[#1E1E1E] dark:text-white mt-2">
+            <h2 className="text-3xl sm:text-5xl font-extrabold font-heading text-white mt-2">
               Radar Ferretero en Vivo
             </h2>
-            <p className="text-[#475569] dark:text-gray-300 mt-3 text-base">
+            <p className="text-slate-300 mt-3 text-base">
               Consulta catálogos públicos de las 5 cadenas líderes en Chile directamente desde el Cotizador Web o WhatsApp con ObraBot. Filtra la muestra por cadena o partida.
             </p>
           </div>
@@ -784,8 +784,8 @@ export default function LandingPage() {
                   onClick={() => setActiveStore(store.name)}
                   className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl border-2 shadow-sm transition hover:-translate-y-0.5 flex items-center gap-2 shrink-0 whitespace-nowrap ${
                     selected
-                      ? 'border-[#141A23] dark:border-[#FF6A00] bg-[#141A23] dark:bg-[#FF6A00] text-white'
-                      : 'border-[#E5E7EB] dark:border-[#263040] bg-white dark:bg-[#141A23] text-[#1E1E1E] dark:text-gray-200 hover:border-[#141A23] dark:hover:border-[#FF6A00]'
+                      ? 'border-[#FF6A00] bg-[#FF6A00] text-white'
+                      : 'border-[#2F3C4F] bg-[#1E2735] text-slate-200 hover:border-[#FF6A00]'
                   }`}
                 >
                   {store.dotClass && <span className={`w-2.5 h-2.5 rounded-full ${store.dotClass}`} />}
@@ -795,8 +795,8 @@ export default function LandingPage() {
             })}
           </div>
 
-          <div className="bg-white dark:bg-[#141A23] rounded-2xl border-2 border-[#E5E7EB] dark:border-[#263040] overflow-hidden shadow-lg max-w-5xl mx-auto landing-reveal landing-delay-2">
-            <div className="bg-[#141A23] text-white p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="bg-[#1E2735] rounded-2xl border border-[#2F3C4F] overflow-hidden shadow-2xl max-w-5xl mx-auto landing-reveal landing-delay-2">
+            <div className="bg-[#121821] text-white p-3.5 sm:p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div className="font-mono text-[11px] sm:text-xs font-bold flex items-center gap-2">
                 <Radio className="w-4 h-4 text-[#FF6A00] animate-pulse shrink-0" />
                 <span>COMPARATIVA DE MATERIALES (CLP CON IVA)</span>
@@ -834,9 +834,9 @@ export default function LandingPage() {
             </div>
 
             {/* Mobile Card List (No cramped table scrolling on phones) */}
-            <div className="sm:hidden divide-y divide-[#E5E7EB] dark:divide-[#263040]">
+            <div className="sm:hidden divide-y divide-[#2A3546]">
               {filteredRadar.length === 0 ? (
-                <div className="py-8 px-4 text-center text-xs text-[#64748B] dark:text-gray-400 font-mono">
+                <div className="py-8 px-4 text-center text-xs text-slate-400 font-mono">
                   No hay insumos en esta muestra para el filtro seleccionado. Prueba con &quot;Todas&quot;.
                 </div>
               ) : (
@@ -845,26 +845,26 @@ export default function LandingPage() {
                   return (
                     <div key={item.name} className="p-3.5 space-y-2">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="font-bold text-xs text-[#1E1E1E] dark:text-white leading-snug">
+                        <div className="font-bold text-xs text-white leading-snug">
                           {item.name}
                         </div>
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-mono text-[10px] font-bold shrink-0">
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold shrink-0">
                           -{savingPct}%
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-[11px] font-mono">
-                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-[#0B0E14] text-[#475569] dark:text-gray-300 text-[10px]">
+                        <span className="px-2 py-0.5 rounded bg-[#121821] text-slate-300 text-[10px]">
                           {item.cat} · {item.unit}
                         </span>
-                        <span className="text-[#64748B] dark:text-gray-400 line-through">
+                        <span className="text-slate-400 line-through">
                           {formatCLP(item.avg)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between pt-1 text-xs font-mono">
-                        <span className="text-[#64748B] dark:text-gray-400 text-[11px]">Mejor oferta:</span>
-                        <span className="font-bold text-obra-green">
+                        <span className="text-slate-400 text-[11px]">Mejor oferta:</span>
+                        <span className="font-bold text-[#9AC2A2]">
                           {formatCLP(item.best)}{' '}
-                          <span className="text-[#1E1E1E] dark:text-white">({item.store})</span>
+                          <span className="text-white">({item.store})</span>
                         </span>
                       </div>
                     </div>
@@ -876,20 +876,20 @@ export default function LandingPage() {
             {/* Desktop Table */}
             <div className="hidden sm:block overflow-x-auto">
               <table className="w-full text-left text-xs font-sans">
-                <thead className="bg-[#FAF8F5] dark:bg-[#0B0E14] text-[#1E1E1E] dark:text-gray-200 font-mono border-b border-[#E5E7EB] dark:border-[#263040] uppercase text-[11px]">
+                <thead className="bg-[#161D27] text-slate-300 font-mono border-b border-[#2A3546] uppercase text-[11px]">
                   <tr>
                     <th className="py-3 px-4">Material / Insumo</th>
                     <th className="py-3 px-4">Partida</th>
                     <th className="py-3 px-4">Unidad</th>
                     <th className="py-3 px-4">Ref. Promedio</th>
-                    <th className="py-3 px-4 text-obra-green font-bold">Mejor Oferta Referencial</th>
+                    <th className="py-3 px-4 text-[#9AC2A2] font-bold">Mejor Oferta Referencial</th>
                     <th className="py-3 px-4 text-right">Diferencia</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#E5E7EB] dark:divide-[#263040]">
+                <tbody className="divide-y divide-[#2A3546]">
                   {filteredRadar.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-[#64748B] dark:text-gray-400 font-mono">
+                      <td colSpan={6} className="py-8 text-center text-slate-400 font-mono">
                         No hay insumos en esta muestra para el filtro seleccionado. Prueba con &quot;Todas&quot;.
                       </td>
                     </tr>
@@ -900,25 +900,25 @@ export default function LandingPage() {
                         <tr
                           key={item.name}
                           className={`landing-row-enter ${
-                            idx % 2 === 1 ? 'bg-[#FAF8F5]/80 dark:bg-[#0F141C]' : 'bg-white dark:bg-[#141A23]'
-                          } hover:bg-orange-50/50 dark:hover:bg-[#1C2432] transition`}
+                            idx % 2 === 1 ? 'bg-[#18202C]' : 'bg-[#1E2735]'
+                          } hover:bg-[#253042] transition`}
                           style={{ animationDelay: `${idx * 35}ms` }}
                         >
-                          <td className="py-3 px-4 font-bold text-[#1E1E1E] dark:text-white">{item.name}</td>
+                          <td className="py-3 px-4 font-bold text-white">{item.name}</td>
                           <td className="py-3 px-4">
-                            <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-[#0B0E14] text-[#475569] dark:text-gray-300 font-mono text-[10px]">
+                            <span className="px-2 py-0.5 rounded bg-[#121821] text-slate-300 font-mono text-[10px]">
                               {item.cat}
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-mono text-[#64748B] dark:text-gray-400">{item.unit}</td>
-                          <td className="py-3 px-4 font-mono text-[#475569] dark:text-gray-300">
+                          <td className="py-3 px-4 font-mono text-slate-400">{item.unit}</td>
+                          <td className="py-3 px-4 font-mono text-slate-400">
                             {formatCLP(item.avg)}
                           </td>
-                          <td className="py-3 px-4 font-mono font-bold text-obra-green">
+                          <td className="py-3 px-4 font-mono font-bold text-[#9AC2A2]">
                             {formatCLP(item.best)}{' '}
-                            <span className="text-[#1E1E1E] dark:text-white">({item.store})</span>
+                            <span className="text-white">({item.store})</span>
                           </td>
-                          <td className="py-3 px-4 font-mono font-bold text-right text-emerald-700 dark:text-emerald-400">
+                          <td className="py-3 px-4 font-mono font-bold text-right text-emerald-400">
                             - {savingPct}%
                           </td>
                         </tr>
@@ -929,14 +929,14 @@ export default function LandingPage() {
               </table>
             </div>
 
-            <div className="p-4 bg-[#FAF8F5] dark:bg-[#0B0E14] border-t border-[#E5E7EB] dark:border-[#263040] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono text-[#475569] dark:text-gray-400">
+            <div className="p-4 bg-[#121821] border-t border-[#2A3546] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono text-slate-400">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#6B8F72]" />
                 <span>
                   Mostrando {filteredRadar.length} de {RADAR_ITEMS.length} insumos referenciales
                 </span>
               </div>
-              <span className="text-[#1E1E1E] dark:text-gray-200 font-bold">
+              <span className="text-slate-200 font-bold">
                 En la app devuelve enlaces directos a cada tienda y fecha de consulta
               </span>
             </div>
@@ -945,7 +945,7 @@ export default function LandingPage() {
       </section>
 
       {/* Section 3: Interactive WhatsApp to Gantt Engine */}
-      <section id="como-funciona" className="scroll-mt-24 py-20 bg-white dark:bg-[#0B0E14] border-b border-[#E5E7EB] dark:border-[#263040]">
+      <section id="como-funciona" className="scroll-mt-24 py-20 bg-[#F3EFE6] dark:bg-[#0B0E14] border-b border-[#DDD5C5] dark:border-[#263040]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-3xl mx-auto mb-10 landing-reveal">
             <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
@@ -1043,18 +1043,18 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Step 2 */}
+            {/* Step 2 (Dark Focal Center Card #161D27) */}
             <div
               onMouseMove={handleSpotlightMove}
-              className="landing-spotlight mt-3 lg:mt-0 bg-white dark:bg-[#141A23] border-2 border-[#FF6A00] rounded-3xl p-6 shadow-xl relative landing-reveal landing-delay-1"
+              className="landing-spotlight mt-3 lg:mt-0 bg-[#161D27] text-white border-2 border-[#FF6A00] rounded-3xl p-6 shadow-xl relative landing-reveal landing-delay-1"
             >
               <div className="absolute -top-3.5 left-6 px-3 py-0.5 rounded-full bg-[#FF6A00] text-white font-mono font-bold text-[10px] uppercase tracking-wider shadow-sm">
                 2. MOTOR OBRABOT IA CHILE
               </div>
 
-              <div className="flex items-center justify-between text-xs font-mono text-[#64748B] dark:text-gray-400 uppercase mb-4 mt-2 font-bold">
+              <div className="flex items-center justify-between text-xs font-mono text-slate-400 uppercase mb-4 mt-2 font-bold">
                 <span>VALIDACIÓN TRANSACCIONAL</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-[#FAF8F5] dark:bg-[#0B0E14] border border-[#E5E7EB] dark:border-[#263040] text-[#475569] dark:text-gray-200">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-[#1E2735] border border-[#2C3748] text-slate-200">
                   {botBadge}
                 </span>
               </div>
@@ -1063,26 +1063,26 @@ export default function LandingPage() {
                 <div
                   className={`p-3 rounded-xl border transition-all duration-300 ${
                     botStep >= 1
-                      ? 'ring-2 ring-[#FF6A00] bg-orange-50 dark:bg-orange-950/30 border-[#FF6A00]'
-                      : 'bg-[#FAF8F5] dark:bg-[#0B0E14] border-[#E5E7EB] dark:border-[#263040]'
+                      ? 'ring-2 ring-[#FF6A00] bg-orange-950/40 border-[#FF6A00]'
+                      : 'bg-[#1E2735] border-[#2C3748]'
                   }`}
                 >
                   <div className="text-[10px] text-[#FF6A00] font-bold uppercase">1. Mapeo a Partida Gantt</div>
-                  <div className="text-[#1E1E1E] dark:text-white font-bold text-sm mt-0.5">Pintura Esmalte al Agua</div>
-                  <div className="text-obra-green text-[11px] font-bold mt-1">Avance físico actualizado: 50%</div>
+                  <div className="text-white font-bold text-sm mt-0.5">Pintura Esmalte al Agua</div>
+                  <div className="text-[#9AC2A2] text-[11px] font-bold mt-1">Avance físico actualizado: 50%</div>
                 </div>
 
                 <div
                   className={`p-3 rounded-xl border transition-all duration-300 ${
                     botStep >= 2
-                      ? 'ring-2 ring-[#FF6A00] bg-orange-50 dark:bg-orange-950/30 border-[#FF6A00]'
-                      : 'bg-[#FAF8F5] dark:bg-[#0B0E14] border-[#E5E7EB] dark:border-[#263040]'
+                      ? 'ring-2 ring-[#FF6A00] bg-orange-950/40 border-[#FF6A00]'
+                      : 'bg-[#1E2735] border-[#2C3748]'
                   }`}
                 >
-                  <div className="text-[10px] text-[#1E1E1E] dark:text-gray-300 font-bold uppercase">
+                  <div className="text-[10px] text-slate-300 font-bold uppercase">
                     2. Registro de Imprevisto Instruido
                   </div>
-                  <div className="text-[#1E1E1E] dark:text-white font-bold text-sm mt-0.5">
+                  <div className="text-white font-bold text-sm mt-0.5">
                     Rodillos y cinta (Sodimac)
                   </div>
                   <div className="text-[#FF6A00] text-[11px] font-bold mt-1">$ 18.500 CLP en control de costos</div>
@@ -1091,15 +1091,15 @@ export default function LandingPage() {
                 <div
                   className={`p-3 rounded-xl border transition-all duration-300 ${
                     botStep >= 3
-                      ? 'ring-2 ring-[#FF6A00] bg-orange-50 dark:bg-orange-950/30 border-[#FF6A00]'
-                      : 'bg-[#FAF8F5] dark:bg-[#0B0E14] border-[#E5E7EB] dark:border-[#263040]'
+                      ? 'ring-2 ring-[#FF6A00] bg-orange-950/40 border-[#FF6A00]'
+                      : 'bg-[#1E2735] border-[#2C3748]'
                   }`}
                 >
-                  <div className="text-[10px] text-obra-green font-bold uppercase">3. Evidencia Privada en Bitácora</div>
-                  <div className="text-[#1E1E1E] dark:text-white font-bold text-sm mt-0.5">
+                  <div className="text-[10px] text-[#9AC2A2] font-bold uppercase">3. Evidencia Privada en Bitácora</div>
+                  <div className="text-white font-bold text-sm mt-0.5">
                     Foto guardada con acceso firmado
                   </div>
-                  <div className="text-[#64748B] dark:text-gray-400 text-[11px] mt-1">
+                  <div className="text-slate-400 text-[11px] mt-1">
                     Aislada por empresa (RLS Supabase)
                   </div>
                 </div>
@@ -1173,7 +1173,7 @@ export default function LandingPage() {
       </section>
 
       {/* Section 4: REAL Estados de Pago (EDP) + Custom Letterhead PDF */}
-      <section id="estados-pago" className="scroll-mt-24 py-20 bg-[#FAF8F5] dark:bg-[#0F141C] border-b border-[#E5E7EB] dark:border-[#263040]">
+      <section id="estados-pago" className="scroll-mt-24 py-20 bg-[#EAE3D5] dark:bg-[#0F141C] border-b border-[#D6CEC0] dark:border-[#263040]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
             <div className="lg:col-span-5 landing-reveal">
@@ -1356,17 +1356,17 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Section 5: Real Platform Modules Bento Grid */}
-      <section id="modulos" className="scroll-mt-24 py-20 bg-white dark:bg-[#0B0E14] border-b border-[#E5E7EB] dark:border-[#263040]">
+      {/* Section 5: Real Platform Modules Bento Grid (Dark Slate Band #161D27) */}
+      <section id="modulos" className="scroll-mt-24 py-20 landing-slate-blueprint text-white border-b border-[#2C3748]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-3xl mx-auto mb-14 landing-reveal">
             <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
               ECOSISTEMA REAL EN PRODUCCIÓN
             </span>
-            <h2 className="text-3xl sm:text-5xl font-extrabold font-heading text-[#1E1E1E] dark:text-white mt-2">
+            <h2 className="text-3xl sm:text-5xl font-extrabold font-heading text-white mt-2">
               Mucho más que presupuestos: toda tu obra en un solo lugar
             </h2>
-            <p className="text-[#475569] dark:text-gray-300 mt-3 text-base">
+            <p className="text-slate-300 mt-3 text-base">
               Cada módulo está construido y funcionando hoy en ObraTrack para ordenar tus proyectos de principio a fin.
             </p>
           </div>
@@ -1375,37 +1375,37 @@ export default function LandingPage() {
             {[
               {
                 icon: ClipboardCheck,
-                iconBg: 'bg-[#FF6A00]/10 text-[#FF6A00]',
+                iconBg: 'bg-[#FF6A00]/15 text-[#FF6A00]',
                 title: 'Asistencia y Cálculo de Jornales',
                 desc: 'Control exclusivo de administración y jefes de obra para registrar presencia, atrasos y calcular jornales automáticamente sin planillas sueltas.',
               },
               {
                 icon: FileCheck2,
-                iconBg: 'bg-[#EBF2ED] dark:bg-[#18261D] text-obra-green',
+                iconBg: 'bg-[#6B8F72]/20 text-[#9AC2A2]',
                 title: 'Cierres de Jornada en PDF',
                 desc: 'Consolida avances, incidencias y resumen del día en un PDF limpio que también puedes recibir en forma privada por WhatsApp.',
               },
               {
                 icon: MapPinned,
-                iconBg: 'bg-[#141A23] text-[#FF6A00]',
+                iconBg: 'bg-[#121821] text-[#FF6A00]',
                 title: 'Georreferenciación Google Maps',
                 desc: 'Ubica cada proyecto con dirección y comuna de Chile directamente en Google Maps para compartir rutas rápidas a tu equipo. Incluido desde el Plan Gratis.',
               },
               {
                 icon: BellRing,
-                iconBg: 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300',
+                iconBg: 'bg-emerald-500/20 text-emerald-300',
                 title: 'Avisos a Cuadrillas con Trazabilidad',
                 desc: 'Pídele a ObraBot que envíe instrucciones individuales por WhatsApp a tu equipo y revisa su estado real: pendiente, enviado, entregado o leído.',
               },
               {
                 icon: GitPullRequest,
-                iconBg: 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300',
+                iconBg: 'bg-amber-500/20 text-amber-300',
                 title: 'Adicionales y Solicitudes de Cambio',
                 desc: 'Separa incidentes internos de adicionales del cliente. El contrato y plazo solo cambian cuando registras la aprobación explícita del mandante.',
               },
               {
                 icon: Smartphone,
-                iconBg: 'bg-slate-200 dark:bg-[#1E2634] text-[#1E1E1E] dark:text-white',
+                iconBg: 'bg-white/10 text-white',
                 title: 'PWA Móvil, Push y Respaldo Total',
                 desc: 'Instálala en tu celular con modo claro/oscuro, notificaciones Push, caché local si se corta internet y exportación completa a Excel (.xlsx) y JSON (Ley 21.719).',
               },
@@ -1415,15 +1415,15 @@ export default function LandingPage() {
                 <div
                   key={mod.title}
                   onMouseMove={handleSpotlightMove}
-                  className={`landing-spotlight bg-[#FAF8F5] dark:bg-[#141A23] border-2 border-[#E5E7EB] dark:border-[#263040] hover:border-[#FF6A00]/60 rounded-3xl p-6 landing-reveal ${
+                  className={`landing-spotlight bg-[#1E2735] border border-[#2F3C4F] hover:border-[#FF6A00]/70 rounded-3xl p-6 landing-reveal ${
                     idx % 3 === 1 ? 'landing-delay-1' : idx % 3 === 2 ? 'landing-delay-2' : ''
                   }`}
                 >
                   <div className={`w-11 h-11 rounded-2xl flex items-center justify-center mb-4 ${mod.iconBg}`}>
                     <Icon className="w-5 h-5" />
                   </div>
-                  <h3 className="font-heading font-bold text-lg text-[#1E1E1E] dark:text-white">{mod.title}</h3>
-                  <p className="text-xs sm:text-sm text-[#475569] dark:text-gray-300 mt-2 leading-relaxed">
+                  <h3 className="font-heading font-bold text-lg text-white">{mod.title}</h3>
+                  <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
                     {mod.desc}
                   </p>
                 </div>
@@ -1434,7 +1434,7 @@ export default function LandingPage() {
       </section>
 
       {/* Section 6: Market Comparison */}
-      <section className="py-20 bg-[#FAF8F5] dark:bg-[#0F141C] border-b border-[#E5E7EB] dark:border-[#263040]">
+      <section className="py-20 bg-[#F3EFE6] dark:bg-[#0F141C] border-b border-[#DDD5C5] dark:border-[#263040]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="max-w-3xl mb-12 landing-reveal">
             <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
@@ -1513,7 +1513,7 @@ export default function LandingPage() {
       </section>
 
       {/* Section 7: Interactive ROI Estimator */}
-      <section id="calculadora-roi" className="scroll-mt-24 py-20 bg-white dark:bg-[#0B0E14] border-b border-[#E5E7EB] dark:border-[#263040]">
+      <section id="calculadora-roi" className="scroll-mt-24 py-20 bg-[#EAE3D5] dark:bg-[#0B0E14] border-b border-[#D6CEC0] dark:border-[#263040]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-2xl mx-auto mb-12 landing-reveal">
             <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
@@ -1590,40 +1590,40 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-[#0B0E14] border-2 border-[#FF6A00] rounded-2xl p-6 text-center shadow-lg">
+              <div className="bg-[#161D27] text-white border-2 border-[#FF6A00] rounded-2xl p-6 text-center shadow-xl">
                 <span className="text-xs font-mono text-[#FF6A00] font-bold uppercase tracking-wider">
                   PROYECCIÓN DE MARGEN PROTEGIDO
                 </span>
-                <div className="text-3xl sm:text-5xl font-extrabold font-heading text-[#1E1E1E] dark:text-white mt-3">
+                <div className="text-3xl sm:text-5xl font-extrabold font-heading text-white mt-3">
                   {formatCLP(roiCalc.monthlyRecup)}{' '}
-                  <span className="text-sm font-normal text-[#64748B] dark:text-gray-400 font-mono">CLP/mes</span>
+                  <span className="text-sm font-normal text-slate-400 font-mono">CLP/mes</span>
                 </div>
-                <div className="text-xs text-obra-green font-mono font-bold mt-2">
+                <div className="text-xs text-[#9AC2A2] font-mono font-bold mt-2">
                   {formatCLP(roiCalc.cycleRecup)} CLP en el ciclo de tus {roiObras} obra{roiObras > 1 ? 's' : ''}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 mt-5 text-left">
-                  <div className="p-3 rounded-xl bg-[#FAF8F5] dark:bg-[#141A23] border border-[#E5E7EB] dark:border-[#263040]">
-                    <div className="text-[10px] font-mono text-[#64748B] dark:text-gray-400 uppercase">
+                  <div className="p-3 rounded-xl bg-[#1E2735] border border-[#2C3748]">
+                    <div className="text-[10px] font-mono text-slate-400 uppercase">
                       Oficina ahorrada
                     </div>
-                    <div className="font-heading font-extrabold text-lg text-[#1E1E1E] dark:text-white mt-0.5">
+                    <div className="font-heading font-extrabold text-lg text-white mt-0.5">
                       {roiCalc.hoursSaved} hrs/mes
                     </div>
                   </div>
-                  <div className="p-3 rounded-xl bg-[#FAF8F5] dark:bg-[#141A23] border border-[#E5E7EB] dark:border-[#263040]">
-                    <div className="text-[10px] font-mono text-[#64748B] dark:text-gray-400 uppercase">
+                  <div className="p-3 rounded-xl bg-[#1E2735] border border-[#2C3748]">
+                    <div className="text-[10px] font-mono text-slate-400 uppercase">
                       Relación vs Pro IA
                     </div>
-                    <div className="font-heading font-extrabold text-lg text-obra-green mt-0.5">
+                    <div className="font-heading font-extrabold text-lg text-[#9AC2A2] mt-0.5">
                       {roiCalc.roiMult}x valor plan
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-5 pt-5 border-t border-[#E5E7EB] dark:border-[#263040]">
-                  <div className="text-xs text-[#475569] dark:text-gray-300">
-                    Plan Pro IA cuesta <strong className="text-[#1E1E1E] dark:text-white">$24.990 CLP/mes</strong> (IVA incluido).
+                <div className="mt-5 pt-5 border-t border-[#2C3748]">
+                  <div className="text-xs text-slate-300">
+                    Plan Pro IA cuesta <strong className="text-white">$24.990 CLP/mes</strong> (IVA incluido).
                   </div>
                   <Link
                     href="/login"
@@ -1639,7 +1639,7 @@ export default function LandingPage() {
       </section>
 
       {/* Section 8: Official Pricing Plans (Driven directly from lib/plans.ts) */}
-      <section id="precios" className="scroll-mt-24 py-24 bg-[#FAF8F5] dark:bg-[#0F141C] border-b border-[#E5E7EB] dark:border-[#263040]">
+      <section id="precios" className="scroll-mt-24 py-24 bg-[#F3EFE6] dark:bg-[#0F141C] border-b border-[#DDD5C5] dark:border-[#263040]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-3xl mx-auto mb-12 landing-reveal">
             <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
@@ -1730,14 +1730,14 @@ export default function LandingPage() {
                 <article
                   key={plan.id}
                   onMouseMove={handleSpotlightMove}
-                  className={`landing-spotlight w-[85vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none md:shrink bg-white dark:bg-[#141A23] rounded-3xl p-6 sm:p-7 flex flex-col justify-between relative landing-reveal ${
+                  className={`landing-spotlight w-[85vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none md:shrink rounded-3xl p-6 sm:p-7 flex flex-col justify-between relative landing-reveal ${
                     idx === 1 ? 'landing-delay-1' : idx === 2 ? 'landing-delay-2' : ''
                   } ${
                     isPro
-                      ? 'border-2 border-[#FF6A00] shadow-xl shadow-[#FF6A00]/15'
+                      ? 'bg-[#161D27] text-white border-2 border-[#FF6A00] shadow-2xl shadow-[#161D27]/25'
                       : isProIa
-                      ? 'border-2 border-[#6B8F72] shadow-lg'
-                      : 'border-2 border-[#E5E7EB] dark:border-[#263040] shadow-sm'
+                      ? 'bg-[#FAF8F5] dark:bg-[#141A23] border-2 border-[#6B8F72] shadow-lg'
+                      : 'bg-[#FAF8F5] dark:bg-[#141A23] border-2 border-[#D6CEC0] dark:border-[#263040] shadow-sm'
                   }`}
                 >
                   {(isPro || isProIa) && (
@@ -1752,16 +1752,16 @@ export default function LandingPage() {
 
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-2xl font-bold font-heading text-[#1E1E1E] dark:text-white">
+                      <h3 className={`text-2xl font-bold font-heading ${isPro ? 'text-white' : 'text-[#1E1E1E] dark:text-white'}`}>
                         {plan.nombre}
                       </h3>
                       <span
                         className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full ${
                           isPro
-                            ? 'bg-[#FF6A00]/10 text-[#FF6A00]'
+                            ? 'bg-[#FF6A00]/20 text-[#FF6A00]'
                             : isProIa
                             ? 'bg-[#EBF2ED] dark:bg-[#18261D] text-obra-green'
-                            : 'bg-[#FAF8F5] dark:bg-[#0B0E14] border border-[#E5E7EB] dark:border-[#263040] text-[#64748B] dark:text-gray-400'
+                            : 'bg-[#EFEAE0] dark:bg-[#0B0E14] border border-[#D6CEC0] dark:border-[#263040] text-[#5C554B] dark:text-gray-400'
                         }`}
                       >
                         {plan.id === 'gratis' ? plan.badge : isPro ? 'Contratista' : 'Multi-Cuadrilla'}
@@ -1769,25 +1769,29 @@ export default function LandingPage() {
                     </div>
 
                     <div className="mt-4 flex items-baseline gap-1.5">
-                      <span className="text-4xl font-extrabold font-heading text-[#1E1E1E] dark:text-white">
+                      <span className={`text-4xl font-extrabold font-heading ${isPro ? 'text-white' : 'text-[#1E1E1E] dark:text-white'}`}>
                         {formatCLP(monthlyPrice)}
                       </span>
-                      <span className="text-xs font-mono text-[#64748B] dark:text-gray-400">
+                      <span className={`text-xs font-mono ${isPro ? 'text-slate-400' : 'text-[#64748B] dark:text-gray-400'}`}>
                         {plan.id === 'gratis' ? 'CLP / mes para siempre' : 'CLP / mes'}
                       </span>
                     </div>
 
-                    <div className="h-5 mt-1 text-[11px] font-mono text-obra-green font-bold">
+                    <div className={`h-5 mt-1 text-[11px] font-mono font-bold ${isPro ? 'text-[#9AC2A2]' : 'text-obra-green'}`}>
                       {pricing && billingCycle === 'anual'
                         ? `Pago anual único ${formatCLP(pricing.montoCobroCLP)} · Ahorras ${formatCLP(pricing.ahorroAnualCLP)}`
                         : ''}
                     </div>
 
-                    <p className="text-xs text-[#475569] dark:text-gray-300 mt-2 leading-relaxed">
+                    <p className={`text-xs mt-2 leading-relaxed ${isPro ? 'text-slate-300' : 'text-[#475569] dark:text-gray-300'}`}>
                       {plan.descripcion}
                     </p>
 
-                    <ul className="mt-6 space-y-2.5 text-xs text-[#1E1E1E] dark:text-gray-200 border-t border-[#E5E7EB] dark:border-[#263040] pt-6">
+                    <ul className={`mt-6 space-y-2.5 text-xs border-t pt-6 ${
+                      isPro
+                        ? 'text-slate-200 border-[#2C3748]'
+                        : 'text-[#1E1E1E] dark:text-gray-200 border-[#E2DACB] dark:border-[#263040]'
+                    }`}>
                       {plan.caracteristicas.map((feat) => (
                         <li key={feat} className="flex items-start gap-2">
                           <CheckCircle2
@@ -1875,7 +1879,7 @@ export default function LandingPage() {
       </section>
 
       {/* Section 9: FAQ */}
-      <section className="py-20 bg-white dark:bg-[#0B0E14] border-b border-[#E5E7EB] dark:border-[#263040]">
+      <section className="py-20 bg-[#EAE3D5] dark:bg-[#0B0E14] border-b border-[#D6CEC0] dark:border-[#263040]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-12 landing-reveal">
             <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
