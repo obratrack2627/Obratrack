@@ -722,7 +722,13 @@ function LoginForm() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   useEffect(() => {
-    if (searchParams.get('error') === 'acceso_whatsapp') return;
+    if (
+      searchParams.get('error') === 'acceso_whatsapp' ||
+      searchParams.get('deleted') === '1' ||
+      searchParams.get('logout') === '1'
+    ) {
+      return;
+    }
     let current = true;
     void resumeSupabaseSession().then(result => {
       if (!current || !result) return;

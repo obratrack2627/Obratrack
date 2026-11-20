@@ -187,7 +187,7 @@ test('Mi perfil permite eliminar la cuenta definitivamente tras confirmar ELIMIN
   await page.goto('/dashboard');
   await page.getByRole('button', { name: /Saltar/ }).click();
 
-  await page.locator('aside').getByRole('button', { name: 'Cuenta' }).click();
+  await page.locator('aside summary[aria-label="Cuenta"]').click();
   await page.getByRole('button', { name: 'Editar perfil' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Editar perfil de cuenta y empresa' });
