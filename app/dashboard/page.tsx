@@ -26,7 +26,12 @@ import {
   MapPin,
   Eye,
   EyeOff,
+  HelpCircle,
 } from 'lucide-react';
+import DashboardOnboardingTour, {
+  DashboardFirstStepsChecklist,
+  type TourChecklistStatus,
+} from '@/components/DashboardOnboardingTour';
 import {
   ResponsiveContainer,
   BarChart,
@@ -53,15 +58,24 @@ const compactCLP = (value: number) => {
   return formatCLP(amount);
 };
 
+const DEMO_EMPRESA_ID = 'e1111111-1111-4111-a111-111111111111';
+const tourDoneKey = (userId: string) => `obratrack_dashboard_tour_done:${userId}`;
+const checklistHiddenKey = (userId: string) => `obratrack_dashboard_checklist_hidden:${userId}`;
+
 export default function DashboardPage() {
   const router = useRouter();
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [reportes, setReportes] = useState<ReporteWhatsApp[]>([]);
   const [whatsappPendingCount, setWhatsappPendingCount] = useState(0);
   const [activeUser, setActiveUser] = useState<Usuario | null>(null);
+  const [teamCount, setTeamCount] = useState(0);
+  const [hasProfileSetup, setHasProfileSetup] = useState(false);
   const [loading, setLoading] = useState(true);
   const [barChartRevealed, setBarChartRevealed] = useState(false);
   const [pieChartRevealed, setPieChartRevealed] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+  const [checklistHidden, setChecklistHidden] = useState(false);
 
   useEffect(() => {
     if (!barChartRevealed && !pieChartRevealed) return;
@@ -73,6 +87,29 @@ export default function DashboardPage() {
   }, [barChartRevealed, pieChartRevealed]);
 
   useEffect(() => {
+    const computeOnboardingState = (
+      user: Usuario | null,
+      projs: Proyecto[],
+      autoTrigger: boolean
+    ) => {
+      const empresa = dataService.getEmpresa();
+      const users = dataService.getUsuarios();
+      const cleanPhone = (user?.telefono_whatsapp || '').replace(/\D/g, '');
+      setHasProfileSetup(Boolean(cleanPhone.length >= 8 || empresa?.logo_url));
+      setTeamCount(users.filter((u) => u.id !== user?.id).length);
+
+      if (!user?.id || user.empresa_id === DEMO_EMPRESA_ID) return;
+      try {
+        setChecklistHidden(localStorage.getItem(checklistHiddenKey(user.id)) === '1');
+        if (autoTrigger && projs.length === 0 && localStorage.getItem(tourDoneKey(user.id)) !== '1') {
+          setTourStep(0);
+          setTourOpen(true);
+        }
+      } catch {
+        // Ignorar restricciones de almacenamiento en modo privado
+      }
+    };
+
     const user = dataService.getActiveUser();
     if (user?.rol === 'terreno') {
       router.replace('/proyectos');
@@ -85,6 +122,8 @@ export default function DashboardPage() {
 
     const reps = dataService.getReportes();
     setReportes(reps);
+
+    computeOnboardingState(user, projs, true);
 
     const loadWhatsAppPending = async () => {
       try {
@@ -106,14 +145,53 @@ export default function DashboardPage() {
 
     setLoading(false);
     const onSync = () => {
-      setActiveUser(dataService.getActiveUser());
-      setProyectos(dataService.getProyectos());
+      const syncedUser = dataService.getActiveUser();
+      const syncedProjs = dataService.getProyectos();
+      setActiveUser(syncedUser);
+      setProyectos(syncedProjs);
       setReportes(dataService.getReportes());
+      computeOnboardingState(syncedUser, syncedProjs, false);
       void loadWhatsAppPending();
     };
+    const onProfileUpdated = () => {
+      const updatedUser = dataService.getActiveUser();
+      setActiveUser(updatedUser);
+      computeOnboardingState(updatedUser, dataService.getProyectos(), false);
+    };
     window.addEventListener('obratrack_cloud_synced', onSync);
-    return () => window.removeEventListener('obratrack_cloud_synced', onSync);
+    window.addEventListener('obratrack_profile_updated', onProfileUpdated);
+    return () => {
+      window.removeEventListener('obratrack_cloud_synced', onSync);
+      window.removeEventListener('obratrack_profile_updated', onProfileUpdated);
+    };
   }, [router]);
+
+  const startTour = () => {
+    setTourStep(0);
+    setTourOpen(true);
+  };
+
+  const closeTour = () => {
+    setTourOpen(false);
+    if (activeUser?.id) {
+      try {
+        localStorage.setItem(tourDoneKey(activeUser.id), '1');
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  };
+
+  const dismissChecklist = () => {
+    setChecklistHidden(true);
+    if (activeUser?.id) {
+      try {
+        localStorage.setItem(checklistHiddenKey(activeUser.id), '1');
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  };
 
   // Cálculos de KPIs Financieros y Operacionales (excluyendo obras canceladas)
   const proyectosVigentes = proyectos.filter((p) => p.estado !== 'cancelada');
@@ -197,10 +275,24 @@ export default function DashboardPage() {
     );
   }
 
+  const checklistStatus: TourChecklistStatus = {
+    hasProfileSetup,
+    hasProject: proyectosVigentes.length > 0,
+    hasTeamMember: teamCount > 0,
+  };
+  const showFirstSteps =
+    Boolean(activeUser?.id) &&
+    activeUser?.empresa_id !== DEMO_EMPRESA_ID &&
+    !checklistHidden &&
+    proyectosVigentes.length === 0;
+
   return (
     <div className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
       {/* Cabecera Principal */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#141A23] p-6 md:pr-14 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm">
+      <div
+        data-tour-zone="header"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#141A23] p-6 md:pr-14 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm"
+      >
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-[#6B8F72]/15 text-[#6B8F72] border border-[#6B8F72]/30">
@@ -223,6 +315,15 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={startTour}
+            aria-label="Abrir guía del Centro de Mando"
+            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-kraft-50 dark:bg-[#1E2530] text-navy-900 dark:text-gray-200 font-heading font-bold text-sm border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00]/60 hover:text-[#FF6A00] transition-all"
+          >
+            <HelpCircle className="w-4 h-4 text-[#FF6A00]" />
+            <span>Guía</span>
+          </button>
           <Link
             href="/cotizador"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF6A00] to-[#E55F00] text-white font-heading font-bold text-sm shadow-md shadow-[#FF6A00]/20 hover:opacity-95 transition-all"
@@ -240,8 +341,16 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Checklist de Arranque para cuentas nuevas sin obras */}
+      <DashboardFirstStepsChecklist
+        visible={showFirstSteps}
+        status={checklistStatus}
+        onStartTour={startTour}
+        onDismiss={dismissChecklist}
+      />
+
       {/* Grid de KPIs Superiores */}
-      <CompactSummary><div className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <CompactSummary><div data-tour-zone="kpis" className="workspace-metrics grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Obras Activas */}
         <div className="p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm hover:border-[#FF6A00]/50 transition-all group">
           <div className="flex items-center justify-between">
@@ -344,7 +453,10 @@ export default function DashboardPage() {
 
       {/* Alertas Operacionales Críticas */}
       {alertas.length > 0 && (
-        <div className="p-4 rounded-2xl bg-[#D94336]/10 border border-[#D94336]/30 text-navy-900 dark:text-gray-100 space-y-3">
+        <div
+          data-tour-zone="alerts"
+          className="p-4 rounded-2xl bg-[#D94336]/10 border border-[#D94336]/30 text-navy-900 dark:text-gray-100 space-y-3"
+        >
           <div className="flex items-center gap-2 text-[#D94336] font-heading font-bold text-sm">
             <AlertTriangle className="w-4 h-4" />
             <span>Alertas de Plazo y Avance en Obras ({alertas.length})</span>
@@ -375,7 +487,7 @@ export default function DashboardPage() {
       )}
 
       {/* Obras en curso */}
-      <div>
+      <div data-tour-zone="projects">
         {/* Obras Activas con Semáforo */}
         <div className="min-w-0 p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4">
           <div className="flex items-center justify-between">
@@ -470,7 +582,7 @@ export default function DashboardPage() {
 
       </div>
       {/* Sección Gráfica y Obras en Curso */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div data-tour-zone="charts" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Gráfico de Flujo de Caja por Obra */}
         <div className="min-w-0 max-w-full overflow-hidden lg:col-span-2 p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] shadow-sm space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
@@ -620,7 +732,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-
+      <DashboardOnboardingTour
+        open={tourOpen}
+        stepIndex={tourStep}
+        onStepChange={setTourStep}
+        onClose={closeTour}
+      />
     </div>
   );
 }

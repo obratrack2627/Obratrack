@@ -123,3 +123,29 @@ test('avisos enviados permite eliminar un registro con confirmación explícita'
   await expect.poll(() => deletedAvisoId).toBe('11111111-1111-4111-a111-111111111111');
   await expect(page.getByText('Mañana hormigonamos a las 08:00', { exact: true })).toHaveCount(0);
 });
+
+test('tutorial inicial del Centro de Mando se abre la primera vez sin obras y se adapta a web y móvil', async ({ page }) => {
+  await setup(page, {}, false);
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto('/dashboard');
+
+  const tour = page.getByRole('region', { name: /Guía del Centro de Mando/ });
+  await expect(tour).toBeVisible();
+  await expect(tour).toContainText('Paso 1 de 6');
+  await expect(page.getByRole('region', { name: 'Primeros pasos en ObraTrack' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+  await tour.getByRole('button', { name: 'Siguiente' }).click();
+  await expect(tour).toContainText('Paso 2 de 6');
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await tour.getByRole('button', { name: 'Saltar' }).click();
+  await expect(tour).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Centro de Mando', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: /Guía del Centro de Mando/ })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Abrir guía del Centro de Mando' }).click();
+  await expect(page.getByRole('region', { name: /Guía del Centro de Mando/ })).toContainText('Paso 1 de 6');
+});

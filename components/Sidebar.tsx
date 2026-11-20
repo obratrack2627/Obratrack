@@ -84,14 +84,22 @@ export default function Sidebar() {
       if (e.detail) setActivePlan(e.detail);
     };
     const syncHandler = () => loadSidebarData();
+    const openProfileHandler = (e: Event) => {
+      const tab = (e as CustomEvent<{ tab?: 'perfil' | 'empresa' | 'cotizaciones' | 'notificaciones' }>).detail?.tab || 'perfil';
+      setProfileInitialTab(tab);
+      setProfileOpen(true);
+      setMobileOpen(false);
+    };
 
     window.addEventListener('obratrack_plan_changed', planChangeHandler);
     window.addEventListener('obratrack_cloud_synced', syncHandler);
     window.addEventListener('obratrack_profile_updated', syncHandler);
+    window.addEventListener('obratrack_open_profile', openProfileHandler);
     return () => {
       window.removeEventListener('obratrack_plan_changed', planChangeHandler);
       window.removeEventListener('obratrack_cloud_synced', syncHandler);
       window.removeEventListener('obratrack_profile_updated', syncHandler);
+      window.removeEventListener('obratrack_open_profile', openProfileHandler);
     };
   }, [pathname]);
 
@@ -254,7 +262,7 @@ export default function Sidebar() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="p-3.5 space-y-1">
+          <nav data-tour-zone="sidebar-nav" className="p-3.5 space-y-1">
             {navItems.filter(item => item.href !== '/planes').map((item) => {
               const Icon = item.icon;
               const isActive =
@@ -309,7 +317,7 @@ export default function Sidebar() {
           {activeUser?.is_dev === true && <button type="button" onClick={() => setIsPlanModalOpen(true)} aria-label="Cambiar plan de desarrollo" className="text-xs text-obra-orange hover:underline">Plan de desarrollo</button>}
 
           {/* Active User info & Logout */}
-          <div className="space-y-2">
+          <div data-tour-zone="sidebar-account" className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 overflow-hidden">
                 <div className="w-8 h-8 rounded-full bg-[#FF6A00] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
