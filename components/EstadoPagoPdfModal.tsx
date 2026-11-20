@@ -5,6 +5,7 @@ import React, { useId, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   FileSpreadsheet,
+  Lock,
   MessageCircle,
   Printer,
   Download,
@@ -14,6 +15,7 @@ import Logo from './Logo';
 import { dataService } from '@/lib/data-service';
 import { projectProgress } from '@/lib/work-calendar';
 import { calcularEstadoPago } from '@/lib/edp-calculator';
+import { deriveEdpPdfPassword } from '@/lib/payments/pdf';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 import type {
   Actividad,
@@ -77,6 +79,18 @@ export default function EstadoPagoPdfModal({
     });
   }, [proyecto, actividades, pagos, cambios, modoCobro, montoCustomInput, retencionPct]);
 
+  const pdfPasswordInfo = useMemo(() => {
+    const clientPass = deriveEdpPdfPassword(cliente?.rut);
+    if (clientPass) {
+      return { password: clientPass, source: 'mandante' as const };
+    }
+    const companyPass = deriveEdpPdfPassword(empresaRut);
+    if (companyPass) {
+      return { password: companyPass, source: 'empresa' as const };
+    }
+    return null;
+  }, [cliente?.rut, empresaRut]);
+
   if (!isOpen) return null;
 
   const fechaEmision = new Date().toLocaleDateString('es-CL', {
@@ -92,6 +106,8 @@ export default function EstadoPagoPdfModal({
       paymentPdf({
         nombre: proyecto.nombre,
         cliente: cliente?.nombre || 'Por definir',
+        clienteRut: cliente?.rut || '',
+        password: pdfPasswordInfo?.password,
         fecha: fechaEmision,
         resumen,
         actividades,
@@ -133,6 +149,9 @@ export default function EstadoPagoPdfModal({
       `🔥 *LÍQUIDO A PAGAR EN ESTE EDP:* *${formatCLP(resumen.liquidoAPagarConIva)}*\n` +
       `📌 *Saldo restante tras este pago:* ${formatCLP(resumen.saldoRemanenteTrasEdp)}\n` +
       (observacionEdp.trim() ? `\n📝 *Nota:* ${observacionEdp.trim()}\n` : '') +
+      (pdfPasswordInfo?.source === 'mandante'
+        ? `\n🔐 *Clave del PDF:* últimos 4 dígitos de tu RUT (sin guion ni dígito verificador).\n`
+        : '') +
       `\nEmitido por ${emisor?.empresa_nombre || 'Constructora'} en ObraTrack.`;
     const url = cleanPhone
       ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
@@ -260,6 +279,27 @@ export default function EstadoPagoPdfModal({
         </div>
 
         {!projectProgress(actividades).weighted && actividades.length>0 && <p className="print:hidden mx-4 my-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">El avance usa un promedio simple de partidas. Completa sus montos contratados para ponderar el cobro o confirma un monto personalizado.</p>}
+        <div className="print:hidden px-4 sm:px-6 py-2 bg-emerald-50/80 dark:bg-emerald-950/25 border-b border-emerald-200/70 dark:border-emerald-900/50 flex flex-wrap items-center justify-between gap-2 text-[11px] text-emerald-900 dark:text-emerald-200">
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            <Lock className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+            {pdfPasswordInfo?.source === 'mandante' ? (
+              <>
+                PDF protegido con clave: <strong>últimos 4 dígitos del RUT del mandante</strong> (sin dígito verificador)
+              </>
+            ) : pdfPasswordInfo?.source === 'empresa' ? (
+              <>
+                PDF protegido con clave: <strong>últimos 4 dígitos del RUT de tu empresa</strong> (el mandante no tiene RUT registrado)
+              </>
+            ) : (
+              <>Registra el RUT del mandante en Clientes para proteger automáticamente el PDF con clave.</>
+            )}
+          </span>
+          {pdfPasswordInfo && (
+            <span className="font-mono font-bold px-2 py-0.5 rounded bg-emerald-600/15 text-emerald-800 dark:text-emerald-300">
+              Clave: {pdfPasswordInfo.password}
+            </span>
+          )}
+        </div>
       {/* Controles rápidos de configuración del EDP (Ocultos al imprimir) */}
         <div className="print:hidden px-4 sm:px-6 py-3 bg-kraft-100 dark:bg-[#0B0F14] border-b border-kraft-200 dark:border-[#263040] grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
           <div>

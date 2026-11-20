@@ -94,3 +94,49 @@ test('el documento y PDF de cotización aplican logo de empresa, RUT, firma y da
   assert.match(text, /\/Subtype \/Image/);
   assert.match(text, /Constructora Andes SpA/);
 });
+
+test('el PDF de Estado de Pago se cifra con los últimos 4 dígitos del RUT del mandante', () => {
+  const { deriveEdpPdfPassword, paymentPdf } = require('../lib/payments/pdf.ts');
+  assert.equal(deriveEdpPdfPassword('76.412.890-K'), '2890');
+  assert.equal(deriveEdpPdfPassword('12.345.678-5'), '5678');
+  assert.equal(deriveEdpPdfPassword('201868246'), '6824');
+  assert.equal(deriveEdpPdfPassword(''), null);
+
+  const pdf = paymentPdf({
+    nombre: 'Ampliación PAC',
+    cliente: 'Constructora del Norte S.A.',
+    clienteRut: '76.412.890-K',
+    fecha: '20-11-2026',
+    resumen: {
+      numeroCorrelativo: 1,
+      folio: 'EDP-001',
+      montoContratadoVigente: 10000000,
+      adicionalesAprobadosMonto: 0,
+      adicionalesAprobadosCantidad: 0,
+      porcentajeAvanceFisico: 50,
+      valorAvanceAcumulado: 5000000,
+      totalPagadoAnterior: 0,
+      totalRetenidoAnterior: 0,
+      saldoPendienteContrato: 10000000,
+      cobroSugeridoSegunAvance: 5000000,
+      montoBrutoPeriodoConIva: 5000000,
+      retencionPorcentaje: 0,
+      retencionMonto: 0,
+      liquidoAPagarConIva: 5000000,
+      netoPeriodo: 4201681,
+      ivaPeriodo: 798319,
+      saldoRemanenteTrasEdp: 5000000,
+    },
+    actividades: [],
+    observacion: '',
+    emisor: {
+      empresa: 'AJ-Constructora',
+      rut: '20.186.824-6',
+      datosBancarios: 'Banco Estado · Cta Vista 123456',
+    },
+  });
+
+  const text = Buffer.from(pdf.output('arraybuffer')).toString('latin1');
+  assert.ok(text.startsWith('%PDF-'));
+  assert.match(text, /\/Encrypt/);
+});

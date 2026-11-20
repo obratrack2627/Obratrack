@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -302,19 +303,30 @@ export default function DashboardOnboardingTour({
       return;
     }
 
-    const measure = () => {
+    let rafId = 0;
+
+    const measureNow = () => {
       const target = findTargetElement(step.getSelectors());
       if (!target) {
         setSpotlightRect(null);
         return;
       }
       const r = target.getBoundingClientRect();
+      const pad = 6;
+      const left = Math.max(4, r.left - pad);
+      const top = Math.max(4, r.top - pad);
+      const maxWidth = Math.max(0, window.innerWidth - left - 4);
       setSpotlightRect({
-        top: Math.max(4, r.top - 4),
-        left: Math.max(4, r.left - 4),
-        width: Math.min(window.innerWidth - 8, r.width + 8),
-        height: r.height + 8,
+        top,
+        left,
+        width: Math.min(maxWidth, r.width + pad * 2),
+        height: r.height + pad * 2,
       });
+    };
+
+    const scheduleMeasure = () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(measureNow);
     };
 
     const target = findTargetElement(step.getSelectors());
@@ -322,15 +334,28 @@ export default function DashboardOnboardingTour({
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    measure();
-    const timer = window.setTimeout(measure, 320);
-    window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
+    measureNow();
+    const t1 = window.setTimeout(scheduleMeasure, 120);
+    const t2 = window.setTimeout(scheduleMeasure, 360);
+    const t3 = window.setTimeout(scheduleMeasure, 680);
+
+    let resizeObs: ResizeObserver | null = null;
+    if (target && typeof ResizeObserver !== 'undefined') {
+      resizeObs = new ResizeObserver(scheduleMeasure);
+      resizeObs.observe(target);
+    }
+
+    window.addEventListener('resize', scheduleMeasure);
+    window.addEventListener('scroll', scheduleMeasure, true);
 
     return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
+      if (rafId) window.cancelAnimationFrame(rafId);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+      resizeObs?.disconnect();
+      window.removeEventListener('resize', scheduleMeasure);
+      window.removeEventListener('scroll', scheduleMeasure, true);
     };
   }, [open, step, didNavigateManually]);
 
@@ -351,7 +376,7 @@ export default function DashboardOnboardingTour({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, safeIndex, onStepChange, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
   const isLast = safeIndex === STEPS.length - 1;
 
@@ -360,19 +385,25 @@ export default function DashboardOnboardingTour({
     onStepChange(Math.max(0, Math.min(STEPS.length - 1, next)));
   };
 
-  return (
+  return createPortal(
     <>
-      {/* Aro visual del bloque destacado (pointer-events-none para no bloquear botones de la plataforma) */}
-      {spotlightRect && (
+      {/* Fondo oscurecido alrededor del bloque destacado (pointer-events-none para no bloquear botones) */}
+      {spotlightRect ? (
         <div
           aria-hidden="true"
-          className="fixed pointer-events-none z-[44] rounded-2xl border-2 border-[#FF6A00] shadow-[0_0_0_4px_rgba(255,106,0,0.22)] transition-all duration-300 print:hidden"
+          className="fixed pointer-events-none z-[44] rounded-2xl border-2 border-[#FF6A00] transition-opacity duration-200 print:hidden"
           style={{
             top: spotlightRect.top,
             left: spotlightRect.left,
             width: spotlightRect.width,
             height: spotlightRect.height,
+            boxShadow: '0 0 0 9999px rgba(11, 14, 20, 0.56), 0 0 0 4px rgba(255, 106, 0, 0.32)',
           }}
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 pointer-events-none z-[44] bg-[#0B0E14]/50 transition-opacity duration-200 print:hidden"
         />
       )}
 
@@ -469,6 +500,7 @@ export default function DashboardOnboardingTour({
           </div>
         </div>
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }

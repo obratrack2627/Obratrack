@@ -18,16 +18,53 @@ export interface PaymentPdfEmisor {
   datosBancarios?: string;
 }
 
+/**
+ * Obtiene los últimos 4 dígitos numéricos del cuerpo del RUT (sin guion ni dígito verificador)
+ * para proteger con contraseña el PDF del Estado de Pago.
+ */
+export function deriveEdpPdfPassword(rut?: string | null): string | null {
+  const raw = (rut || '').trim();
+  if (!raw) return null;
+  const bodyPart = raw.includes('-')
+    ? raw.split('-')[0]
+    : raw.replace(/[^0-9kK]/g, '').length >= 7
+      ? raw.replace(/[^0-9kK]/g, '').slice(0, -1)
+      : raw;
+  const digits = bodyPart.replace(/\D/g, '');
+  if (digits.length < 4) return null;
+  return digits.slice(-4);
+}
+
 export function paymentPdf(input: {
   nombre: string;
   cliente: string;
+  clienteRut?: string;
+  password?: string;
   fecha: string;
   resumen: ResumenEstadoPago;
   actividades: Actividad[];
   observacion: string;
   emisor?: PaymentPdfEmisor;
 }) {
-  const pdf = new jsPDF({ format: 'a4', compress: true });
+  const userPassword =
+    (input.password || '').trim() ||
+    deriveEdpPdfPassword(input.clienteRut) ||
+    deriveEdpPdfPassword(input.emisor?.rut) ||
+    null;
+
+  const pdf = new jsPDF({
+    format: 'a4',
+    compress: true,
+    ...(userPassword
+      ? {
+          encryption: {
+            userPassword,
+            ownerPassword: `obratrack-${input.resumen.folio}-${userPassword}`,
+            userPermissions: ['print', 'copy'],
+          },
+        }
+      : {}),
+  });
   let headerStartY = 32;
   const logoUrl = (input.emisor?.logoUrl || '').trim();
   const match = LOGO_DATA_URL_RE.exec(logoUrl);
