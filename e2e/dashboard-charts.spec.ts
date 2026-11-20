@@ -142,7 +142,14 @@ test('tutorial inicial del Centro de Mando se abre la primera vez sin obras y se
   await tour.getByRole('button', { name: 'Saltar' }).click();
   await expect(tour).toHaveCount(0);
 
-  await page.reload();
+  await expect.poll(() =>
+    page.evaluate(() => localStorage.getItem('obratrack_dashboard_tour_done:00000000-0000-0000-0000-000000000001'))
+  ).toBe('1');
+
+  await page.getByRole('link', { name: 'Gestionar Obras' }).click();
+  await expect(page).toHaveURL(/\/proyectos$/);
+  await page.locator('aside').getByRole('link', { name: 'Centro de Mando', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole('heading', { name: 'Centro de Mando', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: /Guía del Centro de Mando/ })).toHaveCount(0);
 

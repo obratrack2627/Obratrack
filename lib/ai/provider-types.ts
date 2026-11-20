@@ -1,3 +1,5 @@
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 export interface OpenAIFunctionTool {
   type: 'function';
   name: string;
@@ -16,4 +18,7 @@ export interface GenerationOptions {
   fetcher?: typeof fetch;
   timeoutMs?: number;
   budgetMs?: number;
+  model?: string;
+  reasoningEffort?: ReasoningEffort;
+  maxOutputTokens?: number;
 }

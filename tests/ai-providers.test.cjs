@@ -9,7 +9,7 @@ const { CHAT_RESPONSE_SCHEMA, QUOTE_RESPONSE_SCHEMA, WHATSAPP_RESPONSE_SCHEMA, M
 const { parseChatResponse } = require('../lib/ai/protocol.ts');
 const { transcriptionFile } = require('../lib/ai/audio.ts');
 const original = {...process.env};
-const keys=['AI_PROVIDER','AI_FALLBACK_PROVIDER','OPENAI_API_KEY','OPENAI_MODEL','OPENAI_REASONING_EFFORT','OPENAI_TRANSCRIPTION_MODEL','GEMINI_API_KEY'];
+const keys=['AI_PROVIDER','AI_FALLBACK_PROVIDER','OPENAI_API_KEY','OPENAI_MODEL','OPENAI_REASONING_EFFORT','OPENAI_MODEL_COMPLEX','OPENAI_REASONING_COMPLEX','OPENAI_TRANSCRIPTION_MODEL','GEMINI_API_KEY'];
 beforeEach(()=>{for(const k of keys)delete process.env[k];process.env.OPENAI_API_KEY='fixture-openai';process.env.AI_PROVIDER='openai';});
 afterEach(()=>{for(const k of keys){if(original[k]===undefined)delete process.env[k];else process.env[k]=original[k];}});
 const response=(text,extra={})=>new Response(JSON.stringify({status:'completed',output:[{type:'reasoning',summary:[]},{type:'message',content:[{type:'output_text',text}]}],...extra}),{headers:{'Content-Type':'application/json'}});
@@ -35,7 +35,7 @@ test('los cuatro contratos estrictos conservan campos requeridos y convierten op
 test('texto e imagen usan Responses con esquema, credencial solo en servidor y sin almacenar conversaciones',async()=>{
   const result=await generateOpenAI('Consulta sobre foto',{schema:CHAT_RESPONSE_SCHEMA,image:{mimeType:'image/png',data:'aGVsbG8='},fetcher:async(url,opts)=>{
     assert.equal(url,'https://api.openai.com/v1/responses');assert.equal(opts.headers.Authorization,'Bearer fixture-openai');
-    const body=JSON.parse(opts.body);assert.equal(body.store,false);assert.equal(body.model,'gpt-6-luna');assert.equal(body.reasoning.effort,'low');assert.ok(opts.signal);
+    const body=JSON.parse(opts.body);assert.equal(body.store,false);assert.equal(body.model,'gpt-6-luna');assert.equal(body.reasoning.effort,'medium');assert.ok(opts.signal);
     assert.equal(body.text.format.strict,true);verifySchema(body.text.format.schema);
     assert.deepEqual(body.input[0].content[1],{type:'input_image',image_url:'data:image/png;base64,aGVsbG8=',detail:'auto'});
     return response(JSON.stringify({respuesta:'Se ve acopio; indica la obra.',acciones:[],cotizacion:null,busqueda_materiales:null}));
@@ -107,4 +107,65 @@ test('audio vacío desde transcripción OpenAI devuelve error 422 amigable y lim
   const { sanitizeSttNoiseTranscript } = require('../lib/whatsapp/burst.ts');
   assert.equal(sanitizeSttNoiseTranscript('Subtítulos realizados por la comunidad de Amara.org'), '');
   assert.equal(sanitizeSttNoiseTranscript('Avanzamos el radier al 80%'), 'Avanzamos el radier al 80%');
+});
+
+test('enrutamiento híbrido usa gpt-6-luna en medium por defecto y escala a modelo/razonamiento complejo en cotizaciones, Gantt, fotos y reintentos', async () => {
+  const { selectAIProfile } = require('../lib/ai/model-router.ts');
+  const { chatGenerationRequest } = require('../lib/gemini.ts');
+  const { generateValidatedChat } = require('../lib/ai/generation.ts');
+  const { AIError } = require('../lib/ai/errors.ts');
+
+  const simple = selectAIProfile({ mode: 'chat', message: '¿Cuánto falta por cobrar?' });
+  assert.deepEqual(simple, { tier: 'standard', model: 'gpt-6-luna', reasoningEffort: 'medium', maxOutputTokens: 8192 });
+
+  const quoteWithoutComplexEnv = selectAIProfile({ mode: 'quote', message: 'Cotiza un radier de 20 m2' });
+  assert.deepEqual(quoteWithoutComplexEnv, { tier: 'complex', model: 'gpt-6-luna', reasoningEffort: 'high', maxOutputTokens: 12288 });
+
+  process.env.OPENAI_MODEL_COMPLEX = 'gpt-6.1-sol';
+  const reqSimple = chatGenerationRequest([], '¿Cuántas obras activas hay?', {});
+  assert.equal(reqSimple.options.model, 'gpt-6-luna');
+  assert.equal(reqSimple.options.reasoningEffort, 'medium');
+
+  const reqQuote = chatGenerationRequest([], 'Cotiza un muro perimetral de 15 metros', {});
+  assert.equal(reqQuote.options.model, 'gpt-6.1-sol');
+  assert.equal(reqQuote.options.reasoningEffort, 'medium');
+  assert.equal(reqQuote.options.maxOutputTokens, 12288);
+
+  const reqGantt = chatGenerationRequest([], 'Crea la obra Casa Sur con carta gantt de 4 partidas', {});
+  assert.equal(reqGantt.options.model, 'gpt-6.1-sol');
+
+  // generateOpenAI respeta overrides por llamada
+  await generateOpenAI('Test override', {
+    model: 'gpt-6.1-sol',
+    reasoningEffort: 'high',
+    maxOutputTokens: 12288,
+    fetcher: async (_url, opts) => {
+      const body = JSON.parse(opts.body);
+      assert.equal(body.model, 'gpt-6.1-sol');
+      assert.equal(body.reasoning.effort, 'high');
+      assert.equal(body.max_output_tokens, 12288);
+      return response(JSON.stringify({ respuesta: 'Ok', acciones: [], cotizacion: null }));
+    },
+  });
+
+  // Reintento tras error 422 escala automáticamente al perfil complejo
+  const seenModels = [];
+  const res = await generateValidatedChat(
+    'Instrucciones',
+    'Anota gasto de cemento',
+    {},
+    {
+      model: 'gpt-6-luna',
+      reasoningEffort: 'medium',
+      validateResult: () => {
+        if (seenModels.length === 1) throw new AIError('AI_INVALID_ACTION', 'Falta obra.', 422);
+      },
+    },
+    async (_prompt, opts) => {
+      seenModels.push(opts.model);
+      return JSON.stringify({ respuesta: '¿De qué obra?', accion: null, cotizacion: null });
+    },
+  );
+  assert.equal(res.respuesta, '¿De qué obra?');
+  assert.deepEqual(seenModels, ['gpt-6-luna', 'gpt-6.1-sol']);
 });

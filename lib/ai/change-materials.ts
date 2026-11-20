@@ -1,4 +1,5 @@
 import { generateAI } from "./provider";
+import { selectAIProfile } from "./model-router";
 import { quotePrompt } from "./prompt";
 import { QUOTE_RESPONSE_SCHEMA } from "./schema";
 import { parseChatResponse } from "./protocol";
@@ -14,8 +15,14 @@ export async function sugerirMaterialesCambioGemini(params: {
   const prompt = separatePrompt(quotePrompt([], message, {
     proyecto_actual: { nombre: params.nombreObra, comuna: params.comuna },
   }));
+  const profile = selectAIProfile({ mode: 'quote', message });
   const result = parseChatResponse(await generateAI(prompt.input, {
-    instructions: prompt.instructions, json: true, schema: QUOTE_RESPONSE_SCHEMA,
+    instructions: prompt.instructions,
+    json: true,
+    schema: QUOTE_RESPONSE_SCHEMA,
+    model: profile.model,
+    reasoningEffort: profile.reasoningEffort,
+    maxOutputTokens: profile.maxOutputTokens,
   }));
   if (!result.cotizacion)
     return {

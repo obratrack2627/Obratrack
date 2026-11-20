@@ -1,6 +1,7 @@
 import { compactAIContext, separatePrompt, ACTION_EXAMPLES } from '@/lib/ai/prompt-context';
 import { buildToolChatInput, buildToolChatInstructions, getObraBotTools } from '@/lib/ai/tools';
 import { generateValidatedChat, type ChatGenerationOptions } from '@/lib/ai/generation';
+import { selectAIProfile } from '@/lib/ai/model-router';
 import {CONSTRUCTION_WORKFLOW_RULES} from '@/lib/ai/prompt';
 import { getServerOpenAIKey } from "@/lib/ai/provider";
 import { AIError } from "@/lib/ai/errors";
@@ -99,6 +100,7 @@ export function chatGenerationRequest(
         ));
   const pureSearchOnly = priceSearch && !hasNonSearchTask(mensajeUsuario) && !requestsPlatformAction(mensajeUsuario);
   const compacted = compactAIContext(contextoDB);
+  const actionRequested = requestsPlatformAction(mensajeUsuario);
   const useToolCalling =
     !pureSearchOnly &&
     !quote &&
@@ -109,13 +111,22 @@ export function chatGenerationRequest(
       actionsEnabled: contextoDB.acciones_habilitadas !== false,
       whatsapp: Boolean(contextoDB.creacion_obra_whatsapp),
     });
-    const extended = Boolean(options.image);
+    const profile = selectAIProfile({
+      mode: 'chat',
+      message: mensajeUsuario,
+      hasImage: Boolean(options.image),
+      hasActionRequest: actionRequested,
+    });
+    const extended = Boolean(options.image) || profile.tier === 'complex';
     return {
       mode: 'chat' as const,
       pureSearchOnly: false,
       input: buildToolChatInput(historial, mensajeUsuario, compacted),
       options: {
         ...options,
+        model: options.model || profile.model,
+        reasoningEffort: options.reasoningEffort || profile.reasoningEffort,
+        maxOutputTokens: options.maxOutputTokens || profile.maxOutputTokens,
         instructions: buildToolChatInstructions(compacted),
         tools,
         toolChoice: 'auto' as const,
@@ -133,11 +144,21 @@ export function chatGenerationRequest(
     : contextoDB.creacion_obra_whatsapp
       ? WHATSAPP_RESPONSE_SCHEMA
       : CHAT_RESPONSE_SCHEMA;
-  const extended = quote || Boolean(options.image);
+  const resolvedMode: 'search' | 'quote' | 'chat' = pureSearchOnly ? 'search' : quote ? 'quote' : 'chat';
+  const profile = selectAIProfile({
+    mode: resolvedMode,
+    message: mensajeUsuario,
+    hasImage: Boolean(options.image),
+    hasActionRequest: actionRequested,
+  });
+  const extended = quote || Boolean(options.image) || profile.tier === 'complex';
   const separated = separatePrompt(prompt);
-  return { mode: pureSearchOnly ? 'search' : quote ? 'quote' : 'chat', pureSearchOnly,
+  return { mode: resolvedMode, pureSearchOnly,
     input: separated.input, options: {
       ...options,
+      model: options.model || profile.model,
+      reasoningEffort: options.reasoningEffort || profile.reasoningEffort,
+      maxOutputTokens: options.maxOutputTokens || profile.maxOutputTokens,
       instructions: separated.instructions + (pureSearchOnly || quote ? '' : '\n' + CONSTRUCTION_WORKFLOW_RULES + '\n' + ACTION_EXAMPLES),
       json: true, schema,
       budgetMs: Math.min(options.budgetMs || (extended ? 45000 : 30000), extended ? 45000 : 30000),
