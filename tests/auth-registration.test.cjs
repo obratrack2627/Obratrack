@@ -97,3 +97,8 @@ test('sanitiza correos vigentes y distingue correo no autorizado por SMTP de cor
 });
 
 test('el alta nueva rechaza claves menores a ocho caracteres y acepta desde 8',()=>{assert.match(validateSignUpFields({nombre:'QA Admin',rut:'',email:'qa@example.test',telefono:'+56912345678',signupPassword:'1234567',signupConfirmPassword:'1234567',acceptTerms:true}),/8 caracteres/);assert.equal(validateSignUpFields({nombre:'QA Admin',rut:'',email:'qa@example.test',telefono:'+56912345678',signupPassword:'12345678',signupConfirmPassword:'12345678',acceptTerms:true}),null);});
+
+test('mapSupabaseAuthError muestra la longitud y requisitos reales de contraseña devueltos por Supabase',()=>{
+  assert.equal(mapSupabaseAuthError('Password should be at least 12 characters.'),'La contraseña debe tener al menos 12 caracteres.');
+  assert.match(mapSupabaseAuthError('Password should be at least 8 characters. Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789.','weak_password'),/8 caracteres e incluir minúsculas, mayúsculas y números/);
+});

@@ -58,8 +58,23 @@ export function mapSupabaseAuthError(message: string, code?: string): string {
   if (lower.includes('email not confirmed')) {
     return 'Tu correo aún no ha sido confirmado. Revisa tu bandeja de entrada o solicita un nuevo correo de activación.';
   }
-  if (lower.includes('password should be at least')) {
-    return 'La contraseña debe tener al menos 8 caracteres.';
+  if (
+    lower.includes('password should be at least') ||
+    lower.includes('password should contain at least one character')
+  ) {
+    const minMatch = /at least\s+(\d+)\s+character/i.exec(message || '');
+    const minLen = minMatch ? Number(minMatch[1]) : 8;
+    const reqs: string[] = [];
+    if (message.includes('abcdefghijklmnopqrstuvwxyz') || lower.includes('lowercase')) reqs.push('minúsculas');
+    if (message.includes('ABCDEFGHIJKLMNOPQRSTUVWXYZ') || lower.includes('uppercase')) reqs.push('mayúsculas');
+    if (message.includes('0123456789') || lower.includes('digit') || lower.includes('number')) reqs.push('números');
+    if (/[!@#$%^&*]/.test(message) || lower.includes('symbol') || lower.includes('special')) reqs.push('símbolos');
+    if (reqs.length > 0) {
+      const last = reqs.pop();
+      const joined = reqs.length > 0 ? `${reqs.join(', ')} y ${last}` : last;
+      return `La contraseña debe tener al menos ${minLen} caracteres e incluir ${joined}.`;
+    }
+    return `La contraseña debe tener al menos ${minLen} caracteres.`;
   }
   if (
     normalizedCode === 'same_password' ||
@@ -73,7 +88,7 @@ export function mapSupabaseAuthError(message: string, code?: string): string {
     lower.includes('weak_password') ||
     lower.includes('weak password')
   ) {
-    return 'La contraseña es muy débil. Usa al menos 8 caracteres combinando letras y números.';
+    return 'La contraseña es muy débil o común. Usa al menos 8 caracteres combinando mayúsculas, minúsculas, números y un símbolo.';
   }
   if (
     normalizedCode === 'email_address_not_authorized' ||
