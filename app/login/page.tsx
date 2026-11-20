@@ -488,7 +488,7 @@ function SignUpView(props: SignUpViewProps) {
                 autoComplete="new-password"
                 required
                 minLength={8}
-                placeholder="Mín. 8 caracteres"
+                placeholder="Letras y números (8+)"
                 value={props.signupPassword}
                 onChange={(e) => props.onPasswordChange(e.target.value)}
                 className={`${INPUT_CLASS} pr-10`}
@@ -518,6 +518,10 @@ function SignUpView(props: SignUpViewProps) {
             />
           </div>
         </div>
+
+        <p className="-mt-2 text-[11px] text-[#7D776D] dark:text-gray-400">
+          Mínimo 8 caracteres combinando letras y números.
+        </p>
 
         <div className="flex items-start gap-2.5 pt-1">
           <input

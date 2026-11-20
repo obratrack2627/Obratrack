@@ -248,7 +248,7 @@ export default function ActualizarPasswordPage() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full pl-10 pr-10 py-2.5 bg-[#FAF8F5] dark:bg-[#0F141C] border border-[#E5DFC9] dark:border-[#263040] rounded-xl text-xs text-[#1E1E1E] dark:text-white focus:outline-none focus:border-[#FF6A00] focus:ring-2 focus:ring-[#FF6A00]/20 font-sans transition-all"
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder="Mín. 8 caracteres (letras y números)"
                   required
                   minLength={8}
                 />
