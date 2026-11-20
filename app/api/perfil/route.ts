@@ -13,7 +13,9 @@ import {
   type RegistrationConflictField,
 } from '@/lib/auth/registration-validation';
 import { normalizeSpecialties, parseSpecialties } from '@/lib/team-specialties';
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin, requireSupabaseAdmin } from '@/lib/supabase/admin';
+import { createFlowGateway, getFlowConfig, isFlowConfigured } from '@/lib/billing/flow';
+import { deleteAccountForUser } from '@/lib/account-deletion';
 import type { Empresa, EmpresaConfiguracion, Usuario } from '@/types/database';
 
 export const dynamic = 'force-dynamic';
@@ -101,7 +103,7 @@ function formatEmpresa(empresaRow: any): Empresa {
 export async function GET(request: NextRequest) {
   try {
     const { client, user } = await authorizeAI(request);
-    const [{ data: usuarioRow, error: userErr }, { data: empresaRow, error: companyErr }] = await Promise.all([
+    const [{ data: usuarioRow, error: userErr }, { data: empresaRow, error: companyErr }, { data: companyUsers }] = await Promise.all([
       client
         .from('usuarios')
         .select('*')
@@ -113,16 +115,27 @@ export async function GET(request: NextRequest) {
         .select('id,nombre,rut,plan_id,logo_url,configuracion,created_at,updated_at')
         .eq('id', user.empresa_id)
         .maybeSingle(),
+      client
+        .from('usuarios')
+        .select('id,rol')
+        .eq('empresa_id', user.empresa_id),
     ]);
     if (userErr || companyErr || !usuarioRow || !empresaRow) {
       throw new AIError('DATABASE_READ', 'No se pudo cargar tu perfil y empresa.', 503);
     }
+
+    const soloAdmin =
+      usuarioRow.rol === 'admin' &&
+      (Array.isArray(companyUsers)
+        ? companyUsers.filter((u: any) => u.id !== user.id && u.rol === 'admin').length === 0
+        : true);
 
     return NextResponse.json(
       {
         success: true,
         usuario: hydrateUsuarioWithEmpresa(usuarioRow, empresaRow),
         empresa: formatEmpresa(empresaRow),
+        solo_admin: soloAdmin,
       },
       { headers: { 'Cache-Control': 'private, no-store' } },
     );
@@ -379,6 +392,40 @@ export async function PATCH(request: NextRequest) {
       success: true,
       usuario: hydrateUsuarioWithEmpresa(nextUserRow, nextCompanyRow),
       empresa: formatEmpresa(nextCompanyRow),
+    });
+  } catch (error) {
+    return errorJSON(error);
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { user } = await authorizeAI(request);
+    const body = await request.json().catch(() => null);
+    const confirm =
+      typeof body?.confirmacion === 'string' ? body.confirmacion.trim().toUpperCase() : '';
+    if (confirm !== 'ELIMINAR') {
+      throw new AIError(
+        'ACCOUNT_DELETE_CONFIRM_REQUIRED',
+        'Escribe ELIMINAR para confirmar el borrado definitivo de tu cuenta.',
+        422,
+      );
+    }
+
+    const admin = requireSupabaseAdmin();
+    const flow = isFlowConfigured()
+      ? createFlowGateway(getFlowConfig(request.nextUrl.origin))
+      : null;
+
+    const result = await deleteAccountForUser({
+      admin,
+      user,
+      flow,
+    });
+
+    return NextResponse.json({
+      success: true,
+      deleted_scope: result.scope,
     });
   } catch (error) {
     return errorJSON(error);

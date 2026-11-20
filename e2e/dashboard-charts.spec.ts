@@ -156,3 +156,51 @@ test('tutorial inicial del Centro de Mando se abre la primera vez sin obras y se
   await page.getByRole('button', { name: 'Abrir guía del Centro de Mando' }).click();
   await expect(page.getByRole('region', { name: /Guía del Centro de Mando/ })).toContainText('Paso 1 de 6');
 });
+
+test('Mi perfil permite eliminar la cuenta definitivamente tras confirmar ELIMINAR', async ({ page }) => {
+  await setup(page, {}, false);
+  let deletedConfirm = '';
+  await page.route('**/api/perfil', async (route) => {
+    if (route.request().method() === 'DELETE') {
+      const body = route.request().postDataJSON();
+      deletedConfirm = body?.confirmacion || '';
+      await route.fulfill({ json: { success: true, deleted_scope: 'company' } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        success: true,
+        solo_admin: true,
+        usuario: {
+          id: '00000000-0000-0000-0000-000000000001',
+          empresa_id: 'fixture-company',
+          nombre: 'Contratista de prueba',
+          email: 'owner@example.test',
+          rol: 'admin',
+          telefono_whatsapp: '',
+        },
+        empresa: { id: 'fixture-company', nombre: 'Empresa QA', plan_id: 'pro_ia', configuracion: {} },
+      },
+    });
+  });
+
+  await page.goto('/dashboard');
+  await page.getByRole('button', { name: /Saltar/ }).click();
+
+  await page.locator('aside').getByRole('button', { name: 'Cuenta' }).click();
+  await page.getByRole('button', { name: 'Editar perfil' }).click();
+
+  const dialog = page.getByRole('dialog', { name: 'Editar perfil de cuenta y empresa' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Eliminar cuenta', exact: true }).click();
+
+  const confirmBtn = dialog.getByRole('button', { name: 'Eliminar definitivamente', exact: true });
+  await expect(confirmBtn).toBeDisabled();
+  await dialog.locator('#perfil-delete-confirm').fill('ELIMINAR');
+  await expect(confirmBtn).toBeEnabled();
+  await confirmBtn.click();
+
+  await expect.poll(() => deletedConfirm).toBe('ELIMINAR');
+  await expect(page).toHaveURL(/\/login\?deleted=1$/);
+  await expect(page.getByText('Tu cuenta y todos sus datos fueron eliminados definitivamente.')).toBeVisible();
+});

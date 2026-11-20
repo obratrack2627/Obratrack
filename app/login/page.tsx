@@ -53,8 +53,15 @@ function resolveSafeRedirect(isTerreno: boolean): string {
 
 function resolveUrlAuthNotice(
   cuentaConfirmada: string | null,
-  errorParam: string | null
+  errorParam: string | null,
+  deletedParam?: string | null
 ): { success?: string; error?: string; forceSignIn?: boolean } {
+  if (deletedParam === '1') {
+    return {
+      success: 'Tu cuenta y todos sus datos fueron eliminados definitivamente.',
+      forceSignIn: true,
+    };
+  }
   if (errorParam === 'acceso_whatsapp') return { error: 'Tu perfil trabaja por WhatsApp. El acceso web es exclusivo para administradores y desarrolladores.', forceSignIn: true };
   if (cuentaConfirmada === 'true') {
     return {
@@ -696,7 +703,8 @@ function useUrlAuthNotice(
   useEffect(() => {
     const notice = resolveUrlAuthNotice(
       searchParams.get('cuenta_confirmada'),
-      searchParams.get('error')
+      searchParams.get('error'),
+      searchParams.get('deleted')
     );
     if (notice.success) onSuccess(notice.success);
     if (notice.error) onError(notice.error);

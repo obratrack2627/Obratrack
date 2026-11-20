@@ -11,6 +11,7 @@ import {
   Loader2,
   Plus,
   RotateCcw,
+  Trash2,
   Upload,
   User,
   X,
@@ -20,6 +21,7 @@ import Logo from '@/components/Logo';
 import PushNotificationsControl from '@/components/PushNotificationsControl';
 import { dataService } from '@/lib/data-service';
 import { aiHeaders } from '@/lib/ai/client';
+import { signOutSupabase } from '@/lib/supabase/auth';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
 import { normalizeSpecialties, parseSpecialties } from '@/lib/team-specialties';
 import type { Empresa, EmpresaConfiguracion, Usuario } from '@/types/database';
@@ -108,7 +110,13 @@ export default function ProfileSettingsModal({
 
   const [role, setRole] = useState<Usuario['rol']>('admin');
   const [isDev, setIsDev] = useState(false);
+  const [isDemoAccount, setIsDemoAccount] = useState(false);
+  const [soloAdmin, setSoloAdmin] = useState(true);
   const [emailAcceso, setEmailAcceso] = useState('');
+  const [showDeleteZone, setShowDeleteZone] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Tab 1: Mi Perfil
   const [nombre, setNombre] = useState('');
@@ -174,12 +182,18 @@ export default function ProfileSettingsModal({
     setActiveTab(initialTab);
     setError('');
     setSuccessMsg('');
+    setShowDeleteZone(false);
+    setDeleteConfirmText('');
+    setDeleteError('');
+    setDeletingAccount(false);
     if (closeTimerRef.current) {
       clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
     }
 
-    hydrateFromEntities(dataService.getActiveUser(), dataService.getEmpresa());
+    const activeLocal = dataService.getActiveUser();
+    setIsDemoAccount(activeLocal?.empresa_id === 'e1111111-1111-4111-a111-111111111111');
+    hydrateFromEntities(activeLocal, dataService.getEmpresa());
 
     const fetchFreshProfile = async () => {
       setLoadingRemote(true);
@@ -192,6 +206,8 @@ export default function ProfileSettingsModal({
         if (!res.ok) return;
         const data = await res.json();
         if (!active || !data?.usuario) return;
+        if (typeof data.solo_admin === 'boolean') setSoloAdmin(data.solo_admin);
+        setIsDemoAccount(data.usuario.empresa_id === 'e1111111-1111-4111-a111-111111111111');
         dataService.applyLocalProfileUpdate(data.usuario, data.empresa || null);
         if (!dirtyRef.current) {
           hydrateFromEntities(data.usuario, data.empresa || null);
@@ -596,6 +612,103 @@ export default function ProfileSettingsModal({
                       </button>
                     )}
                   </div>
+                </div>
+
+                {/* Zona de peligro: Eliminar cuenta y datos */}
+                <div className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 p-4 space-y-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+                        Eliminar cuenta y datos
+                      </p>
+                      <p className="text-[11px] text-red-700/80 dark:text-red-300/80 mt-0.5 leading-relaxed">
+                        {isDemoAccount || isDev
+                          ? 'Las cuentas de demostración o desarrollo están protegidas y no se eliminan desde aquí.'
+                          : soloAdmin
+                          ? 'Acción irreversible: elimina tu cuenta, empresa, obras, cotizaciones, archivos y equipo registrado.'
+                          : 'Acción irreversible: elimina tu usuario, historial personal y credenciales de acceso.'}
+                      </p>
+                    </div>
+                    {!isDemoAccount && !isDev && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowDeleteZone((prev) => !prev);
+                          setDeleteError('');
+                          setDeleteConfirmText('');
+                        }}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-red-300 dark:border-red-800 bg-white dark:bg-[#141A23] px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>{showDeleteZone ? 'Cancelar' : 'Eliminar cuenta'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {showDeleteZone && !isDemoAccount && !isDev && (
+                    <div className="pt-3 border-t border-red-200 dark:border-red-900/50 space-y-3">
+                      <p className="text-xs text-gray-700 dark:text-gray-300">
+                        Para confirmar que deseas borrar definitivamente todo rastro en la base de datos y liberar tu RUT, correo y teléfono, escribe{' '}
+                        <strong className="font-mono text-red-600 dark:text-red-400">ELIMINAR</strong>:
+                      </p>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          id="perfil-delete-confirm"
+                          type="text"
+                          value={deleteConfirmText}
+                          onChange={(e) => {
+                            setDeleteConfirmText(e.target.value);
+                            if (deleteError) setDeleteError('');
+                          }}
+                          disabled={deletingAccount}
+                          placeholder="Escribe ELIMINAR"
+                          className="min-w-0 flex-1 rounded-xl border border-red-300 dark:border-red-800 bg-white dark:bg-[#0D1117] px-3 py-2 text-xs font-mono uppercase text-gray-900 dark:text-gray-100 focus:border-red-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          disabled={
+                            deletingAccount ||
+                            deleteConfirmText.trim().toUpperCase() !== 'ELIMINAR'
+                          }
+                          onClick={async () => {
+                            setDeleteError('');
+                            setDeletingAccount(true);
+                            try {
+                              const res = await fetch('/api/perfil', {
+                                method: 'DELETE',
+                                headers: await aiHeaders(),
+                                body: JSON.stringify({ confirmacion: deleteConfirmText }),
+                              });
+                              const payload = await res.json().catch(() => ({}));
+                              if (!res.ok) {
+                                setDeleteError(
+                                  payload?.error || 'No se pudo eliminar la cuenta.',
+                                );
+                                setDeletingAccount(false);
+                                return;
+                              }
+                              await signOutSupabase(true).catch(() => {});
+                              window.location.href = '/login?deleted=1';
+                            } catch {
+                              setDeleteError('No se pudo conectar para eliminar tu cuenta.');
+                              setDeletingAccount(false);
+                            }
+                          }}
+                          className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-50 px-4 py-2 text-xs font-semibold text-white transition-colors"
+                        >
+                          {deletingAccount && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          <span>
+                            {deletingAccount ? 'Eliminando...' : 'Eliminar definitivamente'}
+                          </span>
+                        </button>
+                      </div>
+                      {deleteError && (
+                        <p role="alert" className="text-xs font-medium text-red-600 dark:text-red-400">
+                          {deleteError}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

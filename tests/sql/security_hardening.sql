@@ -102,4 +102,31 @@ BEGIN
   END IF;
 END $$;
 RESET ROLE;
+
+-- 5. Eliminación completa de cuenta y cascada de empresa/presupuestos/avisos
+SELECT set_config('request.jwt.claims','{"role":"service_role"}',true);
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  res jsonb;
+BEGIN
+  INSERT INTO public.presupuestos(id,empresa_id,creado_por,origen,cotizacion)
+  VALUES('qa-del-pres','qa-sec-emp','00000000-0000-0000-0000-000000000102','plataforma','{"titulo_proyecto":"Obra QA"}');
+
+  -- Al borrar usuario no-admin, presupuesto queda con creado_por NULL sin error FK y la empresa sigue existiendo
+  res := public.eliminar_cuenta_usuario('00000000-0000-0000-0000-000000000102');
+  IF res->>'scope' <> 'user' OR NOT EXISTS (SELECT 1 FROM public.empresas WHERE id='qa-sec-emp') THEN
+    RAISE EXCEPTION 'SINGLE_USER_DELETE_FAILED: %', res;
+  END IF;
+  IF (SELECT creado_por FROM public.presupuestos WHERE id='qa-del-pres') IS NOT NULL THEN
+    RAISE EXCEPTION 'PRESUPUESTO_SET_NULL_FAILED';
+  END IF;
+
+  -- Al borrar único admin, se elimina la empresa y todos sus rastros en cascada
+  res := public.eliminar_cuenta_usuario('00000000-0000-0000-0000-000000000101');
+  IF res->>'scope' <> 'company' OR EXISTS (SELECT 1 FROM public.empresas WHERE id='qa-sec-emp') OR EXISTS (SELECT 1 FROM public.usuarios WHERE empresa_id='qa-sec-emp') OR EXISTS (SELECT 1 FROM public.presupuestos WHERE empresa_id='qa-sec-emp') THEN
+    RAISE EXCEPTION 'COMPANY_CASCADE_DELETE_FAILED: %', res;
+  END IF;
+END $$;
+RESET ROLE;
 ROLLBACK;
