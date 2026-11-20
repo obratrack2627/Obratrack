@@ -2025,12 +2025,19 @@ export default function LandingPage() {
         href="https://wa.me/56948743041?text=Hola,%20vengo%20desde%20la%20web%20de%20ObraTrack%20y%20tengo%20una%20consulta"
         target="_blank"
         rel="noopener noreferrer"
-        className="fixed bottom-5 right-5 z-40 group flex items-center gap-2.5 bg-[#141A23] hover:bg-[#0B0E14] text-white pl-4 pr-3 py-2.5 rounded-full shadow-2xl border border-white/15 transition-all hover:scale-105"
+        className="fixed bottom-5 right-5 z-40 group flex items-center justify-center sm:gap-2.5 w-14 h-14 p-0 sm:w-auto sm:h-auto sm:pl-4 sm:pr-2.5 sm:py-2 rounded-full bg-[#25D366] hover:bg-[#1EBE5D] sm:bg-[#141A23] sm:hover:bg-[#0B0E14] text-white shadow-2xl border border-white/20 transition-all hover:scale-105"
         aria-label="Contactar por WhatsApp"
       >
         <span className="text-xs font-heading font-bold hidden sm:inline">¿Dudas? WhatsApp</span>
-        <span className="landing-fab-pulse relative w-9 h-9 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-inner">
-          <MessageCircle className="w-5 h-5" />
+        <span className="landing-fab-pulse relative w-full h-full sm:w-9 sm:h-9 rounded-full bg-[#25D366] text-white flex items-center justify-center shrink-0">
+          <svg
+            viewBox="0 0 32 32"
+            fill="currentColor"
+            aria-hidden="true"
+            className="w-7 h-7 sm:w-5 sm:h-5"
+          >
+            <path d="M16.004 3.2C8.94 3.2 3.2 8.94 3.2 16.004c0 2.26.592 4.464 1.716 6.404L3.1 29.04l6.8-1.784a12.74 12.74 0 0 0 6.104 1.556h.004c7.06 0 12.796-5.74 12.796-12.804 0-3.42-1.332-6.636-3.752-9.056A12.72 12.72 0 0 0 16.004 3.2Zm0 23.448h-.004a10.6 10.6 0 0 1-5.408-1.48l-.388-.232-4.036 1.06 1.076-3.936-.252-.404a10.58 10.58 0 0 1-1.624-5.652c0-5.868 4.772-10.64 10.64-10.64 2.84 0 5.512 1.108 7.52 3.12a10.56 10.56 0 0 1 3.116 7.524c-.004 5.868-4.776 10.64-10.64 10.64Zm5.836-7.968c-.32-.16-1.892-.932-2.184-1.04-.292-.108-.504-.16-.716.16-.212.32-.824 1.04-1.012 1.252-.188.212-.372.24-.692.08-.32-.16-1.352-.5-2.576-1.592-.952-.848-1.596-1.896-1.784-2.216-.188-.32-.02-.492.14-.652.144-.144.32-.372.48-.56.16-.188.212-.32.32-.532.108-.212.052-.4-.028-.56-.08-.16-.716-1.728-.984-2.368-.26-.624-.524-.54-.716-.548l-.612-.012c-.212 0-.56.08-.852.4-.292.32-1.116 1.092-1.116 2.664s1.144 3.092 1.304 3.304c.16.212 2.252 3.436 5.456 4.82.764.328 1.36.524 1.824.672.764.244 1.46.208 2.012.128.612-.092 1.892-.772 2.156-1.52.268-.748.268-1.388.188-1.52-.08-.132-.292-.212-.612-.372Z" />
+          </svg>
         </span>
       </a>
 
