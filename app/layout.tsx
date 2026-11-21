@@ -39,14 +39,11 @@ const appBaseUrl = (() => {
   }
 })();
 
+// Respetar el color nativo de barras del sistema en móvil y PWA (InstalledAppTheme).
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#F7F5F2' },
-    { media: '(prefers-color-scheme: dark)', color: '#07151E' },
-  ],
 };
 
 export const metadata: Metadata = {

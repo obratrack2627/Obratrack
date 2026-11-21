@@ -103,6 +103,9 @@ test('regresión estática: sin URLs legacy, sin alert/confirm nativos, links se
   assert.equal(fs.existsSync(path.join(root, 'public/storyboard_obratrack.jpg')), false);
   assert.equal(fs.existsSync(path.join(root, 'public/storyboard_obratrack_es.jpg')), false);
 
+  const layoutTxt = fs.readFileSync(path.join(root, 'app/layout.tsx'), 'utf8');
+  assert.equal(/\bthemeColor\b/.test(layoutTxt), false, 'app/layout.tsx no debe imponer themeColor');
+
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
   assert.equal('date-fns' in pkg.dependencies, false);
   assert.equal('frappe-gantt' in pkg.dependencies, false);
