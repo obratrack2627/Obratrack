@@ -15,7 +15,7 @@ import Logo from './Logo';
 import { dataService } from '@/lib/data-service';
 import { projectProgress } from '@/lib/work-calendar';
 import { calcularEstadoPago } from '@/lib/edp-calculator';
-import { deriveEdpPdfPassword } from '@/lib/payments/pdf';
+import { deriveEdpPdfPassword } from '@/lib/payments/pdf-password';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
 import type {
   Actividad,

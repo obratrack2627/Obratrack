@@ -47,5 +47,13 @@ export default function EvidenceImage({
     );
   if (!url)
     return <span className="text-xs text-gray-500">Cargando foto…</span>;
-  return <img {...props} alt={alt || "Evidencia de obra"} src={url} />;
+  return (
+    <img
+      loading="lazy"
+      decoding="async"
+      {...props}
+      alt={alt || "Evidencia de obra"}
+      src={url}
+    />
+  );
 }

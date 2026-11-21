@@ -561,7 +561,7 @@ export default function CopilotoObreroPage() {
                         <a
                           href={`https://wa.me/${u.telefono_whatsapp.replace(/[^0-9]/g, '')}`}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           className="p-1.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-lg shadow-xs"
                           title="Abrir WhatsApp"
                         >

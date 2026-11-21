@@ -48,6 +48,7 @@ import {
 } from '@/types/database';
 import { formatDate } from '@/lib/utils';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
+import ModalOverlay from '@/components/ModalOverlay';
 import ChatMessageFormatter from '@/components/ChatMessageFormatter';
 import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
 import AIMessageTools from '@/components/AIMessageTools';
@@ -76,6 +77,7 @@ export default function ProyectoIAPage() {
   const [cargando, setCargando] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isMapsModalOpen, setIsMapsModalOpen] = useState(false);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -162,12 +164,15 @@ export default function ProyectoIAPage() {
   };
 
   const handleLimpiarHistorial = () => {
-    if (confirm('¿Deseas reiniciar el historial de conversación de este proyecto?')) {
-      dataService.clearProyectoChatHistorial(projectId);
-      setMensajes([]);
-      loadData();
-      showToast('Historial del proyecto reiniciado.');
-    }
+    setConfirmClearOpen(true);
+  };
+
+  const confirmLimpiarHistorial = () => {
+    setConfirmClearOpen(false);
+    dataService.clearProyectoChatHistorial(projectId);
+    setMensajes([]);
+    loadData();
+    showToast('Historial del proyecto reiniciado.');
   };
 
   const handleEnviarMensaje = async (textoAEnviar?: string) => {
@@ -292,7 +297,7 @@ export default function ProyectoIAPage() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Tu navegador no soporta reconocimiento de voz nativo. Por favor escribe tu mensaje.');
+      showToast('Tu navegador no soporta reconocimiento de voz nativo. Por favor escribe tu mensaje.');
       return;
     }
 
@@ -402,7 +407,7 @@ export default function ProyectoIAPage() {
               <a
                 href={`https://wa.me/${cliente.telefono.replace(/[^0-9]/g, '')}`}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-colors"
                 title="Abrir WhatsApp del cliente"
               >
@@ -535,7 +540,7 @@ export default function ProyectoIAPage() {
                           <a
                             href={m.accion_ejecutada.enlace_whatsapp}
                             target="_blank"
-                            rel="noreferrer"
+                            rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 mt-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs transition-colors"
                           >
                             <span>Enviar mensaje al cliente por WhatsApp</span>
@@ -633,6 +638,42 @@ export default function ProyectoIAPage() {
           </div>
         )}
       </div>
+
+      {confirmClearOpen && (
+        <ModalOverlay
+          onClose={() => setConfirmClearOpen(false)}
+          aria-label="Confirmar reinicio de historial"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-base font-bold font-heading text-navy-900 dark:text-white">
+              ¿Reiniciar historial de conversación?
+            </h2>
+            <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+              Se limpiarán los mensajes locales del asistente para esta obra y volverá el saludo inicial.
+            </p>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmClearOpen(false)}
+                className="px-4 py-2 rounded-xl border border-kraft-200 dark:border-[#263040] text-xs font-semibold text-gray-700 dark:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmLimpiarHistorial}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-bold text-white"
+              >
+                Reiniciar historial
+              </button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
     </div>
   );
 }

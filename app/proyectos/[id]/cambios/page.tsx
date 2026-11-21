@@ -641,6 +641,8 @@ export default function ProyectoCambiosPage() {
                         <img
                           src={item.foto_url}
                           alt="Evidencia"
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                         />
                         <span className="absolute inset-0 bg-black/35 text-white text-[10px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">

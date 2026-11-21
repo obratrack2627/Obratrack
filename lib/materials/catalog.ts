@@ -348,7 +348,7 @@ async function fetchCatalogTerm(
       cache: "no-store",
       headers: {
         Accept: provider.tipo === 'sodimac' ? "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8" : "application/json",
-        "User-Agent": "ObraTrack/1.0 (https://obratrack-5zwn.vercel.app)",
+        "User-Agent": "ObraTrack/1.0 (https://obratrack-cl.vercel.app)",
       },
       signal: AbortSignal.timeout(9000),
     },

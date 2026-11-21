@@ -30,16 +30,53 @@ const ibmPlexMono = localFont({
   display: 'swap',
 });
 
+const appBaseUrl = (() => {
+  const raw = (process.env.NEXT_PUBLIC_APP_URL || '').trim();
+  try {
+    return raw ? new URL(raw) : new URL('https://obratrack-cl.vercel.app');
+  } catch {
+    return new URL('https://obratrack-cl.vercel.app');
+  }
+})();
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#F7F5F2' },
+    { media: '(prefers-color-scheme: dark)', color: '#07151E' },
+  ],
 };
 
 export const metadata: Metadata = {
+  metadataBase: appBaseUrl,
   title: 'ObraTrack | El copiloto digital del constructor',
   description:
     'Control, Cotizaciones, Costos, Pagos, Avances y Georreferenciación con ObraBot, Google Maps y WhatsApp para constructoras en Chile.',
+  openGraph: {
+    type: 'website',
+    locale: 'es_CL',
+    siteName: 'ObraTrack Chile',
+    title: 'ObraTrack | El copiloto digital del constructor',
+    description:
+      'Cotizador IA determinista, comparador de 5 ferreterías chilenas, Carta Gantt, WhatsApp con ObraBot y Estados de Pago en PDF.',
+    images: [
+      {
+        url: '/app-icons/obratrack-mobile-v3-512.png?v=4',
+        width: 512,
+        height: 512,
+        alt: 'ObraTrack — Gestión de Obras y Cotizador IA',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ObraTrack | El copiloto digital del constructor',
+    description:
+      'Presupuestos con IA, Radar ferretero en vivo, Carta Gantt, WhatsApp con ObraBot y Estados de Pago en PDF.',
+    images: ['/app-icons/obratrack-mobile-v3-512.png?v=4'],
+  },
   manifest: '/manifest.webmanifest',
   icons: {
     icon: [

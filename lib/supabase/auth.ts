@@ -20,7 +20,7 @@ export function getRedirectBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location.origin) {
     return window.location.origin;
   }
-  return process.env.NEXT_PUBLIC_APP_URL || 'https://obratrack-5zwn.vercel.app';
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://obratrack-cl.vercel.app';
 }
 
 // Mapeo exhaustivo de errores de Supabase Auth en español

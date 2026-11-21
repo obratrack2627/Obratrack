@@ -35,8 +35,23 @@ import {
   FileText,
   Loader2,
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import dynamic from 'next/dynamic';
 import Navbar from '@/components/Navbar';
+
+const ProjectFinanzasPieChart = dynamic(
+  () => import('@/components/ProjectFinanzasPieChart'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full w-full animate-pulse rounded-xl bg-gray-100 dark:bg-[#1E2633]" />
+    ),
+  },
+);
+
+const EstadoPagoPdfModal = dynamic(
+  () => import('@/components/EstadoPagoPdfModal'),
+  { ssr: false },
+);
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import { dataService } from '@/lib/data-service';
@@ -50,7 +65,6 @@ import {
   Actividad,
   ReclamoCambioObra,
 } from '@/types/database';
-import EstadoPagoPdfModal from '@/components/EstadoPagoPdfModal';
 import { downloadProjectExcel } from '@/lib/excel-export';
 import MaterialCatalogQuickSearch from '@/components/MaterialCatalogQuickSearch';
 import { formatCLP, formatDate, formatThousands, parseThousands } from '@/lib/utils';
@@ -783,24 +797,7 @@ export default function ProyectoFinanzasPage() {
                   Sin montos registrados
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart aria-hidden="true" accessibilityLayer={false} tabIndex={-1}>
-                    <Pie rootTabIndex={-1}
-                      data={chartData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      paddingAngle={4}
-                      dataKey="value"
-                    >
-                      {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value: number) => [flowChartRevealed ? formatCLP(value) : MASKED_CLP_AMOUNT, '']} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <ProjectFinanzasPieChart chartData={chartData} revealed={flowChartRevealed} />
               )}
             </div>
             
@@ -982,6 +979,8 @@ export default function ProyectoFinanzasPage() {
                                   <img
                                     src={imp.foto_url}
                                     alt="Evidencia"
+                                    loading="lazy"
+                                    decoding="async"
                                     className="w-full h-full object-cover"
                                   />
                                 </button>
@@ -2084,16 +2083,18 @@ export default function ProyectoFinanzasPage() {
         </ModalOverlay>
       )}
 
-      <EstadoPagoPdfModal
-        isOpen={isEdpModalOpen}
-        onClose={() => setIsEdpModalOpen(false)}
-        proyecto={proyecto}
-        cliente={cliente}
-        actividades={actividades}
-        pagos={pagos}
-        cambios={cambios}
-        onRegistrarPago={handleRegistrarPagoDesdeEdp}
-      />
+      {isEdpModalOpen && (
+        <EstadoPagoPdfModal
+          isOpen={isEdpModalOpen}
+          onClose={() => setIsEdpModalOpen(false)}
+          proyecto={proyecto}
+          cliente={cliente}
+          actividades={actividades}
+          pagos={pagos}
+          cambios={cambios}
+          onRegistrarPago={handleRegistrarPagoDesdeEdp}
+        />
+      )}
 
       {/* Modal: Visor Google Maps de la Obra */}
       <GoogleMapsProjectViewer

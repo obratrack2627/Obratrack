@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -10,36 +11,29 @@ import {
   Building,
   Menu,
   X,
-  PhoneCall,
   UserCog,
   Sparkles,
   CreditCard,
-  Zap,
-  LogOut,
+  AlertTriangle,
   ClipboardCheck,
   Bell,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { dataService } from '@/lib/data-service';
-import { Usuario, UserRole, SubscriptionPlanId } from '@/types/database';
+import { Usuario, SubscriptionPlanId } from '@/types/database';
 import { getPlanDetails } from '@/lib/plans';
 import Logo from '@/components/Logo';
-import PlanSwitcherModal from '@/components/PlanSwitcherModal';
 import { signOutSupabase } from '@/lib/supabase/auth';
 import ActionMenu from '@/components/ActionMenu';
-import ChangePasswordModal from '@/components/ChangePasswordModal';
-import ProfileSettingsModal from '@/components/ProfileSettingsModal';
+import ModalOverlay from '@/components/ModalOverlay';
 import ThemeToggle from '@/components/ThemeToggle';
 import PushNotificationsControl from '@/components/PushNotificationsControl';
 
-interface SidebarProps {
-  mobileOpen?: boolean;
-  setMobileOpen?: (open: boolean) => void;
-}
+const PlanSwitcherModal = dynamic(() => import('@/components/PlanSwitcherModal'), { ssr: false });
+const ChangePasswordModal = dynamic(() => import('@/components/ChangePasswordModal'), { ssr: false });
+const ProfileSettingsModal = dynamic(() => import('@/components/ProfileSettingsModal'), { ssr: false });
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileInitialTab, setProfileInitialTab] = useState<'perfil' | 'empresa' | 'cotizaciones' | 'notificaciones'>('perfil');
@@ -48,6 +42,7 @@ export default function Sidebar() {
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('pro_ia');
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [logoutConfirmPending, setLogoutConfirmPending] = useState<number | null>(null);
 
   useEffect(() => {
     document.documentElement.toggleAttribute('data-mobile-nav-open', mobileOpen);
@@ -65,16 +60,24 @@ export default function Sidebar() {
     setPendingReportsCount(pending);
   };
 
-  const handleLogout = async () => {
-    const pending = dataService.pendingCloudChanges();
-    if(pending && !window.confirm(`Hay ${pending} cambios sin guardar en este dispositivo. Cerrar sesión los descartará. ¿Quieres cerrar sesión de todos modos?`))return;
+  const performLogout = async (discardPending: boolean) => {
+    setLogoutConfirmPending(null);
     try {
-      await signOutSupabase(pending>0);
+      await signOutSupabase(discardPending);
     } catch (e) {
       console.error(e);
     }
     dataService.clearActiveUser();
     window.location.href = '/login?logout=1';
+  };
+
+  const handleLogout = async () => {
+    const pending = dataService.pendingCloudChanges();
+    if (pending > 0) {
+      setLogoutConfirmPending(pending);
+      return;
+    }
+    await performLogout(false);
   };
 
   useEffect(() => {
@@ -190,18 +193,70 @@ export default function Sidebar() {
   return (
     <>
       {/* Plan Switcher Modal para Evaluación */}
-      <PlanSwitcherModal
-        isOpen={isPlanModalOpen}
-        onClose={() => setIsPlanModalOpen(false)}
-      />
+      {isPlanModalOpen && (
+        <PlanSwitcherModal
+          isOpen={isPlanModalOpen}
+          onClose={() => setIsPlanModalOpen(false)}
+        />
+      )}
 
-      <ChangePasswordModal isOpen={passwordOpen} onClose={() => setPasswordOpen(false)} userEmail={activeUser?.email_acceso || activeUser?.email} />
-      <ProfileSettingsModal
-        isOpen={profileOpen}
-        initialTab={profileInitialTab}
-        onClose={() => setProfileOpen(false)}
-        onRequestChangePassword={() => setPasswordOpen(true)}
-      />
+      {passwordOpen && (
+        <ChangePasswordModal
+          isOpen={passwordOpen}
+          onClose={() => setPasswordOpen(false)}
+          userEmail={activeUser?.email_acceso || activeUser?.email}
+        />
+      )}
+      {profileOpen && (
+        <ProfileSettingsModal
+          isOpen={profileOpen}
+          initialTab={profileInitialTab}
+          onClose={() => setProfileOpen(false)}
+          onRequestChangePassword={() => setPasswordOpen(true)}
+        />
+      )}
+      {logoutConfirmPending !== null && (
+        <ModalOverlay
+          onClose={() => setLogoutConfirmPending(null)}
+          aria-label="Confirmar cierre de sesión"
+          className="fixed inset-0 z-[95] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[#263040] bg-[#141A23] text-white p-6 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-base font-bold font-heading">
+                  Cambios pendientes por sincronizar
+                </h2>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  Hay {logoutConfirmPending} cambios locales pendientes de guardar en la nube. Si cierras sesión ahora se descartarán de este dispositivo.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setLogoutConfirmPending(null)}
+                className="px-4 py-2 rounded-xl border border-[#2E3A4D] text-xs font-semibold text-gray-200 hover:bg-white/5"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void performLogout(true)}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-xs font-bold text-white"
+              >
+                Descartar y cerrar sesión
+              </button>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
       {/* Mobile Top Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#1E1E1E] text-white z-50 flex items-center justify-between px-4 border-b border-[#2A2A2A] shadow-md print:hidden">
         <Link href="/dashboard">

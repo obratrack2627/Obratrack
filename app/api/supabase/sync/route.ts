@@ -13,6 +13,7 @@ import { loadAIContext, checkedRows } from "@/lib/ai/context";
 import { persistentFile, signRows, storedFile } from "@/lib/supabase/private-files";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyPushOnSyncChanges } from "@/lib/push/events";
+export const maxDuration = 30;
 const mapping: Record<string, string> = {
   proyectos: "proyectos",
   clientes: "clientes",

@@ -59,6 +59,7 @@ export default function GoogleMapsLocationPicker({
   });
   const [isDetectingGps, setIsDetectingGps] = useState(false);
   const [gpsStatusText, setGpsStatusText] = useState<string | null>(null);
+  const [gpsError, setGpsError] = useState<string | null>(null);
   const [mapType, setMapType] = useState<'m' | 'k'>('m'); // 'm' = Roadmap, 'k' = Satellite
 
   // Sincronizar props entrantes si cambian desde el modal padre
@@ -150,8 +151,9 @@ export default function GoogleMapsLocationPicker({
 
   // Detección automática por GPS del dispositivo + Reverse Geocoding automático
   const handleDetectGPS = () => {
+    setGpsError(null);
     if (!navigator.geolocation) {
-      alert('Tu navegador o dispositivo no soporta geolocalización GPS.');
+      setGpsError('Tu navegador o dispositivo no soporta geolocalización GPS.');
       return;
     }
 
@@ -213,8 +215,8 @@ export default function GoogleMapsLocationPicker({
         setIsDetectingGps(false);
         setGpsStatusText(null);
         console.warn('GPS Error:', err);
-        alert(
-          'No se pudo obtener la ubicación GPS automática. Por favor activa los permisos de ubicación en tu navegador o selecciona tu comuna en la lista.'
+        setGpsError(
+          'No se pudo obtener la ubicación GPS automática. Activa los permisos de ubicación en tu navegador o selecciona tu comuna en la lista.'
         );
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
@@ -281,6 +283,15 @@ export default function GoogleMapsLocationPicker({
           </span>
         </button>
       </div>
+
+      {gpsError && (
+        <p
+          role="alert"
+          className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:text-amber-200"
+        >
+          {gpsError}
+        </p>
+      )}
 
       {/* Selectores de Región y Comuna */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

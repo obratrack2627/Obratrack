@@ -3,12 +3,14 @@ import SyncConflictDialog from './SyncConflictDialog';
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { WifiOff } from "lucide-react";
 import { dataService } from "@/lib/data-service";
 
 // Mantener una sola sincronización activa, también al regresar desde otra app móvil.
 export default function CloudSync() {
   const pathname = usePathname();
   const [error, setError] = useState("");
+  const [isOffline, setIsOffline] = useState(false);
   const [busy, setBusy] = useState(false);
   const [conflict,setConflict]=useState(false);
   const [review,setReview]=useState(false);
@@ -30,9 +32,11 @@ export default function CloudSync() {
         return;
       }
       if (!navigator.onLine) {
+        setIsOffline(true);
         setError(offlineMessage);
         return;
       }
+      setIsOffline(false);
       const active = dataService.getActiveUser();
       if (!active?.empresa_id) return;
       const identity = `${active.id}:${active.empresa_id}`;
@@ -97,8 +101,14 @@ export default function CloudSync() {
       }
     };
     window.addEventListener('storage', storageChanged);
-    const offline = () => setError(offlineMessage);
-    const triggerRequest = () => request(true);
+    const offline = () => {
+      setIsOffline(true);
+      setError(offlineMessage);
+    };
+    const triggerRequest = () => {
+      if (navigator.onLine) setIsOffline(false);
+      request(true);
+    };
     retry.current = triggerRequest;
     window.addEventListener("obratrack_pending_changed", triggerRequest);
     window.addEventListener("focus", triggerRequest);
@@ -127,9 +137,13 @@ export default function CloudSync() {
     {review&&<SyncConflictDialog onClose={()=>setReview(false)} onResolved={()=>{setConflict(false);setError('');retry.current();}}/>}
     <div
       role="status"
+      aria-live="polite"
       className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
     >
-      <span>{error || 'Hay cambios más recientes que debes revisar antes de guardar.'}</span>
+      <span className="inline-flex items-center gap-2">
+        {isOffline && <WifiOff className="w-4 h-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />}
+        <span>{error || 'Hay cambios más recientes que debes revisar antes de guardar.'}</span>
+      </span>
       {conflict&&<button type="button" disabled={busy} onClick={()=>setReview(true)} className="min-h-11 font-semibold underline disabled:opacity-50">Revisar cambios</button>}
       <button
         type="button"

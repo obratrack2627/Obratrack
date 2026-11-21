@@ -11,6 +11,8 @@ const PUBLIC_PAGES = [
   '/auth/callback',
   '/actualizar-password',
   '/manifest.webmanifest',
+  '/robots.txt',
+  '/sitemap.xml',
   '/icon.svg',
   '/favicon.ico',
   '/sw.js',
@@ -76,13 +78,6 @@ async function handleRequest(request: NextRequest, forwardedHeaders: Headers) {
   const isAuthorized = isValidAuthToken(authToken);
 
   if (!isAuthorized) {
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json(
-        { error: 'No autorizado. Se requiere sesión activa válida.' },
-        { status: 401 }
-      );
-    }
-
     const safeRedirect = sanitizeRedirectPath(pathname + request.nextUrl.search);
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', safeRedirect);
@@ -115,6 +110,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|app-icons/).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|robots.txt|sitemap.xml|app-icons/).*)',
   ],
 };

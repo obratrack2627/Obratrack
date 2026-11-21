@@ -5,6 +5,7 @@ import { AIError } from "@/lib/ai/errors";
 import { serverFetch } from "@/lib/server-fetch";
 import { supabaseUrl } from "@/lib/supabase/client";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 export async function GET(request: NextRequest) {
   try {
     const { client, user } = await authorizeAI(request);

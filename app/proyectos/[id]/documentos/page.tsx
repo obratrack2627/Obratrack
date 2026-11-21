@@ -929,6 +929,8 @@ export default function ProyectoDocumentosPage() {
                     <img
                       src={safeImgSrc}
                       alt={docPreview.nombre}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full max-h-[60vh] object-contain rounded-xl border border-kraft-200"
                     />
                   ) : docPreview.mime_type === 'application/pdf' && safeLinkHref ? (

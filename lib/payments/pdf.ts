@@ -4,6 +4,9 @@ import type { ResumenEstadoPago } from '@/lib/edp-calculator';
 import type { Actividad } from '@/types/database';
 import { drawObraTrackWordmarkPdf } from '@/lib/brand-pdf';
 import { quoteMoney } from '@/lib/quotes/document';
+import { deriveEdpPdfPassword } from '@/lib/payments/pdf-password';
+
+export { deriveEdpPdfPassword };
 
 const LOGO_DATA_URL_RE = /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i;
 
@@ -16,23 +19,6 @@ export interface PaymentPdfEmisor {
   email?: string;
   telefono?: string;
   datosBancarios?: string;
-}
-
-/**
- * Obtiene los últimos 4 dígitos numéricos del cuerpo del RUT (sin guion ni dígito verificador)
- * para proteger con contraseña el PDF del Estado de Pago.
- */
-export function deriveEdpPdfPassword(rut?: string | null): string | null {
-  const raw = (rut || '').trim();
-  if (!raw) return null;
-  const bodyPart = raw.includes('-')
-    ? raw.split('-')[0]
-    : raw.replace(/[^0-9kK]/g, '').length >= 7
-      ? raw.replace(/[^0-9kK]/g, '').slice(0, -1)
-      : raw;
-  const digits = bodyPart.replace(/\D/g, '');
-  if (digits.length < 4) return null;
-  return digits.slice(-4);
 }
 
 export function paymentPdf(input: {

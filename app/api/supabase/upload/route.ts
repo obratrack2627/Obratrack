@@ -4,6 +4,8 @@ import { uploadBufferToSupabaseStorage, getSupabaseAdmin } from "@/lib/supabase/
 import { authorizeAI, errorJSON } from "@/lib/ai/server";
 import { AIError } from "@/lib/ai/errors";
 
+export const maxDuration = 30;
+
 export async function POST(request: NextRequest) {
   try {
     const { client, user } = await authorizeAI(request);

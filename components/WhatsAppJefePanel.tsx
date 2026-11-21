@@ -264,7 +264,7 @@ export default function WhatsAppJefePanel() {
                   className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-green-700 hover:bg-green-800 text-white px-3.5 py-2 text-xs sm:text-sm font-semibold transition-colors"
                   href={`https://wa.me/${status.numero.replace(/\D/g, "")}`}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                 >
                   <MessageCircle className="w-4 h-4 shrink-0" />
                   <span>Abrir WhatsApp de ObraTrack</span>

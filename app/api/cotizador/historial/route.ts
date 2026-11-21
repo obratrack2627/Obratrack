@@ -3,6 +3,7 @@ import {authorizeAI,errorJSON} from '@/lib/ai/server';
 import {syncChat,readOlderChat} from '@/lib/ai/chat-history-server';
 import {AIError} from '@/lib/ai/errors';
 export const dynamic='force-dynamic';
+export const maxDuration=20;
 export async function GET(request:NextRequest){try{const {client,user}=await authorizeAI(request);const before=request.nextUrl.searchParams.get('before');return NextResponse.json(before?await readOlderChat(client,user,before,request.nextUrl.searchParams.get('before_id')||''):await syncChat(client,user));}catch(error){return errorJSON(error);}}
 export async function POST(request:NextRequest){try{
  const {client,user}=await authorizeAI(request);const raw=await request.text();if(raw.length>1000000)throw new AIError('CHAT_INVALID','La conversación es demasiado extensa.',413);
