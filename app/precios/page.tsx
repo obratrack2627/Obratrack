@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle2, CreditCard, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Building2, CheckCircle2, CreditCard, ShieldCheck } from 'lucide-react';
 import Logo from '@/components/Logo';
 import LegalTermsModal from '@/components/LegalTermsModal';
 import { PLANES_SUSCRIPCION, getPlanPricing, isPaidPlanId } from '@/lib/plans';
@@ -130,6 +130,35 @@ export default function PreciosPublicosPage() {
               </article>
             );
           })}
+        </section>
+
+        <section
+          aria-label="Plan Pro IA Multi-Cuadrilla / Corporativo"
+          className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+        >
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-[#141A23] dark:bg-[#FF6A00]/20 text-white dark:text-[#FF8533]">
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Tramo B2B</span>
+              </span>
+              <span className="text-xs font-mono font-bold text-[#6B8F72]">
+                Desde $49.900 / mes (neto)
+              </span>
+            </div>
+            <h2 className="text-lg font-heading font-bold text-navy-900 dark:text-white">
+              Plan Pro IA Multi-Cuadrilla / Corporativo
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Para constructoras con múltiples frentes activos, cuadrillas simultáneas, onboarding presencial en terreno y soporte prioritario.
+            </p>
+          </div>
+          <a
+            href="mailto:soporte@obratrack.cl?subject=Cotizaci%C3%B3n%20Plan%20Corporativo%20ObraTrack"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-obra-orange text-obra-orange hover:bg-obra-orange hover:text-white px-4 py-2.5 text-sm font-bold transition-colors shrink-0 whitespace-nowrap"
+          >
+            Solicitar contratación B2B
+          </a>
         </section>
 
         <footer className="border-t border-kraft-200 dark:border-[#263040] pt-6 flex flex-wrap items-center justify-between gap-4 text-xs text-gray-600 dark:text-gray-400">
