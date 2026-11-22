@@ -1,13 +1,13 @@
 -- ==============================================================================
 -- OBRATRACK - ELIMINACIÓN SEGURA Y COMPLETA DE CUENTA Y DATOS ASOCIADOS
--- 1. Ajusta FKs sobre usuarios(id) a ON DELETE SET NULL para poder borrar usuarios individuales.
--- 2. Actualiza validar_presupuesto() para permitir cascada SET NULL sin error.
+-- 1. Ajusta FKs sobre usuarios(id), presupuestos y presupuesto_grupos a ON DELETE SET NULL.
+-- 2. Actualiza validar_presupuesto() y proteger_acta_recepcion() para cascadas seguras.
 -- 3. Crea RPC transaccional eliminar_cuenta_usuario(p_usuario_id) (solo service_role).
 -- ==============================================================================
 
 BEGIN;
 
--- 1. Ajustar FKs que apuntaban a usuarios(id) sin cláusula ON DELETE
+-- 1. Ajustar FKs que apuntaban a usuarios(id) o presupuesto_grupos/presupuestos sin ON DELETE
 ALTER TABLE public.presupuestos ALTER COLUMN creado_por DROP NOT NULL;
 ALTER TABLE public.presupuestos DROP CONSTRAINT IF EXISTS presupuestos_creado_por_fkey;
 ALTER TABLE public.presupuestos
@@ -25,6 +25,16 @@ ALTER TABLE public.obrabot_apu DROP CONSTRAINT IF EXISTS obrabot_apu_revisado_po
 ALTER TABLE public.obrabot_apu
   ADD CONSTRAINT obrabot_apu_revisado_por_fkey
   FOREIGN KEY (revisado_por) REFERENCES public.usuarios(id) ON DELETE SET NULL;
+
+ALTER TABLE public.presupuestos DROP CONSTRAINT IF EXISTS presupuestos_grupo_id_fkey;
+ALTER TABLE public.presupuestos
+  ADD CONSTRAINT presupuestos_grupo_id_fkey
+  FOREIGN KEY (grupo_id) REFERENCES public.presupuesto_grupos(id) ON DELETE SET NULL;
+
+ALTER TABLE public.presupuesto_grupos DROP CONSTRAINT IF EXISTS presupuesto_grupos_seleccionado_id_fkey;
+ALTER TABLE public.presupuesto_grupos
+  ADD CONSTRAINT presupuesto_grupos_seleccionado_id_fkey
+  FOREIGN KEY (seleccionado_id) REFERENCES public.presupuestos(id) ON DELETE SET NULL;
 
 -- 2. Permitir el SET NULL automático de Postgres cuando se elimina al autor de un presupuesto
 CREATE OR REPLACE FUNCTION public.validar_presupuesto() RETURNS trigger
@@ -66,6 +76,25 @@ BEGIN
   RETURN NEW;
 END $$;
 
+-- 2b. Permitir el borrado de actas de recepción únicamente durante eliminación total de empresa/cuenta
+CREATE OR REPLACE FUNCTION public.proteger_acta_recepcion() RETURNS trigger
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.categoria = 'acta_recepcion'
+       AND coalesce(current_setting('obratrack.deleting_account', true), '') IS DISTINCT FROM OLD.empresa_id
+       AND EXISTS (SELECT 1 FROM public.proyectos WHERE id = OLD.proyecto_id) THEN
+      RAISE EXCEPTION 'RECEPTION_HISTORY_IMMUTABLE';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF (NEW.categoria = 'acta_recepcion' OR (TG_OP = 'UPDATE' AND OLD.categoria = 'acta_recepcion'))
+     AND coalesce(current_setting('obratrack.recepcion_autorizada', true), '') <> NEW.id THEN
+    RAISE EXCEPTION 'RECEPTION_USE_RPC';
+  END IF;
+  RETURN NEW;
+END $$;
+
 -- 3. RPC atómico para eliminar completamente la empresa (si es único admin) o solo al usuario
 CREATE OR REPLACE FUNCTION public.eliminar_cuenta_usuario(p_usuario_id TEXT)
 RETURNS JSONB
@@ -79,7 +108,8 @@ DECLARE
   auth_ids TEXT[] := '{}';
   uuid_re CONSTANT TEXT := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 BEGIN
-  IF auth.role() IS DISTINCT FROM 'service_role' THEN
+  IF auth.role() IS DISTINCT FROM 'service_role'
+     AND current_setting('role', true) IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'ACCOUNT_DELETE_FORBIDDEN';
   END IF;
 
@@ -113,15 +143,30 @@ BEGIN
       SELECT CASE WHEN u.id ~* uuid_re THEN u.id ELSE NULL END AS candidate
       FROM public.usuarios u
       WHERE u.empresa_id = actor.empresa_id
+      UNION
+      SELECT nullif(btrim(e.creado_por_auth), '') AS candidate
+      FROM public.empresas e
+      WHERE e.id = actor.empresa_id
     ) s
     WHERE candidate IS NOT NULL AND candidate ~* uuid_re;
+
+    PERFORM set_config('obratrack.deleting_account', actor.empresa_id, true);
+
+    DELETE FROM public.notificaciones_push_enviadas
+      WHERE empresa_id = actor.empresa_id;
 
     UPDATE public.presupuesto_grupos
       SET seleccionado_id = NULL
       WHERE empresa_id = actor.empresa_id;
+    DELETE FROM public.presupuestos
+      WHERE empresa_id = actor.empresa_id;
     DELETE FROM public.presupuesto_grupos
       WHERE empresa_id = actor.empresa_id;
-    DELETE FROM public.empresas WHERE id = actor.empresa_id;
+
+    DELETE FROM public.proyectos
+      WHERE empresa_id = actor.empresa_id;
+    DELETE FROM public.empresas
+      WHERE id = actor.empresa_id;
 
     RETURN jsonb_build_object(
       'scope', 'company',
@@ -138,6 +183,16 @@ BEGIN
     SELECT CASE WHEN actor.id ~* uuid_re THEN actor.id ELSE NULL END AS candidate
   ) s
   WHERE candidate IS NOT NULL AND candidate ~* uuid_re;
+
+  DELETE FROM public.notificaciones_push_enviadas
+    WHERE usuario_id = actor.id;
+  DELETE FROM public.obrabot_usage
+    WHERE empresa_id = actor.empresa_id AND actor_id = actor.id;
+  DELETE FROM public.sync_web_batches
+    WHERE empresa_id = actor.empresa_id AND actor_id = actor.id;
+  UPDATE public.security_audit_logs
+    SET actor_id = NULL
+    WHERE empresa_id = actor.empresa_id AND actor_id = actor.id;
 
   DELETE FROM public.usuarios WHERE id = actor.id;
 

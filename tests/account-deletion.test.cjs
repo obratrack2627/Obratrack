@@ -27,10 +27,11 @@ afterEach(() => {
   Object.assign(process.env, savedEnv);
 });
 
-function buildAdminStub({ teamRows, subscriptionRow, bucketFiles, rpcResult }) {
+function buildAdminStub({ teamRows, subscriptionRow, bucketFiles, rpcResult, rpcError = null }) {
   const removed = [];
   const deletedAuthIds = [];
   const rpcCalls = [];
+  const events = [];
 
   const admin = {
     from(table) {
@@ -74,6 +75,7 @@ function buildAdminStub({ teamRows, subscriptionRow, bucketFiles, rpcResult }) {
             return { data: entries, error: null };
           },
           async remove(paths) {
+            events.push(`storage.remove:${bucket}`);
             removed.push({ bucket, paths });
             return { data: paths, error: null };
           },
@@ -81,12 +83,14 @@ function buildAdminStub({ teamRows, subscriptionRow, bucketFiles, rpcResult }) {
       },
     },
     async rpc(name, args) {
+      events.push('rpc');
       rpcCalls.push({ name, args });
-      return { data: rpcResult, error: null };
+      return { data: rpcError ? null : rpcResult, error: rpcError };
     },
     auth: {
       admin: {
         async deleteUser(uid) {
+          events.push(`auth.deleteUser:${uid}`);
           deletedAuthIds.push(uid);
           return { data: {}, error: null };
         },
@@ -94,7 +98,7 @@ function buildAdminStub({ teamRows, subscriptionRow, bucketFiles, rpcResult }) {
     },
   };
 
-  return { admin, removed, deletedAuthIds, rpcCalls };
+  return { admin, removed, deletedAuthIds, rpcCalls, events };
 }
 
 test('deleteAccountForUser protege cuentas demo y cuentas dev', async () => {
@@ -127,7 +131,7 @@ test('deleteAccountForUser como único admin cancela Flow, limpia Storage, borra
   const authWorkerId = '22222222-2222-4222-a222-222222222222';
   const flowCancelled = [];
 
-  const { admin, removed, deletedAuthIds, rpcCalls } = buildAdminStub({
+  const { admin, removed, deletedAuthIds, rpcCalls, events } = buildAdminStub({
     teamRows: [
       { id: authAdminId, rol: 'admin' },
       { id: 'worker-1', rol: 'terreno' },
@@ -172,10 +176,65 @@ test('deleteAccountForUser como único admin cancela Flow, limpia Storage, borra
   });
   assert.deepEqual(flowCancelled, [{ subscriptionId: 'sub_flow_999', atPeriodEnd: true }]);
   assert.deepEqual(rpcCalls, [{ name: 'eliminar_cuenta_usuario', args: { p_usuario_id: authAdminId } }]);
+  assert.equal(events[0], 'rpc');
+  assert.ok(events.findIndex((e) => e.startsWith('storage.remove:')) > 0);
+  assert.ok(events.findIndex((e) => e.startsWith('auth.deleteUser:')) > events.findIndex((e) => e.startsWith('storage.remove:')));
   assert.deepEqual(deletedAuthIds, [authAdminId, authWorkerId]);
   assert.ok(removed.some((r) => r.bucket === 'documentos-obra' && r.paths.includes(`${empresaId}/p1/factura.pdf`)));
   assert.ok(removed.some((r) => r.bucket === 'bitacora-fotos' && r.paths.includes(`${empresaId}/foto.jpg`)));
   assert.ok(removed.some((r) => r.bucket === 'obratrack-cloud-db' && r.paths.includes(`ledgers/v2_${empresaId}.json`)));
+});
+
+test('si falla el RPC eliminar_cuenta_usuario no destruye archivos de Storage ni usuarios en Auth', async () => {
+  const empresaId = 'emp-rpc-fail';
+  const authAdminId = '44444444-4444-4444-a444-444444444444';
+
+  const genericFail = buildAdminStub({
+    teamRows: [{ id: authAdminId, rol: 'admin' }],
+    subscriptionRow: null,
+    bucketFiles: {
+      [`documentos-obra:${empresaId}`]: [{ name: 'contrato.pdf', id: 'c1' }],
+    },
+    rpcResult: null,
+    rpcError: { code: '23503', message: 'violates foreign key constraint' },
+  });
+
+  await assert.rejects(
+    () =>
+      deleteAccountForUser({
+        admin: genericFail.admin,
+        user: { id: authAdminId, empresa_id: empresaId, rol: 'admin', is_dev: false },
+        flow: null,
+      }),
+    (err) => err.code === 'ACCOUNT_DELETE_FAILED' && err.status === 500,
+  );
+  assert.equal(genericFail.removed.length, 0);
+  assert.equal(genericFail.deletedAuthIds.length, 0);
+
+  const missingRpc = buildAdminStub({
+    teamRows: [{ id: authAdminId, rol: 'admin' }],
+    subscriptionRow: null,
+    bucketFiles: {
+      [`documentos-obra:${empresaId}`]: [{ name: 'contrato.pdf', id: 'c1' }],
+    },
+    rpcResult: null,
+    rpcError: {
+      code: 'PGRST202',
+      message: 'Could not find the function public.eliminar_cuenta_usuario(p_usuario_id) in the schema cache',
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      deleteAccountForUser({
+        admin: missingRpc.admin,
+        user: { id: authAdminId, empresa_id: empresaId, rol: 'admin', is_dev: false },
+        flow: null,
+      }),
+    (err) => err.code === 'ACCOUNT_DELETE_MIGRATION_MISSING' && err.status === 503,
+  );
+  assert.equal(missingRpc.removed.length, 0);
+  assert.equal(missingRpc.deletedAuthIds.length, 0);
 });
 
 test('deleteAccountForUser con otro admin activo solo elimina al usuario sin borrar la empresa ni cancelar suscripción', async () => {

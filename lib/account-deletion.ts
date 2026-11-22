@@ -174,13 +174,16 @@ export async function deleteAccountForUser(params: {
     }
   }
 
-  await cleanupStorageBeforeDelete(admin, expectedScope, user.empresa_id, user.id);
-
   const { data: rpcResult, error: rpcError } = await admin.rpc('eliminar_cuenta_usuario', {
     p_usuario_id: user.id,
   });
 
   if (rpcError) {
+    console.error('account_delete_rpc_error', {
+      code: rpcError.code,
+      message: rpcError.message,
+      hint: rpcError.hint,
+    });
     const msg = rpcError.message || '';
     if (msg.includes('ACCOUNT_DELETE_PROTECTED')) {
       throw new AIError(
@@ -189,20 +192,52 @@ export async function deleteAccountForUser(params: {
         403,
       );
     }
+    if (msg.includes('ACCOUNT_DELETE_FORBIDDEN')) {
+      throw new AIError(
+        'ACCOUNT_DELETE_FORBIDDEN',
+        'No tienes permisos para ejecutar la eliminación de la cuenta.',
+        403,
+      );
+    }
     if (msg.includes('ACCOUNT_NOT_FOUND')) {
       throw new AIError('ACCOUNT_NOT_FOUND', 'La cuenta ya no existe en el sistema.', 404);
+    }
+    if (
+      rpcError.code === 'PGRST202' ||
+      /could not find the function public\.eliminar_cuenta_usuario/i.test(msg)
+    ) {
+      throw new AIError(
+        'ACCOUNT_DELETE_MIGRATION_MISSING',
+        'La función de eliminación de cuentas aún no está habilitada en la base de datos. Aplica la migración 20261120_delete_account_cascade.sql en Supabase.',
+        503,
+      );
     }
     throw new AIError('ACCOUNT_DELETE_FAILED', 'No se pudieron eliminar los datos de tu cuenta.', 500);
   }
 
   const scope: 'company' | 'user' = rpcResult?.scope === 'company' ? 'company' : 'user';
+
+  try {
+    await cleanupStorageBeforeDelete(admin, scope, user.empresa_id, user.id);
+  } catch (storageErr: any) {
+    console.error('account_delete_storage_error', {
+      message: storageErr?.message || 'Error limpiando Storage tras eliminar cuenta',
+    });
+  }
+
   const authIds: string[] = Array.isArray(rpcResult?.auth_user_ids)
-    ? rpcResult.auth_user_ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+    ? Array.from(
+        new Set(
+          rpcResult.auth_user_ids.filter(
+            (id: unknown): id is string => typeof id === 'string' && id.length > 0,
+          ),
+        ),
+      )
     : [];
 
   let deletedAuthUsers = 0;
   for (const authId of authIds) {
-    const { error: authDelErr } = await admin.auth.admin.deleteUser(authId);
+    const { error: authDelErr } = await admin.auth.admin.deleteUser(authId, false);
     if (!authDelErr) {
       deletedAuthUsers += 1;
     } else if (!/not found/i.test(authDelErr.message || '')) {

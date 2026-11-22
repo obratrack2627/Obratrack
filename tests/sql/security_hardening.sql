@@ -103,17 +103,53 @@ BEGIN
 END $$;
 RESET ROLE;
 
--- 5. Eliminación completa de cuenta y cascada de empresa/presupuestos/avisos
+-- 5. Eliminación completa de cuenta y cascada de empresa/presupuestos/actas/avisos
 SELECT set_config('request.jwt.claims','{"role":"service_role"}',true);
 SET LOCAL ROLE service_role;
 DO $$
 DECLARE
   res jsonb;
 BEGIN
-  INSERT INTO public.presupuestos(id,empresa_id,creado_por,origen,cotizacion)
-  VALUES('qa-del-pres','qa-sec-emp','00000000-0000-0000-0000-000000000102','plataforma','{"titulo_proyecto":"Obra QA"}');
+  INSERT INTO public.proyectos(id,empresa_id,nombre,fecha_termino_estimada)
+  VALUES('qa-del-proj','qa-sec-emp','Obra QA',current_date + 30);
 
-  -- Al borrar usuario no-admin, presupuesto queda con creado_por NULL sin error FK y la empresa sigue existiendo
+  PERFORM set_config('obratrack.recepcion_autorizada','qa-del-acta',true);
+  INSERT INTO public.documentos_obra(id,proyecto_id,empresa_id,categoria,nombre)
+  VALUES('qa-del-acta','qa-del-proj','qa-sec-emp','acta_recepcion','Acta QA');
+  PERFORM set_config('obratrack.recepcion_autorizada','',true);
+
+  INSERT INTO public.presupuesto_grupos(id,empresa_id,proyecto_id,nombre,tipo)
+  VALUES('qa-del-grp','qa-sec-emp','qa-del-proj','Grupo QA','principal');
+
+  INSERT INTO public.presupuestos(id,empresa_id,creado_por,proyecto_id,grupo_id,origen,cotizacion)
+  VALUES('qa-del-pres','qa-sec-emp','00000000-0000-0000-0000-000000000102','qa-del-proj','qa-del-grp','plataforma','{"titulo_proyecto":"Obra QA"}');
+
+  UPDATE public.presupuesto_grupos
+  SET seleccionado_id = 'qa-del-pres'
+  WHERE id = 'qa-del-grp';
+
+  INSERT INTO public.whatsapp_avisos(id,empresa_id,actor_id,proyecto_id,request_key,mensaje,origen)
+  VALUES('11111111-1111-4111-a111-111111111998','qa-sec-emp','00000000-0000-0000-0000-000000000102','qa-del-proj','qa-del-aviso-2','Aviso Terreno QA','plataforma');
+
+  INSERT INTO public.obrabot_apu(empresa_id,nombre,categoria,unidad,rendimiento,fuente,fecha_referencia,revisado_por)
+  VALUES('qa-sec-emp','Radier QA','obra_gruesa','m2',1.5,'QA',current_date,'00000000-0000-0000-0000-000000000102');
+
+  INSERT INTO public.notificaciones_push_enviadas(dedup_key,empresa_id,usuario_id,categoria,titulo,cuerpo,url,enviadas)
+  VALUES
+    ('qa-dedup-terreno','qa-sec-emp','00000000-0000-0000-0000-000000000102','avance','T','C','/dashboard',1),
+    ('qa-dedup-admin','qa-sec-emp','00000000-0000-0000-0000-000000000101','avance','A','C','/dashboard',1);
+
+  INSERT INTO public.obrabot_usage(empresa_id,actor_id,channel,kind,reserved_units)
+  VALUES
+    ('qa-sec-emp','00000000-0000-0000-0000-000000000102','web','generation',1),
+    ('qa-sec-emp','00000000-0000-0000-0000-000000000101','web','generation',1);
+
+  INSERT INTO public.sync_web_batches(empresa_id,actor_id,id,payload_hash,resultado)
+  VALUES
+    ('qa-sec-emp','00000000-0000-0000-0000-000000000102',gen_random_uuid(),'qa-hash-terreno','{}'::jsonb),
+    ('qa-sec-emp','00000000-0000-0000-0000-000000000101',gen_random_uuid(),'qa-hash-admin','{}'::jsonb);
+
+  -- Al borrar usuario no-admin, presupuesto/aviso/apu/audit quedan con actor NULL sin error FK, empresa sigue existiendo y rastros sin FK se limpian
   res := public.eliminar_cuenta_usuario('00000000-0000-0000-0000-000000000102');
   IF res->>'scope' <> 'user' OR NOT EXISTS (SELECT 1 FROM public.empresas WHERE id='qa-sec-emp') THEN
     RAISE EXCEPTION 'SINGLE_USER_DELETE_FAILED: %', res;
@@ -121,10 +157,36 @@ BEGIN
   IF (SELECT creado_por FROM public.presupuestos WHERE id='qa-del-pres') IS NOT NULL THEN
     RAISE EXCEPTION 'PRESUPUESTO_SET_NULL_FAILED';
   END IF;
+  IF (SELECT actor_id FROM public.whatsapp_avisos WHERE id='11111111-1111-4111-a111-111111111998') IS NOT NULL THEN
+    RAISE EXCEPTION 'WA_AVISO_SET_NULL_FAILED';
+  END IF;
+  IF (SELECT revisado_por FROM public.obrabot_apu WHERE empresa_id='qa-sec-emp' AND nombre='Radier QA') IS NOT NULL THEN
+    RAISE EXCEPTION 'OBRABOT_APU_SET_NULL_FAILED';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.security_audit_logs WHERE empresa_id='qa-sec-emp' AND actor_id='00000000-0000-0000-0000-000000000102') THEN
+    RAISE EXCEPTION 'AUDIT_ACTOR_SET_NULL_FAILED';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.notificaciones_push_enviadas WHERE usuario_id='00000000-0000-0000-0000-000000000102')
+     OR EXISTS (SELECT 1 FROM public.obrabot_usage WHERE empresa_id='qa-sec-emp' AND actor_id='00000000-0000-0000-0000-000000000102')
+     OR EXISTS (SELECT 1 FROM public.sync_web_batches WHERE empresa_id='qa-sec-emp' AND actor_id='00000000-0000-0000-0000-000000000102') THEN
+    RAISE EXCEPTION 'USER_ORPHAN_CLEANUP_FAILED';
+  END IF;
 
-  -- Al borrar único admin, se elimina la empresa y todos sus rastros en cascada
+  -- Al borrar único admin, se elimina la empresa y todos sus rastros (incluidas actas de recepción, grupos circulares y push)
   res := public.eliminar_cuenta_usuario('00000000-0000-0000-0000-000000000101');
-  IF res->>'scope' <> 'company' OR EXISTS (SELECT 1 FROM public.empresas WHERE id='qa-sec-emp') OR EXISTS (SELECT 1 FROM public.usuarios WHERE empresa_id='qa-sec-emp') OR EXISTS (SELECT 1 FROM public.presupuestos WHERE empresa_id='qa-sec-emp') THEN
+  IF res->>'scope' <> 'company'
+     OR EXISTS (SELECT 1 FROM public.empresas WHERE id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.usuarios WHERE empresa_id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.proyectos WHERE empresa_id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.documentos_obra WHERE empresa_id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.presupuestos WHERE empresa_id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.presupuesto_grupos WHERE empresa_id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.notificaciones_push_enviadas WHERE empresa_id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.obrabot_usage WHERE empresa_id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.sync_web_batches WHERE empresa_id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.whatsapp_avisos WHERE empresa_id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.obrabot_apu WHERE empresa_id='qa-sec-emp')
+     OR EXISTS (SELECT 1 FROM public.security_audit_logs WHERE empresa_id='qa-sec-emp') THEN
     RAISE EXCEPTION 'COMPANY_CASCADE_DELETE_FAILED: %', res;
   END IF;
 END $$;

@@ -19,6 +19,7 @@ import { deleteAccountForUser } from '@/lib/account-deletion';
 import type { Empresa, EmpresaConfiguracion, Usuario } from '@/types/database';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 const MAX_LOGO_DATA_URL_LENGTH = 900_000;
 const LOGO_DATA_URL_RE = /^data:image\/(?:png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i;
