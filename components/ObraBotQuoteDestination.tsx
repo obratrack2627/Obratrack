@@ -102,7 +102,7 @@ export function ObraBotQuoteDestination({ quote }: { quote: QuoteReview }) {
     {kind === 'crear' && <form className="space-y-3 rounded-lg border border-kraft-200 p-3" onSubmit={event => {
       event.preventDefault();
       const values = Object.fromEntries(new FormData(event.currentTarget));
-      const equipo = String(values.equipo || '').split(/\s*[,;]\s*/).map(name => name.trim()).filter(Boolean);
+      const equipo = String(values.equipo || '').split(/[,;]/).map(name => name.trim()).filter(Boolean);
       void run(() => request(undefined, { ...values, modo: 'crear', cliente: clientKind === 'existente' ? selected : values.cliente, equipo }));
     }}>
       <label className="block">Nombre de la obra<input name="nombre" required maxLength={150} className={input} defaultValue={quote.borrador.titulo_proyecto} /></label>

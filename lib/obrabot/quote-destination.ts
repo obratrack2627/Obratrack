@@ -121,17 +121,27 @@ export async function rememberQuoteDestination(db: any, actor: Actor, channel: C
   await saveSession(db, actor, channel, { paso: 'opciones', id });
 }
 
-const startCreate = /^(?:(?:quiero|necesito|por favor)\s+)?(?:crea(?:r|me)?|convierte|convertir)\s+(?:(?:una|la)\s+)?obra\s+(?:a partir de|con|desde)\s+(?:(?:esta|esa|la|una)\s+)?cotizacion\b/;
-const startLink = /^(?:(?:quiero|necesito|por favor)\s+)?(?:vincula(?:r)?|adjunta(?:r)?|asigna(?:r)?)\s+(?:(?:esta|esa|la|una)\s+)?cotizacion\s*(?:[a-f0-9-]{36}\s*)?(?:a\s+(?:(?:una|la|esta|esa)\s+)?obra\b|$)/;
-const askOptions = /^(?:usa(?:r)?|que hago con|que puedo hacer con)\s+(?:(?:esta|esa|la)\s+)?cotizacion\b/;
-const field = /^(nombre(?: de la obra)?|direccion|cliente(?: existente)?|telefono|correo(?: electronico)?|email|equipo|obra)\s*:/;
-const projectReference = /^(?:a\s+)?(?:la\s+)?obra\s+(.+)$/i;
-const assignment = /^(?:asigna(?:r)?|a[nñ]ade|agrega|incorpora)\s+(?:(?:a|al|la|el)\s+)?(?:(?:trabajador(?:a|es)?|jefe(?:s)? de obra|supervisor(?:a|es)?)\s+)?(.+)$/i;
+const startCreate = /^(?:(?:quiero|necesito|por favor) )?(?:crea(?:r|me)?|convierte|convertir) (?:(?:una|la) )?obra (?:a partir de|con|desde) (?:(?:esta|esa|la|una) )?cotizacion\b/;
+const startLink = /^(?:(?:quiero|necesito|por favor) )?(?:vincula(?:r)?|adjunta(?:r)?|asigna(?:r)?) (?:(?:esta|esa|la|una) )?cotizacion(?: [a-f0-9-]{36})?(?: a (?:(?:una|la|esta|esa) )?obra\b|$)/;
+const askOptions = /^(?:usa(?:r)?|que hago con|que puedo hacer con) (?:(?:esta|esa|la) )?cotizacion\b/;
+const field = /^(nombre(?: de la obra)?|direccion|cliente(?: existente)?|telefono|correo(?: electronico)?|email|equipo|obra) ?:/;
+const projectReference = /^(?:a )?(?:la )?obra (.+)$/i;
+const assignment = /^(?:asigna(?:r)?|a[nñ]ade|agrega|incorpora) (?:(?:a|al|la|el) )?(?:(?:trabajador(?:a|es)?|jefe(?:s)? de obra|supervisor(?:a|es)?) )?(.+)$/i;
 const yes = /^(?:si|si por favor|si hazlo|dale|ok)$/;
 const cancel = /^(?:cancelar|cancela|no gracias|no)$/;
 
+function withoutEndPunctuation(text: string) {
+  let end = text.length;
+  while (end > 0 && '.!?'.includes(text[end - 1])) end--;
+  return text.slice(0, end).trimEnd();
+}
+
+function commandText(text: string) {
+  return withoutEndPunctuation(fold(text.trimStart().split(/\r?\n/, 1)[0]).replace(/\s+/g, ' '));
+}
+
 function conversationalMode(text: string) {
-  const clean = fold(text).replace(/[.!?]+$/, '');
+  const clean = commandText(text);
   if (startCreate.test(clean)) return 'crear';
   if (startLink.test(clean)) return 'vincular';
   if (askOptions.test(clean)) return 'opciones';
@@ -143,7 +153,7 @@ export function isDestinationCommand(text: string) {
 }
 
 export function isDestinationContinuation(text: string) {
-  const clean = fold(text.trim().split(/\r?\n/, 1)[0]).replace(/[.!?]+$/, '');
+  const clean = commandText(text);
   return field.test(clean) || projectReference.test(clean) || !!parseLinkChoice(clean) || yes.test(clean) || cancel.test(clean) ||
     /^(?:crear (?:una |la )?obra|vincular a (?:una |la )?obra|asignar equipo)$/.test(clean) || assignment.test(clean);
 }
@@ -157,7 +167,7 @@ function parseLinkChoice(text: string): LinkMode | null {
   return null;
 }
 
-const splitTeam = (s: string) => s.split(/\s*[,;]\s*|\s+y\s+/i).map(item => item.trim().replace(/[.!?]+$/, '')).filter(Boolean);
+const splitTeam = (s: string) => s.replace(/\s+/g, ' ').split(/[,;]| y /i).map(item => withoutEndPunctuation(item.trim())).filter(Boolean);
 
 function fieldsFrom(lines: string[]): CreateFields {
   const result: CreateFields = {};
@@ -203,8 +213,9 @@ export async function handleDestinationTurn(db: any, actor: Actor, channel: Chan
     if (!start || !new RegExp(quoteUuid, 'i').test(message)) return null;
     failed({ message: 'OBRABOT_FORBIDDEN' });
   }
-  const [first, ...lines] = message.trim().split(/\r?\n/);
-  const clean = fold(first).replace(/[.!?]+$/, '');
+  const [firstLine, ...lines] = message.trim().split(/\r?\n/);
+  const first = firstLine.replace(/\s+/g, ' ');
+  const clean = commandText(first);
   let state = await loadSession(db, actor, channel);
   const previous = state;
   if (start) {
@@ -256,8 +267,9 @@ export async function handleDestinationTurn(db: any, actor: Actor, channel: Chan
   }
   if (state.paso === 'vincular' || state.paso === 'confirmar') {
     const projectLine = (start ? lines : [first, ...lines]).find(line => /^obra\s*:/.test(fold(line)));
-    const inline = start === 'vincular' ? first.match(/\ba (?:la |esta |esa |una )?obra(?:\s*:\s*|\s+)(.+)/i)?.[1] : undefined;
-    const reference = (projectLine?.slice(projectLine.indexOf(':') + 1) || inline || first.match(projectReference)?.[1])?.trim().replace(/[.!?]+$/, '');
+    const marker = start === 'vincular' ? /\ba (?:la |esta |esa |una )?obra\b/i.exec(first) : null;
+    const inline = marker ? first.slice(marker.index + marker[0].length).trim().replace(/^:/, '') : '';
+    const reference = withoutEndPunctuation((projectLine?.slice(projectLine.indexOf(':') + 1) || inline || first.match(projectReference)?.[1] || '').trim());
     if (reference) {
       const matches = await findProject(db, actor, reference);
       if (matches.length !== 1) {

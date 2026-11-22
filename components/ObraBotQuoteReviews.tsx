@@ -85,7 +85,7 @@ export function ObraBotQuoteReviews() {
         <label className="block text-sm">Nombre de la cotización<input required maxLength={150} className={input} value={title} onChange={event => setTitle(event.target.value)} /></label>
         <label className="block text-sm">Materiales y precios con IVA incluido<textarea rows={3} className={input} value={items} onChange={event => setItems(event.target.value)} placeholder="Cemento | saco | 2 | 5.990" /></label>
         <label className="block text-sm">O adjunta un Excel, un PDF o una foto del presupuesto<input type="file" accept=".xlsx,application/pdf,image/jpeg,image/png,image/webp" className="mt-1 block max-w-full text-sm" onChange={event => setFile(event.target.files?.[0] || null)} /></label>
-        <button disabled={busy || (!items.trim() && !file)} className={button}>Preparar cotización</button>
+        <button type="submit" disabled={busy || (!items.trim() && !file)} className={button}>Preparar cotización</button>
       </form>
       <div className="mt-4 space-y-3">
         <div className="flex items-center justify-between gap-3"><strong>Pendientes de revisión</strong><button type="button" disabled={busy} className={button} onClick={() => void run(load)}>Actualizar</button></div>

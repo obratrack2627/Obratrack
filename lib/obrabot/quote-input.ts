@@ -26,15 +26,15 @@ const extractSchema = {
 };
 
 function quantity(value: string | number) {
-  if (typeof value === 'number') return Number(value.toFixed(6)) === value ? value : NaN;
-  if (!/^\d+(?:[,.]\d{1,6})?$/.test(value.trim())) return NaN;
+  if (typeof value === 'number') return Number(value.toFixed(6)) === value ? value : Number.NaN;
+  if (!/^\d+(?:[,.]\d{1,6})?$/.test(value.trim())) return Number.NaN;
   return Number(value.trim().replace(',', '.'));
 }
 
 function price(value: string | number) {
   if (typeof value === 'number') return value;
   const clean = value.trim().replace(/^\$\s*/, '');
-  if (!/^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(clean)) return NaN;
+  if (!/^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(clean)) return Number.NaN;
   return Number(clean.replaceAll('.', ''));
 }
 
