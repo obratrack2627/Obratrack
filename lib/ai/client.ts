@@ -75,6 +75,8 @@ export async function applyAIResponse(data: any, projectId?: string) {
         "No se pudieron actualizar los datos de la obra. Reintenta antes de aplicar cambios.",
       );
   }
+  const savedDestination = data.accion_ejecutada?.tipo === 'obrabot_destino_cotizacion';
+  const refreshed = savedDestination ? await dataService.pullFromCloudServer().catch(() => null) : null;
   const action = data.accion
     ? await executeAI(data.accion, projectId)
     : undefined;
@@ -100,7 +102,9 @@ export async function applyAIResponse(data: any, projectId?: string) {
         .join('\n\n')
     : '';
   return {
-    texto: action?.warning || actionText || data.respuesta,
+    texto: action?.warning || actionText || (savedDestination && !refreshed?.success
+      ? `${data.respuesta}\n\nActualiza la página para cargar los datos de la obra.`
+      : data.respuesta),
     accion_ejecutada: executed,
     cotizacion_generada: cotizacion,
     comparacion_materiales: isMaterialComparison(data.comparacion_materiales)

@@ -418,7 +418,8 @@ export default function PresupuestosPanel({
       {visible.some(row => !row.grupo_id) && (
         <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2" aria-label="Listado de presupuestos">
           {visible.filter(row => !row.grupo_id).map(row => {
-            const canConvert = !row.proyecto_id && !['anulada','rechazada'].includes(row.estado);
+            const fromObraBot = row.id.startsWith('obrabot-v2:');
+            const canConvert = !fromObraBot && !row.proyecto_id && !['anulada','rechazada'].includes(row.estado);
             const tone = row.estado === 'aprobada' ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300' : ['rechazada','anulada'].includes(row.estado) ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300' : 'border-kraft-200 bg-kraft-50 text-gray-700 dark:border-[#263040] dark:bg-[#0B0F14] dark:text-gray-200';
             return <article key={row.id} aria-label={`Presupuesto ${row.cotizacion.titulo_proyecto}`} className="min-w-0 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-4 sm:p-5 flex flex-col gap-4">
               <header className="min-w-0 space-y-2">
@@ -436,14 +437,14 @@ export default function PresupuestosPanel({
               <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
                   Estado
-                  <select disabled={busy} aria-label={`Estado de ${row.cotizacion.titulo_proyecto}`} value={row.estado} onChange={e => void update(row,{estado:e.target.value as BudgetStatus})} className={`block w-full min-w-0 max-w-full rounded-xl border px-3 py-2.5 text-sm font-semibold ${tone}`}>
+                  <select disabled={busy || fromObraBot} aria-label={`Estado de ${row.cotizacion.titulo_proyecto}`} value={row.estado} onChange={e => void update(row,{estado:e.target.value as BudgetStatus})} className={`block w-full min-w-0 max-w-full rounded-xl border px-3 py-2.5 text-sm font-semibold ${tone}`}>
                     {budgetStatuses.map(status => <option key={status} value={status}>{labels[status]}</option>)}
                   </select>
                 </label>
                 <div className="min-w-0 space-y-1.5">
                   <label className="block min-w-0 space-y-1.5 text-xs font-medium text-gray-500">
                     Obra asociada
-                    <select disabled={busy} aria-label={`Obra de ${row.cotizacion.titulo_proyecto}`} value={row.proyecto_id || ''} onChange={e => void update(row,{proyecto_id:e.target.value || null})} className="block w-full min-w-0 max-w-full truncate rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100">
+                    <select disabled={busy || fromObraBot} aria-label={`Obra de ${row.cotizacion.titulo_proyecto}`} value={row.proyecto_id || ''} onChange={e => void update(row,{proyecto_id:e.target.value || null})} className="block w-full min-w-0 max-w-full truncate rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#0B0F14] px-3 py-2.5 text-sm text-navy-900 dark:text-gray-100">
                       <option value="">Sin asociar</option>{projects.map(project => <option key={project.id} value={project.id}>{project.nombre}</option>)}
                     </select>
                   </label>
@@ -452,11 +453,12 @@ export default function PresupuestosPanel({
               </div>
               <footer className="mt-auto flex items-center gap-2 border-t border-kraft-200 dark:border-[#263040] pt-4">
                 <button type="button" onClick={() => {setEditSelected(false);setSelected(row);}} className="rounded-xl bg-obra-orange px-3.5 py-2 text-sm font-semibold text-white hover:bg-obra-orange-hover">Ver / PDF</button>
-                <button type="button" onClick={() => {setEditSelected(true);setSelected(row);}} className="rounded-xl border border-kraft-200 dark:border-[#263040] px-3.5 py-2 text-sm font-semibold">Editar</button>
+                {fromObraBot ? <Link className="text-sm font-semibold underline" href="/cotizador#cotizaciones-obrabot">Abrir en ObraBot</Link> :
+                  <button type="button" onClick={() => {setEditSelected(true);setSelected(row);}} className="rounded-xl border border-kraft-200 dark:border-[#263040] px-3.5 py-2 text-sm font-semibold">Editar</button>}
                 <div className="ml-auto"><ActionMenu label={`Más acciones de ${row.cotizacion.titulo_proyecto}`}>
                   <button type="button" onClick={() => setHistory(row)}>Historial</button>
-                  <button type="button" disabled={busy} onClick={() => setVariantSource(row)}>Crear alternativa</button>
-                  {row.proyecto_id && !['rechazada','anulada'].includes(row.estado) && <button type="button" disabled={busy} onClick={() => setChoice(row)}>Aplicar a la obra</button>}
+                  {!fromObraBot && <button type="button" disabled={busy} onClick={() => setVariantSource(row)}>Crear alternativa</button>}
+                  {!fromObraBot && row.proyecto_id && !['rechazada','anulada'].includes(row.estado) && <button type="button" disabled={busy} onClick={() => setChoice(row)}>Aplicar a la obra</button>}
                   {canConvert && <button type="button" disabled={busy} onClick={() => void handleConvertirEnObra(row)}><FolderPlus size={15} />Convertir en Obra</button>}
                 </ActionMenu></div>
               </footer>
@@ -469,6 +471,7 @@ export default function PresupuestosPanel({
         isOpen={!!selected}
         onClose={() => setSelected(null)}
         cotizacion={selected?.cotizacion || null}
+        readOnly={selected?.id.startsWith('obrabot-v2:') || selected?.grupo?.obrabot_reemplazado}
         startEditing={editSelected}
         onSaved={(row) => { setSelected(row); setEditSelected(false); setRows((prev) => prev.map((r) => r.id === row.id ? row : r)); }}
       />

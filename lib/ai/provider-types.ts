@@ -15,6 +15,7 @@ export interface GenerationOptions {
   tools?: OpenAIFunctionTool[];
   toolChoice?: 'auto' | 'none' | 'required';
   image?: { mimeType: string; data: string };
+  pdf?: { data: string };
   fetcher?: typeof fetch;
   timeoutMs?: number;
   budgetMs?: number;

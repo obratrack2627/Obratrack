@@ -424,7 +424,7 @@ export async function runScheduledPushReminders(
     const [projRes, agendaRes] = await Promise.all([
       admin
         .from("proyectos")
-        .select("id,nombre,estado,fecha_inicio,fecha_termino_estimada")
+        .select("id,nombre,estado,fecha_inicio,fecha_termino_estimada,programacion_pendiente")
         .eq("empresa_id", empresaId)
         .in("estado", ["activo", "pendiente"]),
       admin
@@ -436,7 +436,7 @@ export async function runScheduledPushReminders(
     if (agendaRes?.error) {
       console.warn("push_cron_agenda_query_error", { empresa_id: empresaId, code: agendaRes.error.code });
     }
-    const projects = projRes?.data || [];
+    const projects = (projRes?.data || []).filter((p: { programacion_pendiente?: boolean }) => !p.programacion_pendiente);
     const events = agendaRes?.data || [];
     const projectIds = projects.map((p: any) => p.id);
 

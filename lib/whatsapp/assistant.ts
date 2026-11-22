@@ -1,3 +1,4 @@
+import { quoteWhatsAppTurn } from '@/lib/obrabot/whatsapp';
 import { withSnapshotVersions } from '@/lib/sync/snapshot-versions';
 import { setAIUsageActor } from '@/lib/ai/usage';
 import { completeRows } from '@/lib/supabase/pagination';
@@ -228,6 +229,11 @@ export async function processPersonalMessage(
       persistido: false,
     };
   }
+  const quoteReply = await quoteWhatsAppTurn(sb, user, message, batchItems, mediaFn, undefined, loaded.conversationRows);
+  if (quoteReply) {
+    await finalizeBatch(true, quoteReply.message_id);
+    return quoteReply;
+  }
   let conversationRows: any[] = loaded.conversationRows;
   if (user.rol === 'terreno') conversationRows = workerHistory(conversationRows, new Set(tables.proyectos.map(p => p.id)));
   if (user.rol === 'supervisor') {
@@ -371,6 +377,13 @@ export async function processPersonalMessage(
         whatsappCard("Revisa tu mensaje", "Envía una instrucción de hasta 6000 caracteres e indica la obra."),
       persistido: false,
     };
+  }
+  if (batchItems.some(item => item.type === 'audio') && !attachments.length) {
+    const transcribedQuoteReply = await quoteWhatsAppTurn(sb, user, message, batchItems, mediaFn, text, conversationRows);
+    if (transcribedQuoteReply) {
+      await finalizeBatch(true, transcribedQuoteReply.message_id);
+      return transcribedQuoteReply;
+    }
   }
   if (
     pendingPerson?.asignacion &&
@@ -601,11 +614,11 @@ export async function processPersonalMessage(
     let semanticReferences: any[] = [];
     let savedBudgetsContext: any[] = [];
     if (!directWhatsAppReply) {
-      if (ragEligible(text, user.rol)) {
+      if (user.rol === 'admin' && ragEligible(text, user.rol)) {
         scheduleKnowledgeIndex(user.empresa_id);
         semanticReferences = await (deps.retrieveReferences || retrieveReferences)(sb, text, user.rol, { companyId: user.empresa_id });
       }
-      if (['admin', 'supervisor'].includes(user.rol) && (isQuoteRequest(text) || isQuoteRevision(text) || isAlternativeRequest(text))) {
+      if (user.rol === 'admin' && (isQuoteRequest(text) || isQuoteRevision(text) || isAlternativeRequest(text))) {
         try {
           const budgetQuery = sb.from('presupuestos').select('id,proyecto_id,estado,nombre_alternativa,cotizacion').eq('empresa_id', user.empresa_id);
           const ordered = typeof budgetQuery?.order === 'function' ? budgetQuery.order('created_at', { ascending: false }) : budgetQuery;

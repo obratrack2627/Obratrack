@@ -1,5 +1,6 @@
 'use client';
 
+import { ObraBotQuoteReviews } from '@/components/ObraBotQuoteReviews';
 import { projectStatusLabel } from '@/lib/project-status';
 import { conversationRequest } from '@/lib/ai/conversation';
 import React, { useState, useEffect, useRef } from 'react';
@@ -289,6 +290,7 @@ export default function CopilotoObreroPage() {
           description="Cotiza trabajos, consulta materiales y organiza tu obra desde el chat."
         >
           <div className="grid grid-cols-1 gap-6">
+            <ObraBotQuoteReviews />
 
             {/* ========================================================================= */}
             {/* COLUMNA PRINCIPAL: CHAT CONVERSACIONAL CON OBRABOT (8 cols) */}
