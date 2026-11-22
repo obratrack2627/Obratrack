@@ -1,3 +1,4 @@
+import { obrabotWhatsAppFile } from '@/lib/obrabot/whatsapp';
 import {deliverReplyOnce} from './reply-delivery';
 import {splitWhatsAppMessage} from './format';
 import { isAIConfigured } from '@/lib/ai/provider';
@@ -153,6 +154,11 @@ export function createWhatsAppWebhook(
                 }
               }
               if (deps.sendDocument) {
+                if (result.acciones?.archivo_cotizacion) {
+                  stage = 'obrabot_quote_file';
+                  const file = await obrabotWhatsAppFile(sb, result, message.from);
+                  if (file) await sendOnce(`obrabot_quote:${file.mime}`, () => deps.sendDocument!(message.from, file.bytes, file.filename, file.caption, file.mime));
+                }
                 stage = 'daily_close_pdf';
                 try {
                   const document = await dailyCloseDocument(sb, result, message.from);

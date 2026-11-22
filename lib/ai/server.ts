@@ -34,8 +34,10 @@ import { checkActionPermissions } from "./permissions";
 import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
 import { randomUUID } from "node:crypto";
 import { canAccessWeb, WEB_ACCESS_ERROR, isSessionJWT } from '@/lib/auth/access';
+import { handleQuoteTurn, isQuoteWorkflow } from '@/lib/obrabot/quotes';
+import { requireSupabaseAdmin } from '@/lib/supabase/admin';
 
-export async function authorizeAI(request: NextRequest) {
+export async function authorizeAI(request: NextRequest, options?: { adminOnly?: boolean }) {
   const authorization = (request.headers.get('authorization') || '').trim().split(/\s+/);
   const bearer = authorization.length === 2 && authorization[0].toLowerCase() === 'bearer' ? authorization[1] : request.cookies.get('obratrack_auth_token')?.value;
   if (authorization.length === 1 && ['POST', 'PATCH', 'DELETE', 'PUT'].includes(request.method)
@@ -73,8 +75,9 @@ export async function authorizeAI(request: NextRequest) {
       403,
     );
   if (!canAccessWeb(user)) throw new AIError('WEB_ROLE_FORBIDDEN', WEB_ACCESS_ERROR, 403);
+  if (options?.adminOnly && user.rol !== 'admin') throw new AIError('OBRABOT_ADMIN', 'Esta acción está reservada al administrador.', 403);
   setAIUsageActor(user);
-  return { client, user: { ...user, rol: user.is_dev === true ? 'admin' : user.rol } };
+  return { client, user: { ...user, rol_original: user.rol, rol: user.is_dev === true ? 'admin' : user.rol } };
 }
 
 export function errorJSON(error: unknown) {
@@ -138,6 +141,24 @@ export function createChatHandler(
     try {
       const { client, user } = await deps.authorize(request);
       const body = await readAIRequest(request);
+      if (isQuoteWorkflow(body.mensaje)) {
+        const actor = { ...user, rol: user.rol_original ?? user.rol };
+        if (actor.rol !== 'admin') throw new AIError('OBRABOT_ADMIN', 'Esta acción está reservada al administrador.', 403);
+        const plan = await client.from('empresas').select('plan_id').eq('id', actor.empresa_id).maybeSingle();
+        if (plan.error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude verificar el plan de la empresa.', 503);
+        if (!['pro', 'pro_ia'].includes(plan.data?.plan_id)) throw new AIError('PLAN_REQUIRED', 'ObraBot requiere el plan Pro o Pro IA.', 403);
+        const requestId = typeof body.request_id === 'string' && body.request_id.length <= 100 ? body.request_id : undefined;
+        const reply = await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, requestId);
+        const file = reply?.archivo;
+        return NextResponse.json({
+          respuesta: reply?.respuesta, accion: null, cotizacion: null, sugerencias: [],
+          ...(file ? { accion_ejecutada: {
+            tipo: 'obrabot_cotizacion', titulo: 'Cotización aprobada', resultado_texto: 'Archivo listo para descargar.', detalles: {},
+            link_destino: `/api/obrabot/cotizaciones/${file.id}?formato=${file.formato}`,
+            link_texto: file.formato === 'excel' ? 'Descargar Excel' : 'Descargar PDF',
+          } } : {}),
+        }, { headers: { 'Cache-Control': 'private, no-store' } });
+      }
       const deadlineOnly =
         isProjectDeadlineQuestion(body.mensaje) &&
         !hasOtherWorkBeyondDeadline(body.mensaje);

@@ -306,15 +306,15 @@ export async function sendMetaInteractive(
     );
   }
 }
-export async function sendMetaDocument(to: string, bytes: ArrayBuffer, filename: string, caption: string) {
+export async function sendMetaDocument(to: string, bytes: ArrayBuffer, filename: string, caption: string, mime: 'application/pdf' | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' = 'application/pdf') {
   const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
   const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
   if (!token || !phone || !canonicalPhone(to)) throw new AIError('WHATSAPP_NOT_CONFIGURED', 'No se pudo preparar el envío del documento.', 503);
   const headers = { Authorization: `Bearer ${token}` };
   const form = new FormData();
   form.set('messaging_product', 'whatsapp');
-  form.set('type', 'application/pdf');
-  form.set('file', new Blob([bytes], { type: 'application/pdf' }), filename);
+  form.set('type', mime);
+  form.set('file', new Blob([bytes], { type: mime }), filename);
   const upload = await serverFetch(`https://graph.facebook.com/${version()}/${phone}/media`, { method: 'POST', headers, body: form, signal: AbortSignal.timeout(6000) });
   const media = await upload.json().catch(() => null);
   if (!upload.ok || !/^\d+$/.test(String(media?.id || ''))) throw new AIError('WHATSAPP_DOCUMENT_UPLOAD', 'No se pudo adjuntar el PDF del cierre.', 503);

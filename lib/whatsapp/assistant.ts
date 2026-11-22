@@ -1,3 +1,4 @@
+import { quoteWhatsAppTurn } from '@/lib/obrabot/whatsapp';
 import { withSnapshotVersions } from '@/lib/sync/snapshot-versions';
 import { setAIUsageActor } from '@/lib/ai/usage';
 import { completeRows } from '@/lib/supabase/pagination';
@@ -227,6 +228,11 @@ export async function processPersonalMessage(
         whatsappCard("Plan de tu empresa", "El canal de gestión por WhatsApp requiere el plan Pro IA de tu empresa."),
       persistido: false,
     };
+  }
+  const quoteReply = await quoteWhatsAppTurn(sb, user, message, batchItems, mediaFn);
+  if (quoteReply) {
+    await finalizeBatch(true, quoteReply.message_id);
+    return quoteReply;
   }
   let conversationRows: any[] = loaded.conversationRows;
   if (user.rol === 'terreno') conversationRows = workerHistory(conversationRows, new Set(tables.proyectos.map(p => p.id)));
@@ -601,11 +607,11 @@ export async function processPersonalMessage(
     let semanticReferences: any[] = [];
     let savedBudgetsContext: any[] = [];
     if (!directWhatsAppReply) {
-      if (ragEligible(text, user.rol)) {
+      if (user.rol === 'admin' && ragEligible(text, user.rol)) {
         scheduleKnowledgeIndex(user.empresa_id);
         semanticReferences = await (deps.retrieveReferences || retrieveReferences)(sb, text, user.rol, { companyId: user.empresa_id });
       }
-      if (['admin', 'supervisor'].includes(user.rol) && (isQuoteRequest(text) || isQuoteRevision(text) || isAlternativeRequest(text))) {
+      if (user.rol === 'admin' && (isQuoteRequest(text) || isQuoteRevision(text) || isAlternativeRequest(text))) {
         try {
           const budgetQuery = sb.from('presupuestos').select('id,proyecto_id,estado,nombre_alternativa,cotizacion').eq('empresa_id', user.empresa_id);
           const ordered = typeof budgetQuery?.order === 'function' ? budgetQuery.order('created_at', { ascending: false }) : budgetQuery;

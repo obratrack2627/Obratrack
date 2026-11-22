@@ -25,7 +25,7 @@ export async function generateOpenAI(prompt: string, options: GenerationOptions 
   const file = audio && options.image ? await transcriptionFile(options.image, deadline) : undefined;
   const units = file?.durationSeconds !== undefined
     ? Math.max(1, Math.ceil(file.durationSeconds * 100))
-    : Buffer.byteLength(prompt,'utf8')+8192+(options.image?50000:0);
+    : Buffer.byteLength(prompt,'utf8')+8192+(options.image || options.pdf ? 50000 : 0);
   const settle=options.fetcher || !getServerOpenAIKey() ? async(_actual?:number)=>{} : await reserveAIUsage(units,audio?'audio':'generation');
   let actual:number|undefined;
   try{return await generateOpenAIResponse(prompt,{...options,budgetMs:Math.max(1,deadline-Date.now())},units=>{actual=units;},file,units);}
@@ -52,6 +52,7 @@ async function generateOpenAIResponse(prompt: string, options: GenerationOptions
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(options.image.mimeType)) throw new AIError('AI_IMAGE_INVALID', 'La foto debe ser JPG, PNG o WebP.', 422);
       content.push({ type: 'input_image', image_url: `data:${options.image.mimeType};base64,${options.image.data}`, detail: 'auto' });
     }
+    if (options.pdf) content.push({ type: 'input_file', filename: 'presupuesto.pdf', file_data: `data:application/pdf;base64,${options.pdf.data}` });
     const reasoning = options.reasoningEffort || process.env.OPENAI_REASONING_EFFORT || 'medium';
     if (!['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(reasoning)) throw new AIError('AI_MODEL_INVALID', 'Revisa la configuración del asistente.', 503);
     const maxOutputTokens = Math.min(Math.max(Number(options.maxOutputTokens) || 8192, 1024), 16384);
