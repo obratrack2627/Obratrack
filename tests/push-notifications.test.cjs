@@ -220,6 +220,7 @@ test("runScheduledPushReminders avisa el día previo (19 nov) y el mismo día (2
     ],
     proyectos: [
       { id: "p-norte", empresa_id: "e1", nombre: "Casa Norte", estado: "pendiente", fecha_inicio: "2026-11-20", fecha_termino_estimada: "2026-12-10" },
+      { id: "p-nueva", empresa_id: "e1", nombre: "Obra sin programar", estado: "pendiente", fecha_inicio: "2026-11-20", fecha_termino_estimada: "2026-11-20", programacion_pendiente: true },
     ],
     proyecto_trabajadores: [
       { proyecto_id: "p-norte", usuario_id: "u-w1" },
@@ -255,6 +256,7 @@ test("runScheduledPushReminders avisa el día previo (19 nov) y el mismo día (2
   assert.ok(delivered.some((d) => d.endpoint === "https://push/admin" && /Inicio hoy · Casa Norte/.test(d.title)));
   assert.ok(delivered.some((d) => d.endpoint === "https://push/admin" && /Hoy en tu agenda · 08:30/.test(d.title)));
   assert.ok(delivered.some((d) => d.endpoint === "https://push/w1" && /Hoy comienzas en Casa Norte/.test(d.title)));
+  assert.ok(!delivered.some((d) => /Obra sin programar/.test(d.title)));
 });
 
 test("endpoint cron /api/notificaciones/cron rechaza accesos sin CRON_SECRET válido", async () => {

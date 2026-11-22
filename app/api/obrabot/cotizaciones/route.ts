@@ -10,15 +10,15 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const { actor, db } = await authorizeQuoteWeb(request);
+    const { actor, db, plan } = await authorizeQuoteWeb(request);
     const [solicitudes, aprobadas] = await Promise.all([listQuotes(db, actor), listQuotes(db, actor, 'aprobada')]);
-    return NextResponse.json({ solicitudes, aprobadas }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return NextResponse.json({ solicitudes, aprobadas, permiteVincular: plan === 'pro_ia' }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { return errorJSON(error); }
 }
 
 async function submitQuote(request: NextRequest) {
   try {
-    const { actor, db } = await authorizeQuoteWeb(request);
+    const { actor, db, plan } = await authorizeQuoteWeb(request);
     if (Number(request.headers.get('content-length')) > 3200000) throw new AIError('OBRABOT_QUOTE_INPUT', 'El archivo de cotización supera los 3 MB.', 413);
     const form = await request.formData().catch(() => null);
     const message = form?.get('mensaje');
@@ -31,7 +31,7 @@ async function submitQuote(request: NextRequest) {
       bytes: Buffer.from(await file.arrayBuffer()),
       mime: /\.xlsx$/i.test(file.name) ? excelMime : file.type,
     } : undefined;
-    const result = await handleQuoteTurn(db, actor, 'plataforma', message, requestId, source);
+    const result = await handleQuoteTurn(db, actor, 'plataforma', message, requestId, source, { permiteVincular: plan === 'pro_ia' });
     if (!result) throw new AIError('OBRABOT_QUOTE_INPUT', 'Indica una acción de cotización.', 422);
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { return errorJSON(error); }

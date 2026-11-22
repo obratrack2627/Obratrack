@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ObraBotQuoteDestination } from './ObraBotQuoteDestination';
 import { aiHeaders } from '@/lib/ai/client';
 import type { QuoteReview, QuoteReply } from '@/lib/obrabot/quotes';
 
@@ -11,6 +12,7 @@ const editorText = (row: QuoteReview) => (row.borrador.partidas_venta || []).map
 export function ObraBotQuoteReviews() {
   const [rows, setRows] = useState<QuoteReview[]>([]);
   const [approved, setApproved] = useState<QuoteReview[]>([]);
+  const [canLink, setCanLink] = useState(false);
   const [title, setTitle] = useState('');
   const [items, setItems] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -28,6 +30,7 @@ export function ObraBotQuoteReviews() {
     if (!res.ok) throw new Error(data.error);
     setRows(data.solicitudes);
     setApproved(data.aprobadas);
+    setCanLink(data.permiteVincular);
   }
 
   async function run(task: () => Promise<void>) {
@@ -68,8 +71,15 @@ export function ObraBotQuoteReviews() {
 
   const button = 'rounded-lg border border-kraft-200 px-3 py-2 text-sm font-medium disabled:opacity-50';
   const input = 'w-full rounded-lg border border-kraft-200 bg-transparent p-2 text-sm';
+  useEffect(() => {
+    if (window.location.hash === '#cotizaciones-obrabot') {
+      const details = document.getElementById('cotizaciones-obrabot') as HTMLDetailsElement | null;
+      if (details) details.open = true;
+    }
+  }, []);
+
   return (
-    <details className="rounded-xl border border-kraft-200 bg-white p-4 dark:bg-[#141A23]" onToggle={event => { if (event.currentTarget.open) void run(load); }}>
+    <details id="cotizaciones-obrabot" className="rounded-xl border border-kraft-200 bg-white p-4 dark:bg-[#141A23]" onToggle={event => { if (event.currentTarget.open) void run(load); }}>
       <summary className="cursor-pointer font-semibold">Cotizaciones con precios ingresados</summary>
       <form className="mt-4 space-y-3" onSubmit={event => { event.preventDefault(); void run(() => submit(`Nueva cotización: ${title}\n${file ? '' : items}`, file)); }}>
         <label className="block text-sm">Nombre de la cotización<input required maxLength={150} className={input} value={title} onChange={event => setTitle(event.target.value)} /></label>
@@ -99,10 +109,10 @@ export function ObraBotQuoteReviews() {
       {response && <p className="mt-3 text-sm" role="status">{response.archivo || !response.solicitud ? response.respuesta : 'Solicitud guardada. Revisa la bandeja para continuar.'}</p>}
       {approved.length > 0 && <div className="mt-4 space-y-2">
         <strong>Cotizaciones aprobadas</strong>
-        {approved.map(row => <div key={row.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-kraft-200 p-2 text-sm">
+        {approved.map(row => <div key={row.id} className="rounded-lg border border-kraft-200 p-2 text-sm"><div className="flex flex-wrap items-center gap-2">
           <span className="mr-auto break-words">{row.borrador.titulo_proyecto}</span>
           {(['pdf', 'excel'] as const).map(format => <button type="button" key={format} disabled={busy} className={button} onClick={() => void run(() => download(row.id, format))}>Descargar {format === 'pdf' ? 'PDF' : 'Excel'}</button>)}
-        </div>)}
+        </div>{(canLink || row.destino) && <ObraBotQuoteDestination quote={row} />}</div>)}
       </div>}
       {error && <p className="mt-3 text-sm" role="alert">{error}</p>}
     </details>

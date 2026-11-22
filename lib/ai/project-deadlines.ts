@@ -13,10 +13,10 @@ export function projectDeadlines(projects: any[], projectId?: string, now = new 
   const today = chileToday(now), todayTime = day(today)!;
   const open = projects.filter(p => (!projectId || p.id === projectId) && ['activo', 'pendiente', 'pausado'].includes(p.estado));
   const overdue = open.flatMap(p => {
-    const due = day(p.fecha_termino_estimada);
+    const due = p.programacion_pendiente ? null : day(p.fecha_termino_estimada);
     return due !== null && due < todayTime ? [{ id: p.id, nombre: p.nombre, estado: p.estado, fecha_termino: p.fecha_termino_estimada, dias_vencida: Math.round((todayTime - due) / 86400000) }] : [];
   }).sort((a, b) => b.dias_vencida - a.dias_vencida || a.nombre.localeCompare(b.nombre));
-  return { fecha_chile: today, criterio: 'Obras abiertas con fecha de término anterior a hoy; terminadas y canceladas excluidas. Una obra que vence hoy todavía no está vencida.', obras_evaluadas: open.length, vencidas: overdue, sin_fecha_valida: open.filter(p => day(p.fecha_termino_estimada) === null).length };
+  return { fecha_chile: today, criterio: 'Obras abiertas con fecha de término anterior a hoy; terminadas y canceladas excluidas. Una obra que vence hoy todavía no está vencida.', obras_evaluadas: open.length, vencidas: overdue, sin_fecha_valida: open.filter(p => p.programacion_pendiente || day(p.fecha_termino_estimada) === null).length };
 }
 const queryWords = new Set('hola buen buenos dia dias buenas tardes noches que cuales cuantas cuantos obras proyectos obra proyecto tengo tenemos alguna algunas algun algunos hay estan esta vencidas vencidos vencida vencido atrasadas atrasados atrasada atrasado retrasadas retrasados ya hoy actualmente son listado dame un saber mis las los el la me puedes mostrar mostrarme dime listar listame muestra muestrame por favor revisar revisa consulta consultar entrega de plazo con tenemos al a fecha'.split(' '));
 export function isProjectDeadlineQuestion(message: string) {

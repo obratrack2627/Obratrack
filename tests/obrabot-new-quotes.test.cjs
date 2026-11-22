@@ -22,6 +22,7 @@ function database() {
     from(table) {
       let filters = [];
       return {
+        async upsert() { return {}; },
         select() { return this; },
         eq(key, value) { filters.push(row => row[key] === value); return this; },
         async maybeSingle() {
@@ -62,6 +63,9 @@ test('la bandeja del administrador aprueba la misma solicitud que ingresó un su
   assert.match((await handleQuoteTurn(db, admin, 'plataforma', `revisa cotización ${id}`)).respuesta, /47\.600/);
   const approved = await handleQuoteTurn(db, admin, 'plataforma', `aprueba cotización ${id} 1`);
   assert.deepEqual(approved.archivo, { id, formato: 'pdf' });
+  const approvedAgain = await handleQuoteTurn(db, admin, 'plataforma', `aprueba cotización ${id} 1`);
+  assert.equal(approvedAgain.archivo, undefined);
+  assert.match(approvedAgain.respuesta, /ya está aprobada/);
   const saved = db.calls[0].args.p_borrador;
   assert.equal(saved.estructura_financiera.precio_sugerido_neto, 40000);
   assert.equal(saved.estructura_financiera.iva_19, 7600);

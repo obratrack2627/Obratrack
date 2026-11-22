@@ -27,7 +27,7 @@ export interface Presupuesto {
 export interface BudgetGroup {
   id: string; empresa_id: string; proyecto_id: string | null; nombre: string;
   tipo: 'principal' | 'complementario'; seleccionado_id: string | null;
-  aplicado: boolean; monto_aplicado: number;
+  aplicado: boolean; monto_aplicado: number; obrabot_reemplazado?: boolean;
   ejecucion: { actividades?: Record<string, any>[]; materiales_proyecto?: Record<string, any>[] };
 }
 export async function budgetGroup(client: any, company: string, row: Presupuesto) {

@@ -35,7 +35,8 @@ import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
 import { randomUUID } from "node:crypto";
 import { canAccessWeb, WEB_ACCESS_ERROR, isSessionJWT } from '@/lib/auth/access';
 import { handleQuoteTurn, isQuoteWorkflow } from '@/lib/obrabot/quotes';
-import { requireSupabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseAdmin, requireSupabaseAdmin } from '@/lib/supabase/admin';
+import { isDestinationCommand, isDestinationContinuation } from '@/lib/obrabot/quote-destination';
 
 export async function authorizeAI(request: NextRequest, options?: { adminOnly?: boolean }) {
   const authorization = (request.headers.get('authorization') || '').trim().split(/\s+/);
@@ -141,21 +142,26 @@ export function createChatHandler(
     try {
       const { client, user } = await deps.authorize(request);
       const body = await readAIRequest(request);
-      if (isQuoteWorkflow(body.mensaje)) {
-        const actor = { ...user, rol: user.rol_original ?? user.rol };
+      const actor = { ...user, rol: user.rol_original ?? user.rol };
+      const quoteCommand = isQuoteWorkflow(body.mensaje) || isDestinationCommand(body.mensaje);
+      const destinationContinuation = actor.rol === 'admin' && isDestinationContinuation(body.mensaje) && getSupabaseAdmin();
+      if (quoteCommand || destinationContinuation) {
         if (actor.rol !== 'admin') throw new AIError('OBRABOT_ADMIN', 'Esta acción está reservada al administrador.', 403);
         const plan = await client.from('empresas').select('plan_id').eq('id', actor.empresa_id).maybeSingle();
         if (plan.error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude verificar el plan de la empresa.', 503);
         if (!['pro', 'pro_ia'].includes(plan.data?.plan_id)) throw new AIError('PLAN_REQUIRED', 'ObraBot requiere el plan Pro o Pro IA.', 403);
         const requestId = typeof body.request_id === 'string' && body.request_id.length <= 100 ? body.request_id : undefined;
-        const reply = await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, requestId);
+        const reply = await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
         const file = reply?.archivo;
-        return NextResponse.json({
-          respuesta: reply?.respuesta, accion: null, cotizacion: null, sugerencias: [],
+        if (reply) return NextResponse.json({
+          respuesta: reply.respuesta, accion: null, cotizacion: null, sugerencias: [],
           ...(file ? { accion_ejecutada: {
             tipo: 'obrabot_cotizacion', titulo: 'Cotización aprobada', resultado_texto: 'Archivo listo para descargar.', detalles: {},
             link_destino: `/api/obrabot/cotizaciones/${file.id}?formato=${file.formato}`,
             link_texto: file.formato === 'excel' ? 'Descargar Excel' : 'Descargar PDF',
+          } } : reply.obra ? { accion_ejecutada: {
+            tipo: 'obrabot_destino_cotizacion', titulo: 'Gestión de obra', resultado_texto: 'Obra disponible en ObraTrack.', detalles: {},
+            link_destino: `/proyectos/${encodeURIComponent(reply.obra)}/presupuestos`, link_texto: 'Ver obra',
           } } : {}),
         }, { headers: { 'Cache-Control': 'private, no-store' } });
       }

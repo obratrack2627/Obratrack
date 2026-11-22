@@ -229,7 +229,7 @@ export async function processPersonalMessage(
       persistido: false,
     };
   }
-  const quoteReply = await quoteWhatsAppTurn(sb, user, message, batchItems, mediaFn);
+  const quoteReply = await quoteWhatsAppTurn(sb, user, message, batchItems, mediaFn, undefined, loaded.conversationRows);
   if (quoteReply) {
     await finalizeBatch(true, quoteReply.message_id);
     return quoteReply;
@@ -377,6 +377,13 @@ export async function processPersonalMessage(
         whatsappCard("Revisa tu mensaje", "Envía una instrucción de hasta 6000 caracteres e indica la obra."),
       persistido: false,
     };
+  }
+  if (batchItems.some(item => item.type === 'audio') && !attachments.length) {
+    const transcribedQuoteReply = await quoteWhatsAppTurn(sb, user, message, batchItems, mediaFn, text, conversationRows);
+    if (transcribedQuoteReply) {
+      await finalizeBatch(true, transcribedQuoteReply.message_id);
+      return transcribedQuoteReply;
+    }
   }
   if (
     pendingPerson?.asignacion &&

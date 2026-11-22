@@ -1,5 +1,4 @@
 import ExcelJS from 'exceljs';
-import { buildQuotePdfBuffer } from '@/lib/whatsapp/quote-document';
 import type { CotizacionEstimacion } from '@/types/database';
 
 export type QuoteFormat = 'pdf' | 'excel';
@@ -7,6 +6,7 @@ export const excelMime = 'application/vnd.openxmlformats-officedocument.spreadsh
 
 export async function quoteFile(db: any, empresaId: string, quote: CotizacionEstimacion, format: QuoteFormat) {
   if (format === 'pdf') {
+    const { buildQuotePdfBuffer } = await import('@/lib/whatsapp/quote-document');
     const document = await buildQuotePdfBuffer(db, { cotizacion: quote, empresaId });
     return { ...document, mime: 'application/pdf' as const };
   }

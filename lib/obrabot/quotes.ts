@@ -4,17 +4,19 @@ import { normalizeQuote } from '@/lib/ai/protocol';
 import type { CotizacionEstimacion } from '@/types/database';
 import { readQuoteSource, readTextQuote, type QuoteSource } from './quote-input';
 import type { QuoteFormat } from './quote-files';
+import { handleDestinationTurn, rememberQuoteDestination, type QuoteDestination } from './quote-destination';
 
 export type Actor = { id: string; empresa_id: string; rol: string };
-type Channel = 'plataforma' | 'whatsapp';
+export type Channel = 'plataforma' | 'whatsapp';
 export type QuoteReview = {
   id: string;
   estado: 'pendiente' | 'aprobada' | 'devuelta';
   revision: number;
   borrador: CotizacionEstimacion;
   presupuesto_id: string | null;
+  destino?: QuoteDestination;
 };
-export type QuoteReply = { respuesta: string; archivo?: { id: string; formato: QuoteFormat }; solicitud?: string };
+export type QuoteReply = { respuesta: string; archivo?: { id: string; formato: QuoteFormat }; solicitud?: string; obra?: string };
 const uuid = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
 const starter = /^(?:nueva cotizaci[oó]n|cotizaci[oó]n con precios|(?:prepara|genera|hazme) (?:una |la )?cotizaci[oó]n con (?:estos )?precios)\b[ \t]*:?[ \t]*([^\n]*)/i;
 const startHelp = /^(?:quiero hacer una )?cotizaci[oó]n pactada[.!]?$/i;
@@ -46,7 +48,7 @@ function preview(row: QuoteReview) {
   const lines = (quote.partidas_venta ?? []).map(line => `• ${line.nombre} · ${line.cantidad} ${line.unidad} × ${formatCLP(line.precio_unitario)} = ${formatCLP(line.subtotal)}`);
   const detail = [...lines.slice(0, 8), ...(lines.length > 8 ? [`Vista resumida de ${lines.length} partidas. Revisa el detalle completo en la bandeja web antes de aprobar.`] : [])];
   return [`${quote.titulo_proyecto} · revisión ${row.revision}`, ...detail, `Neto ${formatCLP(totals.precio_sugerido_neto)} · IVA ${formatCLP(totals.iva_19)} · Total ${formatCLP(totals.precio_total_con_iva)}`,
-    row.estado === 'pendiente' ? `Para confirmar esta versión, escribe «aprueba cotización ${row.id} ${row.revision}».` : `Estado ${row.estado}.`].join('\n');
+    row.estado === 'pendiente' ? `Para confirmar esta versión, escribe «aprueba cotización ${row.id} ${row.revision}».` : row.estado === 'aprobada' ? `Para usarla en una obra, escribe «Usa cotización ${row.id}».` : `Estado ${row.estado}.`].join('\n');
 }
 
 export async function getQuoteReview(db: any, actor: Actor, id: string) {
@@ -68,7 +70,13 @@ export async function listQuotes(db: any, actor: Actor, state: 'pendiente' | 'ap
   requireAdmin(actor);
   const { data, error } = await db.from('obrabot_cotizaciones').select('id,estado,revision,borrador,presupuesto_id').eq('empresa_id', actor.empresa_id).eq('estado', state).order('actualizado_at', { ascending: false }).limit(30);
   if (error) dbError(error);
-  return (data || []) as QuoteReview[];
+  const rows = (data || []) as QuoteReview[];
+  if (state !== 'aprobada' || !rows.length) return rows;
+  const destinations = await db.from('obrabot_destinos_cotizacion').select('cotizacion_id,resultado')
+    .eq('empresa_id', actor.empresa_id).in('cotizacion_id', rows.map(row => row.id));
+  if (destinations.error) dbError(destinations.error);
+  const byId = new Map<string, QuoteDestination>((destinations.data || []).map((row: { cotizacion_id: string; resultado: QuoteDestination }) => [row.cotizacion_id, row.resultado]));
+  return rows.map(row => ({ ...row, destino: byId.get(row.id) }));
 }
 
 function draftId(actor: Actor, requestId?: string) {
@@ -98,9 +106,9 @@ export async function reviewQuote(db: any, actor: Actor, id: string, revision: n
   return data as QuoteReview;
 }
 
-export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, text: string, requestId?: string, source?: QuoteSource): Promise<QuoteReply | null> {
+export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, text: string, requestId?: string, source?: QuoteSource, context?: { quotedId?: string | null; permiteVincular?: boolean }): Promise<QuoteReply | null> {
   const message = text.trim();
-  if (!isQuoteWorkflow(message)) return null;
+  if (!isQuoteWorkflow(message)) return handleDestinationTurn(db, actor, channel, message, context?.quotedId);
   if (channel === 'plataforma') requireAdmin(actor);
   const start = message.match(starter);
   if (start || startHelp.test(message)) {
@@ -132,8 +140,17 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
   if (!decision) return { respuesta: 'Indica el código de la cotización. Para aprobar, corregir o devolver, incluye también el número de revisión.' };
   const verb = decision[1].toLowerCase();
   const id = decision[2].toLowerCase();
+  const alreadyApproved = verb === 'aprueba' && (await getQuoteReview(db, actor, id)).estado === 'aprobada';
   const approved = await reviewQuote(db, actor, id, Number(decision[3]), verb === 'aprueba' ? 'aprobar' : verb === 'corrige' ? 'corregir' : 'devolver', decision[4]);
   if (verb === 'devuelve') return { respuesta: 'La solicitud quedó devuelta con la observación.' };
   if (verb === 'corrige') return { respuesta: preview(approved), solicitud: id };
-  return { respuesta: 'Cotización aprobada y guardada en Presupuestos. Puedes compartir el PDF o pedir el Excel editable.', archivo: { id, formato: 'pdf' } };
+  if (alreadyApproved) return { respuesta: `Esta cotización ya está aprobada. Escribe «PDF cotización ${id}» si quieres descargarla de nuevo.` };
+  const canLink = context?.permiteVincular !== false;
+  if (canLink) await rememberQuoteDestination(db, actor, channel, id);
+  return {
+    respuesta: 'Cotización aprobada. Puedes compartir el PDF o pedir el Excel.' + (canLink
+      ? '\n\n¿Quieres crear una obra con esta cotización o vincularla a una obra existente? Responde «Crear obra» o «Vincular a obra».'
+      : ''),
+    archivo: { id, formato: 'pdf' },
+  };
 }
