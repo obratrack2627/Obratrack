@@ -80,6 +80,12 @@ export default function ModalOverlay({ children, className = '', onClose, ...pro
   return createPortal(
     <div {...props} ref={root} role={props.role || 'dialog'} aria-modal="true" tabIndex={-1}
       data-modal-layout={className.includes('flex-col') ? 'fullscreen' : 'dialog'}
+      onClick={(event) => {
+        props.onClick?.(event);
+        if (!event.defaultPrevented && event.target === event.currentTarget && close.current) {
+          close.current();
+        }
+      }}
       className={`app-modal-overlay ${className}`}>
       {children}
     </div>, document.body,

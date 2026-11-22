@@ -18,9 +18,12 @@ import {
   Smartphone,
   Sparkles,
   Search,
-  CheckCircle2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import { toast } from '@/components/ToastProvider';
+import { aggregateMonthlyAttendance } from '@/lib/attendance-monthly';
+import { downloadMonthlyAttendanceExcel } from '@/lib/excel-export';
 import { dataService } from '@/lib/data-service';
 import { Proyecto, AsistenciaObrero } from '@/types/database';
 import { formatDate } from '@/lib/utils';
@@ -29,14 +32,14 @@ export default function ControlAsistenciaGlobalPage() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [asistencias, setAsistencias] = useState<AsistenciaObrero[]>([]);
   const [fechaFiltro, setFechaFiltro] = useState(chileToday());
+  const [viewMode, setViewMode] = useState<'diario' | 'mensual'>('diario');
+  const [mesFiltro, setMesFiltro] = useState(chileToday().slice(0, 7));
   const [obraFiltro, setObraFiltro] = useState('todas');
   const [searchTerm, setSearchTerm] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState<'todos' | 'presente' | 'atraso' | 'ausente'>('todos');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+  const showToast = (msg: string, tone: 'success' | 'info' | 'error' = 'info') => {
+    toast(msg, tone);
   };
 
   const loadData = () => {
@@ -46,6 +49,10 @@ export default function ControlAsistenciaGlobalPage() {
 
   useEffect(() => {
     loadData();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('vista') === 'mensual') {
+      setViewMode('mensual');
+    }
     const onSync = () => loadData();
     window.addEventListener('obratrack_cloud_synced', onSync);
     return () => window.removeEventListener('obratrack_cloud_synced', onSync);
@@ -82,9 +89,72 @@ export default function ControlAsistenciaGlobalPage() {
     }
   };
 
+  const monthlyFilteredRows = React.useMemo(() => {
+    const base = aggregateMonthlyAttendance(asistencias, proyectos, mesFiltro, obraFiltro);
+    const q = searchTerm.toLowerCase().trim();
+    if (!q) return base;
+    return base.filter(
+      (r) =>
+        r.trabajador.toLowerCase().includes(q) ||
+        r.cargo.toLowerCase().includes(q) ||
+        r.obras.some((o) => o.toLowerCase().includes(q)),
+    );
+  }, [asistencias, proyectos, mesFiltro, obraFiltro, searchTerm]);
+
+  const handleExportarMensualExcel = async () => {
+    if (monthlyFilteredRows.length === 0) {
+      showToast('No hay marcajes registrados en el mes seleccionado.', 'info');
+      return;
+    }
+    try {
+      await downloadMonthlyAttendanceExcel(
+        monthlyFilteredRows,
+        mesFiltro,
+        dataService.getEmpresa()?.nombre,
+      );
+      showToast(`Planilla mensual ${mesFiltro} descargada en Excel.`, 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo generar el Excel mensual.', 'error');
+    }
+  };
+
   const handleExportarConsolidado = () => {
+    if (viewMode === 'mensual') {
+      if (monthlyFilteredRows.length === 0) {
+        showToast('No hay registros mensuales de asistencia para exportar.', 'info');
+        return;
+      }
+      const headers = ['Mes', 'Trabajador', 'Cargo', 'Presentes', 'Atrasos', 'Ausencias', 'Licencias/Permisos', 'Días', 'Horas', 'Obras'];
+      const rows = monthlyFilteredRows.map((r) =>
+        [
+          mesFiltro,
+          r.trabajador,
+          r.cargo,
+          r.presentes,
+          r.atrasos,
+          r.ausentes,
+          r.licenciasPermisos,
+          r.totalDias,
+          r.totalHoras,
+          r.obras.join(' · '),
+        ]
+          .map(csvCell)
+          .join(','),
+      );
+      const csv = '\uFEFF' + [headers.map(csvCell).join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Consolidado_Mensual_Asistencia_${mesFiltro}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast('Resumen mensual CSV descargado.', 'success');
+      return;
+    }
+
     if (asistenciasFiltradas.length === 0) {
-      showToast('No hay registros de asistencia para exportar.');
+      showToast('No hay registros de asistencia para exportar.', 'info');
       return;
     }
     const headers = ['Fecha', 'Obra', 'Trabajador', 'Cargo', 'Estado', 'Entrada', 'Salida', 'Horas', 'Origen'];
@@ -93,7 +163,7 @@ export default function ControlAsistenciaGlobalPage() {
       a.trabajador_nombre, a.trabajador_rol || '', a.estado, a.hora_entrada || '',
       a.hora_salida || '', a.horas_trabajadas || 0, a.origen,
     ].map(csvCell).join(','));
-    const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const csv = '\uFEFF' + [headers.map(csvCell).join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -134,7 +204,7 @@ export default function ControlAsistenciaGlobalPage() {
   const ausenciasHoy = asistenciasBase.filter(
     (a) => a.estado === 'ausente' || a.estado === 'licencia' || a.estado === 'permiso'
   ).length;
-  const mesActivo = (fechaFiltro || chileToday()).slice(0, 7);
+  const mesActivo = viewMode === 'mensual' ? mesFiltro : (fechaFiltro || chileToday()).slice(0, 7);
   const totalHorasMes = asistencias
     .filter(
       (a) =>
@@ -152,25 +222,30 @@ export default function ControlAsistenciaGlobalPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-[#FAF8F5] dark:bg-[#0E131B] pb-16">
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-obra-orange shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
+    <div className="flex-1 flex flex-col min-h-screen bg-[var(--bg-page)] pb-16">
       <Navbar
         title="Asistencia"
-        subtitle="Asistencia diaria de tus obras."
+        subtitle="Asistencia diaria y consolidado mensual de tus obras."
         action={
-          <button
-            onClick={handleExportarConsolidado}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF6A00] hover:bg-[#E05E00] text-white text-xs font-heading font-bold shadow-sm transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            <span>Exportar asistencia</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {viewMode === 'mensual' && (
+              <button
+                type="button"
+                onClick={handleExportarMensualExcel}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs font-heading font-bold shadow-sm transition-colors"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-[#6B8F72]" />
+                <span className="hidden sm:inline">Excel (.xlsx)</span>
+              </button>
+            )}
+            <button
+              onClick={handleExportarConsolidado}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF6A00] hover:bg-[#E05E00] text-white text-xs font-heading font-bold shadow-sm transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              <span>Exportar asistencia</span>
+            </button>
+          </div>
         }
       />
 
@@ -304,6 +379,46 @@ export default function ControlAsistenciaGlobalPage() {
 
         {/* Barra Unificada de Búsqueda y Filtros de Asistencia */}
         <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-3.5 sm:p-4 shadow-sm space-y-3 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-kraft-100 dark:border-[#1E2530]">
+            <div
+              role="tablist"
+              aria-label="Modo de vista de asistencia"
+              className="inline-flex items-center rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] p-1 gap-1"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'diario'}
+                onClick={() => setViewMode('diario')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-heading font-semibold transition-all ${
+                  viewMode === 'diario'
+                    ? 'bg-navy-900 dark:bg-obra-orange text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-navy-900 dark:hover:text-white'
+                }`}
+              >
+                Diario
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'mensual'}
+                onClick={() => setViewMode('mensual')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-heading font-semibold transition-all ${
+                  viewMode === 'mensual'
+                    ? 'bg-navy-900 dark:bg-obra-orange text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-300 hover:text-navy-900 dark:hover:text-white'
+                }`}
+              >
+                Resumen Mensual
+              </button>
+            </div>
+            <span className="text-[11px] font-mono text-gray-500 dark:text-gray-400">
+              {viewMode === 'diario'
+                ? `${asistenciasFiltradas.length} marcaje(s)`
+                : `${monthlyFilteredRows.length} trabajador(es) en ${mesFiltro}`}
+            </span>
+          </div>
+
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 min-w-0">
             <div className="relative flex-1 min-w-0">
               <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -329,14 +444,24 @@ export default function ControlAsistenciaGlobalPage() {
             <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0 min-w-0">
               <div className="flex items-center gap-1.5 h-10 bg-kraft-50 dark:bg-[#0F141C] px-3 rounded-xl border border-kraft-200 dark:border-[#263040] min-w-0">
                 <Calendar className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
-                <input
-                  type="date"
-                  aria-label="Filtrar por fecha"
-                  max={chileToday()}
-                  value={fechaFiltro}
-                  onChange={(e) => setFechaFiltro(e.target.value || chileToday())}
-                  className="bg-transparent text-xs font-mono text-navy-900 dark:text-white focus:outline-none min-w-0"
-                />
+                {viewMode === 'diario' ? (
+                  <input
+                    type="date"
+                    aria-label="Filtrar por fecha"
+                    max={chileToday()}
+                    value={fechaFiltro}
+                    onChange={(e) => setFechaFiltro(e.target.value || chileToday())}
+                    className="bg-transparent text-xs font-mono text-navy-900 dark:text-white focus:outline-none min-w-0"
+                  />
+                ) : (
+                  <input
+                    type="month"
+                    aria-label="Filtrar resumen mensual por mes"
+                    value={mesFiltro}
+                    onChange={(e) => setMesFiltro(e.target.value || chileToday().slice(0, 7))}
+                    className="bg-transparent text-xs font-mono text-navy-900 dark:text-white focus:outline-none min-w-0"
+                  />
+                )}
               </div>
 
               <select
@@ -355,6 +480,7 @@ export default function ControlAsistenciaGlobalPage() {
             </div>
           </div>
 
+          {viewMode === 'diario' && (
           <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-kraft-100 dark:border-[#1E2530] min-w-0">
             <div
               role="tablist"
@@ -419,7 +545,7 @@ export default function ControlAsistenciaGlobalPage() {
                     )}
                     <span>{tab.label}</span>
                     <span
-                      className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
                         isActive
                           ? 'bg-white/20 text-current'
                           : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
@@ -446,9 +572,139 @@ export default function ControlAsistenciaGlobalPage() {
               </button>
             )}
           </div>
+          )}
         </div>
 
-        {/* Tabla Consolidada */}
+        {viewMode === 'mensual' ? (
+          <div className="bg-white dark:bg-[#141A23] rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-kraft-100 dark:border-[#263040] flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-sm font-heading font-bold text-navy-900 dark:text-white flex items-center gap-2">
+                <ClipboardCheck className="w-4 h-4 text-[#FF6A00]" />
+                <span>Resumen Mensual de Asistencia ({mesFiltro})</span>
+              </h3>
+              {monthlyFilteredRows.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleExportarMensualExcel}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] hover:border-[#FF6A00] text-xs font-heading font-semibold text-navy-900 dark:text-white transition-colors"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-[#6B8F72]" />
+                  <span>Descargar Excel (.xlsx)</span>
+                </button>
+              )}
+            </div>
+
+            {monthlyFilteredRows.length === 0 ? (
+              <div className="p-10 text-center space-y-2">
+                <p className="text-sm font-heading font-bold text-navy-900 dark:text-white">
+                  Sin marcajes registrados en {mesFiltro}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Cambia el mes o selecciona otra obra para revisar los acumulados.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Cards móviles mensuales */}
+                <div className="md:hidden divide-y divide-kraft-100 dark:divide-[#1E2530]">
+                  {monthlyFilteredRows.map((row) => (
+                    <div key={row.workerKey} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-heading font-bold text-navy-900 dark:text-white">
+                            {row.trabajador}
+                          </p>
+                          <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 capitalize">
+                            {row.cargo}
+                          </p>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-obra-orange">
+                          {row.totalHoras} h
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5 text-center text-[11px] font-mono">
+                        <div className="rounded-lg bg-[#6B8F72]/15 text-[#6B8F72] py-1">
+                          <span className="block font-bold">{row.presentes}</span>
+                          <span className="text-[9px]">Pres.</span>
+                        </div>
+                        <div className="rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 py-1">
+                          <span className="block font-bold">{row.atrasos}</span>
+                          <span className="text-[9px]">Atras.</span>
+                        </div>
+                        <div className="rounded-lg bg-red-500/15 text-red-500 py-1">
+                          <span className="block font-bold">{row.ausentes}</span>
+                          <span className="text-[9px]">Aus.</span>
+                        </div>
+                        <div className="rounded-lg bg-kraft-100 dark:bg-[#0F141C] text-gray-700 dark:text-gray-300 py-1">
+                          <span className="block font-bold">{row.totalDias}</span>
+                          <span className="text-[9px]">Días</span>
+                        </div>
+                      </div>
+                      {row.obras.length > 0 && (
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                          Obras: {row.obras.join(' · ')}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tabla escritorio mensual */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-[#FAF8F5] dark:bg-[#1A222D] text-[11px] font-mono uppercase text-gray-500 border-b border-kraft-200 dark:border-[#263040]">
+                        <th className="py-3 px-4">Trabajador</th>
+                        <th className="py-3 px-4">Cargo</th>
+                        <th className="py-3 px-3 text-center">Presentes</th>
+                        <th className="py-3 px-3 text-center">Atrasos</th>
+                        <th className="py-3 px-3 text-center">Ausencias</th>
+                        <th className="py-3 px-3 text-center">Lic./Perm.</th>
+                        <th className="py-3 px-3 text-center">Días</th>
+                        <th className="py-3 px-4 text-right">Horas</th>
+                        <th className="py-3 px-4">Obras</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-kraft-100 dark:divide-[#1E2530]">
+                      {monthlyFilteredRows.map((row) => (
+                        <tr key={row.workerKey} className="hover:bg-kraft-50/50 dark:hover:bg-[#1A222D]/50">
+                          <td className="py-3 px-4 font-bold text-navy-900 dark:text-white whitespace-nowrap">
+                            {row.trabajador}
+                          </td>
+                          <td className="py-3 px-4 text-gray-500 dark:text-gray-400 capitalize whitespace-nowrap">
+                            {row.cargo}
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono font-bold text-[#6B8F72]">
+                            {row.presentes}
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono font-bold text-amber-600 dark:text-amber-400">
+                            {row.atrasos}
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono font-bold text-red-500">
+                            {row.ausentes}
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono text-gray-600 dark:text-gray-300">
+                            {row.licenciasPermisos}
+                          </td>
+                          <td className="py-3 px-3 text-center font-mono font-semibold text-navy-900 dark:text-white">
+                            {row.totalDias}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-obra-orange whitespace-nowrap">
+                            {row.totalHoras} h
+                          </td>
+                          <td className="py-3 px-4 text-gray-600 dark:text-gray-300 max-w-[220px] truncate">
+                            {row.obras.join(' · ') || '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+        /* Tabla Consolidada Diaria */
         <div className="bg-white dark:bg-[#141A23] rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm overflow-hidden">
           <div className="p-4 border-b border-kraft-100 dark:border-[#263040] flex items-center justify-between gap-3">
             <h3 className="text-sm font-heading font-bold text-navy-900 dark:text-white flex items-center gap-2">
@@ -470,72 +726,120 @@ export default function ControlAsistenciaGlobalPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-[#FAF8F5] dark:bg-[#1A222D] text-[11px] font-mono uppercase text-gray-500 border-b border-kraft-200 dark:border-[#263040]">
-                    <th className="py-3 px-4">Trabajador</th>
-                    <th className="py-3 px-4">Obra</th>
-                    <th className="py-3 px-4">Estado</th>
-                    <th className="py-3 px-4">Horario</th>
-                    <th className="py-3 px-4">Horas</th>
-                    <th className="py-3 px-4">Canal</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-kraft-100 dark:divide-[#1E2530]">
-                  {asistenciasFiltradas.map((a) => {
-                    const obraNombre =
-                      proyectos.find((p) => p.id === a.proyecto_id)?.nombre || 'Obra';
-                    return (
-                      <tr key={a.id}>
-                        <td className="py-3 px-4 font-bold text-navy-900 dark:text-white">
-                          {a.trabajador_nombre}
-                        </td>
-                        <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
+            <>
+              {/* Cards móviles diarias */}
+              <div className="md:hidden divide-y divide-kraft-100 dark:divide-[#1E2530]">
+                {asistenciasFiltradas.map((a) => {
+                  const obraNombre =
+                    proyectos.find((p) => p.id === a.proyecto_id)?.nombre || 'Obra';
+                  return (
+                    <div key={a.id} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-heading font-bold text-navy-900 dark:text-white truncate">
+                            {a.trabajador_nombre}
+                          </p>
                           <Link
                             href={`/proyectos/${a.proyecto_id}/asistencia`}
-                            className="hover:text-[#FF6A00] inline-flex items-center gap-1"
+                            className="text-[11px] text-gray-500 dark:text-gray-400 hover:text-[#FF6A00] inline-flex items-center gap-1 mt-0.5"
                           >
-                            <Building2 className="w-3.5 h-3.5 text-[#FF6A00]" />
-                            <span>{obraNombre}</span>
+                            <Building2 className="w-3 h-3 text-[#FF6A00] shrink-0" />
+                            <span className="truncate">{obraNombre}</span>
                           </Link>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
-                              a.estado === 'presente'
-                                ? 'bg-[#6B8F72]/20 text-[#6B8F72]'
-                                : a.estado === 'atraso'
-                                ? 'bg-amber-500/20 text-amber-600'
-                                : 'bg-red-500/15 text-red-500'
-                            }`}
-                          >
-                            {a.estado}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-mono text-gray-600 dark:text-gray-300">
-                          {a.hora_entrada ? `${a.hora_entrada} - ${a.hora_salida || '--:--'}` : '—'}
-                        </td>
-                        <td className="py-3 px-4 font-mono font-bold text-navy-900 dark:text-white">
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase shrink-0 ${
+                            a.estado === 'presente'
+                              ? 'bg-[#6B8F72]/20 text-[#6B8F72]'
+                              : a.estado === 'atraso'
+                              ? 'bg-amber-500/20 text-amber-600'
+                              : 'bg-red-500/15 text-red-500'
+                          }`}
+                        >
+                          {a.estado}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] font-mono text-gray-500 dark:text-gray-400 pt-1">
+                        <span>
+                          {a.hora_entrada ? `${a.hora_entrada} - ${a.hora_salida || '--:--'}` : 'Sin marca'}
+                        </span>
+                        <span className="font-bold text-navy-900 dark:text-white">
                           {a.horas_trabajadas ? `${a.horas_trabajadas} h` : '0 h'}
-                        </td>
-                        <td className="py-3 px-4">
-                          {a.origen === 'whatsapp_ia' ? (
-                            <span className="inline-flex items-center gap-1 text-[#25D366] font-bold">
-                              <Smartphone className="w-3.5 h-3.5" /> WhatsApp IA
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-[#FAF8F5] dark:bg-[#1A222D] text-[11px] font-mono uppercase text-gray-500 border-b border-kraft-200 dark:border-[#263040]">
+                      <th className="py-3 px-4">Trabajador</th>
+                      <th className="py-3 px-4">Obra</th>
+                      <th className="py-3 px-4">Estado</th>
+                      <th className="py-3 px-4">Horario</th>
+                      <th className="py-3 px-4">Horas</th>
+                      <th className="py-3 px-4">Canal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-kraft-100 dark:divide-[#1E2530]">
+                    {asistenciasFiltradas.map((a) => {
+                      const obraNombre =
+                        proyectos.find((p) => p.id === a.proyecto_id)?.nombre || 'Obra';
+                      return (
+                        <tr key={a.id}>
+                          <td className="py-3 px-4 font-bold text-navy-900 dark:text-white">
+                            {a.trabajador_nombre}
+                          </td>
+                          <td className="py-3 px-4 text-gray-600 dark:text-gray-300">
+                            <Link
+                              href={`/proyectos/${a.proyecto_id}/asistencia`}
+                              className="hover:text-[#FF6A00] inline-flex items-center gap-1"
+                            >
+                              <Building2 className="w-3.5 h-3.5 text-[#FF6A00]" />
+                              <span>{obraNombre}</span>
+                            </Link>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase ${
+                                a.estado === 'presente'
+                                  ? 'bg-[#6B8F72]/20 text-[#6B8F72]'
+                                  : a.estado === 'atraso'
+                                  ? 'bg-amber-500/20 text-amber-600'
+                                  : 'bg-red-500/15 text-red-500'
+                              }`}
+                            >
+                              {a.estado}
                             </span>
-                          ) : (
-                            <span className="text-gray-500">Web</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-gray-600 dark:text-gray-300">
+                            {a.hora_entrada ? `${a.hora_entrada} - ${a.hora_salida || '--:--'}` : '—'}
+                          </td>
+                          <td className="py-3 px-4 font-mono font-bold text-navy-900 dark:text-white">
+                            {a.horas_trabajadas ? `${a.horas_trabajadas} h` : '0 h'}
+                          </td>
+                          <td className="py-3 px-4">
+                            {a.origen === 'whatsapp_ia' ? (
+                              <span className="inline-flex items-center gap-1 text-[#25D366] font-bold">
+                                <Smartphone className="w-3.5 h-3.5" /> WhatsApp IA
+                              </span>
+                            ) : (
+                              <span className="text-gray-500">Web</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
+        )}
       </div>
     </div>
   );

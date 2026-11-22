@@ -20,6 +20,7 @@ import { dataService } from "@/lib/data-service";
 import AIMessageTools from "./AIMessageTools";
 import EvidenceLink from './EvidenceLink';
 import EvidenceImage from "./EvidenceImage";
+import { ReportFeedSkeleton } from "./PageSkeletons";
 import ChatMessageFormatter from "./ChatMessageFormatter";
 import WhatsAppAvisosPanel from "./WhatsAppAvisosPanel";
 const labels: Record<string, string> = {
@@ -407,9 +408,16 @@ export default function WhatsAppJefePanel() {
               {error}
             </p>
           )}
+          {busy && !messages.length && <ReportFeedSkeleton count={4} />}
           {!busy && !error && !messages.length && (
-            <div className="rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-8 text-center text-sm text-gray-500 dark:text-gray-400">
-              No hay registros con estos filtros.
+            <div className="rounded-2xl border border-dashed border-kraft-300 dark:border-[#263040] bg-white dark:bg-[#141A23] px-6 py-10 text-center space-y-2">
+              <MessageCircle className="w-8 h-8 text-gray-400 dark:text-gray-500 mx-auto" />
+              <p className="text-sm font-semibold text-navy-900 dark:text-white">
+                No hay registros con estos filtros
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Prueba limpiando la búsqueda o envía un mensaje desde WhatsApp para verlo aquí.
+              </p>
             </div>
           )}
           <div className="space-y-3">

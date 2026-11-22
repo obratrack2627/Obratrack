@@ -26,14 +26,18 @@ import {
   Zap,
   MapPin,
   HelpCircle,
+  Search,
 } from 'lucide-react';
 import DashboardOnboardingTour, {
   DashboardFirstStepsChecklist,
   type TourChecklistStatus,
 } from '@/components/DashboardOnboardingTour';
+import { DashboardSkeleton } from '@/components/PageSkeletons';
+import { AlertsBellButton } from '@/components/AlertsDrawer';
+import AgendaWidget from '@/components/AgendaWidget';
 import { dataService } from '@/lib/data-service';
-import { Proyecto, ReporteWhatsApp, Usuario } from '@/types/database';
-import { formatCLP, formatDate } from '@/lib/utils';
+import { EventoAgenda, Proyecto, ReporteWhatsApp, Usuario } from '@/types/database';
+import { formatDate } from '@/lib/utils';
 import { aiHeaders } from '@/lib/ai/client';
 
 const DashboardFinanceCharts = dynamic(
@@ -57,6 +61,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [reportes, setReportes] = useState<ReporteWhatsApp[]>([]);
+  const [eventosAgenda, setEventosAgenda] = useState<EventoAgenda[]>([]);
   const [whatsappPendingCount, setWhatsappPendingCount] = useState(0);
   const [activeUser, setActiveUser] = useState<Usuario | null>(null);
   const [teamCount, setTeamCount] = useState(0);
@@ -113,6 +118,7 @@ export default function DashboardPage() {
 
     const reps = dataService.getReportes();
     setReportes(reps);
+    setEventosAgenda(dataService.getEventosAgenda());
 
     computeOnboardingState(user, projs, true);
 
@@ -141,6 +147,7 @@ export default function DashboardPage() {
       setActiveUser(syncedUser);
       setProyectos(syncedProjs);
       setReportes(dataService.getReportes());
+      setEventosAgenda(dataService.getEventosAgenda());
       computeOnboardingState(syncedUser, syncedProjs, false);
       void loadWhatsAppPending();
     };
@@ -243,12 +250,19 @@ export default function DashboardPage() {
       const rank = (s: Proyecto['estado']) => (s === 'activo' ? 0 : s === 'pausado' ? 1 : 2);
       return rank(a.estado) - rank(b.estado) || (b.monto_cotizado || 0) - (a.monto_cotizado || 0);
     })
-    .map((p) => ({
-      nombre: p.nombre,
-      Presupuestado: p.monto_cotizado || 0,
-      Cobrado: p.total_pagado || 0,
-      Pendiente: Math.max(0, (p.monto_cotizado || 0) - (p.total_pagado || 0)),
-    }));
+    .map((p) => {
+      const presupuestado = p.monto_cotizado || 0;
+      const cobrado = p.total_pagado || 0;
+      const costos = (p.total_materiales || 0) + (p.total_imprevistos || 0);
+      return {
+        nombre: p.nombre,
+        Presupuestado: presupuestado,
+        Cobrado: cobrado,
+        Pendiente: Math.max(0, presupuestado - cobrado),
+        Costos: costos,
+        Margen: presupuestado - costos,
+      };
+    });
 
   const pieDataRentabilidad = [
     { name: 'Cobrado', value: totalCobrado, color: '#6B8F72' },
@@ -256,14 +270,7 @@ export default function DashboardPage() {
   ].filter((d) => d.value > 0);
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="flex items-center gap-3 text-gray-500">
-          <div className="w-5 h-5 border-2 border-[#FF6A00] border-t-transparent rounded-full animate-spin"></div>
-          <span className="font-heading">Cargando Centro de Control...</span>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const checklistStatus: TourChecklistStatus = {
@@ -282,7 +289,7 @@ export default function DashboardPage() {
       {/* Cabecera Principal */}
       <div
         data-tour-zone="header"
-        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#141A23] p-6 md:pr-14 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#141A23] p-6 md:pr-16 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm"
       >
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -306,6 +313,20 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event('obratrack_open_command_palette'))}
+            aria-label="Búsqueda rápida (Ctrl+K)"
+            title="Búsqueda rápida (Ctrl+K)"
+            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-kraft-50 dark:bg-[#1E2530] text-gray-700 dark:text-gray-200 text-xs font-medium border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] hover:text-[#FF6A00] transition-all"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Buscar</span>
+            <kbd className="hidden xl:inline-flex items-center rounded bg-black/5 dark:bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-gray-500 dark:text-gray-400">
+              Ctrl K
+            </kbd>
+          </button>
+          <AlertsBellButton />
           <button
             type="button"
             onClick={startTour}
@@ -404,11 +425,26 @@ export default function DashboardPage() {
           <div className="mt-3 text-2xl lg:text-3xl font-heading font-black text-[#6B8F72]">
             <MaskedMoneyAmount value={totalCobrado} label="Total recaudado / cobrado" />
           </div>
-          <div className="mt-3 space-y-1 text-xs font-mono text-gray-500">
-            <span className="block">Saldo por cobrar:</span>
-            <strong className="block min-w-0 text-[#FF6A00]">
-              <MaskedMoneyAmount value={saldoPendiente} label="Saldo por cobrar" compact />
-            </strong>
+          <div className="mt-3 space-y-2 text-xs font-mono text-gray-500">
+            <div className="flex items-center justify-between gap-2">
+              <span>Saldo por cobrar:</span>
+              <strong className="min-w-0 text-[#FF6A00]">
+                <MaskedMoneyAmount value={saldoPendiente} label="Saldo por cobrar" compact />
+              </strong>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-kraft-100 dark:bg-gray-800 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className="bg-[#6B8F72] h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${totalCotizado > 0 ? Math.min(100, Math.round((totalCobrado / totalCotizado) * 100)) : 0}%`,
+                  }}
+                />
+              </div>
+              <span className="text-[11px] font-bold text-[#6B8F72]">
+                {totalCotizado > 0 ? Math.min(100, Math.round((totalCobrado / totalCotizado) * 100)) : 0}% cobrado
+              </span>
+            </div>
           </div>
         </div>
 
@@ -500,7 +536,19 @@ export default function DashboardPage() {
 
           <div className="space-y-3">
             {obrasActivas.length === 0 ? (
-              <p className="text-xs text-gray-500 py-6 text-center">No hay obras en curso en este momento.</p>
+              <div className="rounded-xl border border-dashed border-kraft-300 dark:border-[#263040] bg-kraft-50/70 dark:bg-[#0F141C] px-4 py-8 text-center space-y-2">
+                <Building className="w-7 h-7 text-gray-400 mx-auto" />
+                <p className="text-xs font-semibold text-navy-900 dark:text-gray-200">
+                  No hay obras en curso en este momento.
+                </p>
+                <Link
+                  href="/proyectos?nueva=1"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-[#FF6A00] hover:underline"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Crear nueva obra</span>
+                </Link>
+              </div>
             ) : (
               obrasActivas.map((p) => {
                 const avance = p.porcentaje_avance_ponderado || 0;
@@ -583,6 +631,12 @@ export default function DashboardPage() {
         totalCobrado={totalCobrado}
         saldoPendiente={saldoPendiente}
         totalImprevistos={totalImprevistos}
+      />
+
+      <AgendaWidget
+        proyectos={proyectosVigentes}
+        eventos={eventosAgenda}
+        onChanged={() => setEventosAgenda(dataService.getEventosAgenda())}
       />
 
       <DashboardOnboardingTour

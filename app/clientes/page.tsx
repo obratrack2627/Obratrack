@@ -2,6 +2,8 @@
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 import ClientProjectAssignments from '@/components/ClientProjectAssignments';
+import { toast } from '@/components/ToastProvider';
+import { downloadClientesCsv } from '@/lib/excel-export';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
@@ -19,7 +21,7 @@ import {
   Users,
   Search,
   Edit3,
-  CheckCircle2,
+  Download,
   AlertTriangle,
   ExternalLink,
   ArrowUpDown,
@@ -61,7 +63,6 @@ export default function ClientesPage() {
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [clienteToDelete, setClienteToDelete] = useState<Cliente | null>(null);
   const [selectedClienteDetail, setSelectedClienteDetail] = useState<Cliente | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Filtros y Vista
   const [searchTerm, setSearchTerm] = useState('');
@@ -113,6 +114,9 @@ export default function ClientesPage() {
       window.location.href = '/proyectos';
       return;
     }
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setViewMode('grid');
+    }
     loadData();
   }, []);
 
@@ -122,8 +126,7 @@ export default function ClientesPage() {
   }, []);
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    toast(msg, 'success');
   };
 
   const validateClienteForm = (args: {
@@ -310,25 +313,30 @@ export default function ClientesPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-obra-orange" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       <Navbar
         title="Clientes"
         subtitle="Contactos y obras asociadas."
         action={
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="px-4 py-2.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-sm font-semibold rounded-xl shadow-sm flex items-center gap-2 font-heading transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nuevo Cliente</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                downloadClientesCsv(clientes, proyectos);
+                toast('Clientes exportados en CSV.', 'success');
+              }}
+              className="px-3 py-2.5 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm flex items-center gap-1.5 font-heading transition-all"
+            >
+              <Download className="w-4 h-4 text-[#FF6A00]" />
+              <span className="hidden sm:inline">CSV</span>
+            </button>
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="px-4 py-2.5 bg-obra-orange hover:bg-obra-orange-hover text-white text-sm font-semibold rounded-xl shadow-sm flex items-center gap-2 font-heading transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nuevo Cliente</span>
+            </button>
+          </div>
         }
       />
 
@@ -508,7 +516,7 @@ export default function ClientesPage() {
                     )}
                     <span>{tab.label}</span>
                     <span
-                      className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
                         isActive
                           ? 'bg-white/20 text-current'
                           : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'

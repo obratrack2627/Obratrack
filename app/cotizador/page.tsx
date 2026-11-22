@@ -14,7 +14,6 @@ import {
   Users,
   Calendar,
   DollarSign,
-  CheckCircle2,
   HardHat,
   MapPin,
   Clock,
@@ -33,6 +32,7 @@ import {
   Printer,
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import { toast } from '@/components/ToastProvider';
 import { dataService } from '@/lib/data-service';
 import {
   MensajeChatCotizador,
@@ -78,7 +78,6 @@ export default function CopilotoObreroPage() {
 
   // Estados de interfaz
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('gratis');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Mensajes de chat (Persistidos por sesión de usuario)
   const [mensajesChat, setMensajesChat] = useState<MensajeChatCotizador[]>([INITIAL_CHAT_MESSAGE]);
@@ -175,8 +174,7 @@ export default function CopilotoObreroPage() {
   }, [mensajesChat, isChatLoading]);
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    toast(msg);
   };
 
   // Reiniciar conversación activa para empezar una nueva
@@ -273,14 +271,7 @@ export default function CopilotoObreroPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-kraft-100 font-sans pb-8">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-navy-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-kraft-200 flex items-center gap-2 text-xs font-semibold animate-in slide-in-from-bottom-5">
-          <Sparkles className="w-4 h-4 text-obra-orange shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+    <div className="flex-1 flex flex-col min-h-screen bg-[var(--bg-page)] font-sans pb-8">
 
 
       {/* Navbar Superior */}

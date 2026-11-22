@@ -6,11 +6,16 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  Copy,
   Edit2,
   Eye,
   EyeOff,
+  MessageCircle,
   Package,
   PackageCheck,
+  Search,
+  ShoppingCart,
+  Store,
   Trash2,
   X,
 } from 'lucide-react';
@@ -19,6 +24,8 @@ import { dataService } from '@/lib/data-service';
 import { materialNeeds } from '@/lib/construction-workflow';
 import { formatMaterialCategory } from '@/lib/materials/format';
 import { chileToday } from '@/lib/work-calendar';
+import { formatShoppingListMessage } from '@/lib/shopping-list';
+import ModalOverlay from '@/components/ModalOverlay';
 import MaskedMoneyAmount from '@/components/MaskedMoneyAmount';
 import { MASKED_CLP_AMOUNT } from '@/lib/privacy/mask';
 
@@ -54,6 +61,11 @@ export default function ProjectMaterials({
   const [savingIds, setSavingIds] = useState<Record<string, boolean>>({});
   const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'por_comprar' | 'por_pagar' | 'por_recibir' | 'urgentes'>('todos');
+  const [groupBySupplier, setGroupBySupplier] = useState(false);
+  const [shoppingModalOpen, setShoppingModalOpen] = useState(false);
+  const [shoppingCopied, setShoppingCopied] = useState(false);
 
   useEffect(() => {
     if (!Object.keys(revealedIds).length) return;
@@ -252,6 +264,56 @@ export default function ProjectMaterials({
     }
   };
 
+  const filteredMaterials = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return materials.filter((material) => {
+      const delivered = receivedByMaterial.get(material.id) || 0;
+      const totalQty = Number(material.cantidad || 0);
+      const pending = Math.max(0, totalQty - delivered);
+      const complete = totalQty > 0 && pending <= 0.000001;
+      const isUrgent = urgentNames.has(material.nombre) && !complete;
+
+      if (statusFilter === 'por_comprar' && material.comprado) return false;
+      if (statusFilter === 'por_pagar' && material.pagado === true) return false;
+      if (statusFilter === 'por_recibir' && complete) return false;
+      if (statusFilter === 'urgentes' && !isUrgent) return false;
+
+      if (!q) return true;
+      return (
+        material.nombre.toLowerCase().includes(q) ||
+        (material.proveedor || '').toLowerCase().includes(q) ||
+        formatMaterialCategory(material.categoria).toLowerCase().includes(q)
+      );
+    });
+  }, [materials, receivedByMaterial, searchQuery, statusFilter, urgentNames]);
+
+  const supplierGroups = useMemo(() => {
+    const map = new Map<string, MaterialProyecto[]>();
+    for (const mat of filteredMaterials) {
+      const sup = (mat.proveedor || '').trim() || 'Proveedor por definir';
+      const arr = map.get(sup) || [];
+      arr.push(mat);
+      map.set(sup, arr);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], 'es'));
+  }, [filteredMaterials]);
+
+  const activeProject = useMemo(
+    () => (activeProjectId ? dataService.getProyectoById(activeProjectId) : undefined),
+    [activeProjectId],
+  );
+
+  const shoppingListText = useMemo(
+    () =>
+      formatShoppingListMessage({
+        proyectoNombre: activeProject?.nombre || 'Obra',
+        direccion: activeProject?.direccion,
+        comuna: activeProject?.comuna,
+        materiales: materials,
+      }),
+    [activeProject, materials],
+  );
+
   if (materials.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-kraft-300 dark:border-[#2A3544] bg-[#FAF8F5] dark:bg-[#141A23] px-4 py-10 text-center">
@@ -265,6 +327,182 @@ export default function ProjectMaterials({
       </div>
     );
   }
+
+  const pendingBuyCount = materials.filter((m) => !m.comprado).length;
+
+  const renderMaterialRow = (material: MaterialProyecto) => {
+    const delivered = receivedByMaterial.get(material.id) || 0;
+    const totalQty = Number(material.cantidad || 0);
+    const pending = Math.max(0, totalQty - delivered);
+    const complete = totalQty > 0 && pending <= 0.000001;
+    const partial = !complete && delivered > 0;
+
+    const receptionLabel = complete
+      ? 'Recibido completo'
+      : partial
+        ? 'Entrega parcial'
+        : 'Por recibir';
+
+    const receptionTone = complete
+      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+      : partial
+        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+        : 'bg-gray-100 text-gray-600 dark:bg-[#1E2530] dark:text-gray-300';
+
+    const linkedActivity = material.actividad_id
+      ? activityById.get(material.actividad_id)
+      : undefined;
+    const isUrgent = urgentNames.has(material.nombre) && !complete;
+    const isSaving = Boolean(savingIds[material.id]);
+    const isMoneyRevealed = Boolean(revealedIds[material.id]);
+
+    return (
+      <li
+        key={material.id}
+        className="py-2.5 transition-colors hover:bg-kraft-50/50 dark:hover:bg-[#19212C]/50 text-xs"
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:gap-3 items-start lg:items-center min-w-0">
+          {/* Material + metadata */}
+          <div className="lg:col-span-4 min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
+              <span className="font-semibold text-navy-900 dark:text-white break-words">
+                {material.nombre}
+              </span>
+              {isUrgent && (
+                <span className="rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-2 py-0.5 text-[10px] font-semibold">
+                  Faena próxima
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+              {formatMaterialCategory(material.categoria)} ·{' '}
+              {material.proveedor?.trim() || 'Proveedor por definir'}
+              {linkedActivity ? ` · ${linkedActivity.nombre}` : ''}
+            </p>
+          </div>
+
+          {/* Cantidad y costo */}
+          <div className="lg:col-span-2 lg:text-right min-w-0 flex items-baseline justify-between lg:block gap-2">
+            <span className="inline-flex items-center gap-1 font-mono font-semibold text-navy-900 dark:text-white tabular-nums">
+              <span>{isMoneyRevealed ? clp(material.subtotal) : MASKED_CLP_AMOUNT}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setRevealedIds((prev) => ({
+                    ...prev,
+                    [material.id]: !prev[material.id],
+                  }))
+                }
+                aria-label={
+                  isMoneyRevealed
+                    ? `Ocultar montos de ${material.nombre}`
+                    : `Mostrar montos de ${material.nombre}`
+                }
+                aria-pressed={isMoneyRevealed}
+                title={isMoneyRevealed ? 'Ocultar montos' : 'Mostrar montos'}
+                className="inline-flex items-center justify-center p-0.5 rounded text-gray-400 hover:text-obra-orange hover:bg-kraft-100 dark:hover:bg-[#1E2633] transition-colors shrink-0"
+              >
+                {isMoneyRevealed ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              </button>
+            </span>
+            <span className="block text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+              {formatQty(material.cantidad)} {material.unidad} × {isMoneyRevealed ? clp(material.precio_unitario) : MASKED_CLP_AMOUNT}
+            </span>
+          </div>
+
+          {/* Recepción en obra */}
+          <div className="lg:col-span-2 min-w-0 flex flex-wrap lg:flex-col items-center lg:items-start justify-between gap-1">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${receptionTone}`}
+            >
+              {complete ? (
+                <CheckCircle2 className="w-3 h-3 shrink-0" />
+              ) : partial ? (
+                <Clock className="w-3 h-3 shrink-0" />
+              ) : null}
+              {receptionLabel}
+            </span>
+            <span className="text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+              Recibido: {formatQty(delivered)} / {formatQty(material.cantidad)} {material.unidad}
+            </span>
+          </div>
+
+          {/* Compra y pago inline */}
+          <div className="lg:col-span-2 min-w-0 flex flex-wrap lg:flex-col gap-x-3 gap-y-1">
+            <label className="inline-flex items-center gap-1.5 text-[11px] text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={Boolean(material.comprado)}
+                onChange={(e) =>
+                  handleToggle(material.id, 'comprado', e.target.checked)
+                }
+                className="h-3.5 w-3.5 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              />
+              <span>Compra registrada</span>
+            </label>
+
+            <label className="inline-flex items-center gap-1.5 text-[11px] text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={material.pagado === true}
+                onChange={(e) =>
+                  handleToggle(material.id, 'pagado', e.target.checked)
+                }
+                className="h-3.5 w-3.5 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              />
+              <span>Pago confirmado</span>
+            </label>
+
+            {material.pagado === false && (
+              <span className="text-[10px] font-semibold text-amber-800 dark:text-amber-300">
+                Por pagar
+              </span>
+            )}
+            {isSaving && (
+              <span className="text-[10px] text-gray-400">Guardando…</span>
+            )}
+          </div>
+
+          {/* Acciones */}
+          <div className="lg:col-span-2 flex flex-wrap items-center lg:justify-end gap-1.5 shrink-0">
+            {pending > 0 ? (
+              <button
+                type="button"
+                onClick={() => openReceptionModal(material)}
+                className="inline-flex items-center gap-1 rounded-lg border border-kraft-300 dark:border-[#324054] bg-white dark:bg-[#1B2330] hover:bg-[#FAF8F5] dark:hover:bg-[#232D3D] px-2 py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200 transition-colors whitespace-nowrap"
+              >
+                <PackageCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                <span>Registrar recepción</span>
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+                <Check className="w-3 h-3 shrink-0" />
+                Al día
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => onEdit(material)}
+              aria-label={`Editar ${material.nombre}`}
+              title={`Editar ${material.nombre}`}
+              className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded transition-colors"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(material)}
+              aria-label={`Eliminar ${material.nombre}`}
+              title={`Eliminar ${material.nombre}`}
+              className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </li>
+    );
+  };
 
   return (
     <div className="space-y-3 min-w-0">
@@ -306,10 +544,77 @@ export default function ProjectMaterials({
         </div>
       )}
 
+      <div className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3 space-y-2.5">
+        <div className="flex flex-wrap items-center gap-2 justify-between">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar material, categoría o ferretería..."
+              className="w-full h-9 pl-8 pr-3 rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] text-xs focus:outline-none focus:border-[#FF6A00]"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setGroupBySupplier((prev) => !prev)}
+              aria-pressed={groupBySupplier}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                groupBySupplier
+                  ? 'border-[#FF6A00] bg-[#FF6A00]/10 text-[#FF6A00]'
+                  : 'border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 hover:border-[#FF6A00]/60'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>Por ferretería</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShoppingModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#25D366]/15 hover:bg-[#25D366]/25 text-[#15803D] dark:text-[#4ADE80] border border-[#25D366]/30 text-xs font-semibold transition-colors"
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              <span>Lista de compras ({pendingBuyCount})</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(
+            [
+              { id: 'todos', label: 'Todos', count: materials.length },
+              { id: 'por_comprar', label: 'Por comprar', count: materials.length - summary.boughtCount },
+              { id: 'por_pagar', label: 'Por pagar', count: materials.length - summary.paidCount },
+              { id: 'por_recibir', label: 'Por recibir', count: materials.length - summary.receivedCount },
+              ...(needs.length > 0 ? [{ id: 'urgentes' as const, label: 'Urgentes 7d', count: needs.length }] : []),
+            ] as const
+          ).map((f) => {
+            const active = statusFilter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setStatusFilter(f.id)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                  active
+                    ? 'bg-[#FF6A00] text-white'
+                    : 'bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00]/60'
+                }`}
+              >
+                <span>{f.label}</span>
+                <span className="font-mono text-[10px] opacity-85">{f.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1 text-xs text-gray-500 dark:text-gray-400">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 min-w-0">
           <span className="font-medium text-gray-700 dark:text-gray-300">
-            {materials.length} {materials.length === 1 ? 'material' : 'materiales'}
+            {filteredMaterials.length} de {materials.length} {materials.length === 1 ? 'material' : 'materiales'}
           </span>
           <span>·</span>
           <span>{summary.boughtCount} comprados</span>
@@ -343,186 +648,96 @@ export default function ProjectMaterials({
           <div className="lg:col-span-2 lg:text-right">Acciones</div>
         </div>
 
-        <ul className="divide-y divide-kraft-200/70 dark:divide-[#263040]">
-          {materials.map((material) => {
-            const delivered = receivedByMaterial.get(material.id) || 0;
-            const totalQty = Number(material.cantidad || 0);
-            const pending = Math.max(0, totalQty - delivered);
-            const complete = totalQty > 0 && pending <= 0.000001;
-            const partial = !complete && delivered > 0;
-
-            const receptionLabel = complete
-              ? 'Recibido completo'
-              : partial
-                ? 'Entrega parcial'
-                : 'Por recibir';
-
-            const receptionTone = complete
-              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
-              : partial
-                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
-                : 'bg-gray-100 text-gray-600 dark:bg-[#1E2530] dark:text-gray-300';
-
-            const linkedActivity = material.actividad_id
-              ? activityById.get(material.actividad_id)
-              : undefined;
-            const isUrgent = urgentNames.has(material.nombre) && !complete;
-            const isSaving = Boolean(savingIds[material.id]);
-
-            return (
-              <li
-                key={material.id}
-                className="py-2.5 transition-colors hover:bg-kraft-50/50 dark:hover:bg-[#19212C]/50 text-xs"
-              >
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:gap-3 items-start lg:items-center min-w-0">
-                  {/* Material + metadata */}
-                  <div className="lg:col-span-4 min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
-                      <span className="font-semibold text-navy-900 dark:text-white break-words">
-                        {material.nombre}
-                      </span>
-                      {isUrgent && (
-                        <span className="rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-2 py-0.5 text-[10px] font-semibold">
-                          Faena próxima
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                      {formatMaterialCategory(material.categoria)} ·{' '}
-                      {material.proveedor?.trim() || 'Proveedor por definir'}
-                      {linkedActivity ? ` · ${linkedActivity.nombre}` : ''}
-                    </p>
-                  </div>
-
-                  {/* Cantidad y costo */}
-                  {(() => {
-                    const isMoneyRevealed = Boolean(revealedIds[material.id]);
-                    return (
-                      <div className="lg:col-span-2 lg:text-right min-w-0 flex items-baseline justify-between lg:block gap-2">
-                        <span className="inline-flex items-center gap-1 font-mono font-semibold text-navy-900 dark:text-white tabular-nums">
-                          <span>{isMoneyRevealed ? clp(material.subtotal) : MASKED_CLP_AMOUNT}</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setRevealedIds((prev) => ({
-                                ...prev,
-                                [material.id]: !prev[material.id],
-                              }))
-                            }
-                            aria-label={
-                              isMoneyRevealed
-                                ? `Ocultar montos de ${material.nombre}`
-                                : `Mostrar montos de ${material.nombre}`
-                            }
-                            aria-pressed={isMoneyRevealed}
-                            title={isMoneyRevealed ? 'Ocultar montos' : 'Mostrar montos'}
-                            className="inline-flex items-center justify-center p-0.5 rounded text-gray-400 hover:text-obra-orange hover:bg-kraft-100 dark:hover:bg-[#1E2633] transition-colors shrink-0"
-                          >
-                            {isMoneyRevealed ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                          </button>
-                        </span>
-                        <span className="block text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
-                          {formatQty(material.cantidad)} {material.unidad} × {isMoneyRevealed ? clp(material.precio_unitario) : MASKED_CLP_AMOUNT}
-                        </span>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Recepción en obra */}
-                  <div className="lg:col-span-2 min-w-0 flex flex-wrap lg:flex-col items-center lg:items-start justify-between gap-1">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${receptionTone}`}
-                    >
-                      {complete ? (
-                        <CheckCircle2 className="w-3 h-3 shrink-0" />
-                      ) : partial ? (
-                        <Clock className="w-3 h-3 shrink-0" />
-                      ) : null}
-                      {receptionLabel}
-                    </span>
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
-                      Recibido: {formatQty(delivered)} / {formatQty(material.cantidad)} {material.unidad}
-                    </span>
-                  </div>
-
-                  {/* Compra y pago inline */}
-                  <div className="lg:col-span-2 min-w-0 flex flex-wrap lg:flex-col gap-x-3 gap-y-1">
-                    <label className="inline-flex items-center gap-1.5 text-[11px] text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(material.comprado)}
-                        onChange={(e) =>
-                          handleToggle(material.id, 'comprado', e.target.checked)
-                        }
-                        className="h-3.5 w-3.5 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                      />
-                      <span>Compra registrada</span>
-                    </label>
-
-                    <label className="inline-flex items-center gap-1.5 text-[11px] text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={material.pagado === true}
-                        onChange={(e) =>
-                          handleToggle(material.id, 'pagado', e.target.checked)
-                        }
-                        className="h-3.5 w-3.5 rounded border-gray-300 dark:border-gray-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                      />
-                      <span>Pago confirmado</span>
-                    </label>
-
-                    {material.pagado === false && (
-                      <span className="text-[10px] font-semibold text-amber-800 dark:text-amber-300">
-                        Por pagar
-                      </span>
-                    )}
-                    {isSaving && (
-                      <span className="text-[10px] text-gray-400">Guardando…</span>
-                    )}
-                  </div>
-
-                  {/* Acciones */}
-                  <div className="lg:col-span-2 flex flex-wrap items-center lg:justify-end gap-1.5 shrink-0">
-                    {pending > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => openReceptionModal(material)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-kraft-300 dark:border-[#324054] bg-white dark:bg-[#1B2330] hover:bg-[#FAF8F5] dark:hover:bg-[#232D3D] px-2 py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200 transition-colors whitespace-nowrap"
-                      >
-                        <PackageCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                        <span>Registrar recepción</span>
-                      </button>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                        <Check className="w-3 h-3 shrink-0" />
-                        Al día
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onEdit(material)}
-                      aria-label={`Editar ${material.nombre}`}
-                      title={`Editar ${material.nombre}`}
-                      className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded transition-colors"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(material)}
-                      aria-label={`Eliminar ${material.nombre}`}
-                      title={`Eliminar ${material.nombre}`}
-                      className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+        {filteredMaterials.length === 0 ? (
+          <p className="py-8 text-center text-xs text-gray-500 dark:text-gray-400">
+            No hay materiales que coincidan con el filtro seleccionado.
+          </p>
+        ) : groupBySupplier ? (
+          <div className="space-y-4 pt-2">
+            {supplierGroups.map(([supplier, items]) => (
+              <div key={supplier} className="space-y-1">
+                <div className="flex items-center justify-between px-2 py-1 rounded-lg bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200/70 dark:border-[#263040] text-xs font-semibold text-navy-900 dark:text-gray-200">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Store className="w-3.5 h-3.5 text-[#FF6A00]" />
+                    <span>{supplier}</span>
+                  </span>
+                  <span className="font-mono text-[11px] text-gray-500">
+                    {items.length} {items.length === 1 ? 'ítem' : 'ítems'}
+                  </span>
                 </div>
-              </li>
-            );
-          })}
-        </ul>
+                <ul className="divide-y divide-kraft-200/70 dark:divide-[#263040]">
+                  {items.map(renderMaterialRow)}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <ul className="divide-y divide-kraft-200/70 dark:divide-[#263040]">
+            {filteredMaterials.map(renderMaterialRow)}
+          </ul>
+        )}
       </div>
+
+      {shoppingModalOpen && (
+        <ModalOverlay
+          onClose={() => setShoppingModalOpen(false)}
+          aria-label="Lista de compras por ferretería"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-5 shadow-2xl space-y-4 animate-in zoom-in-95"
+          >
+            <div className="flex items-center justify-between border-b border-kraft-200 dark:border-[#263040] pb-3">
+              <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4 text-[#FF6A00]" />
+                <span>Lista de Compras por Ferretería</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShoppingModalOpen(false)}
+                aria-label="Cerrar"
+                className="text-gray-400 hover:text-gray-700 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <textarea
+              readOnly
+              rows={10}
+              value={shoppingListText}
+              className="w-full rounded-xl border border-kraft-200 dark:border-[#263040] bg-[#FAF8F5] dark:bg-[#0F141C] p-3 text-xs font-mono leading-relaxed"
+            />
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(shoppingListText).then(() => {
+                    setShoppingCopied(true);
+                    reportMessage('Lista de compras copiada al portapapeles.');
+                    window.setTimeout(() => setShoppingCopied(false), 2000);
+                  }).catch(() => {});
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-kraft-200 dark:border-[#263040] text-xs font-semibold hover:border-[#FF6A00]"
+              >
+                {shoppingCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{shoppingCopied ? 'Copiada' : 'Copiar lista'}</span>
+              </button>
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(shoppingListText)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#25D366] hover:bg-[#1FB857] text-white text-xs font-heading font-bold"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>Enviar por WhatsApp</span>
+              </a>
+            </div>
+          </div>
+        </ModalOverlay>
+      )}
 
       {/* Modal Registrar Recepción */}
       {receiving && (

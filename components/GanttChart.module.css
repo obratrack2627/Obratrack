@@ -384,6 +384,10 @@
   background: #382417;
   color: #ffe0c2;
 }
+.bar[data-overdue="true"] {
+  border-color: #d94336;
+  box-shadow: 0 0 0 1px rgba(217, 67, 54, 0.35);
+}
 .outside {
   position: absolute;
   inset: 0;

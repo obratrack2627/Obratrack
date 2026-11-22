@@ -34,6 +34,7 @@ import {
   FileSpreadsheet,
   FileText,
   Loader2,
+  Clock,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Navbar from '@/components/Navbar';
@@ -48,12 +49,25 @@ const ProjectFinanzasPieChart = dynamic(
   },
 );
 
+const ProjectCashflowChart = dynamic(
+  () => import('@/components/ProjectCashflowChart'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-56 w-full animate-pulse rounded-xl bg-gray-100 dark:bg-[#1E2633]" />
+    ),
+  },
+);
+
 const EstadoPagoPdfModal = dynamic(
   () => import('@/components/EstadoPagoPdfModal'),
   { ssr: false },
 );
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
+import { ProjectWorkspaceSkeleton } from '@/components/PageSkeletons';
+import { toast } from '@/components/ToastProvider';
+import { downloadExecutiveProjectPdf } from '@/lib/reports/executive-project-pdf';
 import { dataService } from '@/lib/data-service';
 import {
   Proyecto,
@@ -83,7 +97,8 @@ export default function ProyectoFinanzasPage() {
   const [materiales, setMateriales] = useState<MaterialProyecto[]>([]);
   const [financeSection, setFinanceSection] = useState('resumen');
   const [flowChartRevealed, setFlowChartRevealed] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [expenseCatFilter, setExpenseCatFilter] = useState<'todos' | 'mano_obra' | 'imprevisto' | 'gasto_general'>('todos');
+  const [expensePaidFilter, setExpensePaidFilter] = useState<'todos' | 'pendiente' | 'pagado'>('todos');
   const submitLockRef = React.useRef(false);
 
   useEffect(() => {
@@ -216,8 +231,39 @@ export default function ProyectoFinanzasPage() {
   }, [projectId]);
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    toast(msg);
+  };
+
+  const handleMarkExpensePaid = async (imp: Imprevisto) => {
+    dataService.updateImprevisto(imp.id, { pagado: true });
+    loadData();
+    try {
+      await dataService.confirmarCambios();
+      showToast('Gasto marcado como pagado.');
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : 'Pago de gasto guardado localmente; pendiente de sincronización.',
+      );
+    } finally {
+      loadData();
+    }
+  };
+
+  const handleDownloadExecutivePdf = () => {
+    if (!proyecto) return;
+    const empresa = dataService.getEmpresa();
+    downloadExecutiveProjectPdf({
+      proyecto,
+      cliente,
+      empresaNombre: empresa?.nombre,
+      empresaRut: empresa?.rut,
+      empresaLogoUrl: empresa?.logo_url,
+      actividades,
+      bitacora: dataService.getBitacora(projectId),
+    });
+    showToast('Informe Ejecutivo PDF descargado.');
   };
 
   const handleExportExcel = async () => {
@@ -513,11 +559,7 @@ export default function ProyectoFinanzasPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-screen text-gray-500 font-sans">
-        <p>Cargando información financiera del proyecto...</p>
-      </div>
-    );
+    return <ProjectWorkspaceSkeleton label="Cargando información financiera del proyecto..." />;
   }
 
   if (!proyecto) {
@@ -559,14 +601,6 @@ export default function ProyectoFinanzasPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-obra-orange" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       <ProjectTabsHeader
         proyecto={proyecto}
         cliente={cliente}
@@ -576,7 +610,7 @@ export default function ProyectoFinanzasPage() {
       <div className="p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
         
         {/* Barra Ejecutiva: Estado de Pago Formal (EDP PDF) y Cartola Excel (.xlsx) */}
-        <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-heading font-bold text-sm text-navy-900 dark:text-white">
               Documentos de cobro
@@ -593,6 +627,14 @@ export default function ProyectoFinanzasPage() {
             >
               <FileText className="w-4 h-4" />
               <span>Emitir Estado de Pago (PDF)</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadExecutivePdf}
+              className="font-medium"
+            >
+              <FileText className="w-4 h-4 text-[#FF6A00]" />
+              <span>Informe de Avance (PDF)</span>
             </button>
             <button
               type="button"
@@ -670,7 +712,7 @@ export default function ProyectoFinanzasPage() {
                 <span>{sec.label}</span>
                 {sec.count !== null && (
                   <span
-                    className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
                       isActive
                         ? 'bg-white/20 text-current'
                         : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
@@ -770,53 +812,141 @@ export default function ProyectoFinanzasPage() {
               Materiales previstos y gastos registrados. Registra los gastos de mano de obra.
             </p>
           </div>
-        </div></CompactSummary><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-gray-700 dark:bg-[#141A23]"><p className="text-xs text-gray-500">Mano de obra registrada</p><div className="mt-1 text-xl font-bold font-mono text-navy-900 dark:text-white"><MaskedMoneyAmount value={totalJornales} label="Mano de obra registrada" /></div></div><div className="min-w-0 rounded-xl border border-kraft-200 bg-white p-4 dark:border-gray-700 dark:bg-[#141A23]"><p className="text-xs text-gray-500">Flujo registrado de la obra</p><div className="mt-1 text-xl font-bold font-mono text-navy-900 dark:text-white"><MaskedMoneyAmount value={flujoRegistrado} label="Flujo registrado de la obra" /></div><p className="mt-1 text-xs text-gray-500">Cobros menos pagos confirmados de gastos y materiales. No equivale al saldo bancario.</p></div></div>
+        </div></CompactSummary>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="min-w-0 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <p className="text-xs font-mono font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Mano de obra registrada
+              </p>
+              <div className="w-7 h-7 rounded-lg bg-[#FF6A00]/10 text-[#FF6A00] flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-1 text-xl font-bold font-mono text-navy-900 dark:text-white">
+              <MaskedMoneyAmount value={totalJornales} label="Mano de obra registrada" />
+            </div>
+            <p className="mt-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+              Jornales y tratos asociados a la cuadrilla en esta obra.
+            </p>
+          </div>
+          <div className="min-w-0 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-4 sm:p-5 shadow-sm flex flex-col justify-between space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-mono font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Flujo registrado y consumo
+              </p>
+              <span className="text-[11px] font-mono font-bold text-[#FF6A00]">
+                {montoCotizado > 0 ? Math.min(999, Math.round((totalCostosDirectos / montoCotizado) * 100)) : 0}% costos/contrato
+              </span>
+            </div>
+            <div className="text-xl font-bold font-mono text-navy-900 dark:text-white">
+              <MaskedMoneyAmount value={flujoRegistrado} label="Flujo registrado de la obra" />
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-kraft-100 dark:bg-gray-800 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  montoCotizado > 0 && totalCostosDirectos / montoCotizado >= 1
+                    ? 'bg-[#D94336]'
+                    : montoCotizado > 0 && totalCostosDirectos / montoCotizado >= 0.85
+                      ? 'bg-amber-500'
+                      : 'bg-[#6B8F72]'
+                }`}
+                style={{
+                  width: `${montoCotizado > 0 ? Math.min(100, Math.round((totalCostosDirectos / montoCotizado) * 100)) : 0}%`,
+                }}
+              />
+            </div>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+              Cobros menos pagos confirmados de gastos y materiales. No equivale al saldo bancario.
+            </p>
+          </div>
+        </div>
 
         {/* Gráfico y Paneles de Control */}
         <div className={financeSection === 'materiales' ? 'hidden' : 'grid grid-cols-1 gap-6'}>
           
-          {/* Gráfico Donut de Rentabilidad */}
-          <div className={`${financeSection === 'resumen' ? 'flex' : 'hidden'} bg-white border border-kraft-200 rounded-xl p-5 shadow-sm flex-col justify-between items-center text-center`}>
-            <div className="w-full flex items-center justify-between gap-2">
-              <h4 className="font-heading font-bold text-sm text-navy-900">Distribución de Flujo</h4>
-              <button
-                type="button"
-                onClick={() => setFlowChartRevealed((prev) => !prev)}
-                aria-label={flowChartRevealed ? 'Ocultar montos de Distribución de Flujo' : 'Mostrar montos de Distribución de Flujo'}
-                aria-pressed={flowChartRevealed}
-                title={flowChartRevealed ? 'Ocultar montos' : 'Mostrar montos'}
-                className="inline-flex items-center justify-center p-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50/80 dark:bg-[#1E2633] text-gray-500 hover:text-[#FF6A00] transition-colors shrink-0"
-              >
-                {flowChartRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            
-            <div className="w-full h-48 my-2">
-              {montoCotizado === 0 && totalPagado === 0 ? (
-                <div className="h-full flex items-center justify-center text-xs text-gray-400 font-mono">
-                  Sin montos registrados
-                </div>
-              ) : (
-                <ProjectFinanzasPieChart chartData={chartData} revealed={flowChartRevealed} />
-              )}
-            </div>
-            
-            {/* Leyenda */}
-            <div className="w-full space-y-1 text-xs font-mono pt-2 border-t border-kraft-200">
-              <div className="flex justify-between items-center text-obra-green">
-                <span>● Cobrado:</span>
-                <span>{flowChartRevealed ? formatCLP(totalPagado) : MASKED_CLP_AMOUNT}</span>
+          {/* Resumen Analítico: Donut + Flujo Mensual */}
+          <div className={`${financeSection === 'resumen' ? 'grid grid-cols-1 lg:grid-cols-2 gap-6' : 'hidden'}`}>
+            <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-5 shadow-sm flex flex-col justify-between items-center text-center">
+              <div className="w-full flex items-center justify-between gap-2">
+                <h4 className="font-heading font-bold text-sm text-navy-900 dark:text-white">Distribución de Flujo</h4>
+                <button
+                  type="button"
+                  onClick={() => setFlowChartRevealed((prev) => !prev)}
+                  aria-label={flowChartRevealed ? 'Ocultar montos de Distribución de Flujo' : 'Mostrar montos de Distribución de Flujo'}
+                  aria-pressed={flowChartRevealed}
+                  title={flowChartRevealed ? 'Ocultar montos' : 'Mostrar montos'}
+                  className="inline-flex items-center justify-center p-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50/80 dark:bg-[#1E2633] text-gray-500 hover:text-[#FF6A00] transition-colors shrink-0"
+                >
+                  {flowChartRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
-              <div className="flex justify-between items-center text-obra-orange">
-                <span>● Por Cobrar:</span>
-                <span>{flowChartRevealed ? formatCLP(saldoPendiente) : MASKED_CLP_AMOUNT}</span>
+              
+              <div className="w-full h-52 my-2">
+                {montoCotizado === 0 && totalPagado === 0 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-gray-400 font-mono">
+                    Sin montos registrados
+                  </div>
+                ) : (
+                  <ProjectFinanzasPieChart chartData={chartData} revealed={flowChartRevealed} />
+                )}
               </div>
-              {totalImprevistos > 0 && (
-                <div className="flex justify-between items-center text-obra-red">
-                  <span>● Imprevistos:</span>
-                  <span>{flowChartRevealed ? formatCLP(totalImprevistos) : MASKED_CLP_AMOUNT}</span>
+              
+              {/* Leyenda */}
+              <div className="w-full space-y-1 text-xs font-mono pt-2 border-t border-kraft-200 dark:border-[#263040]">
+                <div className="flex justify-between items-center text-obra-green">
+                  <span>● Cobrado:</span>
+                  <span>{flowChartRevealed ? formatCLP(totalPagado) : MASKED_CLP_AMOUNT}</span>
                 </div>
-              )}
+                <div className="flex justify-between items-center text-obra-orange">
+                  <span>● Por Cobrar:</span>
+                  <span>{flowChartRevealed ? formatCLP(saldoPendiente) : MASKED_CLP_AMOUNT}</span>
+                </div>
+                {totalImprevistos > 0 && (
+                  <div className="flex justify-between items-center text-obra-red">
+                    <span>● Imprevistos:</span>
+                    <span>{flowChartRevealed ? formatCLP(totalImprevistos) : MASKED_CLP_AMOUNT}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h4 className="font-heading font-bold text-sm text-navy-900 dark:text-white">
+                    Flujo Mensual: Cobros vs Costos
+                  </h4>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">
+                    Evolución mensual de ingresos y costos directos
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFlowChartRevealed((prev) => !prev)}
+                  aria-label={flowChartRevealed ? 'Ocultar montos de Flujo Mensual' : 'Mostrar montos de Flujo Mensual'}
+                  className="inline-flex items-center justify-center p-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50/80 dark:bg-[#1E2633] text-gray-500 hover:text-[#FF6A00] transition-colors shrink-0"
+                >
+                  {flowChartRevealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <ProjectCashflowChart
+                pagos={pagos}
+                materiales={materiales}
+                imprevistos={imprevistos}
+                revealed={flowChartRevealed}
+              />
+              <div className="flex flex-wrap items-center justify-center gap-5 pt-2 border-t border-kraft-200 dark:border-[#263040] text-xs font-mono">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#6B8F72]" />
+                  <span>Cobros</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#FF6A00]" />
+                  <span>Costos y Gastos</span>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -900,9 +1030,9 @@ export default function ProyectoFinanzasPage() {
           </div>
 
           {/* Historial de Imprevistos con Fotos (con CRUD) */}
-          <div className={`${financeSection === 'imprevistos' ? 'flex' : 'hidden'} bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-xl p-5 shadow-sm flex-col justify-between`}>
+          <div className={`${financeSection === 'imprevistos' ? 'flex' : 'hidden'} bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-5 shadow-sm flex-col justify-between`}>
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <h4 className="font-heading font-bold text-sm text-navy-900 dark:text-white flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-obra-red" />
                   <span>Gastos registrados</span>
@@ -915,99 +1045,177 @@ export default function ProyectoFinanzasPage() {
                 </button>
               </div>
 
-              <div className="max-h-72 overflow-y-auto overflow-x-auto pr-1">
-                {imprevistos.length === 0 ? (
-                  <div className="py-8 text-center space-y-2.5">
-                    <div className="w-10 h-10 rounded-xl bg-obra-red-light dark:bg-obra-red/15 text-obra-red flex items-center justify-center mx-auto">
-                      <AlertTriangle className="w-5 h-5" />
-                    </div>
-                    <p className="text-xs font-heading font-bold text-navy-900 dark:text-white">Sin imprevistos registrados</p>
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
-                      Reporta gastos extraordinarios o emergencias de terreno para controlar el margen real de la obra.
-                    </p>
+              {imprevistos.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2.5 border-b border-kraft-100 dark:border-[#263040]">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        { id: 'todos', label: 'Todos' },
+                        { id: 'mano_obra', label: 'Mano de obra' },
+                        { id: 'imprevisto', label: 'Imprevisto' },
+                        { id: 'gasto_general', label: 'Gasto general' },
+                      ] as const
+                    ).map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setExpenseCatFilter(cat.id)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                          expenseCatFilter === cat.id
+                            ? 'bg-[#FF6A00] text-white'
+                            : 'bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border border-kraft-200 dark:border-[#263040]'
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
                   </div>
-                ) : (
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-kraft-200 dark:border-[#263040] text-gray-500 dark:text-gray-400 font-mono uppercase text-[11px]">
-                        <th className="py-2 pr-3 font-medium">Fecha</th>
-                        <th className="py-2 pr-3 font-medium">Descripción</th>
-                        <th className="py-2 pr-3 font-medium">Categoría</th>
-                        <th className="py-2 pr-3 font-medium text-right">Monto</th>
-                        <th className="py-2 pr-3 font-medium">Estado</th>
-                        <th className="py-2 text-right font-medium">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-kraft-200/70 dark:divide-[#263040]">
-                      {imprevistos.map((imp) => (
-                        <tr key={imp.id} className="hover:bg-kraft-50/50 dark:hover:bg-[#1A222D]/40 transition-colors">
-                          <td className="py-2.5 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
-                            {formatDate(imp.fecha)}
-                          </td>
-                          <td className="py-2.5 pr-3 text-navy-900 dark:text-white font-medium max-w-[200px] truncate" title={imp.descripcion}>
-                            {imp.descripcion}
-                          </td>
-                          <td className="py-2.5 pr-3 whitespace-nowrap text-gray-500 dark:text-gray-400">
-                            {imp.categoria_gasto === 'mano_obra' ? 'Mano de obra' : imp.categoria_gasto === 'gasto_general' ? 'Gasto general' : 'Imprevisto'}
-                            {imp.origen === 'whatsapp_ia' ? ' · IA' : ''}
-                          </td>
-                          <td className="py-2.5 pr-3 whitespace-nowrap text-right font-mono font-semibold text-obra-red">
-                            <MaskedMoneyAmount value={imp.monto} label={`Monto de ${imp.descripcion}`} compact />
-                          </td>
-                          <td className="py-2.5 pr-3 whitespace-nowrap">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                                imp.pagado === true
-                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
-                                  : imp.pagado === false
-                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
-                                    : 'bg-gray-100 text-gray-600 dark:bg-[#1E2530] dark:text-gray-300'
-                              }`}
-                            >
-                              {imp.pagado === true ? 'Pagado' : imp.pagado === false ? 'Pendiente' : 'Sin confirmar'}
-                            </span>
-                          </td>
-                          <td className="py-2.5 text-right whitespace-nowrap">
-                            <div className="inline-flex items-center justify-end gap-1">
-                              {imp.foto_url && (
+                  <div className="flex gap-1.5">
+                    {(
+                      [
+                        { id: 'todos', label: 'Todos' },
+                        { id: 'pendiente', label: 'Pendientes' },
+                        { id: 'pagado', label: 'Pagados' },
+                      ] as const
+                    ).map((st) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => setExpensePaidFilter(st.id)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                          expensePaidFilter === st.id
+                            ? 'bg-navy-900 dark:bg-white text-white dark:text-navy-900'
+                            : 'bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border border-kraft-200 dark:border-[#263040]'
+                        }`}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="max-h-80 overflow-y-auto overflow-x-auto pr-1">
+                {(() => {
+                  const visibleExpenses = imprevistos.filter((imp) => {
+                    const cat = imp.categoria_gasto || 'imprevisto';
+                    if (expenseCatFilter !== 'todos' && cat !== expenseCatFilter) return false;
+                    if (expensePaidFilter === 'pagado' && imp.pagado !== true) return false;
+                    if (expensePaidFilter === 'pendiente' && imp.pagado === true) return false;
+                    return true;
+                  });
+
+                  if (visibleExpenses.length === 0) {
+                    return (
+                      <div className="py-8 text-center space-y-2.5">
+                        <div className="w-10 h-10 rounded-xl bg-obra-red-light dark:bg-obra-red/15 text-obra-red flex items-center justify-center mx-auto">
+                          <AlertTriangle className="w-5 h-5" />
+                        </div>
+                        <p className="text-xs font-heading font-bold text-navy-900 dark:text-white">
+                          {imprevistos.length === 0
+                            ? 'Sin imprevistos registrados'
+                            : 'No hay gastos con este filtro'}
+                        </p>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+                          Reporta gastos extraordinarios o emergencias de terreno para controlar el margen real de la obra.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-kraft-200 dark:border-[#263040] text-gray-500 dark:text-gray-400 font-mono uppercase text-[11px]">
+                          <th className="py-2 pr-3 font-medium">Fecha</th>
+                          <th className="py-2 pr-3 font-medium">Descripción</th>
+                          <th className="py-2 pr-3 font-medium">Categoría</th>
+                          <th className="py-2 pr-3 font-medium text-right">Monto</th>
+                          <th className="py-2 pr-3 font-medium">Estado</th>
+                          <th className="py-2 text-right font-medium">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-kraft-200/70 dark:divide-[#263040]">
+                        {visibleExpenses.map((imp) => (
+                          <tr key={imp.id} className="hover:bg-kraft-50/50 dark:hover:bg-[#1A222D]/40 transition-colors">
+                            <td className="py-2.5 pr-3 whitespace-nowrap text-gray-600 dark:text-gray-300">
+                              {formatDate(imp.fecha)}
+                            </td>
+                            <td className="py-2.5 pr-3 text-navy-900 dark:text-white font-medium max-w-[200px] truncate" title={imp.descripcion}>
+                              {imp.descripcion}
+                            </td>
+                            <td className="py-2.5 pr-3 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                              {imp.categoria_gasto === 'mano_obra' ? 'Mano de obra' : imp.categoria_gasto === 'gasto_general' ? 'Gasto general' : 'Imprevisto'}
+                              {imp.origen === 'whatsapp_ia' ? ' · IA' : ''}
+                            </td>
+                            <td className="py-2.5 pr-3 whitespace-nowrap text-right font-mono font-semibold text-obra-red">
+                              <MaskedMoneyAmount value={imp.monto} label={`Monto de ${imp.descripcion}`} compact />
+                            </td>
+                            <td className="py-2.5 pr-3 whitespace-nowrap">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                  imp.pagado === true
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                    : imp.pagado === false
+                                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                                      : 'bg-gray-100 text-gray-600 dark:bg-[#1E2530] dark:text-gray-300'
+                                }`}
+                              >
+                                {imp.pagado === true ? 'Pagado' : imp.pagado === false ? 'Pendiente' : 'Sin confirmar'}
+                              </span>
+                            </td>
+                            <td className="py-2.5 text-right whitespace-nowrap">
+                              <div className="inline-flex items-center justify-end gap-1">
+                                {imp.pagado !== true && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleMarkExpensePaid(imp)}
+                                    className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 text-[11px] font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                                    title="Marcar gasto como pagado"
+                                  >
+                                    Marcar pagado
+                                  </button>
+                                )}
+                                {imp.foto_url && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewPhoto(imp.foto_url || null)}
+                                    className="w-6 h-6 rounded border border-kraft-200 overflow-hidden"
+                                    title="Ver foto de respaldo"
+                                  >
+                                    <img
+                                      src={imp.foto_url}
+                                      alt="Evidencia"
+                                      loading="lazy"
+                                      decoding="async"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </button>
+                                )}
                                 <button
                                   type="button"
-                                  onClick={() => setPreviewPhoto(imp.foto_url || null)}
-                                  className="w-6 h-6 rounded border border-kraft-200 overflow-hidden"
-                                  title="Ver foto de respaldo"
+                                  onClick={() => handleOpenEditImprevisto(imp)}
+                                  className="p-1 text-gray-400 hover:text-obra-orange rounded transition-colors"
+                                  title="Editar imprevisto"
                                 >
-                                  <img
-                                    src={imp.foto_url}
-                                    alt="Evidencia"
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="w-full h-full object-cover"
-                                  />
+                                  <Edit3 className="w-3.5 h-3.5" />
                                 </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditImprevisto(imp)}
-                                className="p-1 text-gray-400 hover:text-obra-orange rounded transition-colors"
-                                title="Editar imprevisto"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setImprevistoToDelete(imp)}
-                                className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                title="Eliminar imprevisto"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setImprevistoToDelete(imp)}
+                                  className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                  title="Eliminar imprevisto"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
               </div>
             </div>
           </div>

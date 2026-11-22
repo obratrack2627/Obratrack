@@ -32,6 +32,8 @@ import {
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
+import { ProjectWorkspaceSkeleton } from '@/components/PageSkeletons';
+import { toast } from '@/components/ToastProvider';
 import { dataService } from '@/lib/data-service';
 import {
   Proyecto,
@@ -78,7 +80,6 @@ export default function ProyectoIAPage() {
   const [isListening, setIsListening] = useState(false);
   const [isMapsModalOpen, setIsMapsModalOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -159,8 +160,7 @@ export default function ProyectoIAPage() {
   }, [mensajes]);
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    toast(msg);
   };
 
   const handleLimpiarHistorial = () => {
@@ -332,14 +332,7 @@ export default function ProyectoIAPage() {
   };
 
   if (!proyecto) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-screen text-gray-500 font-sans">
-        <p>Cargando ObraBot...</p>
-        <Link href="/proyectos" className="mt-4 text-xs font-bold text-[#FF6A00] hover:underline">
-          &larr; Volver a Proyectos
-        </Link>
-      </div>
-    );
+    return <ProjectWorkspaceSkeleton label="Cargando ObraBot..." />;
   }
 
   const totalPagado = pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0);
@@ -348,13 +341,6 @@ export default function ProyectoIAPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-[#141A23] text-white border border-[#FF6A00]/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-[#FF6A00]" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
 
       {/* Modal Google Maps */}
       <GoogleMapsProjectViewer

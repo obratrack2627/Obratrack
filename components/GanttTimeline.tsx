@@ -134,7 +134,10 @@ export default function GanttTimeline({
           </div>
           {actividades.map((activity) => {
             const range = activityDates(activity),
-              bar = activityBar(activity, start, days);
+              bar = activityBar(activity, start, days),
+              pct = progressValue(activity.porcentaje_avance),
+              isOverdue = Boolean(range && range.end < today && pct < 100),
+              overdueDays = isOverdue && range ? today - range.end : 0;
             return (
               <Fragment key={activity.id}>
                 <div className={styles.metaRow}>
@@ -150,6 +153,11 @@ export default function GanttTimeline({
                       {range
                         ? `${dateLabel(range.start)} – ${dateLabel(range.end)}`
                         : "Revisar fechas"}
+                      {isOverdue && (
+                        <span style={{ color: "#D94336", fontWeight: 700, marginLeft: 6 }}>
+                          · Atrasada {overdueDays}d
+                        </span>
+                      )}
                     </p>
                   </div>
                   <button
@@ -167,12 +175,14 @@ export default function GanttTimeline({
                       color:
                         activity.estado === "terminada"
                           ? "#6B8F72"
-                          : activity.estado === "en_curso"
-                            ? "#FF6A00"
-                            : undefined,
+                          : isOverdue
+                            ? "#D94336"
+                            : activity.estado === "en_curso"
+                              ? "#FF6A00"
+                              : undefined,
                     }}
                   >
-                    {progressValue(activity.porcentaje_avance)}%
+                    {pct}%
                   </span>
                 </div>
                 <div className={styles.lane} style={background}>
@@ -188,10 +198,11 @@ export default function GanttTimeline({
                       className={styles.bar}
                       data-activity-bar={activity.id}
                       data-status={activity.estado}
+                      data-overdue={isOverdue ? "true" : undefined}
                       style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
                       onClick={() => onEdit(activity)}
-                      aria-label={`Editar ${activity.nombre}: ${dateLabel(range!.start, true)} al ${dateLabel(range!.end, true)}, ${progressValue(activity.porcentaje_avance)}% de avance`}
-                      title={`${activity.nombre} · ${range!.days} días · ${progressValue(activity.porcentaje_avance)}%${bar.clipped ? " · Continúa fuera del periodo" : ""}`}
+                      aria-label={`Editar ${activity.nombre}: ${dateLabel(range!.start, true)} al ${dateLabel(range!.end, true)}, ${pct}% de avance${isOverdue ? `, atrasada ${overdueDays} días` : ""}`}
+                      title={`${activity.nombre} · ${range!.days} días · ${pct}%${activity.responsable?.nombre ? ` · ${activity.responsable.nombre}` : ""}${isOverdue ? ` · Atrasada ${overdueDays} días` : ""}${bar.clipped ? " · Continúa fuera del periodo" : ""}`}
                     >
                       <span
                         style={{
@@ -199,13 +210,15 @@ export default function GanttTimeline({
                           background:
                             activity.estado === "terminada"
                               ? "#6B8F72"
-                              : activity.estado === "en_curso"
-                                ? "#FF6A00"
-                                : "#9CA3AF",
+                              : isOverdue
+                                ? "#D94336"
+                                : activity.estado === "en_curso"
+                                  ? "#FF6A00"
+                                  : "#9CA3AF",
                         }}
                       />
                       <span>
-                        {activity.estado === "terminada" ? "✓ " : ""}
+                        {activity.estado === "terminada" ? "✓ " : isOverdue ? "! " : ""}
                         {activity.nombre}
                       </span>
                     </button>
@@ -233,6 +246,10 @@ export default function GanttTimeline({
           <span>
             <i className={styles.dot} style={{ background: "#9CA3AF" }} />
             Pendiente
+          </span>
+          <span>
+            <i className={styles.dot} style={{ background: "#D94336" }} />
+            Atrasada
           </span>
         </div>
         <span>Desliza el calendario para ver más fechas</span>

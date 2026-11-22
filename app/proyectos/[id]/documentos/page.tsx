@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
+import { ProjectWorkspaceSkeleton } from '@/components/PageSkeletons';
+import { toast } from '@/components/ToastProvider';
 import { dataService } from '@/lib/data-service';
 import {
   Proyecto,
@@ -67,7 +69,6 @@ export default function ProyectoDocumentosPage() {
   const [isMapsModalOpen, setIsMapsModalOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [docPreview, setDocPreview] = useState<DocumentoObra | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Estado formulario nuevo documento / correo
   const [categoria, setCategoria] = useState<CategoriaDocumentoObra>('contrato');
@@ -89,8 +90,7 @@ export default function ProyectoDocumentosPage() {
   const [isUploading, setIsUploading] = useState(false);
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+    toast(msg);
   };
 
   const loadData = () => {
@@ -268,21 +268,11 @@ export default function ProyectoDocumentosPage() {
     .reduce((acc, d) => acc + (d.monto_documento || 0), 0);
 
   if (!proyecto) {
-    return (
-      <div className="p-8 text-center text-gray-500 font-mono text-sm">
-        Cargando repositorio documental...
-      </div>
-    );
+    return <ProjectWorkspaceSkeleton label="Cargando repositorio documental..." />;
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-[#FAF8F5] dark:bg-[#0E131B] pb-16">
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-obra-orange shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+    <div className="flex-1 flex flex-col min-h-screen bg-[var(--bg-page)] pb-16">
 
       <ProjectTabsHeader
         proyecto={proyecto}
@@ -486,7 +476,7 @@ export default function ProyectoDocumentosPage() {
                     )}
                     <span>{cat.label}</span>
                     <span
-                      className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
                         isActive
                           ? 'bg-white/20 text-current'
                           : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'

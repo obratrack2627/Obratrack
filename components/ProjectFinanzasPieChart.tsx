@@ -35,7 +35,17 @@ export default function ProjectFinanzasPieChart({
             <Cell key={`cell-${index}`} fill={entry.color} />
           ))}
         </Pie>
-        <Tooltip formatter={(value: number) => [revealed ? formatCLP(value) : MASKED_CLP_AMOUNT, '']} />
+        <Tooltip
+          formatter={(value: number) => [revealed ? formatCLP(value) : MASKED_CLP_AMOUNT, '']}
+          contentStyle={{
+            backgroundColor: '#141A23',
+            border: '1px solid #344156',
+            borderRadius: '10px',
+            color: '#fff',
+          }}
+          itemStyle={{ color: '#fff' }}
+          labelStyle={{ color: '#fff', fontWeight: 700 }}
+        />
       </PieChart>
     </ResponsiveContainer>
   );

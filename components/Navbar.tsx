@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Search } from 'lucide-react';
+import { AlertsBellButton } from '@/components/AlertsDrawer';
 
 interface NavbarProps {
   title: string;
@@ -36,6 +37,7 @@ export default function Navbar({ title, subtitle, action }: NavbarProps) {
             Ctrl K
           </kbd>
         </button>
+        <AlertsBellButton />
         {action}
       </div>
     </header>

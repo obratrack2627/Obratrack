@@ -247,7 +247,7 @@ export default function GoogleMapsLocationPicker({
           <div>
             <h4 className="text-xs font-bold font-heading text-[#1E1E1E] dark:text-white uppercase tracking-wider flex items-center gap-1.5">
               <span>Ubicación Geográfica en Chile</span>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-[#FF6A00]/15 text-[#FF6A00] font-bold">
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-[#FF6A00]/15 text-[#FF6A00] font-bold">
                 Google Maps
               </span>
             </h4>

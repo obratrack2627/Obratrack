@@ -60,7 +60,7 @@
     color: #F3F4F6;
   }
 
-  * {
+  body, main, header, aside, button, a, input, select, textarea {
     transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
                 border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
                 color 0.15s ease-out;
@@ -249,71 +249,37 @@ html[data-mobile-nav-open] .obrabot-launcher {
   color: #FFFFFF !important;
 }
 
-/* Estilos para Frappe Gantt */
-.gantt-container {
-  overflow-x: auto;
-  background: #ffffff;
-  border-radius: 0.75rem;
-  border: 1px solid #E5DFC9;
+@layer utilities {
+  .animate-in {
+    animation-duration: 0.22s;
+    animation-fill-mode: both;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fade-in {
+    animation-name: obratrackFadeIn;
+  }
+  .zoom-in-95 {
+    animation-name: obratrackZoomIn;
+  }
+  .slide-in-from-bottom-5,
+  .slide-in-from-bottom-4 {
+    animation-name: obratrackSlideUp;
+  }
 }
 
-.dark .gantt-container {
-  background: #141A23 !important;
-  border-color: #263040 !important;
+@keyframes obratrackFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.dark .gantt .grid-header {
-  fill: #1A2230 !important;
-  stroke: #263040 !important;
+@keyframes obratrackZoomIn {
+  from { opacity: 0; transform: scale(0.96) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-.dark .gantt .grid-row {
-  fill: #141A23 !important;
-}
-
-.dark .gantt .grid-row:nth-child(even) {
-  fill: #0F141C !important;
-}
-
-.dark .gantt .row-line,
-.dark .gantt .tick {
-  stroke: #263040 !important;
-}
-
-.dark .gantt .upper-text {
-  fill: #F3F4F6 !important;
-}
-
-.dark .gantt .lower-text {
-  fill: #9CA3AF !important;
-}
-
-.gantt .bar {
-  fill: #9A9A9A;
-  stroke: #1E1E1E;
-  rx: 4px;
-}
-
-.gantt .bar.status-pendiente {
-  fill: #9A9A9A !important;
-}
-
-.gantt .bar.status-en_curso {
-  fill: #FF6A00 !important;
-}
-
-.gantt .bar.status-terminada {
-  fill: #6B8F72 !important;
-}
-
-.gantt .bar-progress {
-  fill: rgba(0, 0, 0, 0.25) !important;
-}
-
-.gantt .bar-label {
-  fill: #ffffff !important;
-  font-weight: 600;
-  font-size: 12px;
+@keyframes obratrackSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Neutralizar fondo celeste de autocompletado del navegador (Chrome / Edge) */
@@ -626,6 +592,12 @@ html[data-mobile-nav-open] #obrabot-widget { visibility: hidden; pointer-events:
 }
 
 @media (prefers-reduced-motion: reduce) {
+  *:not(.pwa-splash-dots i),
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+  .animate-in { animation-duration: 0.01ms !important; }
   .landing-reveal { opacity: 1; transform: none; transition: none; }
   .landing-blob-1, .landing-blob-2, .landing-wave-playing span, .landing-pipeline-active, .landing-fab-pulse::after {
     animation: none !important;

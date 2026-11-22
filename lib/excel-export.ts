@@ -1,5 +1,6 @@
-import { chileToday } from '@/lib/ai/project-deadlines';
+import { chileToday, csvCell } from '@/lib/work-calendar';
 import { projectStatusLabel } from '@/lib/project-status';
+import type { MonthlyAttendanceSummaryRow } from '@/lib/attendance-monthly';
 import type {
   Actividad,
   AsistenciaObrero,
@@ -8,6 +9,8 @@ import type {
   MaterialProyecto,
   Pago,
   Proyecto,
+  ReclamoCambioObra,
+  Usuario,
 } from '@/types/database';
 
 export interface ProjectExcelExportPayload {
@@ -246,4 +249,244 @@ export async function downloadProjectExcel(payload: ProjectExcelExportPayload): 
       }),
     }).catch(() => {});
   }
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  if (typeof window === 'undefined') return;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+export async function downloadPortfolioExcel(payload: {
+  empresaNombre?: string;
+  proyectos: Proyecto[];
+  clientes: Cliente[];
+  materiales: MaterialProyecto[];
+  imprevistos: Imprevisto[];
+  pagos: Pago[];
+  reclamos: ReclamoCambioObra[];
+}): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const ExcelJSImport: any = await import('exceljs');
+  const ExcelJS = ExcelJSImport.default || ExcelJSImport;
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = payload.empresaNombre || 'ObraTrack SaaS';
+  workbook.created = new Date();
+
+  const clientMap = new Map(payload.clientes.map((c) => [c.id, c.nombre]));
+  const activeProjects = payload.proyectos.filter((p) => p.estado !== 'cancelada');
+
+  const wsResumen = workbook.addWorksheet('Resumen Cartera');
+  wsResumen.columns = [
+    { header: 'Indicador', key: 'indicador', width: 34 },
+    { header: 'Valor', key: 'valor', width: 36 },
+  ];
+  styleHeaderRow(wsResumen.getRow(1));
+
+  const totalCotizado = activeProjects.reduce((s, p) => s + (Number(p.monto_cotizado) || 0), 0);
+  const totalPagado = payload.pagos
+    .filter((p) => !p.estado || p.estado === 'completado')
+    .reduce((s, p) => s + (Number(p.monto) || 0), 0);
+  const totalMats = payload.materiales.reduce(
+    (s, m) => s + (Number(m.subtotal || m.cantidad * m.precio_unitario) || 0),
+    0,
+  );
+  const totalImps = payload.imprevistos.reduce(
+    (s, i) => s + (Number(i.monto ?? i.monto_adicional) || 0),
+    0,
+  );
+
+  [
+    ['Constructora', sanitizeExcelCell(payload.empresaNombre || 'Constructora ObraTrack')],
+    ['Fecha de emisión', chileToday()],
+    ['Obras activas', activeProjects.filter((p) => p.estado === 'activo').length],
+    ['Obras totales vigentes', activeProjects.length],
+    ['Total Contratado', Math.round(totalCotizado), true],
+    ['Total Cobrado', Math.round(totalPagado), true],
+    ['Saldo por Cobrar', Math.max(0, Math.round(totalCotizado - totalPagado)), true],
+    ['Costos Directos Acumulados', Math.round(totalMats + totalImps), true],
+    ['Margen Bruto Cartera', Math.round(totalCotizado - (totalMats + totalImps)), true],
+  ].forEach(([ind, val, isClp]) => {
+    const row = wsResumen.addRow({ indicador: ind, valor: val });
+    if (isClp) row.getCell(2).numFmt = CLP_FORMAT;
+  });
+
+  const wsObras = workbook.addWorksheet('Obras y Rentabilidad');
+  wsObras.columns = [
+    { header: 'Obra', key: 'nombre', width: 30 },
+    { header: 'Mandante', key: 'cliente', width: 24 },
+    { header: 'Comuna', key: 'comuna', width: 18 },
+    { header: 'Estado', key: 'estado', width: 14 },
+    { header: 'Avance (%)', key: 'avance', width: 12 },
+    { header: 'Contratado', key: 'cotizado', width: 16 },
+    { header: 'Cobrado', key: 'cobrado', width: 16 },
+    { header: 'Costos Directos', key: 'costos', width: 16 },
+    { header: 'Margen Estimado', key: 'margen', width: 16 },
+  ];
+  styleHeaderRow(wsObras.getRow(1));
+
+  activeProjects.forEach((p) => {
+    const cotizado = Math.round(Number(p.monto_cotizado) || 0);
+    const cobrado = payload.pagos
+      .filter((pg) => pg.proyecto_id === p.id && (!pg.estado || pg.estado === 'completado'))
+      .reduce((s, pg) => s + Math.round(Number(pg.monto) || 0), 0);
+    const mats = payload.materiales
+      .filter((m) => m.proyecto_id === p.id)
+      .reduce((s, m) => s + Math.round(Number(m.subtotal || m.cantidad * m.precio_unitario) || 0), 0);
+    const imps = payload.imprevistos
+      .filter((i) => i.proyecto_id === p.id)
+      .reduce((s, i) => s + Math.round(Number(i.monto ?? i.monto_adicional) || 0), 0);
+    const costos = mats + imps;
+    const row = wsObras.addRow({
+      nombre: sanitizeExcelCell(p.nombre),
+      cliente: sanitizeExcelCell((p.cliente_id && clientMap.get(p.cliente_id)) || 'Sin asignar'),
+      comuna: sanitizeExcelCell(p.comuna || ''),
+      estado: sanitizeExcelCell(projectStatusLabel(p.estado)),
+      avance: `${Math.round(Number(p.porcentaje_avance_ponderado) || 0)}%`,
+      cotizado,
+      cobrado,
+      costos,
+      margen: cotizado - costos,
+    });
+    [6, 7, 8, 9].forEach((idx) => {
+      row.getCell(idx).numFmt = CLP_FORMAT;
+    });
+  });
+
+  const wsReclamos = workbook.addWorksheet('Reclamos y Cambios');
+  wsReclamos.columns = [
+    { header: 'Obra', key: 'obra', width: 26 },
+    { header: 'Tipo', key: 'tipo', width: 18 },
+    { header: 'Título', key: 'titulo', width: 32 },
+    { header: 'Prioridad', key: 'prioridad', width: 12 },
+    { header: 'Estado', key: 'estado', width: 14 },
+    { header: 'Impacto Monto', key: 'monto', width: 16 },
+    { header: 'Impacto Días', key: 'dias', width: 14 },
+  ];
+  styleHeaderRow(wsReclamos.getRow(1));
+  const projMap = new Map(payload.proyectos.map((p) => [p.id, p.nombre]));
+  payload.reclamos.forEach((r) => {
+    const row = wsReclamos.addRow({
+      obra: sanitizeExcelCell(projMap.get(r.proyecto_id) || r.proyecto_id),
+      tipo: sanitizeExcelCell(r.tipo),
+      titulo: sanitizeExcelCell(r.titulo),
+      prioridad: sanitizeExcelCell(r.prioridad),
+      estado: sanitizeExcelCell(r.estado),
+      monto: Math.round(Number(r.impacto_monto) || 0),
+      dias: Number(r.impacto_dias) || 0,
+    });
+    row.getCell(6).numFmt = CLP_FORMAT;
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  triggerBlobDownload(
+    new Blob([buffer as ArrayBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    `Cartera_ObraTrack_${chileToday()}.xlsx`,
+  );
+}
+
+export async function downloadMonthlyAttendanceExcel(
+  rows: MonthlyAttendanceSummaryRow[],
+  mesYYYYMM: string,
+  empresaNombre?: string,
+): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const ExcelJSImport: any = await import('exceljs');
+  const ExcelJS = ExcelJSImport.default || ExcelJSImport;
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = empresaNombre || 'ObraTrack SaaS';
+  workbook.created = new Date();
+
+  const ws = workbook.addWorksheet(`Asistencia ${mesYYYYMM}`);
+  ws.columns = [
+    { header: 'Trabajador', key: 'trabajador', width: 28 },
+    { header: 'Cargo', key: 'cargo', width: 22 },
+    { header: 'Presentes', key: 'presentes', width: 12 },
+    { header: 'Atrasos', key: 'atrasos', width: 12 },
+    { header: 'Ausencias', key: 'ausentes', width: 12 },
+    { header: 'Licencias/Perm.', key: 'licenciasPermisos', width: 15 },
+    { header: 'Días Reg.', key: 'totalDias', width: 12 },
+    { header: 'Total Horas', key: 'totalHoras', width: 14 },
+    { header: 'Obras', key: 'obras', width: 36 },
+  ];
+  styleHeaderRow(ws.getRow(1));
+
+  rows.forEach((r) => {
+    ws.addRow({
+      trabajador: sanitizeExcelCell(r.trabajador),
+      cargo: sanitizeExcelCell(r.cargo),
+      presentes: r.presentes,
+      atrasos: r.atrasos,
+      ausentes: r.ausentes,
+      licenciasPermisos: r.licenciasPermisos,
+      totalDias: r.totalDias,
+      totalHoras: r.totalHoras,
+      obras: sanitizeExcelCell(r.obras.join(' · ')),
+    });
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  triggerBlobDownload(
+    new Blob([buffer as ArrayBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    `Planilla_Mensual_Asistencia_${mesYYYYMM}.xlsx`,
+  );
+}
+
+export function downloadClientesCsv(clientes: Cliente[], proyectos: Proyecto[]): void {
+  const headers = ['Nombre', 'RUT', 'Teléfono', 'Correo', 'Dirección', 'Obras Vigentes', 'Monto Contratado'];
+  const rows = clientes.map((c) => {
+    const projs = proyectos.filter((p) => p.cliente_id === c.id && p.estado !== 'cancelada');
+    const total = projs.reduce((sum, p) => sum + Math.round(Number(p.monto_cotizado) || 0), 0);
+    return [
+      c.nombre,
+      c.rut || '',
+      c.telefono || '',
+      c.email || '',
+      c.direccion || '',
+      projs.length,
+      total,
+    ]
+      .map(csvCell)
+      .join(',');
+  });
+  const csv = '\uFEFF' + [headers.map(csvCell).join(','), ...rows].join('\n');
+  triggerBlobDownload(
+    new Blob([csv], { type: 'text/csv;charset=utf-8;' }),
+    `Clientes_ObraTrack_${chileToday()}.csv`,
+  );
+}
+
+export function downloadEquipoCsv(usuarios: Usuario[], proyectos: Proyecto[]): void {
+  const headers = ['Nombre', 'RUT', 'Rol', 'Teléfono WhatsApp', 'Correo', 'Especialidades', 'Obras Asignadas'];
+  const rows = usuarios.map((u) => {
+    const assigned = proyectos
+      .filter((p) => p.trabajadores_ids?.includes(u.id) && p.estado !== 'cancelada')
+      .map((p) => p.nombre);
+    return [
+      u.nombre,
+      u.rut || '',
+      u.rol,
+      u.telefono_whatsapp || '',
+      u.email || '',
+      Array.isArray(u.especialidades) ? u.especialidades.join(', ') : '',
+      assigned.join(' · '),
+    ]
+      .map(csvCell)
+      .join(',');
+  });
+  const csv = '\uFEFF' + [headers.map(csvCell).join(','), ...rows].join('\n');
+  triggerBlobDownload(
+    new Blob([csv], { type: 'text/csv;charset=utf-8;' }),
+    `Equipo_ObraTrack_${chileToday()}.csv`,
+  );
 }

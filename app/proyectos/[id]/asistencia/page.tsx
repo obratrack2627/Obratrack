@@ -22,6 +22,7 @@ import {
   FileText,
 } from "lucide-react";
 import ProjectTabsHeader from "@/components/ProjectTabsHeader";
+import { ProjectWorkspaceSkeleton } from "@/components/PageSkeletons";
 import GoogleMapsProjectViewer from "@/components/GoogleMapsProjectViewer";
 import ModalOverlay from "@/components/ModalOverlay";
 import CompactSummary from "@/components/CompactSummary";
@@ -125,7 +126,7 @@ export default function ProjectCrewPage() {
     window.addEventListener("obratrack_cloud_synced", refresh);
     return () => window.removeEventListener("obratrack_cloud_synced", refresh);
   }, [refresh]);
-  if (!loaded) return <div className="p-6">Cargando cuadrilla…</div>;
+  if (!loaded) return <ProjectWorkspaceSkeleton label="Cargando cuadrilla..." />;
   if (!project) {
     return (
       <div className="p-6 max-w-lg mx-auto my-12 text-center space-y-3 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl">

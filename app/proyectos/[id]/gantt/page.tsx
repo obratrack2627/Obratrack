@@ -15,7 +15,6 @@ import {
   Wallet,
   Calendar,
   Building2,
-  CheckCircle2,
   X,
   BookOpen,
   Camera,
@@ -32,6 +31,8 @@ import EvidenceImage from '@/components/EvidenceImage';
 import GanttChart from '@/components/GanttChart';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
+import { ProjectWorkspaceSkeleton } from '@/components/PageSkeletons';
+import { toast } from '@/components/ToastProvider';
 import { dataService } from '@/lib/data-service';
 import { Proyecto, Actividad, Usuario, BitacoraEntrada, Cliente } from '@/types/database';
 import { formatDate } from '@/lib/utils';
@@ -47,7 +48,7 @@ export default function ProyectoGanttPage() {
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [bitacora, setBitacora] = useState<BitacoraEntrada[]>([]);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [bitacoraFilter, setBitacoraFilter] = useState<'todos' | BitacoraEntrada['tipo']>('todos');
   
   // Modales
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -126,8 +127,7 @@ export default function ProyectoGanttPage() {
   }, [projectId]);
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    toast(msg);
   };
 
   const handleUpdateActivity = (actId: string, updates: Partial<Actividad>) => {
@@ -233,11 +233,7 @@ export default function ProyectoGanttPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-screen text-gray-500 font-sans">
-        <p>Cargando Carta Gantt...</p>
-      </div>
-    );
+    return <ProjectWorkspaceSkeleton label="Cargando Carta Gantt..." />;
   }
 
   if (!proyecto) {
@@ -255,16 +251,13 @@ export default function ProyectoGanttPage() {
     );
   }
 
+  const filteredBitacora =
+    bitacoraFilter === 'todos'
+      ? bitacora
+      : bitacora.filter((entry) => entry.tipo === bitacoraFilter);
+
   return (
     <div className="flex-1 flex flex-col min-h-screen">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-obra-orange" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       <ProjectTabsHeader
         proyecto={proyecto}
         cliente={cliente}
@@ -292,56 +285,105 @@ export default function ProyectoGanttPage() {
           onAddActivity={() => { setActivityError(''); setIsAddModalOpen(true); }}
         />
 
-        <div className="px-4 sm:px-6 space-y-4"><ProjectPlanningReview project={proyecto} onChanged={loadData}/></div>
+        <div className="space-y-4"><ProjectPlanningReview project={proyecto} onChanged={loadData}/></div>
         {/* Sección Bitácora Diaria de Obra y Registro Fotográfico */}
         <div className="min-w-0 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-kraft-200 dark:border-[#263040]">
             <div>
-              <h3 className="font-heading font-black text-lg text-navy-900 flex items-center gap-2">
+              <h3 className="font-heading font-black text-lg text-navy-900 dark:text-white flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-obra-orange" />
                 <span>Bitácora</span>
               </h3>
-              <p className="text-xs text-gray-500 font-sans mt-0.5">
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-sans mt-0.5">
                 Avances, fotos y novedades.
               </p>
             </div>
             
             <button
               onClick={() => setIsBitacoraModalOpen(true)}
-              className="px-3.5 py-2 bg-navy-800 hover:bg-navy-700 text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 font-heading self-start sm:self-auto"
+              className="px-3.5 py-2 bg-navy-800 hover:bg-navy-700 dark:bg-[#FF6A00] dark:hover:bg-[#E55F00] text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-1.5 font-heading self-start sm:self-auto"
             >
-              <Plus className="w-3.5 h-3.5 text-obra-orange" />
+              <Plus className="w-3.5 h-3.5 text-obra-orange dark:text-white" />
               <span>Registrar avance</span>
             </button>
           </div>
 
-          {bitacora.length === 0 ? (
+          {bitacora.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  { id: 'todos', label: 'Todos' },
+                  { id: 'avance', label: 'Avances' },
+                  { id: 'incidente', label: 'Incidentes' },
+                  { id: 'entrega_material', label: 'Materiales' },
+                  { id: 'clima', label: 'Clima' },
+                ] as const
+              ).map((chip) => {
+                const count =
+                  chip.id === 'todos'
+                    ? bitacora.length
+                    : bitacora.filter((b) => b.tipo === chip.id).length;
+                const active = bitacoraFilter === chip.id;
+                return (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => setBitacoraFilter(chip.id)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                      active
+                        ? 'bg-[#FF6A00] text-white'
+                        : 'bg-kraft-50 dark:bg-[#0F141C] text-gray-600 dark:text-gray-300 border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00]/60'
+                    }`}
+                  >
+                    <span>{chip.label}</span>
+                    <span className="font-mono text-[10px] opacity-85">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {filteredBitacora.length === 0 ? (
             <div className="py-8 text-center text-gray-400 font-sans space-y-2">
-              <Camera className="w-8 h-8 mx-auto text-gray-300" />
-              <p className="text-xs">No hay registros en la bitácora de esta obra aún.</p>
-              <button
-                onClick={() => setIsBitacoraModalOpen(true)}
-                className="text-xs font-bold text-obra-orange hover:underline"
-              >
-                Registrar el primer avance
-              </button>
+              <Camera className="w-8 h-8 mx-auto text-gray-300 dark:text-gray-600" />
+              <p className="text-xs">
+                {bitacora.length === 0
+                  ? 'No hay registros en la bitácora de esta obra aún.'
+                  : 'No hay entradas con este filtro.'}
+              </p>
+              {bitacora.length === 0 && (
+                <button
+                  onClick={() => setIsBitacoraModalOpen(true)}
+                  className="text-xs font-bold text-obra-orange hover:underline"
+                >
+                  Registrar el primer avance
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {bitacora.map((entry) => {
+              {filteredBitacora.map((entry) => {
                 const tipoBadge =
                   entry.tipo === 'avance'
-                    ? 'bg-emerald-100 text-emerald-800'
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
                     : entry.tipo === 'incidente'
-                    ? 'bg-red-100 text-red-800'
+                    ? 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300'
                     : entry.tipo === 'clima'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-amber-100 text-amber-800';
+                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300'
+                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300';
+                const leftBorder =
+                  entry.tipo === 'avance'
+                    ? 'border-l-emerald-500'
+                    : entry.tipo === 'incidente'
+                    ? 'border-l-[#D94336]'
+                    : entry.tipo === 'clima'
+                    ? 'border-l-blue-500'
+                    : 'border-l-amber-500';
 
                 return (
                   <div
                     key={entry.id}
-                    className="p-4 rounded-xl border border-kraft-200 bg-kraft-50/50 hover:bg-white transition-all space-y-3 flex flex-col justify-between"
+                    className={`p-4 rounded-xl border border-kraft-200 dark:border-[#263040] border-l-4 ${leftBorder} bg-kraft-50/80 dark:bg-[#1A2230] hover:bg-white dark:hover:bg-[#1F2937] transition-all space-y-3 flex flex-col justify-between`}
                   >
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
@@ -353,11 +395,11 @@ export default function ProyectoGanttPage() {
                         </span>
                       </div>
 
-                      <h4 className="font-heading font-bold text-sm text-navy-900 leading-snug">
+                      <h4 className="font-heading font-bold text-sm text-navy-900 dark:text-white leading-snug">
                         {entry.titulo}
                       </h4>
 
-                      <p className="text-xs text-gray-600 font-sans leading-relaxed">
+                      <p className="text-xs text-gray-600 dark:text-gray-300 font-sans leading-relaxed">
                         {entry.nota}
                       </p>
 
@@ -365,7 +407,7 @@ export default function ProyectoGanttPage() {
                         <button
                           type="button"
                           onClick={() => setPreviewPhoto(entry.foto_url || null)}
-                          className="w-full h-32 rounded-lg border border-kraft-200 overflow-hidden relative group mt-2"
+                          className="w-full h-32 rounded-lg border border-kraft-200 dark:border-[#263040] overflow-hidden relative group mt-2"
                         >
                           <EvidenceImage
                             src={entry.foto_url}
@@ -376,7 +418,7 @@ export default function ProyectoGanttPage() {
                       )}
                     </div>
 
-                    <div className="pt-2 border-t border-kraft-200 flex items-center justify-between text-[11px] text-gray-400 font-mono">
+                    <div className="pt-2 border-t border-kraft-200 dark:border-[#263040] flex items-center justify-between text-[11px] text-gray-400 font-mono">
                       <span>Por: {entry.autor_nombre}</span>
                       <div className="flex items-center gap-1">
                         <button
@@ -404,9 +446,8 @@ export default function ProyectoGanttPage() {
           )}
         </div>
 
+        {proyecto && <DailyClosePanel proyecto={proyecto} />}
       </div>
-
-      {proyecto && <div className="px-4 sm:px-6 pb-6"><DailyClosePanel proyecto={proyecto}/></div>}
 
       {/* Modal: + Agregar Partida / Actividad */}
       {isAddModalOpen && (

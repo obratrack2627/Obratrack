@@ -3,16 +3,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  Bell,
   Building,
   ClipboardCheck,
   CreditCard,
   FileText,
+  GanttChartSquare,
   LayoutDashboard,
   MessageSquareShare,
+  Plus,
   Search,
   Sparkles,
   User,
   Users,
+  Wallet,
   X,
 } from 'lucide-react';
 import ModalOverlay from '@/components/ModalOverlay';
@@ -22,8 +26,9 @@ interface CommandItem {
   id: string;
   title: string;
   subtitle: string;
-  group: 'Navegación' | 'Obras' | 'Clientes' | 'Equipo' | 'Presupuestos';
-  href: string;
+  group: 'Acciones rápidas' | 'Navegación' | 'Obras' | 'Clientes' | 'Equipo' | 'Presupuestos';
+  href?: string;
+  action?: () => void;
   keywords: string;
   icon: React.ComponentType<{ className?: string }>;
 }
@@ -156,15 +161,71 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
           },
         ];
 
-    const proyectos: CommandItem[] = dataService.getProyectos().map((p) => ({
-      id: `pro-${p.id}`,
-      title: p.nombre,
-      subtitle: [p.comuna, p.estado].filter(Boolean).join(' · ') || 'Obra',
-      group: 'Obras',
-      href: `/proyectos/${p.id}/finanzas`,
-      keywords: `${p.nombre} ${p.comuna || ''} ${p.direccion || ''} ${p.estado}`,
-      icon: Building,
-    }));
+    const quickActions: CommandItem[] = isTerreno
+      ? []
+      : [
+          {
+            id: 'act-new-project',
+            title: '+ Nueva obra o plantilla rápida',
+            subtitle: 'Crear proyecto nuevo o desde plantilla chilena',
+            group: 'Acciones rápidas',
+            href: '/proyectos?nueva=1',
+            keywords: 'crear nueva obra proyecto plantilla',
+            icon: Plus,
+          },
+          {
+            id: 'act-alerts',
+            title: 'Abrir Centro de Alertas',
+            subtitle: 'Sobrecostos, atrasos Gantt, materiales 7d y reclamos',
+            group: 'Acciones rápidas',
+            action: () => window.dispatchEvent(new Event('obratrack_open_alerts_drawer')),
+            keywords: 'alertas avisos sobrecosto atraso',
+            icon: Bell,
+          },
+          {
+            id: 'act-monthly-attendance',
+            title: 'Planilla Mensual de Asistencia',
+            subtitle: 'Consolidado mensual de horas-hombre y exportación',
+            group: 'Acciones rápidas',
+            href: '/asistencia?vista=mensual',
+            keywords: 'planilla mensual horas hombre asistencia liquidacion',
+            icon: ClipboardCheck,
+          },
+        ];
+
+    const proyectos: CommandItem[] = dataService.getProyectos().flatMap((p) => {
+      const base: CommandItem = {
+        id: `pro-${p.id}`,
+        title: p.nombre,
+        subtitle: [p.comuna, p.estado].filter(Boolean).join(' · ') || 'Obra',
+        group: 'Obras',
+        href: `/proyectos/${p.id}/gantt`,
+        keywords: `${p.nombre} ${p.comuna || ''} ${p.direccion || ''} ${p.estado}`,
+        icon: Building,
+      };
+      if (isTerreno) return [base];
+      return [
+        base,
+        {
+          id: `pro-${p.id}-finanzas`,
+          title: `${p.nombre} → Finanzas y Materiales`,
+          subtitle: 'Pagos, EDP PDF, materiales y rentabilidad',
+          group: 'Obras',
+          href: `/proyectos/${p.id}/finanzas`,
+          keywords: `${p.nombre} finanzas costos pagos materiales edp`,
+          icon: Wallet,
+        },
+        {
+          id: `pro-${p.id}-gantt`,
+          title: `${p.nombre} → Carta Gantt y Bitácora`,
+          subtitle: 'Partidas, plazos y registro de avances',
+          group: 'Obras',
+          href: `/proyectos/${p.id}/gantt`,
+          keywords: `${p.nombre} gantt partidas cronograma bitacora`,
+          icon: GanttChartSquare,
+        },
+      ];
+    });
 
     const clientes: CommandItem[] = isTerreno
       ? []
@@ -202,7 +263,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
           icon: FileText,
         }));
 
-    return [...nav, ...proyectos, ...clientes, ...usuarios, ...cotizaciones];
+    return [...quickActions, ...nav, ...proyectos, ...clientes, ...usuarios, ...cotizaciones];
   }, []);
 
   const filtered = useMemo(() => {
@@ -224,7 +285,13 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
   const selectItem = (item?: CommandItem) => {
     if (!item) return;
     onClose();
-    router.push(item.href);
+    if (item.action) {
+      item.action();
+      return;
+    }
+    if (item.href) {
+      router.push(item.href);
+    }
   };
 
   return (

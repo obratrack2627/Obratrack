@@ -15,8 +15,12 @@ import {
   FolderOpen,
   FileText,
   ClipboardCheck,
+  Search,
+  MessageCircle,
 } from 'lucide-react';
 import { ProjectStatusSelect } from '@/components/ProjectStatus';
+import { AlertsBellButton } from '@/components/AlertsDrawer';
+import ClientWhatsAppSummaryModal from '@/components/ClientWhatsAppSummaryModal';
 import { Proyecto, Cliente } from '@/types/database';
 import { assignedCrew, crewAttendance } from '@/lib/crew';
 import { chileToday } from '@/lib/ai/project-deadlines';
@@ -61,6 +65,10 @@ export default function ProjectTabsHeader({
   useEffect(() => { setErrorEstado(''); }, [proyecto?.id]);
   const [docsCount, setDocsCount] = useState(0);
   const [presentesHoy, setPresentesHoy] = useState(0);
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+
+  const activeUserRol = dataService.getActiveUser()?.rol || '';
+  const canShareClientSummary = activeUserRol === 'admin' || activeUserRol === 'supervisor';
 
   useEffect(() => {
     if (!proyecto) return;
@@ -207,9 +215,31 @@ export default function ProjectTabsHeader({
             </div>
           </div>
 
-          {/* Botón de Ubicación Maps */}
-          {onOpenMaps && (
-            <div className="flex items-center gap-2 shrink-0">
+          {/* Acciones rápidas del proyecto */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('obratrack_open_command_palette'))}
+              aria-label="Búsqueda rápida (Ctrl+K)"
+              title="Búsqueda rápida (Ctrl+K)"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-kraft-50 dark:bg-[#1E2530] text-gray-600 dark:text-gray-300 border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] hover:text-[#FF6A00] text-xs font-medium transition-colors"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Buscar</span>
+            </button>
+            <AlertsBellButton compact />
+            {canShareClientSummary && (
+              <button
+                type="button"
+                onClick={() => setSummaryModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#25D366]/10 dark:bg-[#25D366]/15 text-[#15803D] dark:text-[#4ADE80] border border-[#25D366]/30 hover:border-[#25D366] text-xs font-heading font-bold shadow-sm transition-all"
+                title="Enviar resumen de avance al mandante"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>Resumen mandante</span>
+              </button>
+            )}
+            {onOpenMaps && (
               <button
                 type="button"
                 onClick={onOpenMaps}
@@ -219,8 +249,8 @@ export default function ProjectTabsHeader({
                 <MapPin className="w-3.5 h-3.5 text-[#FF6A00]" />
                 <span>Ver en Maps</span>
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -255,7 +285,7 @@ export default function ProjectTabsHeader({
               <span>{tab.label}</span>
               {tab.badge && (
                 <span
-                  className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full ${
+                  className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full ${
                     isActive
                       ? 'bg-[#FF6A00] text-white'
                       : tab.alert
@@ -272,6 +302,13 @@ export default function ProjectTabsHeader({
           );
         })}
       </div>
+
+      <ClientWhatsAppSummaryModal
+        proyecto={proyecto}
+        cliente={cliente}
+        isOpen={summaryModalOpen}
+        onClose={() => setSummaryModalOpen(false)}
+      />
     </div>
   );
 }

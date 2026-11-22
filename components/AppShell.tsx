@@ -12,6 +12,7 @@ import AppNavigation from '@/components/AppNavigation';
 import ThemeToggle from '@/components/ThemeToggle';
 import ObraBotLauncher from '@/components/ObraBotLauncher';
 import WebSession from '@/components/WebSession';
+import { ToastProvider } from '@/components/ToastProvider';
 
 const CommandPalette = dynamic(() => import('@/components/CommandPalette'), { ssr: false });
 
@@ -55,47 +56,49 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeProvider>
-      <a
-        href="#contenido-principal"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-lg focus:bg-[#FF6A00] focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-white focus:shadow-lg"
-      >
-        Saltar al contenido principal
-      </a>
-      <PwaSplash />
-      <InstalledAppTheme />
-      <AppNavigation />
-      {isAuthPage ? (
-        <main
-          id="contenido-principal"
-          className="min-h-screen w-full bg-[var(--bg-page)] text-[var(--text-primary)] antialiased workspace-ui page-fade-enter transition-colors duration-200"
+      <ToastProvider>
+        <a
+          href="#contenido-principal"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-lg focus:bg-[#FF6A00] focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-white focus:shadow-lg"
         >
-          {!isLandingPage && (
-            <div className="fixed top-4 right-4 z-40 print:hidden">
-              <ThemeToggle />
-            </div>
-          )}
-          {children}
-        </main>
-      ) : (
-        <div className="min-h-screen flex flex-col md:flex-row bg-[var(--bg-page)] text-[var(--text-primary)] antialiased transition-colors duration-200">
-          <Sidebar />
-          <WebSession />
-          <div className="hidden md:flex fixed top-3.5 right-4 z-40 print:hidden">
-            <ThemeToggle />
-          </div>
+          Saltar al contenido principal
+        </a>
+        <PwaSplash />
+        <InstalledAppTheme />
+        <AppNavigation />
+        {isAuthPage ? (
           <main
             id="contenido-principal"
-            className="workspace-ui min-w-0 flex-1 flex flex-col min-h-screen w-full pt-16 md:pt-0 md:pl-64 transition-all"
+            className="min-h-screen w-full bg-[var(--bg-page)] text-[var(--text-primary)] antialiased workspace-ui page-fade-enter transition-colors duration-200"
           >
-            <CloudSync />
-            <div className="min-w-0 max-w-full flex-1 flex flex-col page-fade-enter">
-              {children}
-            </div>
+            {!isLandingPage && (
+              <div className="fixed top-4 right-4 z-40 print:hidden">
+                <ThemeToggle />
+              </div>
+            )}
+            {children}
           </main>
-          <ObraBotLauncher />
-          {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
-        </div>
-      )}
+        ) : (
+          <div className="min-h-screen flex flex-col md:flex-row bg-[var(--bg-page)] text-[var(--text-primary)] antialiased transition-colors duration-200">
+            <Sidebar />
+            <WebSession />
+            <div className="hidden md:flex fixed top-3.5 right-4 z-40 print:hidden">
+              <ThemeToggle />
+            </div>
+            <main
+              id="contenido-principal"
+              className="workspace-ui min-w-0 flex-1 flex flex-col min-h-screen w-full pt-16 md:pt-0 md:pl-64 transition-all"
+            >
+              <CloudSync />
+              <div className="min-w-0 max-w-full flex-1 flex flex-col page-fade-enter">
+                {children}
+              </div>
+            </main>
+            <ObraBotLauncher />
+            {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+          </div>
+        )}
+      </ToastProvider>
     </ThemeProvider>
   );
 }

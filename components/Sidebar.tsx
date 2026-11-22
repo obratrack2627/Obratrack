@@ -9,6 +9,7 @@ import {
   MessageSquareShare,
   Users,
   Building,
+  Building2,
   Menu,
   X,
   UserCog,
@@ -180,7 +181,7 @@ export default function Sidebar() {
         {
           label: 'Clientes',
           href: '/clientes',
-          icon: Users,
+          icon: Building2,
         },
         {
           label: 'Planes & Precios',
@@ -278,10 +279,11 @@ export default function Sidebar() {
           </button>
           <button
             type="button"
-            aria-label="Ver mi cuenta" onClick={() => setIsPlanModalOpen(true)}
+            aria-label="Ver mi cuenta"
+            onClick={() => setIsPlanModalOpen(true)}
             className="px-2 py-1 rounded bg-[#FF6A00]/20 text-[#FF6A00] border border-[#FF6A00]/40 text-[10px] font-bold font-mono"
           >
-            Cuenta
+            {currentPlanDetails.nombre.replace('Plan ', '')}
           </button>
           <button
             onClick={() => setMobileOpen(!mobileOpen)}

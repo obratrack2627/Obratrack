@@ -31,6 +31,8 @@ import {
 } from 'lucide-react';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
+import { ProjectWorkspaceSkeleton } from '@/components/PageSkeletons';
+import { toast } from '@/components/ToastProvider';
 import { dataService } from '@/lib/data-service';
 import {aiHeaders} from '@/lib/ai/client';
 import {
@@ -59,7 +61,6 @@ export default function ProyectoCambiosPage() {
   const [formError,setFormError]=useState('');
   const formId=useRef('');
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Estado del formulario de creación
   const [tipo, setTipo] = useState<TipoReclamoCambio>('solicitud_cambio');
@@ -81,8 +82,7 @@ export default function ProyectoCambiosPage() {
   const [matPrecio, setMatPrecio] = useState('');
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+    toast(msg);
   };
 
   const loadData = () => {
@@ -307,21 +307,11 @@ export default function ProyectoCambiosPage() {
   };
 
   if (!proyecto) {
-    return (
-      <div className="p-8 text-center text-gray-500 font-mono text-sm">
-        Cargando información de la obra...
-      </div>
-    );
+    return <ProjectWorkspaceSkeleton label="Cargando cambios y reclamos..." />;
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-[#FAF8F5] dark:bg-[#0E131B] pb-16">
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-obra-orange shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+    <div className="flex-1 flex flex-col min-h-screen bg-[var(--bg-page)] pb-16">
 
       <ProjectTabsHeader
         proyecto={proyecto}
@@ -509,7 +499,7 @@ export default function ProyectoCambiosPage() {
                     )}
                     <span>{f.label}</span>
                     <span
-                      className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
                         isActive
                           ? 'bg-white/20 text-current'
                           : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'

@@ -899,7 +899,7 @@ function LoginForm() {
             <span>Volver al sitio</span>
           </Link>
 
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EFEBE1]/80 dark:bg-[#141B26]/80 border border-[#DDD5C5] dark:border-[#263346] text-[11px] font-mono font-medium text-[#6B6355] dark:text-gray-300 backdrop-blur-xs">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EFEBE1]/80 dark:bg-[#141B26]/80 border border-[#DDD5C5] dark:border-[#263346] text-[11px] font-mono font-medium text-[#6B6355] dark:text-gray-300 backdrop-blur-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-[#FF6A00]" />
             <span>PORTAL DE ACCESO A FAENA</span>
           </div>

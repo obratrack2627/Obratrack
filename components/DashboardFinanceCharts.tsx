@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Eye, EyeOff } from 'lucide-react';
+import { ArrowUpRight, BarChart3, Eye, EyeOff } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -24,6 +24,8 @@ export interface DashboardFinanceDatum {
   Presupuestado: number;
   Cobrado: number;
   Pendiente: number;
+  Costos?: number;
+  Margen?: number;
 }
 
 export interface DashboardPieDatum {
@@ -62,6 +64,9 @@ export default function DashboardFinanceCharts({
   saldoPendiente,
   totalImprevistos,
 }: DashboardFinanceChartsProps) {
+  const [barMode, setBarMode] = useState<'cobranza' | 'rentabilidad'>('cobranza');
+  const hasProfitabilityData = chartDataFinanzas.some((d) => typeof d.Costos === 'number');
+
   return (
     <div data-tour-zone="charts" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Gráfico de Flujo de Caja por Obra */}
@@ -72,10 +77,38 @@ export default function DashboardFinanceCharts({
               Flujo Financiero por Obra (CLP)
             </h3>
             <p className="text-xs text-gray-500 font-mono">
-              Comparativa entre monto contratado y pagos recaudados
+              {barMode === 'cobranza'
+                ? 'Comparativa entre monto contratado y pagos recaudados'
+                : 'Comparativa entre contratado, costos directos y margen proyectado'}
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {hasProfitabilityData && (
+              <div className="inline-flex rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] p-0.5 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setBarMode('cobranza')}
+                  className={`px-2 py-1 rounded-md font-semibold transition-colors ${
+                    barMode === 'cobranza'
+                      ? 'bg-[#FF6A00] text-white'
+                      : 'text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  Cobranza
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBarMode('rentabilidad')}
+                  className={`px-2 py-1 rounded-md font-semibold transition-colors ${
+                    barMode === 'rentabilidad'
+                      ? 'bg-[#FF6A00] text-white'
+                      : 'text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  Rentabilidad
+                </button>
+              </div>
+            )}
             <button
               type="button"
               onClick={onToggleBarChart}
@@ -109,16 +142,35 @@ export default function DashboardFinanceCharts({
                     <Bar dataKey="Presupuestado" name="Contratado" fill="#FF6A00" radius={[4, 4, 0, 0]} maxBarSize={42} isAnimationActive={false}>
                       <LabelList dataKey="Presupuestado" position="top" formatter={(val: unknown) => (barChartRevealed ? compactCLP(Number(val)) : '$ ***')} fill="#c74c00" fontSize={10} />
                     </Bar>
-                    <Bar dataKey="Cobrado" name="Cobrado" fill="#6B8F72" radius={[4, 4, 0, 0]} maxBarSize={42} isAnimationActive={false}>
-                      <LabelList dataKey="Cobrado" position="top" formatter={(val: unknown) => (barChartRevealed ? compactCLP(Number(val)) : '$ ***')} fill="#52745a" fontSize={10} />
-                    </Bar>
+                    {barMode === 'cobranza' ? (
+                      <Bar dataKey="Cobrado" name="Cobrado" fill="#6B8F72" radius={[4, 4, 0, 0]} maxBarSize={42} isAnimationActive={false}>
+                        <LabelList dataKey="Cobrado" position="top" formatter={(val: unknown) => (barChartRevealed ? compactCLP(Number(val)) : '$ ***')} fill="#52745a" fontSize={10} />
+                      </Bar>
+                    ) : (
+                      <>
+                        <Bar dataKey="Costos" name="Costos Directos" fill="#D94336" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false}>
+                          <LabelList dataKey="Costos" position="top" formatter={(val: unknown) => (barChartRevealed ? compactCLP(Number(val)) : '$ ***')} fill="#b9382c" fontSize={10} />
+                        </Bar>
+                        <Bar dataKey="Margen" name="Margen" fill="#6B8F72" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false}>
+                          <LabelList dataKey="Margen" position="top" formatter={(val: unknown) => (barChartRevealed ? compactCLP(Number(val)) : '$ ***')} fill="#52745a" fontSize={10} />
+                        </Bar>
+                      </>
+                    )}
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </>
         ) : (
-          <p className="py-12 text-center text-sm text-gray-500">No hay obras para mostrar en el gráfico.</p>
+          <div className="py-10 text-center space-y-2">
+            <BarChart3 className="w-8 h-8 text-gray-400 mx-auto" />
+            <p className="text-sm font-semibold text-navy-900 dark:text-gray-200">
+              No hay obras para mostrar en el gráfico.
+            </p>
+            <Link href="/proyectos" className="inline-block text-xs font-bold text-[#FF6A00] hover:underline">
+              + Crear tu primera obra
+            </Link>
+          </div>
         )}
 
         <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 pt-2 border-t border-kraft-200 dark:border-gray-800 text-xs font-mono">
@@ -126,10 +178,23 @@ export default function DashboardFinanceCharts({
             <span className="w-3 h-3 rounded-full bg-[#FF6A00]"></span>
             <span>Presupuesto Contratado</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#6B8F72]"></span>
-            <span>Recaudado a la Fecha</span>
-          </div>
+          {barMode === 'cobranza' ? (
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-[#6B8F72]"></span>
+              <span>Recaudado a la Fecha</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-[#D94336]"></span>
+                <span>Costos Directos</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-[#6B8F72]"></span>
+                <span>Margen Bruto</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

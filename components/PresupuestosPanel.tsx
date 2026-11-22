@@ -370,7 +370,7 @@ export default function PresupuestosPanel({
                   )}
                   <span>{tab.label}</span>
                   <span
-                    className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
                       isActive
                         ? "bg-white/20 text-current"
                         : "bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300"

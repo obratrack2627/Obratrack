@@ -1,6 +1,8 @@
 'use client';
 import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
+import { toast } from '@/components/ToastProvider';
+import { downloadEquipoCsv } from '@/lib/excel-export';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -15,7 +17,7 @@ import {
   Trash2,
   Edit3,
   Search,
-  CheckCircle2,
+  Download,
   AlertTriangle,
   MessageSquare,
   BadgeCheck,
@@ -52,7 +54,6 @@ export default function EquipoPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Usuario | null>(null);
   const [userToDelete, setUserToDelete] = useState<Usuario | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [projectId, setProjectId] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -88,13 +89,15 @@ export default function EquipoPage() {
 
   useEffect(() => {
     loadData();
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setViewMode('grid');
+    }
     window.addEventListener('obratrack_cloud_synced', loadData);
     return () => window.removeEventListener('obratrack_cloud_synced', loadData);
   }, []);
 
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+    toast(msg, 'success');
   };
 
   const handleRutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -243,19 +246,22 @@ export default function EquipoPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-navy-900 text-white border border-obra-orange/40 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-5 text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-obra-orange" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
       <Navbar
         title="Equipo"
         subtitle="Personas y obras asignadas."
         action={
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                downloadEquipoCsv(usuarios, proyectos);
+                toast('Equipo exportado en CSV.', 'success');
+              }}
+              className="px-3 py-2 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm flex items-center gap-1.5 font-heading transition-all"
+            >
+              <Download className="w-4 h-4 text-[#FF6A00]" />
+              <span className="hidden sm:inline">CSV</span>
+            </button>
 
             <button
               type="button"
@@ -445,7 +451,7 @@ export default function EquipoPage() {
                     )}
                     <span>{tab.label}</span>
                     <span
-                      className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
                         isActive
                           ? 'bg-white/20 text-current'
                           : 'bg-kraft-200/70 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
@@ -854,7 +860,7 @@ export default function EquipoPage() {
                   </label>
                   {rut && (
                     <span
-                      className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded ${
+                      className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                         validarRutChileno(rut)
                           ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                           : 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
