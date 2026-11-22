@@ -66,13 +66,13 @@ export default function ProjectTabsHeader({
   const [docsCount, setDocsCount] = useState(0);
   const [presentesHoy, setPresentesHoy] = useState(0);
   const [summaryModalOpen, setSummaryModalOpen] = useState(false);
-
-  const activeUserRol = dataService.getActiveUser()?.rol || '';
-  const canShareClientSummary = activeUserRol === 'admin' || activeUserRol === 'supervisor';
+  const [canShareClientSummary, setCanShareClientSummary] = useState(false);
 
   useEffect(() => {
     if (!proyecto) return;
     const refreshCounts = () => {
+      const rol = dataService.getActiveUser()?.rol || '';
+      setCanShareClientSummary(rol === 'admin' || rol === 'supervisor');
       setEstado(dataService.getProyectoById(proyecto.id)?.estado || proyecto.estado);
       const cambios = dataService
         .getReclamosCambios(proyecto.id)
@@ -216,13 +216,13 @@ export default function ProjectTabsHeader({
           </div>
 
           {/* Acciones rápidas del proyecto */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap">
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event('obratrack_open_command_palette'))}
               aria-label="Búsqueda rápida (Ctrl+K)"
               title="Búsqueda rápida (Ctrl+K)"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-kraft-50 dark:bg-[#1E2530] text-gray-600 dark:text-gray-300 border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] hover:text-[#FF6A00] text-xs font-medium transition-colors"
+              className="inline-flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-kraft-50 dark:bg-[#1E2530] text-gray-600 dark:text-gray-300 border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] hover:text-[#FF6A00] text-xs font-medium transition-colors shrink-0"
             >
               <Search className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Buscar</span>
@@ -232,22 +232,26 @@ export default function ProjectTabsHeader({
               <button
                 type="button"
                 onClick={() => setSummaryModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#25D366]/10 dark:bg-[#25D366]/15 text-[#15803D] dark:text-[#4ADE80] border border-[#25D366]/30 hover:border-[#25D366] text-xs font-heading font-bold shadow-sm transition-all"
+                aria-label="Resumen mandante"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#25D366]/10 dark:bg-[#25D366]/15 text-[#15803D] dark:text-[#4ADE80] border border-[#25D366]/30 hover:border-[#25D366] text-xs font-heading font-bold shadow-sm transition-all whitespace-nowrap shrink-0"
                 title="Enviar resumen de avance al mandante"
               >
-                <MessageCircle className="w-3.5 h-3.5" />
-                <span>Resumen mandante</span>
+                <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                <span className="sm:hidden">Resumen</span>
+                <span className="hidden sm:inline">Resumen mandante</span>
               </button>
             )}
             {onOpenMaps && (
               <button
                 type="button"
                 onClick={onOpenMaps}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-kraft-100 dark:bg-[#1E2530] text-navy-900 dark:text-gray-200 border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] text-xs font-heading font-bold shadow-sm transition-all"
+                aria-label="Ver en Maps"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-kraft-100 dark:bg-[#1E2530] text-navy-900 dark:text-gray-200 border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] text-xs font-heading font-bold shadow-sm transition-all whitespace-nowrap shrink-0"
                 title="Ver ubicación en Google Maps"
               >
-                <MapPin className="w-3.5 h-3.5 text-[#FF6A00]" />
-                <span>Ver en Maps</span>
+                <MapPin className="w-3.5 h-3.5 text-[#FF6A00] shrink-0" />
+                <span className="sm:hidden">Maps</span>
+                <span className="hidden sm:inline">Ver en Maps</span>
               </button>
             )}
           </div>

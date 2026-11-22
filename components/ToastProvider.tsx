@@ -63,7 +63,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     if (!clean) return;
     const resolvedTone = tone || inferToastTone(clean);
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setItems((prev) => [...prev.slice(-3), { id, message: clean, tone: resolvedTone }]);
+    setItems((prev) => [
+      ...prev.filter((item) => item.message !== clean).slice(-2),
+      { id, message: clean, tone: resolvedTone },
+    ]);
     window.setTimeout(() => {
       setItems((prev) => prev.filter((item) => item.id !== id));
     }, 3800);
