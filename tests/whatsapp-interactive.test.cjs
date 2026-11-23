@@ -269,7 +269,7 @@ test("buildWhatsAppInteractivePayload genera botones/listas válidos dentro de l
   assert.equal(metaBtn.type, "interactive");
   assert.equal(metaBtn.interactive.type, "button");
   assert.equal(metaBtn.interactive.body.text, multiline);
-  assert.equal(metaBtn.interactive.action.buttons.length, 3);
+  assert.deepEqual(metaBtn.interactive.action.buttons.map(b => b.reply.title), ["Crear obra", "Generar PDF"]);
 
   const metaList = buildMetaInteractiveRequestBody("56912345678", listPayload);
   assert.equal(metaList.type, "interactive");
