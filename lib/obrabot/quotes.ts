@@ -16,7 +16,7 @@ export type QuoteReview = {
   presupuesto_id: string | null;
   destino?: QuoteDestination;
 };
-export type QuoteReply = { respuesta: string; archivo?: { id: string; formato: QuoteFormat }; solicitud?: string; obra?: string };
+export type QuoteReply = { respuesta: string; archivo?: { id: string; formato: QuoteFormat }; solicitud?: string; obra?: string; cotizacionAprobadaId?: string };
 const uuid = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
 const starter = /^(?:nueva cotizaci[oó]n|cotizaci[oó]n con precios|(?:prepara|genera|hazme) (?:una |la )?cotizaci[oó]n con (?:estos )?precios)\b[ \t]*:?[ \t]*([^\n]*)/i;
 const startHelp = /^(?:quiero hacer una )?cotizaci[oó]n pactada[.!]?$/i;
@@ -151,6 +151,7 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
     respuesta: 'Cotización aprobada. Puedes compartir el PDF o pedir el Excel.' + (canLink
       ? '\n\n¿Quieres crear una obra con esta cotización o vincularla a una obra existente? Responde «Crear obra» o «Vincular a obra».'
       : ''),
+    cotizacionAprobadaId: channel === 'whatsapp' && canLink ? id : undefined,
     archivo: { id, formato: 'pdf' },
   };
 }

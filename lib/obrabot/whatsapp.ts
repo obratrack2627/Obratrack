@@ -6,7 +6,7 @@ import { excelMime, quoteFile } from './quote-files';
 import type { QuoteSource } from './quote-input';
 import type { downloadMetaMedia } from '@/lib/whatsapp/meta';
 import { isDestinationCommand, isDestinationContinuation, validQuoteId } from './quote-destination';
-import { parseWhatsAppInteractiveReply } from '@/lib/whatsapp/interactive';
+import { parseWhatsAppInteractiveReply, quotePdfButtonSource } from '@/lib/whatsapp/interactive';
 
 const pdfRequestWords = new Set(
   'pdf por favor el la un una de del en como formato archivo documento copia cotizacion presupuesto esta este esa ese lo eso me mi quiero quisiera necesito que podrias puedes puede das envias mandas enviar mandarme mandar enviarme mandame enviame enviamelo mandamelo damelo dame dalo pasame pasamelo pasa pasalo pasar pasarme entregar entregarme entregame entregamelo entrega adjuntar adjuntarme adjunta adjuntame adjuntalo adjuntamelo descarga descargar descargalo generar generarme genera generame generalo generamelo hazlo hazmelo haz hacer preparar preparame preparalo compartir comparteme compartelo porfa exporta exportar exportalo'.split(' '),
@@ -31,7 +31,14 @@ function quoteReference(row: any) {
 
 async function requestedQuotePdf(db: any, actor: Actor, rows: any[], sourceId?: string): Promise<WhatsAppQuoteReply> {
   if (actor.rol !== 'admin') return { respuesta: 'El PDF de la cotización está disponible para el administrador.' };
-  const ref = sourceId ? quoteReference(rows.find(row => row.message_id === sourceId)) : rows.map(quoteReference).find(Boolean);
+  let receipt = sourceId && rows.find(row => row.message_id === sourceId);
+  if (sourceId && !receipt) {
+    const { data, error } = await db.from('whatsapp_mensajes').select('acciones,cotizacion')
+      .eq('empresa_id', actor.empresa_id).eq('actor_id', actor.id).eq('message_id', sourceId).maybeSingle();
+    if (error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude consultar la cotización del mensaje.', 503);
+    receipt = data;
+  }
+  const ref = sourceId ? quoteReference(receipt) : rows.map(quoteReference).find(Boolean);
   if (!ref) {
     return { respuesta: sourceId
       ? 'No pude identificar esa cotización. Para recibir la última de este chat, escribe «Envíame la cotización en PDF» en un mensaje nuevo.'
@@ -78,7 +85,7 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     const candidate = receipt?.acciones?.archivo_cotizacion?.id;
     const quotedId = sourceId ? (typeof candidate === 'string' && validQuoteId(candidate) ? candidate : null) : undefined;
     reply = contextualPdf
-      ? await requestedQuotePdf(db, actor, conversationRows, sourceId)
+      ? await requestedQuotePdf(db, actor, conversationRows, items.map(quotePdfButtonSource).find(Boolean) || sourceId)
       : await handleQuoteTurn(db, actor, 'whatsapp', text, inbound.id, source, { quotedId });
   } catch (error) {
     if (!(error instanceof AIError) || error.status >= 500) throw error;
@@ -91,7 +98,7 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     p_cotizacion: null,
     p_acciones: {
       tipo: 'obrabot_cotizacion', rol_actor: actor.rol, archivo_cotizacion: reply.archivo,
-      solicitud_cotizacion: reply.solicitud, presupuesto_pdf_id: reply.presupuestoPdfId, proyecto_contexto_id: reply.obra,
+      cotizacion_aprobada_id: reply.cotizacionAprobadaId, solicitud_cotizacion: reply.solicitud, presupuesto_pdf_id: reply.presupuestoPdfId, proyecto_contexto_id: reply.obra,
     },
     p_changed: {}, p_deleted: {}, p_adjunto: null, p_borrador: null, p_aviso: null,
   });

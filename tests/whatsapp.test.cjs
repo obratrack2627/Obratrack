@@ -1819,6 +1819,7 @@ test('«Dámelo en archivo pdf» adjunta la última cotización guardada sin apr
   const rpc = sb.rpc.bind(sb);
   sb.rpc = (name, args) => { if (name === 'aplicar_lote_copiloto') calls.push(args); return rpc(name, args); };
   const sent = [];
+  let expectedQuote = latest;
   const handler = createWhatsAppWebhook({
     client: () => sb,
     process: (client, message) => processPersonalMessage(client, message, {
@@ -1828,8 +1829,8 @@ test('«Dámelo en archivo pdf» adjunta la última cotización guardada sin apr
     sendDocument: async (to, bytes, filename, caption) => {
       assert.equal(to, '56912345678');
       assert.equal(Buffer.from(bytes).subarray(0, 5).toString(), '%PDF-');
-      assert.match(filename, /Radier_Maipu\.pdf$/);
-      assert.match(caption, /Cotización preliminar · Radier Maipú/);
+      assert.ok(filename.endsWith(expectedQuote === latest ? 'Radier_Maipu.pdf' : 'Terraza_anterior.pdf'));
+      assert.ok(caption.includes('Cotización preliminar · ' + expectedQuote.titulo_proyecto));
       sent.push('PDF');
     },
   });
@@ -1843,6 +1844,18 @@ test('«Dámelo en archivo pdf» adjunta la última cotización guardada sin apr
   assert.deepEqual(calls[0].p_changed, {});
   assert.deepEqual(calls[0].p_deleted, {});
   assert.equal(sb.db.presupuestos[0].estado, 'borrador');
+
+  expectedQuote = older;
+  const { buildWhatsAppInteractivePayload } = require('../lib/whatsapp/interactive.ts');
+  const card = buildWhatsAppInteractivePayload(sb.db.whatsapp_mensajes.find(row => row.message_id === older.id));
+  const button = card.buttons.find(b => b.title === 'Generar PDF');
+  const tap = { id: 'tap-pdf-terraza', from: message.from, type: 'interactive', context: { id: 'wamid.outbound' },
+    interactive: { type: 'button_reply', button_reply: button } };
+  assert.equal((await handler(request(event([tap])))).status, 200);
+  assert.equal((await handler(request(event([tap])))).status, 200);
+  assert.deepEqual(sent.slice(2), ['Aquí tienes el PDF de la cotización.', 'PDF']);
+  assert.equal(calls[1].p_acciones.presupuesto_pdf_id, 'wa:' + older.id);
+  assert.deepEqual(calls[1].p_changed, {});
 });
 
 test('WhatsApp conecta RAG con referencias de empresa y responde "Buscalos" consultando tiendas de la cotización', async () => {
