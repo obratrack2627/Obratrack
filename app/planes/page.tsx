@@ -785,7 +785,7 @@ export default function PlanesPage() {
           <p className="flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-obra-green shrink-0" />
             <span>
-              Facturación segura en pesos chilenos (CLP, IVA incluido) vía Flow.cl con Webpay Plus, tarjetas, CuentaRUT y transferencia.
+              Facturación B2B segura en pesos chilenos (CLP, valores netos + IVA) vía Flow.cl con Webpay Plus, tarjetas, CuentaRUT y transferencia.
             </span>
           </p>
         </div>

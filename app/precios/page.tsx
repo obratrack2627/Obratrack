@@ -38,7 +38,7 @@ export default function PreciosPublicosPage() {
             Planes transparentes para constructoras y contratistas en Chile
           </h1>
           <p className="text-sm text-gray-600 dark:text-gray-300">
-            Valores expresados en pesos chilenos (CLP, IVA incluido). Paga con Webpay, tarjetas de crédito, débito nacional, CuentaRUT o transferencia bancaria a través de Flow.
+            Valores netos expresados en pesos chilenos (CLP + IVA). Paga con Webpay, tarjetas de crédito, débito nacional, CuentaRUT o transferencia bancaria a través de Flow.
           </p>
 
           <div className="inline-flex items-center rounded-xl border border-kraft-200 dark:border-[#263040] bg-kraft-100 dark:bg-[#141A23] p-1 text-xs font-semibold">
