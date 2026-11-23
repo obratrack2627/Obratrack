@@ -1,3 +1,5 @@
+import { clientInputLines } from '@/lib/whatsapp/client-input';
+import { canonicalPhone } from '@/lib/phone';
 import { AIError } from '@/lib/ai/errors';
 import { completeRows } from '@/lib/supabase/pagination';
 import type { Actor, Channel, QuoteReply } from './quotes';
@@ -152,9 +154,13 @@ export function isDestinationCommand(text: string) {
   return conversationalMode(text) !== null;
 }
 
+const emailAddress = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const isBarePhone = (value: string) => /^\+?[\d ()-]+$/.test(value) && !!canonicalPhone(value);
+
 export function isDestinationContinuation(text: string) {
   const clean = commandText(text);
-  return field.test(clean) || projectReference.test(clean) || !!parseLinkChoice(clean) || yes.test(clean) || cancel.test(clean) ||
+  const firstField = clientInputLines(text)[0] || '';
+  return field.test(fold(firstField)) || isBarePhone(firstField) || emailAddress.test(firstField) || projectReference.test(clean) || !!parseLinkChoice(clean) || yes.test(clean) || cancel.test(clean) ||
     /^(?:crear (?:una |la )?obra|vincular a (?:una |la )?obra|asignar equipo)$/.test(clean) || assignment.test(clean);
 }
 
@@ -171,9 +177,13 @@ const splitTeam = (s: string) => s.replace(/\s+/g, ' ').split(/[,;]| y /i).map(i
 
 function fieldsFrom(lines: string[]): CreateFields {
   const result: CreateFields = {};
-  for (const line of lines) {
+  for (const line of clientInputLines(lines.join('\n'))) {
     const colon = line.indexOf(':');
-    if (colon < 0) continue;
+    if (colon < 0) {
+      if (emailAddress.test(line)) result.correo = line;
+      if (isBarePhone(line)) result.telefono = line;
+      continue;
+    }
     const label = fold(line.slice(0, colon)).split(/\s+/)[0];
     const value = line.slice(colon + 1).trim();
     if (!value) continue;
@@ -204,7 +214,13 @@ function previewText(vista: LinkPreview) {
 }
 
 const chooseDestination = '¿Quieres crear una obra con esta cotización o vincularla a una obra existente? Responde «Crear obra» o «Vincular a obra».';
-const createHelp = 'Indica la dirección y el cliente, uno por línea. Puedes enviar también un nombre distinto y el equipo.\n\nDirección: Av. Ejemplo 123, Maipú\nCliente: Nombre Apellido\nEquipo: Nombre Apellido';
+function createHelp(datos: CreateFields) {
+  const missing = [!datos.direccion && 'la dirección', !datos.cliente && 'el cliente'].filter(Boolean).join(' y ');
+  return `Para crear la obra, indica ${missing}.\n` + [
+    !datos.direccion && 'Dirección: calle, número y comuna.',
+    !datos.cliente && 'Cliente: nombre o razón social. Si ya está registrado, usaré su ficha. Si es nuevo, agrega su teléfono y correo para registrarlo.',
+  ].filter(Boolean).join('\n');
+}
 
 export async function handleDestinationTurn(db: any, actor: Actor, channel: Channel, message: string, quotedId?: string | null): Promise<QuoteReply | null> {
   const start = conversationalMode(message);
@@ -217,6 +233,7 @@ export async function handleDestinationTurn(db: any, actor: Actor, channel: Chan
   const first = firstLine.replace(/\s+/g, ' ');
   const clean = commandText(first);
   let state = await loadSession(db, actor, channel);
+  if (!start && state?.paso !== 'crear' && (emailAddress.test(first) || isBarePhone(first))) return null;
   const previous = state;
   if (start) {
     const explicitId = first.match(new RegExp(`cotizaci[oó]n\\s+(${quoteUuid})\\b`, 'i'))?.[1].toLowerCase();
@@ -248,11 +265,13 @@ export async function handleDestinationTurn(db: any, actor: Actor, channel: Chan
     const params = fieldsFrom(start ? lines : [first, ...lines]);
     if (!start && state === previous && !Object.keys(params).length) return null;
     const datos = { ...state.datos, ...params };
-    // Keep phone and email in the incoming turn; avoid duplicating contacts in conversation storage.
-    const { telefono, correo, ...draft } = datos;
+    if (params.cliente && state.datos.cliente && fold(params.cliente) !== fold(state.datos.cliente)) {
+      datos.telefono = params.telefono;
+      datos.correo = params.correo;
+    }
     if (!datos.direccion || !datos.cliente) {
-      await saveSession(db, actor, channel, { ...state, datos: draft });
-      return { respuesta: createHelp };
+      await saveSession(db, actor, channel, { ...state, datos });
+      return { respuesta: createHelp(datos) };
     }
     try {
       const output = await quoteDestination(db, actor, channel, state.id, 'crear', datos) as QuoteDestination;
@@ -261,8 +280,15 @@ export async function handleDestinationTurn(db: any, actor: Actor, channel: Chan
       return { respuesta: destinationReply(output, !!datos.equipo?.length), obra: output.proyecto_id };
     } catch (error) {
       if (!(error instanceof AIError) || !['OBRABOT_CLIENT_REQUIRED', 'OBRABOT_CLIENT_AMBIGUOUS', 'OBRABOT_CLIENT_CONTACT_EXISTS'].includes(error.code)) throw error;
-      await saveSession(db, actor, channel, { ...state, datos: draft });
-      return { respuesta: error.code === 'OBRABOT_CLIENT_REQUIRED' ? `${error.message}\nEnvía ambos juntos:\nTeléfono: +56 9 1234 5678\nCorreo: nombre@empresa.cl` : error.message };
+      await saveSession(db, actor, channel, { ...state, datos });
+      if (error.code !== 'OBRABOT_CLIENT_REQUIRED') return { respuesta: error.message };
+      const missing = [
+        !canonicalPhone(datos.telefono || '') && 'Teléfono: número de contacto',
+        !emailAddress.test(datos.correo || '') && 'Correo: correo electrónico del cliente',
+      ].filter(Boolean);
+      return { respuesta: missing.length
+        ? `Para registrar a ${datos.cliente} como cliente nuevo, falta:\n${missing.join('\n')}`
+        : error.message };
     }
   }
   if (state.paso === 'vincular' || state.paso === 'confirmar') {

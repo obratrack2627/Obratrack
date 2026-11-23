@@ -1,6 +1,7 @@
+import { clientInputLines, clientKindReply } from './client-input';
 import { canonicalPhone } from '@/lib/phone';
 import { validarRutChileno } from '@/lib/utils';
-import { isConversationalName } from '@/lib/ai/person-name';
+import { explicitPersonName, isConversationalName } from '@/lib/ai/person-name';
 import { chileanRequestContext } from '@/lib/ai/chilean-context';
 
 const norm = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -35,6 +36,7 @@ function money(value: string): number | undefined {
 /** Datos literales de una creación pendiente; no asigna un número a dos campos. */
 export function projectLiterals(message: string, previous: Record<string, any> = {}) {
   const fields: Record<string, any> = {};
+  if (clientKindReply.test(message.trim())) return fields;
   const description = message.trim().match(/^(?:una?\s+)?((?:ampliaci[oó]n|remodelaci[oó]n|construcci[oó]n|reparaci[oó]n|cobertizo|terraza|quincho)\b[^\n;.!?]*)/i)?.[1];
   if (!previous.nombre && description) {
     fields.nombre = description.split(/\s+(?:en\s+(?:(?:una?|la|mi)\s+)?casa\b|ubicad[oa]\s+en\b)/i)[0].trim().slice(0, 150);
@@ -42,7 +44,7 @@ export function projectLiterals(message: string, previous: Record<string, any> =
   }
   const location = message.match(/\b(?:ubicad[oa]\s+en|comuna(?:\s+de)?\s*[:=]?)\s+([^,;.!?\n]+)/i)?.[1];
   if (location) fields.comuna = location.trim();
-  const lines = message.split(/[\n;]+|,\s*(?=(?:rut|cliente|nombre|obra|proyecto|presupuesto|monto|tel[eé]fono|celular|whatsapp|fono|correo|email)\b)/i).map(line => line.trim()).filter(Boolean);
+  const lines = clientInputLines(message).join('\n').split(/[\n;]+|,\s*(?=(?:rut|cliente|nombre|obra|proyecto|presupuesto|monto|tel[eé]fono|celular|whatsapp|fono|correo|email)\b)/i).map(line => line.trim()).filter(Boolean);
   const bare: string[] = [];
   for (const line of lines) {
     const labeled = line.match(/^(?:el\s+)?(rut(?: del cliente)?|nombre del cliente|cliente|nombre de la obra|nombre de obra|obra(?: llamada)?|proyecto|presupuesto(?: de la obra)?|monto|tel[eé]fono(?: del cliente)?|celular|whatsapp|fono|correo(?: del cliente)?|email)(?:\s*(?::|=|\bes\b)\s*|\s+)(.+)$/i);
@@ -55,6 +57,10 @@ export function projectLiterals(message: string, previous: Record<string, any> =
       else if (value.length <= 150 && !isConversationalName(value)) fields[/^(cliente|nombre del cliente)/.test(label) ? 'cliente_nombre' : 'nombre'] = /^(cliente|nombre del cliente)/.test(label) ? clientReference(value) : value;
     } else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(line)) fields.cliente_email = line;
     else bare.push(line);
+  }
+  if (previous.nombre && !previous.cliente_nombre && !fields.cliente_nombre && /^(?:se llama|su nombre es)\s/i.test(message.trim())) {
+    const name = explicitPersonName(clientInputLines(message)[0] || '');
+    if (name) fields.cliente_nombre = name;
   }
   const numbers: string[] = [];
   const names: string[] = [];

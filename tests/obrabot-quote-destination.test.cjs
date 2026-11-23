@@ -77,7 +77,10 @@ test('WhatsApp retoma la aprobación, pide el cliente nuevo y permite asignar el
   await rememberQuoteDestination(db, actor, 'whatsapp', quote);
   assert.match((await send('1', 'Crear obra')).respuesta, /dirección y el cliente/);
   assert.match((await send('2', 'Dirección: Av. Las Palmas 123\nCliente: Consuelo Díaz')).respuesta, /cliente nuevo/);
-  const created = await send('3', 'Teléfono: 912345678\nCorreo: persona@example.test');
+  const pending = await send('2a', 'Su número es 912345678');
+  assert.match(pending.respuesta, /Correo:/);
+  assert.doesNotMatch(pending.respuesta, /Teléfono:/);
+  const created = await send('3', 'persona@example.test');
   assert.match(created.respuesta, /119\.000.*IVA/);
   assert.match(created.respuesta, /¿Quieres asignar trabajadores/);
   assert.equal(created.acciones.proyecto_contexto_id, proyecto);

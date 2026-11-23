@@ -1,3 +1,4 @@
+import { clientKindReply } from './client-input';
 import { projectLiterals, clientReference } from './project-literals';
 import { isConversationalName } from '@/lib/ai/person-name';
 import { phonesInText } from '@/lib/phone';
@@ -35,7 +36,9 @@ export function projectIntake(
   if (text(draft.cliente_nombre)) draft.cliente_nombre = clientReference(draft.cliente_nombre);
   if (proposal?.cliente_nombre) {
     proposal.cliente_nombre = clientReference(proposal.cliente_nombre);
-    if (norm(proposal.cliente_nombre) !== norm(previous?.cliente_nombre || '')) delete draft.cliente_id;
+    if (previous?.cliente_nombre && norm(proposal.cliente_nombre) !== norm(previous.cliente_nombre)) {
+      for (const field of ['cliente_id', 'cliente_rut', 'cliente_telefono', 'cliente_email']) delete draft[field];
+    }
   }
   const stringFields = [
     "nombre",
@@ -96,7 +99,7 @@ export function projectIntake(
         : Number(budget[1].replace(",", ".")) * multiplier;
     if (Number.isSafeInteger(value) && value > 0) draft.monto_cotizado = value;
   }
-  if (!text(draft.cliente_nombre)) {
+  if (!text(draft.cliente_nombre) && !clientKindReply.test(userText.trim())) {
     const name = Array.from(
       userText.matchAll(
         /\b(?:nombre del cliente|cliente(?:\s+es)?)\s*[:=]?\s*([^,;\n]+)/gi,
@@ -117,7 +120,7 @@ export function projectIntake(
     try {
       client = resolveEntity(availableClients, draft.cliente_nombre || draft.cliente_id);
     } catch (error) {
-      if (/más de una coincidencia/.test((error as Error).message) || /\b(?:ya est[aá]|ya existe|lista de clientes)\b/i.test(userText))
+      if (/más de una coincidencia/.test((error as Error).message) || /\b(?:ya est[aá]|ya existe|cliente existente|lista de clientes)\b/i.test(userText))
         lookupError = `No pude identificar de forma única al cliente ${draft.cliente_nombre || ''}. Indica su nombre completo tal como aparece en Clientes.`;
     }
   }
@@ -206,11 +209,14 @@ export function projectIntake(
   if (newClient && !draft.cliente_telefono)
     missing.push("Teléfono del cliente");
   if (missing.length) {
-    const question =
-      (client ? `Usaré al cliente ${client.nombre}, que ya está registrado.\n` : '') +
+    const onlyRut = newClient && missing.length === 1 && missing[0] === 'RUT válido del nuevo cliente';
+    const question = onlyRut
+      ? `Ya tengo el teléfono y el correo de ${draft.cliente_nombre}. Para registrar su ficha y crear la obra, solo falta su RUT. ${draft.cliente_rut ? 'Revisa el número y envíame un RUT válido con el dígito verificador.' : 'Envíamelo con el dígito verificador.'}`
+      :
+      (client ? `Usaré al cliente ${client.nombre}, que ya está registrado.\n` : newClient ? `Para registrar a ${draft.cliente_nombre} como cliente nuevo y asociarlo a la obra, completaremos su ficha.\n` : '') +
       "Para crear la obra falta:\n" +
       missing.map((s) => "• " + s).join("\n") +
-      (!draft.cliente_nombre ? "\nSi el cliente ya existe, indica su nombre y usaré su ficha." : '') +
+      (!draft.cliente_nombre ? "\nSi ya está en Clientes, basta con su nombre o razón social. Si es nuevo, envíame su nombre, RUT, teléfono y correo. Yo registraré su ficha y la asociaré a la obra." : '') +
       "\nPuedes responder estos datos juntos o uno por uno.";
     const result: AccionAsistenteIA = {
       tipo: "solicitar_datos_obra",
