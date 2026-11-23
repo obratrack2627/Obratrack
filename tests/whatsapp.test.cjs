@@ -1792,6 +1792,59 @@ test('al aceptar una cotización por WhatsApp el webhook genera y envía el PDF 
   assert.equal(sent[1].type, 'pdf');
 });
 
+test('«Dámelo en archivo pdf» adjunta la última cotización guardada sin aprobarla ni repetir el envío', async () => {
+  setup();
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const sb = database();
+  const quote = (id, titulo_proyecto) => normalizeQuote({
+    id, titulo_proyecto,
+    materiales: [{ nombre: 'Cemento', cantidad: 8, unidad: 'un', precio_unitario_estimado: 5000 }],
+    mano_de_obra: [],
+  });
+  const latest = quote('quote-radier', 'Radier Maipú');
+  const older = quote('quote-anterior', 'Terraza anterior');
+  sb.db.whatsapp_mensajes = [latest, older].map(cotizacion => ({
+    message_id: cotizacion.id, cotizacion, empresa_id: user.empresa_id, actor_id: user.id, acciones: { rol_actor: 'admin' },
+  }));
+  sb.db.presupuestos = [latest, older].map(cotizacion => ({
+    id: 'wa:' + cotizacion.id, empresa_id: user.empresa_id, cotizacion, estado: 'borrador',
+  }));
+  const from = sb.from.bind(sb);
+  sb.from = table => {
+    const query = from(table);
+    query.update = () => query;
+    return query;
+  };
+  const calls = [];
+  const rpc = sb.rpc.bind(sb);
+  sb.rpc = (name, args) => { if (name === 'aplicar_lote_copiloto') calls.push(args); return rpc(name, args); };
+  const sent = [];
+  const handler = createWhatsAppWebhook({
+    client: () => sb,
+    process: (client, message) => processPersonalMessage(client, message, {
+      chat: async () => { assert.fail('La solicitud de PDF no necesita el modelo de chat.'); },
+    }),
+    send: async (_to, text) => { sent.push(text); },
+    sendDocument: async (to, bytes, filename, caption) => {
+      assert.equal(to, '56912345678');
+      assert.equal(Buffer.from(bytes).subarray(0, 5).toString(), '%PDF-');
+      assert.match(filename, /Radier_Maipu\.pdf$/);
+      assert.match(caption, /Cotización preliminar · Radier Maipú/);
+      sent.push('PDF');
+    },
+  });
+  const message = { id: 'pedido-pdf-radier', from: '56912345678', type: 'text', text: { body: 'Dámelo en archivo pdf' } };
+  assert.equal((await handler(request(event([message])))).status, 200);
+  assert.equal((await handler(request(event([message])))).status, 200);
+  assert.deepEqual(sent, ['Aquí tienes el PDF de la cotización.', 'PDF']);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].p_cotizacion, null);
+  assert.equal(calls[0].p_acciones.presupuesto_pdf_id, 'wa:' + latest.id);
+  assert.deepEqual(calls[0].p_changed, {});
+  assert.deepEqual(calls[0].p_deleted, {});
+  assert.equal(sb.db.presupuestos[0].estado, 'borrador');
+});
+
 test('WhatsApp conecta RAG con referencias de empresa y responde "Buscalos" consultando tiendas de la cotización', async () => {
   setup();
   process.env.OBRABOT_RAG_ENABLED = 'true';

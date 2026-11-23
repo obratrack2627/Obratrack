@@ -179,7 +179,10 @@ export function createWhatsAppWebhook(
                     stage,
                     code: aiErrorResponse(docError).code,
                   });
-                  await sendOnce('quote_notice',()=>deps.send(message.from,'La cotización quedó aprobada en ObraTrack, pero no pude enviar el PDF aquí. Descárgalo desde ObraTrack → Presupuestos.')).catch(()=>{});
+                  const notice = result.acciones?.presupuesto_pdf_id
+                    ? 'No pude adjuntar el PDF aquí. Puedes volver a pedirme la cotización en PDF o descargarla en ObraTrack → Presupuestos.'
+                    : 'La cotización quedó aprobada en ObraTrack, pero no pude enviar el PDF aquí. Descárgalo desde ObraTrack → Presupuestos.';
+                  await sendOnce('quote_notice', () => deps.send(message.from, notice)).catch(() => {});
                 }
               }
               if (result.persistido && deliveryComplete) {

@@ -1,11 +1,56 @@
 import { AIError } from '@/lib/ai/errors';
 import { canonicalPhone } from '@/lib/phone';
-import { getApprovedQuote, handleQuoteTurn, isQuoteWorkflow, type Actor, type QuoteReply } from './quotes';
+import { findBudget } from '@/lib/presupuestos';
+import { getApprovedQuote, getQuoteReview, handleQuoteTurn, isQuoteWorkflow, type Actor, type QuoteReply } from './quotes';
 import { excelMime, quoteFile } from './quote-files';
 import type { QuoteSource } from './quote-input';
 import type { downloadMetaMedia } from '@/lib/whatsapp/meta';
 import { isDestinationCommand, isDestinationContinuation, validQuoteId } from './quote-destination';
 import { parseWhatsAppInteractiveReply } from '@/lib/whatsapp/interactive';
+
+const pdfRequestWords = new Set(
+  'pdf por favor el la un una de del en como formato archivo documento copia cotizacion presupuesto esta este esa ese lo eso me mi quiero quisiera necesito que podrias puedes puede das envias mandas enviar mandarme mandar enviarme mandame enviame enviamelo mandamelo damelo dame dalo pasame pasamelo pasa pasalo pasar pasarme entregar entregarme entregame entregamelo entrega adjuntar adjuntarme adjunta adjuntame adjuntalo adjuntamelo descarga descargar descargalo generar generarme genera generame generalo generamelo hazlo hazmelo haz hacer preparar preparame preparalo compartir comparteme compartelo porfa exporta exportar exportalo'.split(' '),
+);
+
+function isQuotePdfRequest(text: string) {
+  const words = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[¿?¡!.,]/g, ' ').trim().split(/\s+/);
+  if (!words.includes('pdf') || !words.every(word => pdfRequestWords.has(word))) return false;
+  return !words.some((word, index) => ['un', 'una'].includes(word) && ['cotizacion', 'presupuesto'].includes(words[index + 1]));
+}
+
+type WhatsAppQuoteReply = QuoteReply & { presupuestoPdfId?: string };
+
+function quoteReference(row: any) {
+  const actions = row?.acciones;
+  const review = actions?.archivo_cotizacion?.id || actions?.solicitud_cotizacion;
+  if (typeof review === 'string' && validQuoteId(review)) return { review };
+  const budget = actions?.presupuesto_pdf_id || actions?.presupuesto_seleccion_id || actions?.presupuesto_cotizacion_id || row?.cotizacion?.id;
+  return typeof budget === 'string' && budget ? { budget } : null;
+}
+
+async function requestedQuotePdf(db: any, actor: Actor, rows: any[], sourceId?: string): Promise<WhatsAppQuoteReply> {
+  if (actor.rol !== 'admin') return { respuesta: 'El PDF de la cotización está disponible para el administrador.' };
+  const ref = sourceId ? quoteReference(rows.find(row => row.message_id === sourceId)) : rows.map(quoteReference).find(Boolean);
+  if (!ref) {
+    return { respuesta: sourceId
+      ? 'No pude identificar esa cotización. Para recibir la última de este chat, escribe «Envíame la cotización en PDF» en un mensaje nuevo.'
+      : 'No encontré una cotización en esta conversación. Pídeme una nueva o indícame el código de la que quieres descargar.' };
+  }
+  if (ref.review) {
+    const quote = await getQuoteReview(db, actor, ref.review);
+    if (!quote.presupuesto_id || quote.estado !== 'aprobada') {
+      return { respuesta: 'Esta cotización necesita aprobación antes de enviarse en PDF.', solicitud: ref.review };
+    }
+    return { respuesta: 'Aquí tienes el PDF de la cotización aprobada.', archivo: { id: ref.review, formato: 'pdf' } };
+  }
+  if (!ref.budget) return { respuesta: 'No encontré la cotización en Presupuestos.' };
+  const budget = await findBudget(db, actor.empresa_id, ref.budget);
+  if (!budget?.cotizacion || ['rechazada', 'anulada', 'no_elegida'].includes(budget.estado)) {
+    return { respuesta: 'La cotización ya no está disponible para descargar. Revísala en ObraTrack → Presupuestos.' };
+  }
+  return { respuesta: 'Aquí tienes el PDF de la cotización.', presupuestoPdfId: budget.id };
+}
 
 export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, items: any[], media: typeof downloadMetaMedia, transcription?: string, conversationRows: any[] = []) {
   const text = transcription ?? items.map(item => {
@@ -14,10 +59,11 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     return item[item.type]?.caption;
   }).filter(Boolean).join('\n');
   const quoteInput = isQuoteWorkflow(text);
-  if (!quoteInput && !isDestinationCommand(text) && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
-  let reply: QuoteReply | null;
+  const files = items.filter(item => ['image', 'document', 'audio'].includes(item.type));
+  const contextualPdf = (transcription !== undefined || files.length === 0) && isQuotePdfRequest(text);
+  if (!contextualPdf && !quoteInput && !isDestinationCommand(text) && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
+  let reply: WhatsAppQuoteReply | null;
   try {
-    const files = items.filter(item => ['image', 'document', 'audio'].includes(item.type));
     let source: QuoteSource | undefined;
     if (quoteInput && !transcription && files.length) {
       if (!['admin', 'supervisor'].includes(actor.rol)) throw new AIError('OBRABOT_ADMIN', 'La preparación de cotizaciones corresponde al supervisor o administrador.', 403);
@@ -31,7 +77,9 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     const receipt = sourceId && conversationRows.find(row => row.message_id === sourceId && row.acciones?.tipo === 'obrabot_cotizacion');
     const candidate = receipt?.acciones?.archivo_cotizacion?.id;
     const quotedId = sourceId ? (typeof candidate === 'string' && validQuoteId(candidate) ? candidate : null) : undefined;
-    reply = await handleQuoteTurn(db, actor, 'whatsapp', text, inbound.id, source, { quotedId });
+    reply = contextualPdf
+      ? await requestedQuotePdf(db, actor, conversationRows, sourceId)
+      : await handleQuoteTurn(db, actor, 'whatsapp', text, inbound.id, source, { quotedId });
   } catch (error) {
     if (!(error instanceof AIError) || error.status >= 500) throw error;
     reply = { respuesta: error.message };
@@ -40,7 +88,11 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
   const { data, error } = await db.rpc('aplicar_lote_copiloto', {
     p_id: inbound.id, p_empresa: actor.empresa_id, p_actor: actor.id, p_phone: canonicalPhone(inbound.from),
     p_texto: 'Solicitud de cotización a ObraBot', p_respuesta: reply.respuesta,
-    p_cotizacion: null, p_acciones: { tipo: 'obrabot_cotizacion', rol_actor: actor.rol, archivo_cotizacion: reply.archivo, proyecto_contexto_id: reply.obra },
+    p_cotizacion: null,
+    p_acciones: {
+      tipo: 'obrabot_cotizacion', rol_actor: actor.rol, archivo_cotizacion: reply.archivo,
+      solicitud_cotizacion: reply.solicitud, presupuesto_pdf_id: reply.presupuestoPdfId, proyecto_contexto_id: reply.obra,
+    },
     p_changed: {}, p_deleted: {}, p_adjunto: null, p_borrador: null, p_aviso: null,
   });
   if (error || !data?.message_id) throw new AIError('OBRABOT_QUOTE_DB', 'No pude confirmar la respuesta de la cotización.', 503);
