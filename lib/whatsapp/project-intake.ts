@@ -211,7 +211,7 @@ export function projectIntake(
   if (missing.length) {
     const onlyRut = newClient && missing.length === 1 && missing[0] === 'RUT válido del nuevo cliente';
     const question = onlyRut
-      ? `Ya tengo el teléfono y el correo de ${draft.cliente_nombre}. Para registrar su ficha y crear la obra, solo falta su RUT. Envíamelo con el dígito verificador.`
+      ? `Ya tengo el teléfono y el correo de ${draft.cliente_nombre}. Para registrar su ficha y crear la obra, solo falta su RUT. ${draft.cliente_rut ? 'Revisa el número y envíame un RUT válido con el dígito verificador.' : 'Envíamelo con el dígito verificador.'}`
       :
       (client ? `Usaré al cliente ${client.nombre}, que ya está registrado.\n` : newClient ? `Para registrar a ${draft.cliente_nombre} como cliente nuevo y asociarlo a la obra, completaremos su ficha.\n` : '') +
       "Para crear la obra falta:\n" +
