@@ -1,5 +1,7 @@
 import type { CotizacionEstimacion, EmpresaConfiguracion } from '@/types/database';
 
+import { formatCLP } from '@/lib/utils';
+
 export interface QuoteDocumentEmisorInput {
   nombre?: string;
   empresa_nombre?: string;
@@ -39,19 +41,33 @@ const dateLabel = (value: string) => {
   });
 };
 
+export function quoteLinePreview(row: QuoteLine) {
+  const quantity = row.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 });
+  const plain = (text: string) => text.replace(/[\r\n*]+/g, ' ').trim();
+  return `• ${plain(row.nombre)} · ${quantity} ${plain(row.unidad)} × ${formatCLP(row.precioUnit)} = ${formatCLP(row.total)}`;
+}
+
+export function materialLines(quote: CotizacionEstimacion): QuoteLine[] {
+  return quote.materiales.map(m => ({
+    nombre: m.nombre, descripcion: m.alternativa_economica || '', unidad: m.unidad || 'un',
+    cantidad: m.cantidad, precioUnit: m.precio_unitario_estimado ?? m.precio_mas_barato, total: m.subtotal,
+  }));
+}
+
+export function saleLines(quote: CotizacionEstimacion): QuoteLine[] {
+  return (quote.partidas_venta || []).map(p => ({
+    nombre: p.nombre, descripcion: '', unidad: p.unidad, cantidad: p.cantidad,
+    precioUnit: p.precio_unitario, total: p.subtotal,
+  }));
+}
+
 // La vista previa y el PDF consumen el mismo detalle y los mismos montos guardados.
 export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDocumentOptions = {}) {
   const f = quote.estructura_financiera;
   const cfg: EmpresaConfiguracion = options.emisor?.empresa_configuracion || {};
-  const items: QuoteLine[] = quote.modo_presupuesto === 'precio_acordado' ? (quote.partidas_venta || []).map((p) => ({ nombre: p.nombre, descripcion: '', unidad: p.unidad, cantidad: p.cantidad, precioUnit: p.precio_unitario, total: p.subtotal })) : [
-    ...quote.materiales.map((m) => ({
-      nombre: m.nombre,
-      descripcion: m.alternativa_economica || '',
-      unidad: m.unidad || 'un',
-      cantidad: m.cantidad,
-      precioUnit: m.precio_mas_barato ?? m.precio_unitario_estimado,
-      total: m.subtotal,
-    })),
+  const materials = materialLines(quote);
+  const items: QuoteLine[] = quote.modo_presupuesto === 'precio_acordado' ? saleLines(quote) : [
+    ...materials,
     ...quote.mano_de_obra.map((m) => ({
       nombre: `Mano de obra: ${m.rol}`,
       descripcion: `${m.cantidad_personas} persona(s) · ${m.dias_estimados} día(s)`,
@@ -90,6 +106,7 @@ export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDo
     },
     proyecto: { nombre: quote.titulo_proyecto, ubicacion: quote.comuna_region || 'Por definir', descripcion: [quote.nombre_alternativa ? `Alternativa: ${quote.nombre_alternativa}` : '', quote.resumen_ejecutivo || 'Según detalle de partidas.'].filter(Boolean).join('\n') },
     items,
+    materialesIncluidos: quote.modo_presupuesto === 'precio_acordado' ? materials : [],
     ivaIncluidoEnPartidas: quote.modo_presupuesto === 'precio_acordado' && quote.tratamiento_iva === 'incluido',
     subtotal: f.precio_sugerido_neto,
     iva: f.iva_19,

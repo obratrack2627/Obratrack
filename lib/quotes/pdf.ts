@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawObraTrackWordmarkPdf } from '@/lib/brand-pdf';
-import { quoteMoney, type QuoteDocument } from './document';
+import { quoteMoney, type QuoteDocument, type QuoteLine } from './document';
 
 const ORANGE = '#FF6A00';
 const INK = '#1E1E1E';
@@ -99,30 +99,39 @@ export function createQuotePdf(document: QuoteDocument) {
   detailRows(clientRows, 16, 47, true);
   detailRows(compactProjectRows, 111, 47, true);
   pdf.setFont('helvetica', 'normal').setFontSize(7.4).setTextColor(GRAY);
-  pdf.text('A continuación, presentamos nuestra cotización según los requerimientos del proyecto.', MARGIN, bottom + 6);
+  section(pdf, document.ivaIncluidoEnPartidas ? 'PARTIDAS · IVA INCLUIDO' : 'DETALLE · VALORES NETOS', MARGIN, bottom + 6);
 
-  const body = document.items.map((item, i) => [String(i + 1).padStart(2, '0'), `${item.nombre}${item.descripcion ? '\n' + item.descripcion : ''}`, item.unidad, item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 }), quoteMoney(item.precioUnit), quoteMoney(item.total)]);
-  if (infoBottom > 112) body.unshift(['', 'Alcance del proyecto\n' + document.proyecto.descripcion, '', '', '', '']);
-  autoTable(pdf, {
-    startY: bottom + 10,
-    margin: { left: MARGIN, right: MARGIN, top: 27, bottom: 23 },
-    tableWidth: WIDTH,
-    head: [['ÍTEM', 'DESCRIPCIÓN', 'UNIDAD', 'CANT.', 'PRECIO UNIT.', document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL']],
-    body,
-    theme: 'grid',
-    styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2.2, lineColor: '#E8E8E8', lineWidth: 0.15, textColor: INK, overflow: 'linebreak', valign: 'middle' },
-    headStyles: { fillColor: INK, textColor: '#FFFFFF', fontStyle: 'bold', fontSize: 7 },
-    alternateRowStyles: { fillColor: '#FAFAFA' },
-    columnStyles: { 0: { cellWidth: 12, halign: 'center', textColor: ORANGE }, 1: { cellWidth: 79 }, 2: { cellWidth: 14, halign: 'center' }, 3: { cellWidth: 15, halign: 'right' }, 4: { cellWidth: 32, halign: 'right' }, 5: { cellWidth: 34, halign: 'right' } },
-    rowPageBreak: 'avoid',
-    willDrawPage: (data) => {
-      if (data.pageNumber > 1) {
-        drawBrand(pdf, document, MARGIN, 8, true);
-        pdf.setFont('helvetica', 'bold').setFontSize(8).setTextColor(INK).text(`COTIZACIÓN N.° ${document.folio}`, 198, 15, { align: 'right' });
-      }
-    },
-  });
-  let y = (pdf as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  function drawItems(items: QuoteLine[], startY: number, reference = false) {
+    const firstPage = pdf.getCurrentPageInfo().pageNumber;
+    const billedTotalLabel = document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL';
+    const body = items.map((item, i) => [String(i + 1).padStart(2, '0'), `${item.nombre}${item.descripcion ? '\n' + item.descripcion : ''}`, item.unidad, item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 }), quoteMoney(item.precioUnit), quoteMoney(item.total)]);
+    if (!reference && infoBottom > 112) body.unshift(['', 'Alcance del proyecto\n' + document.proyecto.descripcion, '', '', '', '']);
+    autoTable(pdf, {
+      startY,
+      margin: { left: MARGIN, right: MARGIN, top: 27, bottom: 23 },
+      tableWidth: WIDTH,
+      head: [['ÍTEM', reference ? 'MATERIALES INCLUIDOS · VALORES NETOS DE REFERENCIA' : 'DESCRIPCIÓN', 'UNIDAD', 'CANT.', 'PRECIO UNIT.', reference ? 'IMPORTE REF.' : billedTotalLabel]],
+      body,
+      theme: 'grid',
+      styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2.2, lineColor: '#E8E8E8', lineWidth: 0.15, textColor: INK, overflow: 'linebreak', valign: 'middle' },
+      headStyles: { fillColor: INK, textColor: '#FFFFFF', fontStyle: 'bold', fontSize: 7 },
+      alternateRowStyles: { fillColor: '#FAFAFA' },
+      columnStyles: { 0: { cellWidth: 12, halign: 'center', textColor: ORANGE }, 1: { cellWidth: 79 }, 2: { cellWidth: 14, halign: 'center' }, 3: { cellWidth: 15, halign: 'right' }, 4: { cellWidth: 32, halign: 'right' }, 5: { cellWidth: 34, halign: 'right' } },
+      rowPageBreak: 'avoid',
+      willDrawPage: () => {
+        if (pdf.getCurrentPageInfo().pageNumber > firstPage) {
+          drawBrand(pdf, document, MARGIN, 8, true);
+          pdf.setFont('helvetica', 'bold').setFontSize(8).setTextColor(INK).text(`COTIZACIÓN N.° ${document.folio}`, 198, 15, { align: 'right' });
+        }
+      },
+    });
+    return (pdf as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  }
+  let tableEnd = drawItems(document.items, bottom + 10);
+  if (document.materialesIncluidos.length) {
+    tableEnd = drawItems(document.materialesIncluidos, tableEnd + 5, true);
+  }
+  let y = tableEnd + 8;
   pdf.setFont('helvetica', 'normal').setFontSize(7.6);
   const observations = document.observaciones.flatMap((value) => pdf.splitTextToSize(value, 83) as string[]);
   const conditions = pdf.splitTextToSize(document.condiciones, 83) as string[];

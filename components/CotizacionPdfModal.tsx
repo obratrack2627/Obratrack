@@ -136,7 +136,7 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
         .quote-field { display: grid; grid-template-columns: 68px 1fr; gap: 5px; margin-top: 4px; font-size: 10px; }
         .quote-field dt { font-weight: 700; }
         .quote-field dd { margin: 0; overflow-wrap: anywhere; }
-        .quote-intro { color: #666; font-size: 9px; margin: 18px 0 8px; }
+        .quote-info + .quote-table, .quote-table + .quote-table { margin-top: 14px; }
         .quote-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; }
         .quote-table th { background: #1e1e1e; color: white; padding: 9px 6px; text-transform: uppercase; font-size: 8px; font-weight: 700; }
         .quote-table td { padding: 8px 6px; border: 1px solid #ededed; vertical-align: top; overflow-wrap: anywhere; }
@@ -219,12 +219,16 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
             <section><h2 className="quote-section-title"><User />CLIENTE</h2><dl>{fields([['Nombre:', document.cliente.nombre], ['Contacto:', document.cliente.contacto], ['Email:', document.cliente.email], ['Teléfono:', document.cliente.telefono]])}</dl></section>
             <section><h2 className="quote-section-title"><Briefcase />PROYECTO</h2><dl>{fields([['Proyecto:', document.proyecto.nombre], ['Ubicación:', document.proyecto.ubicacion], ['Descripción:', document.proyecto.descripcion]])}</dl></section>
           </div>
-          <p className="quote-intro">A continuación, presentamos nuestra cotización según los requerimientos del proyecto.</p>
-          <table className="quote-table" aria-label="Detalle de materiales y partidas">
+          {[
+            { title: 'Detalle de materiales y partidas', items: document.items, amountLabel: document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL' },
+            { title: 'Materiales incluidos · valores netos de referencia', items: document.materialesIncluidos, amountLabel: 'Importe ref.' },
+          ].filter(group => group.items.length).map(({ title, items, amountLabel }) => (
+            <table key={title} className="quote-table" aria-label={title}>
             <colgroup><col style={{ width: '6.5%' }} /><col style={{ width: '42.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '8%' }} /><col style={{ width: '17%' }} /><col style={{ width: '18.5%' }} /></colgroup>
-            <thead><tr>{['ÍTEM', 'DESCRIPCIÓN', 'UNIDAD', 'CANT.', 'PRECIO UNIT.', document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL'].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
-            <tbody>{document.items.map((item, index) => <tr key={index}><td>{String(index + 1).padStart(2, '0')}</td><td><strong>{item.nombre}</strong>{item.descripcion && <small>{item.descripcion}</small>}</td><td>{item.unidad}</td><td>{item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })}</td><td>{quoteMoney(item.precioUnit)}</td><td><strong>{quoteMoney(item.total)}</strong></td></tr>)}</tbody>
+            <thead><tr>{['ÍTEM', title, 'UNIDAD', 'CANT.', 'PRECIO UNIT.', amountLabel].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+            <tbody>{items.map((item, index) => <tr key={index}><td>{String(index + 1).padStart(2, '0')}</td><td><strong>{item.nombre}</strong>{item.descripcion && <small>{item.descripcion}</small>}</td><td>{item.unidad}</td><td>{item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })}</td><td>{quoteMoney(item.precioUnit)}</td><td><strong>{quoteMoney(item.total)}</strong></td></tr>)}</tbody>
           </table>
+          ))}
           <div className="quote-closing">
             <div><section className="quote-notes"><h2 className="quote-section-title"><FileText />OBSERVACIONES</h2><ul>{document.observaciones.map((note) => <li key={note}>{note}</li>)}</ul></section><section><h2 className="quote-section-title"><DollarSign />CONDICIONES DE PAGO</h2><p className="quote-payment">{document.condiciones}</p></section></div>
             <div><div className="quote-totals"><div><span>{document.ivaIncluidoEnPartidas ? 'NETO (DESGLOSE)' : 'SUBTOTAL'}</span><strong>{quoteMoney(document.subtotal)}</strong></div><div><span>{document.ivaIncluidoEnPartidas ? 'IVA INCLUIDO (19%)' : 'IVA (19%)'}</span><strong>{quoteMoney(document.iva)}</strong></div><div className="quote-total"><span>TOTAL</span><strong>{quoteMoney(document.total)}</strong></div></div><div className="quote-signature"><div>Firma y sello<strong>{document.emisor.firma || 'ObraTrack'}</strong></div></div></div>

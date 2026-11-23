@@ -1,7 +1,7 @@
 import type { CotizacionEstimacion } from "@/types/database";
 import type { ComparacionMateriales } from "@/lib/materials/types";
 import { formatCLP, formatDate } from "@/lib/utils";
-import { profitLabel } from "@/lib/ai/quote-format";
+import { quoteLinePreview, materialLines, saleLines, type QuoteLine } from '@/lib/quotes/document';
 import { actionReply } from '@/lib/ai/action-reply';
 
 export const WHATSAPP_BRAND = "🟧 *ObraTrack*";
@@ -64,71 +64,46 @@ export function dailyCloseWhatsApp(result: any): string | null {
   ].join('\n\n');
 }
 
+function previewSection(label: string, rows: QuoteLine[]) {
+  if (!rows.length) return '';
+  const visible = rows.slice(0, 8);
+  return [
+    `*${label}*`,
+    ...visible.map(quoteLinePreview),
+    rows.length > visible.length ? `Se muestran ${visible.length} de ${rows.length}. El PDF incluye el listado completo.` : '',
+  ].filter(Boolean).join('\n');
+}
+
+function quoteSummary(q: CotizacionEstimacion) {
+  const f = q.estructura_financiera;
+  const agreed = q.modo_presupuesto === 'precio_acordado';
+  const otherCosts = f.gastos_generales_monto + f.imprevistos_monto + f.margen_utilidad_monto;
+  const tax = q.tratamiento_iva === 'incluido' ? 'IVA incluido' : 'valores netos';
+  const location = [q.comuna_region, q.metros_cuadrados ? `${q.metros_cuadrados.toLocaleString('es-CL')} m²` : '',
+    q.duracion_dias_estimada ? count(q.duracion_dias_estimada, 'día', 'días') : ''].filter(Boolean).join(' · ');
+  return [
+    location,
+    agreed ? previewSection(`Partidas acordadas · ${tax}`, saleLines(q)) : '',
+    previewSection(agreed ? 'Materiales incluidos · referencia neta' : 'Materiales · valores netos', materialLines(q)),
+    !agreed && f.costo_mano_obra_total ? `Mano de obra · ${formatCLP(f.costo_mano_obra_total)}` : '',
+    !agreed && otherCosts ? `Gastos, imprevistos y utilidad · ${formatCLP(otherCosts)}` : '',
+    `Neto ${formatCLP(f.precio_sugerido_neto)} · IVA (19%) ${formatCLP(f.iva_19)}\n*TOTAL: ${formatCLP(f.precio_total_con_iva)}* (IVA incluido)`,
+  ].filter(Boolean).join('\n\n');
+}
+
 export function quoteWhatsApp(q: CotizacionEstimacion, canCreate = true) {
   if (q.alternativas?.length) {
     const options = [q, ...q.alternativas];
-    const baseTotal = options[0].estructura_financiera.precio_total_con_iva;
     return whatsappCard(`Alternativas · ${q.titulo_proyecto}`, [
       '*ALTERNATIVAS*',
-      ...options.map((a, i) => {
-        const f = a.estructura_financiera;
-        const delta = f.precio_total_con_iva - baseTotal;
-        const deltaText = i === 0 || delta === 0 ? '' : ` _(${delta > 0 ? '+' : '−'}${formatCLP(Math.abs(delta))} vs opción 1)_`;
-        return [
-          `*${i + 1}* · *${line(a.nombre_alternativa || `Opción ${i + 1}`)}*`,
-          a.resumen_ejecutivo,
-          ...(a.partidas_venta || []).map((p) => `• ${line(p.nombre)}: ${formatCLP(p.subtotal)}`),
-          ...a.materiales.map((m) =>
-            `• ${line(m.nombre)}: ${m.cantidad.toLocaleString("es-CL")} ${m.unidad}` +
-            (a.modo_presupuesto === 'precio_acordado' ? '' : ` · ${formatCLP(m.subtotal)}`)
-          ),
-          ...(a.mano_de_obra || []).map((m) => `• Mano de obra (${line(m.rol)}): ${count(m.cantidad_personas, "persona", "personas")} × ${count(m.dias_estimados, "día", "días")} · ${formatCLP(m.subtotal)}`),
-          a.modo_presupuesto === 'precio_acordado' && a.tratamiento_iva === 'incluido'
-            ? `*TOTAL: ${formatCLP(f.precio_total_con_iva)}* (IVA incluido)${deltaText}`
-            : `Neto: ${formatCLP(f.precio_sugerido_neto)} · IVA (19%): ${formatCLP(f.iva_19)}\n*TOTAL: ${formatCLP(f.precio_total_con_iva)}*${deltaText}`,
-        ].filter(Boolean).join('\n');
-      }),
-      'Estas propuestas son alternativas completas para la misma obra. Sus totales no se suman.',
-      canCreate
-        ? 'Responde con el *número* o *nombre* de la alternativa que quieres elegir. Al aprobarla, te enviaré el PDF oficial aquí mismo y crearé o actualizaré la obra.'
-        : 'Puedes revisar las propuestas en ObraTrack → Presupuestos.',
-      'Para editar o comparar un material, indica la alternativa y el cambio que necesitas.',
-    ].join('\n\n'));
+      ...options.map((option, index) =>
+        `*${index + 1}* · *${line(option.nombre_alternativa || `Opción ${index + 1}`)}*\n${quoteSummary(option)}`),
+      'Los totales de las alternativas no se suman.',
+      canCreate ? 'Elige por número o nombre para aprobar la alternativa y crear o actualizar la obra.' : '',
+    ].filter(Boolean).join('\n\n'));
   }
-  const f = q.estructura_financiera;
-  const meta = [
-    q.comuna_region ? `📍 ${q.comuna_region}` : "",
-    q.metros_cuadrados ? `📐 ${q.metros_cuadrados.toLocaleString("es-CL")} m²` : "",
-    q.duracion_dias_estimada ? `⏱️ ${count(q.duracion_dias_estimada, "día", "días")}` : "",
-  ].filter(Boolean).join(" · ");
-  const indirectos = (f.gastos_generales_monto || 0) + (f.imprevistos_monto || 0);
-  const sections = [
-    meta,
-    q.resumen_ejecutivo,
-    q.modo_presupuesto === 'precio_acordado'
-      ? ['*PARTIDAS*', ...(q.partidas_venta || []).map((p) => `• ${line(p.nombre)}: ${formatCLP(p.subtotal)}`)].join('\n')
-      : [
-          "*RESUMEN*",
-          `• Materiales: ${formatCLP(f.costo_materiales_total)} · Mano de obra: ${formatCLP(f.costo_mano_obra_total)}`,
-          ...(indirectos > 0 ? [`• Gastos e imprevistos: ${formatCLP(indirectos)}`] : []),
-          `• ${profitLabel(q)}: ${formatCLP(f.margen_utilidad_monto)}`,
-        ].join("\n"),
-    `Neto: ${formatCLP(f.precio_sugerido_neto)} · IVA (19%): ${formatCLP(f.iva_19)}\n*TOTAL: ${formatCLP(f.precio_total_con_iva)}*`,
-    q.materiales.length
-      ? `*MATERIALES (${q.materiales.length})*\n` + q.materiales.map((m) =>
-          `• ${line(m.nombre)} (${m.cantidad.toLocaleString("es-CL")} ${m.unidad}): ${formatCLP(m.subtotal)}`).join("\n")
-      : "",
-    q.mano_de_obra.length
-      ? `*MANO DE OBRA*\n` + q.mano_de_obra.map((m) =>
-          `• ${line(m.rol)} (${count(m.cantidad_personas, "persona", "personas")} × ${count(m.dias_estimados, "día", "días")}): ${formatCLP(m.subtotal)}`).join("\n")
-      : "",
-    q.actividades_gantt?.length ? "*PLAZOS*\n" + q.actividades_gantt.map((a, i) => `${i + 1}. ${line(a.nombre)} — ${count(a.dias, "día", "días")}`).join("\n") : "",
-    q.observaciones ? `*Nota:* ${q.observaciones}` : "",
-    q.condiciones_pago ? `*Pago:* ${q.condiciones_pago}` : "",
-    q.hitos_pago?.length ? '*Hitos:* ' + q.hitos_pago.map((h) => `${h.nombre} ${h.porcentaje}% (${formatCLP(h.monto)})`).join(' · ') : '',
-    [...(canCreate ? [createOption] : []), modifyOption, compareOption].join("  |  "),
-  ];
-  return whatsappCard(`Cotización · ${q.titulo_proyecto}`, sections.filter(Boolean).join("\n\n"));
+  const menu = [...(canCreate ? [createOption] : []), modifyOption, compareOption].join('  |  ');
+  return whatsappCard(`Cotización · ${q.titulo_proyecto}`, `${quoteSummary(q)}\n\n${menu}`);
 }
 
 // Las opciones numéricas solo tienen significado inmediatamente después del menú mostrado.
