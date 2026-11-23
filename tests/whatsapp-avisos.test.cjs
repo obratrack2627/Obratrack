@@ -286,7 +286,7 @@ test("la creación de obra pide los cinco datos, conserva el borrador y permite 
   );
   assert.match(step.question, /Nombre del cliente/);
   assert.match(step.question, /Presupuesto/);
-  assert.doesNotMatch(step.question, /Correo|Teléfono|RUT/);
+  assert.match(step.question, /Si es nuevo, envíame su nombre, RUT, teléfono y correo/);
   assert.equal(step.actions.length, 0);
   step = projectIntake(
     actor,
@@ -455,4 +455,22 @@ test("un rechazo real de permiso de Meta queda como fallido con el permiso reque
   assert.equal(row.estado, "fallido");
   assert.match(row.error_detalle, /whatsapp_business_messaging/);
   assert.equal(row.reintentos, 0);
+});
+
+test("al convertir una cotización el cliente nuevo puede dar nombre, número y correo juntos y el RUT después", () => {
+  const quote = { nombre: "Radier", monto_cotizado: 119000, presupuesto_cotizacion_id: "cot-prueba" };
+  for (const message of [
+    "Cliente: Ana Pérez\nNúmero: 912345678\nCorreo: persona@example.test",
+    "Es un cliente nuevo, se llama Ana Pérez, su número es 912345678 y su correo es persona@example.test",
+  ]) {
+    const step = projectIntake(actor, {}, quote, [], message);
+    assert.equal(step.draft.cliente_nombre, "Ana Pérez");
+    assert.equal(step.draft.cliente_telefono, "+56912345678");
+    assert.equal(step.draft.cliente_email, "persona@example.test");
+    assert.match(step.question, /solo falta su RUT/);
+    assert.doesNotMatch(step.question, /Teléfono del cliente|Correo electrónico del cliente/);
+    const done = projectIntake(actor, {}, step.draft, [], "RUT: 12.345.678-5");
+    assert.equal(done.question, null);
+    assert.equal(done.actions[0].presupuesto_cotizacion_id, quote.presupuesto_cotizacion_id);
+  }
 });

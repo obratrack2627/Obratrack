@@ -1,3 +1,4 @@
+import { clientKindReply } from './client-input';
 import type { CotizacionEstimacion } from '@/types/database';
 import { stripTrailingPunctuation } from './text';
 export function requestsQuotedProject(text: string) {
@@ -35,7 +36,7 @@ export function cancelsProjectDraft(text: string) {
 }
 export function resumesProjectDraft(text: string) {
   const value = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-  return /^(?:continua|continuar|continuemos|sigue|retoma|retomar|creala|listo|ya te (?:di|pase|envie) (?:todos )?los datos)[.!]?$/.test(value);
+  return clientKindReply.test(value) || /^(?:continua|continuar|continuemos|sigue|retoma|retomar|creala|listo|ya te (?:di|pase|envie) (?:todos )?los datos)[.!]?$/.test(value);
 }
 export function startsProjectDraft(text: string) {
   const value = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
