@@ -229,12 +229,24 @@ test("buildWhatsAppInteractivePayload genera botones/listas válidos dentro de l
 
   // 3. Cotización nueva
   const quote = buildWhatsAppInteractivePayload({
+    message_id: "wamid.cot",
     cotizacion: { id: "q-1", titulo_proyecto: "Quincho" },
     acciones: {},
   });
   assert.equal(quote.kind, "buttons");
-  assert.equal(quote.buttons.length, 3);
+  assert.deepEqual(quote.buttons.map(b => b.title), ["Crear obra", "Generar PDF"]);
+  assert.equal(quote.buttons[1].id, "ot:quote:pdf:wamid.cot");
   for (const b of quote.buttons) assert.ok(b.title.length <= 20, `Título supera 20 chars: ${b.title}`);
+
+  const approvedId = "35e18dcb-fab1-403b-95b9-21834d98aef1";
+  const approvedCard = buildWhatsAppInteractivePayload({
+    message_id: "wamid.approved", acciones: { cotizacion_aprobada_id: approvedId, rol_actor: "admin" },
+  });
+  assert.deepEqual(approvedCard.buttons.map(b => b.title), ["Crear obra", "Generar PDF"]);
+  assert.equal(parseWhatsAppInteractiveReply({ type: "interactive", interactive: { type: "button_reply", button_reply: approvedCard.buttons[0] } }),
+    "Crea la obra con la cotización " + approvedId);
+  const supervisorCard = buildWhatsAppInteractivePayload({ message_id: "wamid.cot", cotizacion: { id: "q-1" } }, { role: "supervisor" });
+  assert.deepEqual(supervisorCard.buttons.map(b => b.title), ["Crear obra"]);
 
   // 4. Lista de obras (recorta títulos > 24 chars y descarta canceladas)
   const projects = Array.from({ length: 12 }, (_, i) => ({
@@ -257,7 +269,7 @@ test("buildWhatsAppInteractivePayload genera botones/listas válidos dentro de l
   assert.equal(metaBtn.type, "interactive");
   assert.equal(metaBtn.interactive.type, "button");
   assert.equal(metaBtn.interactive.body.text, multiline);
-  assert.equal(metaBtn.interactive.action.buttons.length, 3);
+  assert.deepEqual(metaBtn.interactive.action.buttons.map(b => b.reply.title), ["Crear obra", "Generar PDF"]);
 
   const metaList = buildMetaInteractiveRequestBody("56912345678", listPayload);
   assert.equal(metaList.type, "interactive");
@@ -615,7 +627,7 @@ test("crear una cotización para una obra ya existente sin cotización, gantt ni
   assert.equal(turn1.interactive.kind, "buttons");
   assert.deepEqual(
     turn1.interactive.buttons.map((b) => b.id),
-    ["ot:quote:apply", "ot:quote:compare", "ot:quote:alt"],
+    ["ot:quote:apply", "ot:quote:pdf:wamid.quote-existing-1"],
   );
 
   // Turno 2: Tocar [✅ Aplicar a la obra] aplica presupuesto, Gantt y materiales a la obra existente y ofrece asignar cuadrilla

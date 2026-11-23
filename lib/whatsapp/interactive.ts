@@ -54,6 +54,15 @@ function clipBody(value: string, max: number): string {
  * Traduce un toque en botón o lista interactiva de WhatsApp Cloud API
  * a una instrucción determinista que ObraBot procesa sin ambigüedad.
  */
+export function quotePdfButtonSource(item: any): string | undefined {
+  const id = item?.interactive?.button_reply?.id;
+  const prefix = "ot:quote:pdf:";
+  if (item?.type === "interactive" && item.interactive.type === "button_reply" &&
+      typeof id === "string" && id.startsWith(prefix) && id.length <= 256) {
+    return id.slice(prefix.length) || undefined;
+  }
+}
+
 export function parseWhatsAppInteractiveReply(item: any): string | null {
   if (!item || typeof item !== "object") return null;
 
@@ -68,6 +77,9 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
 
     const id = typeof reply.id === "string" ? reply.id.trim() : "";
     const title = typeof reply.title === "string" ? reply.title.trim() : "";
+
+    if (quotePdfButtonSource(item)) return "Generar PDF";
+    if (id.startsWith("ot:approved:create:")) return `Crea la obra con la cotización ${id.slice("ot:approved:create:".length)}`;
 
     switch (id) {
       case "ot:menu:create_project":
@@ -324,6 +336,18 @@ export function buildWhatsAppInteractivePayload(
     };
   }
 
+  const pdfButton = role === "admin" && result.message_id
+    ? [{ id: `ot:quote:pdf:${result.message_id}`, title: "Generar PDF" }]
+    : [];
+  if (actions.cotizacion_aprobada_id && role === "admin") {
+    return {
+      kind: "buttons",
+      body: "¿Qué quieres hacer con esta cotización aprobada?",
+      footer: "ObraBot · Cotizador",
+      buttons: [{ id: `ot:approved:create:${actions.cotizacion_aprobada_id}`, title: "Crear obra" }, ...pdfButton],
+    };
+  }
+
   // 3. Cotización recién generada (con alternativas o propuesta única).
   if (result.cotizacion && !actions?.presupuesto_proyecto_id && !actions?.presupuesto_seleccion_id) {
     const alts = Array.isArray(result.cotizacion.alternativas) ? result.cotizacion.alternativas : [];
@@ -362,8 +386,7 @@ export function buildWhatsAppInteractivePayload(
         footer: "ObraBot · Cotizador",
         buttons: [
           { id: "ot:quote:apply", title: "✅ Aplicar a la obra" },
-          { id: "ot:quote:compare", title: "🛒 Precios retail" },
-          { id: "ot:quote:alt", title: "🔄 Otra opción" },
+          ...pdfButton,
         ],
       };
     }
@@ -372,9 +395,8 @@ export function buildWhatsAppInteractivePayload(
       body: "¿Qué quieres hacer con esta cotización?",
       footer: "ObraBot · Cotizador",
       buttons: [
-        { id: "ot:quote:create", title: "🏗️ Crear obra" },
-        { id: "ot:quote:compare", title: "🛒 Precios retail" },
-        { id: "ot:quote:alt", title: "🔄 Otra opción" },
+        { id: "ot:quote:create", title: "Crear obra" },
+        ...pdfButton,
       ],
     };
   }
