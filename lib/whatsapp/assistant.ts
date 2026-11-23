@@ -1,4 +1,7 @@
-import { quoteWhatsAppTurn } from '@/lib/obrabot/whatsapp';
+import { pausedReply, progressAfter, recallsContact, resumeBot } from './conversation-progress';
+import { phoneChoices } from './client-input';
+import { quoteSessionMs, restoreQuoteContext } from './quote-context';
+import { quoteReference, quoteWhatsAppTurn } from '@/lib/obrabot/whatsapp';
 import { withSnapshotVersions } from '@/lib/sync/snapshot-versions';
 import { setAIUsageActor } from '@/lib/ai/usage';
 import { completeRows } from '@/lib/supabase/pagination';
@@ -30,7 +33,7 @@ import { AIError } from "@/lib/ai/errors";
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateAI } from "@/lib/ai/provider";
 import { canonicalPhone, downloadMetaMedia } from "./meta";
-import { buildWhatsAppInteractivePayload, directInteractiveMenuReply, isGreetingOrMenuRequest, parseWhatsAppInteractiveReply } from "./interactive";
+import { buildWhatsAppInteractivePayload, quoteButtonSource, directInteractiveMenuReply, isGreetingOrMenuRequest, parseWhatsAppInteractiveReply } from "./interactive";
 import { isolatedState, planWhatsAppActions, mergeWhatsAppPlans } from "./state";
 import { checkActionPermissions } from "@/lib/ai/permissions";
 import { WHATSAPP_BRAND, whatsappCard, whatsappText, quoteWhatsApp, quoteMenuChoice, materialComparisonWhatsApp, materialBatchComparisonWhatsApp, photoReceiptWhatsApp, dailyCloseWhatsApp } from "./format";
@@ -173,7 +176,7 @@ export async function processPersonalMessage(
     return { respuesta: '', persistido: false, ignorado: true };
   }
   const batchId = burst.role === 'leader' ? burst.batchId : null;
-  const batchItems = burst.role === 'leader' ? burst.items : [message];
+  let batchItems = burst.role === 'leader' ? burst.items : [message];
   const finalizeBatch = async (completed: boolean, leadId?: string) => {
     if (!batchId || typeof sb?.rpc !== 'function') return;
     try {
@@ -229,12 +232,45 @@ export async function processPersonalMessage(
       persistido: false,
     };
   }
-  const quoteReply = await quoteWhatsAppTurn(sb, user, message, batchItems, mediaFn, undefined, loaded.conversationRows);
+  const latest = loaded.conversationRows.find(row => row.acciones?.tipo !== 'agrupado_en_lote');
+  const reviewProject = latest?.acciones?.proyecto_contexto_id;
+  let review = latest;
+  if (latest?.acciones?.caso_humano_id) {
+    review = loaded.conversationRows.find(row => row.message_id === latest.acciones.caso_humano_id);
+    if (!review) {
+      const result = await sb.from('whatsapp_mensajes').select('message_id,revision_resuelta_at')
+        .eq('empresa_id', user.empresa_id).eq('actor_id', user.id).eq('message_id', latest.acciones.caso_humano_id).maybeSingle();
+      if (result.error) throw new AIError('WHATSAPP_INBOX', 'No pude verificar la revisión.', 503);
+      review = result.data;
+    }
+  }
+  if (review && !review.revision_resuelta_at && latest?.acciones?.pausa_humana && latest.acciones.rol_actor === user.rol &&
+      (!reviewProject || user.rol === 'admin' || tables.proyectos.some(project => project.id === reviewProject))) {
+    const input = batchItems.map(item => item.text?.body || `[${item.type}]`).join('\n');
+    const resume = resumeBot(input);
+    const { data, error } = await sb.rpc('aplicar_lote_copiloto', {
+      p_id: message.id, p_empresa: user.empresa_id, p_actor: user.id, p_phone: senderPhone,
+      p_texto: input, p_respuesta: resume ? 'ObraBot está activo. Podemos continuar con la gestión pendiente.' : 'Mensaje recibido durante la revisión humana.',
+      p_acciones: { rol_actor: user.rol, caso_humano_id: resume ? undefined : review.message_id, pausa_humana: !resume, silencio_humano: !resume, proyecto_contexto_id: reviewProject || null, borrador_registro: latest.acciones.borrador_registro },
+      p_cotizacion: null, p_changed: {}, p_deleted: {}, p_adjunto: null, p_borrador: latest.borrador_obra || null, p_aviso: null,
+    });
+    if (error || !data?.message_id) throw new AIError('WHATSAPP_DATABASE_SAVE', 'No pude guardar la gestión.', 503);
+    if (resume) {
+      const finished = await sb.from('whatsapp_mensajes').update({ revision_resuelta_at: new Date().toISOString() })
+        .eq('empresa_id', user.empresa_id).eq('actor_id', user.id).eq('message_id', review.message_id);
+      if (finished.error) throw new AIError('WHATSAPP_INBOX', 'No pude cerrar la revisión.', 503);
+    }
+    await finalizeBatch(true, data.message_id);
+    return { ...data, persistido: true };
+  }
+  const restored = await restoreQuoteContext(sb, user, batchItems, loaded.conversationRows);
+  batchItems = restored.items;
+  const quoteReply = await quoteWhatsAppTurn(sb, user, message, batchItems, mediaFn, undefined, restored.sources);
   if (quoteReply) {
     await finalizeBatch(true, quoteReply.message_id);
     return quoteReply;
   }
-  let conversationRows: any[] = loaded.conversationRows;
+  let conversationRows: any[] = restored.sources;
   if (user.rol === 'terreno') conversationRows = workerHistory(conversationRows, new Set(tables.proyectos.map(p => p.id)));
   if (user.rol === 'supervisor') {
     const assigned = new Set(tables.proyectos.map(p => p.id));
@@ -243,7 +279,7 @@ export async function processPersonalMessage(
   }
   const history = conversationRows.slice(0, 6);
   const lastRowTime = history[0]?.created_at ? Date.parse(history[0].created_at) : NaN;
-  const staleHistory = Number.isFinite(lastRowTime) && Date.now() - lastRowTime > 12 * 3600 * 1000;
+  const staleHistory = Number.isFinite(lastRowTime) && Date.now() - lastRowTime > quoteSessionMs;
   let pendingPerson = staleHistory
     ? null
     : history[0]?.acciones?.borrador_registro || history[0]?.acciones?.detalles?.borrador_registro || null;
@@ -260,6 +296,7 @@ export async function processPersonalMessage(
   let candidateDraft: any = null;
   failureContext.draft = pendingProject;
   failureContext.actions = {
+    seguimiento: history[0]?.acciones?.seguimiento,
     rol_actor: user.rol,
     proyecto_contexto_id: activeWhatsAppProject(tables.proyectos, '', staleHistory ? [] : history),
     borrador_registro: pendingPerson,
@@ -271,7 +308,9 @@ export async function processPersonalMessage(
   const attachments: any[] = [];
   let image: { mimeType: string; data: string } | undefined;
   let replyContextId: string | undefined =
-    message.type !== "interactive" && message.type !== "button" ? message.context?.id : undefined;
+    batchItems.map(item => quoteButtonSource(item, 'create')).find(Boolean);
+  const legacyTap = batchItems.find(item => item.interactive?.button_reply?.id === 'ot:quote:create');
+  if (legacyTap?.context?.id && conversationRows.some(row => row.message_id === legacyTap.context.id)) replyContextId = legacyTap.context.id;
   let unsupportedCount = 0;
   let silentOrNoiseAudioCount = 0;
   const friendlyMediaWarnings: string[] = [];
@@ -422,11 +461,26 @@ export async function processPersonalMessage(
   let confirmationResponse = '';
   const explicitQuoteCreation =
     requestsQuotedProject(text) ||
+    Boolean(replyContextId && /^(?:crea|crear) (?:la |una )?obra[.!]?$/i.test(text.trim())) ||
     selectsRecentQuotedProject(text, history[0]?.respuesta || '') ||
     appliesQuoteToExistingProject(text);
   const replied = replyContextId ? conversationRows.find(row => row.message_id === replyContextId) : null;
   const legacyQuoteMessage = pendingProject && !pendingProject.presupuesto_cotizacion_id ? legacyQuotedProjectMessage(conversationRows) : null;
-  const lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : explicitQuoteCreation && replied ? null : conversationRows.find((m: any) => m.cotizacion));
+  let lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : explicitQuoteCreation && replied ? null : conversationRows.find((m: any) => m.cotizacion));
+  const recentBudget = !replyContextId && !pendingProject && explicitQuoteCreation
+    ? conversationRows.map(quoteReference).find(Boolean)?.budget : undefined;
+  if (explicitQuoteCreation && (replyContextId || recentBudget && recentBudget !== lastQuoteMessage?.cotizacion?.id)) {
+    lastQuoteMessage = null;
+    const ref = replyContextId ? quoteReference(replied) : { budget: recentBudget };
+    if (ref?.budget) {
+      const selected = await findBudget(sb, user.empresa_id, ref.budget);
+      if (selected?.cotizacion) lastQuoteMessage = { ...replied, cotizacion: selected.cotizacion };
+    }
+    if (!lastQuoteMessage) confirmationResponse = 'No pude identificar la cotización de ese mensaje. Toca «Crear obra» en la tarjeta de la cotización que quieres usar.';
+    else if (pendingProject?.presupuesto_cotizacion_id && pendingProject.presupuesto_cotizacion_id !== lastQuoteMessage.cotizacion.id) {
+      confirmationResponse = 'Estás completando otra obra. Escribe «Cancelar» para cerrar ese borrador y luego toca «Crear obra» en la cotización elegida.';
+    }
+  }
   const previousDraft = pendingProject;
   let nativeBudget: Presupuesto | null = null;
   let candidates: Presupuesto[] = [];
@@ -443,7 +497,7 @@ export async function processPersonalMessage(
       }
     }
   }
-  if (legacyQuoteMessage) {
+  if (legacyQuoteMessage && !confirmationResponse) {
     if (!nativeBudget) confirmationResponse = 'No se pudo recuperar el presupuesto guardado. Ábrelo en ObraTrack para revisarlo.';
     else if (['rechazada','anulada'].includes(nativeBudget.estado)) confirmationResponse = 'El presupuesto está rechazado o anulado. Revisa su estado antes de crear la obra.';
     else if (nativeBudget.proyecto_id) { alreadyConverted = true; confirmationResponse = 'Esta cotización ya tiene una obra creada. Puedes abrir su Carta Gantt en ObraTrack.'; }
@@ -456,17 +510,28 @@ export async function processPersonalMessage(
     pendingProject = {...pendingProject};
     const recoverable = new Set(['nombre','cliente_nombre','cliente_rut','cliente_email','cliente_telefono','monto_cotizado'].filter(key => !previousDraft?.[key]));
     const recovered = new Set<string>();
+    const priorPhones = new Set<string>();
+    const recall = recallsContact(text);
     // Solo turnos del borrador vigente; conserva correcciones guardadas y toma el literal más reciente.
     for (const row of conversationRows) {
       if (!row.borrador_obra) break;
+      if (row.borrador_obra.presupuesto_cotizacion_id && pendingProject.presupuesto_cotizacion_id &&
+          row.borrador_obra.presupuesto_cotizacion_id !== pendingProject.presupuesto_cotizacion_id) break;
+      if (row.borrador_obra.cliente_nombre && pendingProject.cliente_nombre &&
+          row.borrador_obra.cliente_nombre !== pendingProject.cliente_nombre) break;
       const boundary = startsProjectDraft(row.texto || '');
       if (anotherTask(row.texto || '') && !boundary) continue;
       const fields = projectLiterals(row.texto || '',pendingProject);
+      if (recall) {
+        const phones = phoneChoices(row.texto || '');
+        for (const phone of phones.chosen ? [phones.chosen] : phones.options) priorPhones.add(phone);
+      }
       for (const [key,value] of Object.entries(fields)) if (recoverable.has(key) && !recovered.has(key)) {
         pendingProject[key] = value; recovered.add(key);
       }
       if (boundary) break;
     }
+    if (priorPhones.size > 1 && !previousDraft?.cliente_telefono) pendingProject.telefonos_pendientes = [...priorPhones];
     nextDraft = pendingProject;
   }
   const menuShown = !!history[0]?.respuesta?.includes('*ALTERNATIVAS*') || !!history[0]?.respuesta?.includes('Hay varias alternativas para esta obra.');
@@ -562,7 +627,7 @@ export async function processPersonalMessage(
   if (explicitQuoteCreation && !pendingProject && !lastQuoteMessage && !confirmationResponse) confirmationResponse = '¿Qué cotización quieres usar? Responde al mensaje de esa cotización o indícala en ObraTrack; no crearé una obra con un presupuesto distinto.';
   if (!confirmationResponse && !pendingProject && !chosenBudget && nativeBudget?.grupo_id && !candidates.length) confirmationResponse = 'No se pudieron recuperar las alternativas. Revisa el presupuesto en ObraTrack.';
   const cancelCreation = !!pendingProject && cancelsProjectDraft(text);
-  const continueCreation = !!pendingProject && !attachment && !anotherTask(text) && (resumesProjectDraft(text) || Object.keys(projectLiterals(text,pendingProject)).length > 0);
+  const continueCreation = !!pendingProject && !attachment && !anotherTask(text) && (resumesProjectDraft(text) || recallsContact(text) || Object.keys(projectLiterals(text,pendingProject)).length > 0);
   const feedback=turnQualityEvent(text,conversationRows.filter((row:any)=>row.respuesta).map(()=>({rol:'model'})),!!pendingPerson||!!pendingProject);
   if(feedback)scheduleQualityEvent(sb,user,feedback,'whatsapp');
   const contactHistory: ContactTurn[] = conversationRows.slice().reverse().flatMap((row:any)=>[
@@ -998,6 +1063,14 @@ export async function processPersonalMessage(
   if (budgetSelection) plan.result = { tipo: 'actualizar_proyecto', titulo: 'Alternativa elegida', resultado_texto: confirmationResponse, detalles: {}, presupuesto_seleccion_id: budgetSelection.row.id, presupuesto_seleccion_version: budgetSelection.row.updated_at, presupuesto_ejecucion: budgetSelection.payload } as any;
   const versioned=withSnapshotVersions(plan,tables);
   const contextProjectId = attachment?.proyecto_id || applyQuoteToExisting?.project.id || (newProjects.length === 1 ? newProjects[0].id : introPause?.projectId || activeProject) || null;
+  const pendingFields = plan.result?.tipo === 'solicitar_datos_obra' ? nextDraft
+    : plan.result?.tipo === 'solicitar_datos_persona' ? nextPerson : null;
+  let progress = pendingFields ? progressAfter(history[0]?.acciones?.seguimiento,
+    plan.result?.tipo === 'solicitar_datos_obra' ? 'Crear obra' : 'Registro de persona', pendingFields, response) : null;
+  if (!pendingFields && actionWarning && !plan.result) {
+    progress = progressAfter(history[0]?.acciones?.seguimiento, 'Ejecutar solicitud', { obra: contextProjectId }, actionWarning, true);
+  }
+  if (progress?.pausa_humana) response = pausedReply;
   const params = {
     p_id: message.id,
     p_empresa: user.empresa_id,
@@ -1006,7 +1079,7 @@ export async function processPersonalMessage(
     p_texto: text,
     p_respuesta: response,
     p_cotizacion: result.cotizacion,
-    p_acciones: { ...(plan.result || {}), preferencias_conversacion:preferences.state, borrador_registro: nextPerson, edicion_nombre_pendiente:nameCommand?.pending || null, rol_actor: user.rol, proyecto_contexto_id: contextProjectId },
+    p_acciones: { ...(plan.result || {}), ...progress, preferencias_conversacion:preferences.state, borrador_registro: nextPerson, edicion_nombre_pendiente:nameCommand?.pending || null, rol_actor: user.rol, proyecto_contexto_id: contextProjectId },
     p_changed: versioned.changed,
     p_deleted: versioned.deleted,
     p_adjunto: attachment,

@@ -240,6 +240,7 @@ export async function sendMetaText(to: string, text: string) {
   const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
   const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
   // WhatsApp limita cada texto a 4096 caracteres. Conservar todo el detalle en varios mensajes.
+  let sentId: string | undefined;
   for (const part of splitWhatsAppMessage(text)) {
     const res = await serverFetch(
       `https://graph.facebook.com/${version()}/${phone}/messages`,
@@ -268,7 +269,9 @@ export async function sendMetaText(to: string, text: string) {
         503,
       );
     }
+    sentId = (await res.json().catch(() => null))?.messages?.[0]?.id;
   }
+  return sentId;
 }
 export async function sendMetaInteractive(
   to: string,
@@ -293,8 +296,7 @@ export async function sendMetaInteractive(
     // Si Meta rechaza el formato interactivo (4xx), caer limpiamente a texto plano para no perder la respuesta.
     if (res.status >= 400 && res.status < 500 && bodyOverride) {
       console.warn("whatsapp_interactive_fallback_text", { status: res.status, code: body?.error?.code });
-      await sendMetaText(to, bodyOverride);
-      return;
+      return sendMetaText(to, bodyOverride);
     }
     const providerCode = Number.isInteger(body.error?.code)
       ? body.error.code
@@ -305,6 +307,7 @@ export async function sendMetaInteractive(
       503,
     );
   }
+  return (await res.json().catch(() => null))?.messages?.[0]?.id;
 }
 export async function sendMetaDocument(to: string, bytes: ArrayBuffer, filename: string, caption: string, mime: 'application/pdf' | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' = 'application/pdf') {
   const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
@@ -323,6 +326,7 @@ export async function sendMetaDocument(to: string, bytes: ArrayBuffer, filename:
     body: JSON.stringify({ messaging_product: 'whatsapp', to: canonicalPhone(to), type: 'document', document: { id: media.id, filename, caption: caption.slice(0, 1024) } }),
   });
   if (!sent.ok) throw new AIError('WHATSAPP_DOCUMENT_SEND', 'No se pudo enviar el PDF del cierre.', 503);
+  return (await sent.json().catch(() => null))?.messages?.[0]?.id;
 }
 export async function downloadMetaMedia(id: string) {
   if (!/^[\d]+$/.test(id)) throw new AIError('MEDIA_INVALID', 'Reenvía el archivo; su identificador no es válido.', 422);

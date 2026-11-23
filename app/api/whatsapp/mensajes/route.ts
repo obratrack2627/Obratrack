@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     let query = client
       .from("whatsapp_mensajes")
       .select(
-        "message_id,actor_id,texto,respuesta,cotizacion,acciones,adjunto,aviso_id,categoria,proyectos_ids,sent_at,created_at",
+        "message_id,actor_id,texto,respuesta,cotizacion,acciones,adjunto,aviso_id,categoria,proyectos_ids,sent_at,created_at,revision_resuelta_at",
         { count: "exact" },
       )
       .eq("empresa_id", user.empresa_id);
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
     if (staff && params.get("autor"))
       query = query.eq("actor_id", params.get("autor")!);
     const category = params.get("tipo");
+    if (category === "revision_humana") query = query.not("acciones->>derivacion_humana", "is", null);
     if (
       category &&
       [
@@ -109,6 +110,22 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     return errorJSON(error);
   }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const { user } = await authorizeAI(request);
+    if (user.rol !== 'admin') throw new AIError('REPORT_FORBIDDEN', 'Solo administración puede cerrar esta revisión.', 403);
+    const id = (await request.json().catch(() => null))?.message_id;
+    if (typeof id !== 'string' || !id || id.length > 256) throw new AIError('INVALID_REQUEST', 'Selecciona una revisión válida.', 400);
+    const db = getSupabaseAdmin();
+    if (!db) throw new AIError('WHATSAPP_INBOX', 'No se pudo acceder a la revisión.', 503);
+    const { data, error } = await db.from('whatsapp_mensajes').update({ revision_resuelta_at: new Date().toISOString() })
+      .eq('empresa_id', user.empresa_id).eq('message_id', id).not('acciones->>derivacion_humana', 'is', null).select('message_id').maybeSingle();
+    if (error) throw new AIError('WHATSAPP_INBOX', 'No se pudo cerrar la revisión.', 503);
+    if (!data) throw new AIError('REPORT_NOT_FOUND', 'La revisión no está disponible.', 404);
+    return NextResponse.json({ ok: true });
+  } catch (error) { return errorJSON(error); }
 }
 
 export async function DELETE(request: NextRequest) {

@@ -54,9 +54,9 @@ function clipBody(value: string, max: number): string {
  * Traduce un toque en botón o lista interactiva de WhatsApp Cloud API
  * a una instrucción determinista que ObraBot procesa sin ambigüedad.
  */
-export function quotePdfButtonSource(item: any): string | undefined {
+export function quoteButtonSource(item: any, action: "create" | "pdf"): string | undefined {
   const id = item?.interactive?.button_reply?.id;
-  const prefix = "ot:quote:pdf:";
+  const prefix = `ot:quote:${action}:`;
   if (item?.type === "interactive" && item.interactive.type === "button_reply" &&
       typeof id === "string" && id.startsWith(prefix) && id.length <= 256) {
     return id.slice(prefix.length) || undefined;
@@ -78,7 +78,8 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
     const id = typeof reply.id === "string" ? reply.id.trim() : "";
     const title = typeof reply.title === "string" ? reply.title.trim() : "";
 
-    if (quotePdfButtonSource(item)) return "Generar PDF";
+    if (quoteButtonSource(item, "create")) return "Crea la obra con esta cotización";
+    if (quoteButtonSource(item, "pdf")) return "Generar PDF";
     if (id.startsWith("ot:approved:create:")) return `Crea la obra con la cotización ${id.slice("ot:approved:create:".length)}`;
 
     switch (id) {
@@ -395,7 +396,7 @@ export function buildWhatsAppInteractivePayload(
       body: "¿Qué quieres hacer con esta cotización?",
       footer: "ObraBot · Cotizador",
       buttons: [
-        { id: "ot:quote:create", title: "Crear obra" },
+        { id: result.message_id ? `ot:quote:create:${result.message_id}` : "ot:quote:create", title: "Crear obra" },
         ...pdfButton,
       ],
     };

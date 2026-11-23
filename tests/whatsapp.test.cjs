@@ -1950,3 +1950,46 @@ test('redelivery del mismo evento no repite texto ni PDF aunque falle guardar se
  assert.equal((await handler(request(event([message])))).status,200);assert.equal((await handler(request(event([message])))).status,200);
  assert.equal(texts,1);assert.equal(pdfs,1);
 });
+
+test('una respuesta al PDF saliente usa la cotización de ese PDF aunque haya otra más reciente',async()=>{
+ const {normalizeQuote}=require('../lib/ai/protocol.ts');
+ const make=(id)=>normalizeQuote({id,titulo_proyecto:id,materiales:[{nombre:'Madera',cantidad:1,unidad:'un',precio_unitario_estimado:1500}],mano_de_obra:[]});
+ const a=make('quote-old'), b=make('quote-new'), sb=database();
+ const scoped={empresa_id:user.empresa_id,actor_id:user.id};
+ sb.db.presupuestos=[a,b].map(cotizacion=>({id:cotizacion.id,empresa_id:user.empresa_id,cotizacion,estado:'borrador'}));
+ sb.db.whatsapp_mensajes=[{...scoped,message_id:'latest',cotizacion:b},{...scoped,message_id:'sent-pdf',acciones:{tipo:'obrabot_cotizacion',rol_actor:'admin',presupuesto_pdf_id:a.id}}];
+ sb.db.whatsapp_respuestas_envios=[{...scoped,meta_message_id:'wamid.out.pdf',source_message_id:'sent-pdf'}];
+ const result=await processPersonalMessage(sb,{id:'tap-old-pdf',from:'56912345678',type:'text',context:{id:'wamid.out.pdf'},text:{body:'Crea la obra con esa cotización'}},{chat:async()=>assert.fail('La referencia es explícita')});
+ assert.equal(result.borrador_obra.presupuesto_cotizacion_id,a.id);
+});
+
+test('dos repeticiones sin avance derivan el trámite una vez, silencian el bot y permiten retomar',async()=>{
+ const sb=database();
+ sb.db.whatsapp_mensajes=[{message_id:'draft',empresa_id:user.empresa_id,actor_id:user.id,acciones:{rol_actor:'admin'},borrador_obra:{nombre:'Terraza',monto_cotizado:190000,cliente_nombre:'Ana Soto'}}];
+ const from=sb.from.bind(sb);
+ sb.from=table=>{const q=from(table);q.update=()=>q;return q;};
+ const turn=(id,body)=>processPersonalMessage(sb,{id,from:'56912345678',type:'text',text:{body}},{chat:async()=>assert.fail('El borrador debe gestionarse sin modelo')});
+ await turn('first','Continúa');
+ assert.equal((await turn('again','Ya te di el número')).acciones.seguimiento.repeticiones,1);
+ const paused=await turn('last','Ya te di el número');
+ assert.equal(paused.acciones.derivacion_humana,'Crear obra');
+ assert.equal((await turn('last','Ya te di el número')).message_id,paused.message_id);
+ assert.equal((await turn('silent','Crea otra obra')).acciones.silencio_humano,true);
+ const resumed=await turn('resume','Retomar ObraBot');
+ assert.equal(resumed.acciones.pausa_humana,false);
+ assert.equal(resumed.borrador_obra.nombre,'Terraza');
+});
+
+test('el recibo de entrega vincula el WAMID efectivamente aceptado con el mensaje autorizado',async()=>{
+ const {deliverReplyOnce}=require('../lib/whatsapp/reply-delivery.ts');
+ const saved = [];
+ const db = {rpc:async()=>({data:{claimed:true}}),from(table){
+   assert.equal(table,'whatsapp_respuestas_envios');
+   const query={update(values){saved.push(values);return this;},eq(){return this;}};
+   return query;
+ }};
+ const accepted=await deliverReplyOnce(db,{persistido:true,empresa_id:'e',actor_id:'a',cotizacion:{id:'q'}},'source','quote_pdf',async()=>'wamid.pdf.accepted');
+ assert.equal(accepted,true);
+ assert.equal(saved[0].meta_message_id,'wamid.pdf.accepted');
+ assert.equal(saved[0].source_message_id,'source');
+});

@@ -1,3 +1,4 @@
+import { notifyReview } from './conversation-progress';
 import { obrabotWhatsAppFile } from '@/lib/obrabot/whatsapp';
 import {deliverReplyOnce} from './reply-delivery';
 import {splitWhatsAppMessage} from './format';
@@ -133,7 +134,9 @@ export function createWhatsAppWebhook(
               ? await deps.process(sb, message, processOptions as any)
               : await deps.process(sb, message);
             if ('ignorado' in result && result.ignorado) continue;
+            if (result.acciones?.silencio_humano) continue;
             if (!result.sent_at) {
+              notifyReview(sb, result);
               let deliveryComplete=true;
               const sendOnce=async(part:string,send:()=>Promise<unknown>)=>{
                 try{const accepted=await deliverReplyOnce(sb,result,message.id,part,send);if(!accepted)deliveryComplete=false;}
@@ -141,7 +144,7 @@ export function createWhatsAppWebhook(
               };
               stage = "send";
               const interactive =
-                deps.sendInteractive
+                deps.sendInteractive && !result.acciones?.pausa_humana
                   ? (('interactive' in result && result.interactive) || buildWhatsAppInteractivePayload(result))
                   : null;
               if (interactive && result.respuesta.length <= 1024) {

@@ -1,4 +1,4 @@
-import { clientKindReply } from './client-input';
+import { askPhone, phoneChoices, clientKindReply } from './client-input';
 import { projectLiterals, clientReference } from './project-literals';
 import { isConversationalName } from '@/lib/ai/person-name';
 import { phonesInText } from '@/lib/phone';
@@ -186,6 +186,14 @@ export function projectIntake(
     if (!phone || (!known && !inText)) delete draft.cliente_telefono;
     else draft.cliente_telefono = "+" + phone;
   }
+  const phones = phoneChoices(userText, draft.telefonos_pendientes);
+  if (!client && phones.options.length > 1) {
+    draft.telefonos_pendientes = phones.options;
+    delete draft.cliente_telefono;
+  } else {
+    if (!client && phones.chosen && draft.telefonos_pendientes) draft.cliente_telefono = phones.chosen;
+    delete draft.telefonos_pendientes;
+  }
   const missing: string[] = [];
   const newClient = !client && text(draft.cliente_nombre);
   const literalRut = userText.match(/\b\d{7,8}-[\dkK]\b|\b\d{1,2}\.\d{3}\.\d{3}-[\dkK]\b/)?.[0];
@@ -207,7 +215,7 @@ export function projectIntake(
   ))
     missing.push("Correo electrónico del cliente");
   if (newClient && !draft.cliente_telefono)
-    missing.push("Teléfono del cliente");
+    missing.push(draft.telefonos_pendientes ? askPhone(draft.telefonos_pendientes) : "Teléfono del cliente");
   if (missing.length) {
     const onlyRut = newClient && missing.length === 1 && missing[0] === 'RUT válido del nuevo cliente';
     const question = onlyRut

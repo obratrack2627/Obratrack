@@ -1,3 +1,5 @@
+import { quoteSessionMs } from '@/lib/whatsapp/quote-context';
+import { progressAfter, pausedReply } from '@/lib/whatsapp/conversation-progress';
 import { AIError } from '@/lib/ai/errors';
 import { canonicalPhone } from '@/lib/phone';
 import { findBudget } from '@/lib/presupuestos';
@@ -6,7 +8,7 @@ import { excelMime, quoteFile } from './quote-files';
 import type { QuoteSource } from './quote-input';
 import type { downloadMetaMedia } from '@/lib/whatsapp/meta';
 import { isDestinationCommand, isDestinationContinuation, validQuoteId } from './quote-destination';
-import { parseWhatsAppInteractiveReply, quotePdfButtonSource } from '@/lib/whatsapp/interactive';
+import { parseWhatsAppInteractiveReply, quoteButtonSource } from '@/lib/whatsapp/interactive';
 
 const pdfRequestWords = new Set(
   'pdf por favor el la un una de del en como formato archivo documento copia cotizacion presupuesto esta este esa ese lo eso me mi quiero quisiera necesito que podrias puedes puede das envias mandas enviar mandarme mandar enviarme mandame enviame enviamelo mandamelo damelo dame dalo pasame pasamelo pasa pasalo pasar pasarme entregar entregarme entregame entregamelo entrega adjuntar adjuntarme adjunta adjuntame adjuntalo adjuntamelo descarga descargar descargalo generar generarme genera generame generalo generamelo hazlo hazmelo haz hacer preparar preparame preparalo compartir comparteme compartelo porfa exporta exportar exportalo'.split(' '),
@@ -21,7 +23,7 @@ function isQuotePdfRequest(text: string) {
 
 type WhatsAppQuoteReply = QuoteReply & { presupuestoPdfId?: string };
 
-function quoteReference(row: any) {
+export function quoteReference(row: any) {
   const actions = row?.acciones;
   const review = actions?.archivo_cotizacion?.id || actions?.solicitud_cotizacion;
   if (typeof review === 'string' && validQuoteId(review)) return { review };
@@ -69,6 +71,10 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
   const files = items.filter(item => ['image', 'document', 'audio'].includes(item.type));
   const contextualPdf = (transcription !== undefined || files.length === 0) && isQuotePdfRequest(text);
   if (!contextualPdf && !quoteInput && !isDestinationCommand(text) && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
+  const last = conversationRows[0];
+  const draft = last?.acciones?.rol_actor === actor.rol && last.borrador_obra &&
+    !(Date.now() - Date.parse(last.created_at) > quoteSessionMs) ? last.borrador_obra : null;
+  if (draft && !contextualPdf && !quoteInput && !isDestinationCommand(text)) return null;
   let reply: WhatsAppQuoteReply | null;
   try {
     let source: QuoteSource | undefined;
@@ -80,27 +86,32 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
       const mime = downloaded.mimeType === 'application/octet-stream' && /\.xlsx$/i.test(file.document?.filename || '') ? excelMime : downloaded.mimeType;
       source = { bytes: Buffer.from(downloaded.data, 'base64'), mime };
     }
-    const sourceId = items.find(item => item.context?.id)?.context?.id;
-    const receipt = sourceId && conversationRows.find(row => row.message_id === sourceId && row.acciones?.tipo === 'obrabot_cotizacion');
-    const candidate = receipt?.acciones?.archivo_cotizacion?.id;
-    const quotedId = sourceId ? (typeof candidate === 'string' && validQuoteId(candidate) ? candidate : null) : undefined;
+    const sourceId = items.map(item => quoteButtonSource(item, 'create')).find(Boolean) || items.find(item => item.context?.id)?.context?.id;
+    const ref = sourceId ? quoteReference(conversationRows.find(row => row.message_id === sourceId)) : undefined;
+    const shortCreate = /^(?:crea|crear) (?:la |una )?obra[.!]?$/i.test(text.trim());
+    const latest = !sourceId && (isDestinationCommand(text) || shortCreate) ? conversationRows.map(quoteReference).find(Boolean) : undefined;
+    const quotedId = sourceId ? ref?.review || null : latest ? latest.review || null : undefined;
+    const createText = shortCreate && quotedId ? `Crea la obra con la cotización ${quotedId}` : text;
+    if (shortCreate && (ref?.budget || latest?.budget || sourceId && !ref)) return null;
     reply = contextualPdf
-      ? await requestedQuotePdf(db, actor, conversationRows, items.map(quotePdfButtonSource).find(Boolean) || sourceId)
-      : await handleQuoteTurn(db, actor, 'whatsapp', text, inbound.id, source, { quotedId });
+      ? await requestedQuotePdf(db, actor, conversationRows, items.map(item => quoteButtonSource(item, 'pdf')).find(Boolean) || sourceId)
+      : await handleQuoteTurn(db, actor, 'whatsapp', createText, inbound.id, source, { quotedId });
   } catch (error) {
     if (!(error instanceof AIError) || error.status >= 500) throw error;
     reply = { respuesta: error.message };
   }
   if (!reply) return null;
+  const progress = reply.pasoPendiente ? progressAfter(conversationRows[0]?.acciones?.seguimiento, 'Crear obra',
+    reply.pasoPendiente, reply.respuesta) : null;
   const { data, error } = await db.rpc('aplicar_lote_copiloto', {
     p_id: inbound.id, p_empresa: actor.empresa_id, p_actor: actor.id, p_phone: canonicalPhone(inbound.from),
-    p_texto: 'Solicitud de cotización a ObraBot', p_respuesta: reply.respuesta,
+    p_texto: 'Solicitud de cotización a ObraBot', p_respuesta: progress?.pausa_humana ? pausedReply : reply.respuesta,
     p_cotizacion: null,
     p_acciones: {
-      tipo: 'obrabot_cotizacion', rol_actor: actor.rol, archivo_cotizacion: reply.archivo,
+      tipo: 'obrabot_cotizacion', ...progress, rol_actor: actor.rol, archivo_cotizacion: reply.archivo,
       cotizacion_aprobada_id: reply.cotizacionAprobadaId, solicitud_cotizacion: reply.solicitud, presupuesto_pdf_id: reply.presupuestoPdfId, proyecto_contexto_id: reply.obra,
     },
-    p_changed: {}, p_deleted: {}, p_adjunto: null, p_borrador: null, p_aviso: null,
+    p_changed: {}, p_deleted: {}, p_adjunto: null, p_borrador: contextualPdf ? draft : null, p_aviso: null,
   });
   if (error || !data?.message_id) throw new AIError('OBRABOT_QUOTE_DB', 'No pude confirmar la respuesta de la cotización.', 503);
   return { ...data, persistido: true };

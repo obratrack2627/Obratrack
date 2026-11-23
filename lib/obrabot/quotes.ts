@@ -17,7 +17,7 @@ export type QuoteReview = {
   presupuesto_id: string | null;
   destino?: QuoteDestination;
 };
-export type QuoteReply = { respuesta: string; archivo?: { id: string; formato: QuoteFormat }; solicitud?: string; obra?: string; cotizacionAprobadaId?: string };
+export type QuoteReply = { pasoPendiente?: { id: string; datos: Record<string, unknown> }; respuesta: string; archivo?: { id: string; formato: QuoteFormat }; solicitud?: string; obra?: string; cotizacionAprobadaId?: string };
 const uuid = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
 const starter = /^(?:nueva cotizaci[oó]n|cotizaci[oó]n con precios|(?:prepara|genera|hazme) (?:una |la )?cotizaci[oó]n con (?:estos )?precios)\b[ \t]*:?[ \t]*([^\n]*)/i;
 const startHelp = /^(?:quiero hacer una )?cotizaci[oó]n pactada[.!]?$/i;
