@@ -295,7 +295,7 @@ export default function CopilotoObreroPage() {
             {/* ========================================================================= */}
             {/* COLUMNA PRINCIPAL: CHAT CONVERSACIONAL CON OBRABOT (8 cols) */}
             {/* ========================================================================= */}
-            <div className="bg-white border border-kraft-200 rounded-3xl shadow-sm overflow-hidden flex flex-col h-[calc(100dvh-14rem)] min-h-[340px] sm:min-h-[480px]">
+            <div className="bg-white border border-kraft-200 rounded-3xl shadow-sm overflow-hidden flex flex-col h-[calc(100dvh-21rem)] sm:h-[calc(100dvh-14rem)] min-h-[340px] sm:min-h-[480px]">
 
               {/* Header del Chat con Botón de Nueva Conversación */}
               <div className="bg-navy-900 text-white px-5 py-4 border-b border-navy-700 flex items-center justify-between">
