@@ -8,6 +8,7 @@ import {
   Circle,
   Clock,
   MapPin,
+  Pencil,
   Plus,
   Trash2,
   X,
@@ -40,6 +41,7 @@ export default function AgendaWidget({
 }) {
   const [filter, setFilter] = useState<'pendientes' | 'completados'>('pendientes');
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<EventoAgenda | null>(null);
 
   const [titulo, setTitulo] = useState('');
   const [tipo, setTipo] = useState<TipoEventoAgenda>('visita_terreno');
@@ -56,38 +58,73 @@ export default function AgendaWidget({
 
   const pendingCount = eventos.filter((e) => !e.completado).length;
 
-  const handleCreate = (e: React.FormEvent) => {
+  const notifyAgendaChanged = () => {
+    onChanged();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('obratrack_agenda_updated'));
+    }
+  };
+
+  const openCreateModal = () => {
+    setEditingEvent(null);
+    setTitulo('');
+    setTipo('visita_terreno');
+    setFecha(chileToday());
+    setHora('09:30');
+    setProyectoId('');
+    setComunaLugar('');
+    setDescripcion('');
+    setModalOpen(true);
+  };
+
+  const openEditModal = (evt: EventoAgenda) => {
+    setEditingEvent(evt);
+    setTitulo(evt.titulo || '');
+    setTipo((evt.tipo in EVENT_TYPE_LABELS ? evt.tipo : 'visita_terreno') as TipoEventoAgenda);
+    setFecha(evt.fecha || chileToday());
+    setHora(evt.hora || '');
+    setProyectoId(evt.proyecto_id || '');
+    setComunaLugar(evt.comuna_lugar || '');
+    setDescripcion(evt.descripcion || '');
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingEvent(null);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!titulo.trim() || !fecha) return;
     const proj = proyectos.find((p) => p.id === proyectoId);
     dataService.saveEventoAgenda({
+      ...(editingEvent ? { id: editingEvent.id, created_at: editingEvent.created_at, empresa_id: editingEvent.empresa_id, usuario_id: editingEvent.usuario_id } : {}),
       titulo: titulo.trim(),
       tipo,
       fecha,
       hora: hora.trim() || undefined,
       proyecto_id: proj?.id || undefined,
       proyecto_nombre: proj?.nombre || undefined,
-      comuna_lugar: comunaLugar.trim() || proj?.comuna || undefined,
+      comuna_lugar: comunaLugar.trim() || (proj ? proj.comuna : undefined),
       descripcion: descripcion.trim() || undefined,
-      completado: false,
-      origen: 'manual',
+      completado: editingEvent ? editingEvent.completado : false,
+      origen: editingEvent ? editingEvent.origen : 'manual',
     });
-    setTitulo('');
-    setDescripcion('');
-    setComunaLugar('');
-    setModalOpen(false);
-    onChanged();
-    toast('Hito agendado correctamente.');
+    const wasEditing = Boolean(editingEvent);
+    closeModal();
+    notifyAgendaChanged();
+    toast(wasEditing ? 'Hito actualizado correctamente.' : 'Hito agendado correctamente.');
   };
 
   const handleToggle = (id: string) => {
     dataService.toggleEventoAgenda(id);
-    onChanged();
+    notifyAgendaChanged();
   };
 
   const handleDelete = (id: string) => {
     dataService.deleteEventoAgenda(id);
-    onChanged();
+    notifyAgendaChanged();
     toast('Evento eliminado de la agenda.');
   };
 
@@ -144,10 +181,7 @@ export default function AgendaWidget({
 
           <button
             type="button"
-            onClick={() => {
-              setFecha(chileToday());
-              setModalOpen(true);
-            }}
+            onClick={openCreateModal}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FF6A00] hover:bg-[#E55F00] text-white text-xs font-heading font-bold shadow-sm transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -167,7 +201,7 @@ export default function AgendaWidget({
           {filter === 'pendientes' && (
             <button
               type="button"
-              onClick={() => setModalOpen(true)}
+              onClick={openCreateModal}
               className="text-xs font-bold text-[#FF6A00] hover:underline"
             >
               + Programar primera visita o hito
@@ -220,15 +254,33 @@ export default function AgendaWidget({
                         {evt.titulo}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(evt.id)}
-                      aria-label={`Eliminar ${evt.titulo}`}
-                      className="text-gray-400 hover:text-red-500 p-0.5 shrink-0"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(evt)}
+                        aria-label={`Editar ${evt.titulo}`}
+                        title="Editar hito"
+                        className="text-gray-400 hover:text-[#FF6A00] p-0.5 transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(evt.id)}
+                        aria-label={`Eliminar ${evt.titulo}`}
+                        title="Eliminar hito"
+                        className="text-gray-400 hover:text-red-500 p-0.5 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
+
+                  {evt.descripcion && (
+                    <p className="pl-6 text-[11px] text-gray-600 dark:text-gray-300 line-clamp-2">
+                      {evt.descripcion}
+                    </p>
+                  )}
 
                   <div className="flex flex-wrap items-center gap-1.5 pl-6 text-[10px] font-mono">
                     <span className="px-2 py-0.5 rounded-full bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] text-gray-600 dark:text-gray-300">
@@ -280,8 +332,8 @@ export default function AgendaWidget({
 
       {modalOpen && (
         <ModalOverlay
-          onClose={() => setModalOpen(false)}
-          aria-label="Agendar hito o visita"
+          onClose={closeModal}
+          aria-label={editingEvent ? 'Editar hito o visita' : 'Agendar hito o visita'}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in"
         >
           <div
@@ -291,11 +343,11 @@ export default function AgendaWidget({
             <div className="flex items-center justify-between border-b border-kraft-200 dark:border-[#263040] pb-3">
               <h3 className="font-heading font-bold text-base text-navy-900 dark:text-white flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-[#FF6A00]" />
-                <span>Agendar visita o hito</span>
+                <span>{editingEvent ? 'Editar visita o hito' : 'Agendar visita o hito'}</span>
               </h3>
               <button
                 type="button"
-                onClick={() => setModalOpen(false)}
+                onClick={closeModal}
                 aria-label="Cerrar"
                 className="text-gray-400 hover:text-gray-700 dark:hover:text-white"
               >
@@ -303,7 +355,7 @@ export default function AgendaWidget({
               </button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-3.5 text-xs">
+            <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
               <div>
                 <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
                   Título *
@@ -395,10 +447,23 @@ export default function AgendaWidget({
                 />
               </div>
 
+              <div>
+                <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Notas / Descripción (opcional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={descripcion}
+                  onChange={(e) => setDescripcion(e.target.value)}
+                  placeholder="Ej: Llevar plano eléctrico y revisar nivelación de radier"
+                  className="w-full rounded-xl border border-[#E5DFC9] dark:border-[#263040] bg-[#FAF8F5] dark:bg-[#0F141C] px-3 py-2 text-sm resize-none"
+                />
+              </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setModalOpen(false)}
+                  onClick={closeModal}
                   className="px-4 py-2 rounded-xl border border-[#E5DFC9] dark:border-[#263040] font-semibold text-gray-600 dark:text-gray-300"
                 >
                   Cancelar
@@ -407,7 +472,7 @@ export default function AgendaWidget({
                   type="submit"
                   className="px-4 py-2 rounded-xl bg-[#FF6A00] hover:bg-[#E55F00] text-white font-heading font-bold shadow-sm"
                 >
-                  Guardar hito
+                  {editingEvent ? 'Guardar cambios' : 'Guardar hito'}
                 </button>
               </div>
             </form>

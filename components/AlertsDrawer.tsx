@@ -87,11 +87,13 @@ export function AlertsBellButton({
     };
     window.addEventListener('obratrack_cloud_synced', refresh);
     window.addEventListener('obratrack_profile_updated', refresh);
+    window.addEventListener('obratrack_agenda_updated', refresh);
     window.addEventListener('obratrack_alerts_dismissed_changed', refresh);
     window.addEventListener('obratrack_open_alerts_drawer', onOpen);
     return () => {
       window.removeEventListener('obratrack_cloud_synced', refresh);
       window.removeEventListener('obratrack_profile_updated', refresh);
+      window.removeEventListener('obratrack_agenda_updated', refresh);
       window.removeEventListener('obratrack_alerts_dismissed_changed', refresh);
       window.removeEventListener('obratrack_open_alerts_drawer', onOpen);
     };

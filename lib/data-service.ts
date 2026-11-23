@@ -1633,14 +1633,14 @@ export class DataService {
     const active = this.getActiveUser();
     const agenda = this.getEventosAgenda();
     const id = evento.id || 'evt-' + crypto.randomUUID();
+    const idx = agenda.findIndex((e) => e.id === id);
     const fullEvento: EventoAgenda = {
       ...evento,
       id,
       empresa_id: evento.empresa_id || active?.empresa_id || DEMO_EMPRESA_ID,
-      created_at: new Date().toISOString(),
+      created_at: evento.created_at || (idx >= 0 ? agenda[idx].created_at : new Date().toISOString()),
     };
 
-    const idx = agenda.findIndex((e) => e.id === id);
     if (idx >= 0) {
       agenda[idx] = fullEvento;
     } else {
@@ -1655,6 +1655,7 @@ export class DataService {
     const agenda = this.getEventosAgenda();
     const filtered = agenda.filter((e) => e.id !== id);
     this.setItem(this.getTenantKey(KEYS.AGENDA), filtered);
+    if (!this.aiLocalOnly) { supabaseService.deleteEventoAgenda(id).catch(() => {}); }
     return true;
   }
 
