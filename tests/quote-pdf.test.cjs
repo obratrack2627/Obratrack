@@ -140,3 +140,25 @@ test('el PDF de Estado de Pago se cifra con los últimos 4 dígitos del RUT del 
   assert.ok(text.startsWith('%PDF-'));
   assert.match(text, /\/Encrypt/);
 });
+
+test('la cotización pactada conserva el total comercial y detalla los insumos incluidos en el PDF', () => {
+  const q = normalizeQuote({
+    titulo_proyecto: 'Radier', modo_presupuesto: 'precio_acordado', tratamiento_iva: 'incluido',
+    partidas_venta: [{ nombre: 'Radier instalado', unidad: 'gl', cantidad: 1, precio_unitario: 238000 }],
+    materiales: Array.from({ length: 12 }, (_, i) => ({
+      nombre: `Insumo ${i + 1}`, unidad: 'm³', cantidad: 0.5, precio_unitario_estimado: 2000,
+    })), mano_de_obra: [],
+  });
+  const summary = require('../lib/whatsapp/format.ts').quoteWhatsApp(q);
+  assert.match(summary, /8 de 12/);
+  assert.doesNotMatch(summary, /Insumo 12/);
+  const doc = buildQuoteDocument(q);
+  assert.equal(doc.items.length, 1);
+  assert.equal(doc.total, 238000);
+  assert.equal(doc.materialesIncluidos.length, 12);
+  assert.equal(doc.materialesIncluidos[11].total, 1000);
+  const table = createQuotePdf(doc).lastAutoTable;
+  assert.equal(table.body.length, 12);
+  assert.equal(table.body[11].cells[1].raw, 'Insumo 12');
+  assert.deepEqual(table.body[11].raw.slice(2), ['m³', '0,5', '$ 2.000', '$ 1.000']);
+});

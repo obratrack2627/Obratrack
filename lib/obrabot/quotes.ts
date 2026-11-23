@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { AIError } from '@/lib/ai/errors';
+import { quoteLinePreview, saleLines } from '@/lib/quotes/document';
 import { normalizeQuote } from '@/lib/ai/protocol';
 import type { CotizacionEstimacion } from '@/types/database';
 import { readQuoteSource, readTextQuote, type QuoteSource } from './quote-input';
@@ -45,9 +46,9 @@ function formatCLP(amount: number) {
 function preview(row: QuoteReview) {
   const quote = row.borrador;
   const totals = quote.estructura_financiera;
-  const lines = (quote.partidas_venta ?? []).map(line => `• ${line.nombre} · ${line.cantidad} ${line.unidad} × ${formatCLP(line.precio_unitario)} = ${formatCLP(line.subtotal)}`);
+  const lines = saleLines(quote).map(quoteLinePreview);
   const detail = [...lines.slice(0, 8), ...(lines.length > 8 ? [`Vista resumida de ${lines.length} partidas. Revisa el detalle completo en la bandeja web antes de aprobar.`] : [])];
-  return [`${quote.titulo_proyecto} · revisión ${row.revision}`, ...detail, `Neto ${formatCLP(totals.precio_sugerido_neto)} · IVA ${formatCLP(totals.iva_19)} · Total ${formatCLP(totals.precio_total_con_iva)}`,
+  return [`${quote.titulo_proyecto} · revisión ${row.revision}`, 'Materiales y partidas · IVA incluido', ...detail, `Neto ${formatCLP(totals.precio_sugerido_neto)} · IVA ${formatCLP(totals.iva_19)} · Total ${formatCLP(totals.precio_total_con_iva)}`,
     row.estado === 'pendiente' ? `Para confirmar esta versión, escribe «aprueba cotización ${row.id} ${row.revision}».` : row.estado === 'aprobada' ? `Para usarla en una obra, escribe «Usa cotización ${row.id}».` : `Estado ${row.estado}.`].join('\n');
 }
 

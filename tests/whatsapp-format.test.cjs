@@ -5,7 +5,7 @@ const { normalizeQuote } = require('../lib/ai/protocol.ts');
 const { formatCLP } = require('../lib/utils.ts');
 const { WHATSAPP_BRAND, whatsappCard, quoteWhatsApp, quoteMenuChoice, materialComparisonWhatsApp, splitWhatsAppMessage } = require('../lib/whatsapp/format.ts');
 
-test('la cotización conserva cálculos, todas las partidas y condiciones en formato nativo de WhatsApp', () => {
+test('la vista previa muestra cantidades, precios y total sin repetir las secciones del documento', () => {
   const q = normalizeQuote({ titulo_proyecto: 'Radier patio', comuna_region: 'Maipú', metros_cuadrados: 20, duracion_dias_estimada: 4,
     materiales: [{ nombre: 'Hormigón H20', cantidad: 0.5, unidad: 'm3', precio_unitario_estimado: 90000 }],
     mano_de_obra: [{ rol: 'Maestro', cantidad_personas: 1, dias_estimados: 2, valor_jornal_diario: 45000 }],
@@ -17,11 +17,10 @@ test('la cotización conserva cálculos, todas las partidas y condiciones en for
   assert.equal(text.includes(WHATSAPP_BRAND), false);
   assert.match(text, /\*Cotización · Radier patio\*/);
   assert.match(text, /0,5 m3/);
-  assert.match(text, /Margen sobre venta \(20%\)/);
+  assert.match(text, /Hormigón H20 · 0,5 m3 × \$90\.000 = \$45\.000/);
   assert.ok(text.includes('*TOTAL: ' + formatCLP(q.estructura_financiera.precio_total_con_iva) + '*'));
-  assert.match(text, /1\. Preparación — 2 día/);
-  assert.match(text, /Respetar curado/);
-  assert.match(text, /Pago acordado/);
+  assert.doesNotMatch(text, /Preparación|Respetar curado|Pago acordado/);
+  assert.match(text, /Mano de obra · \$90\.000/);
   assert.doesNotMatch(text, /\*\*|^#/m);
   assert.equal(quoteMenuChoice('1', { cotizacion: q, respuesta: text }), 1);
   assert.equal(quoteMenuChoice('2.', { cotizacion: q, respuesta: text }), 2);
