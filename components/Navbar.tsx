@@ -23,7 +23,7 @@ export default function Navbar({ title, subtitle, action }: NavbarProps) {
           </p>
         )}
       </div>
-      <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap">
+      <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 shrink-0 flex-wrap">
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event('obratrack_open_command_palette'))}
@@ -37,7 +37,7 @@ export default function Navbar({ title, subtitle, action }: NavbarProps) {
             Ctrl K
           </kbd>
         </button>
-        <AlertsBellButton />
+        <AlertsBellButton className="hidden md:inline-flex" />
         {action}
       </div>
     </header>

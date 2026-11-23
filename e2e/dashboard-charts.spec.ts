@@ -153,6 +153,7 @@ test('tutorial inicial del Centro de Mando se abre la primera vez sin obras y se
   await expect(page.getByRole('heading', { name: 'Centro de Mando', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: /Guía del Centro de Mando/ })).toHaveCount(0);
 
+  await page.locator('aside summary[aria-label="Cuenta"]').click();
   await page.getByRole('button', { name: 'Abrir guía del Centro de Mando' }).click();
   await expect(page.getByRole('region', { name: /Guía del Centro de Mando/ })).toContainText('Paso 1 de 6');
 });

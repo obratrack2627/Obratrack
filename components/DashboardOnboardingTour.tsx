@@ -84,10 +84,10 @@ const STEPS: TourStep[] = [
     id: 'profile',
     badge: 'Paso Recomendado',
     title: 'Configura tu Empresa y WhatsApp',
-    body: 'En Editar perfil puedes subir el logo de tu constructora (aparecerá en tus PDFs) y guardar tu teléfono para que ObraBot te reconozca por WhatsApp. Puedes repetir esta guía cuando quieras en "? Guía".',
+    body: 'En Editar perfil puedes subir el logo de tu constructora (aparecerá en tus PDFs) y guardar tu teléfono para que ObraBot te reconozca por WhatsApp. Puedes repetir esta guía cuando quieras desde Cuenta → Guía.',
     getSelectors: () => {
       if (typeof window !== 'undefined' && window.innerWidth < 768) {
-        return ['button[aria-label="Mi perfil"]'];
+        return ['button[aria-label="Abrir menú"]'];
       }
       return ['[data-tour-zone="sidebar-account"]'];
     },

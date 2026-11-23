@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   MessageSquareShare,
@@ -12,7 +12,7 @@ import {
   Building2,
   Menu,
   X,
-  UserCog,
+  HelpCircle,
   Sparkles,
   CreditCard,
   AlertTriangle,
@@ -28,6 +28,7 @@ import ActionMenu from '@/components/ActionMenu';
 import ModalOverlay from '@/components/ModalOverlay';
 import ThemeToggle from '@/components/ThemeToggle';
 import PushNotificationsControl from '@/components/PushNotificationsControl';
+import { AlertsBellButton } from '@/components/AlertsDrawer';
 
 const PlanSwitcherModal = dynamic(() => import('@/components/PlanSwitcherModal'), { ssr: false });
 const ChangePasswordModal = dynamic(() => import('@/components/ChangePasswordModal'), { ssr: false });
@@ -35,6 +36,7 @@ const ProfileSettingsModal = dynamic(() => import('@/components/ProfileSettingsM
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileInitialTab, setProfileInitialTab] = useState<'perfil' | 'empresa' | 'cotizaciones' | 'notificaciones'>('perfil');
@@ -259,38 +261,27 @@ export default function Sidebar() {
         </ModalOverlay>
       )}
       {/* Mobile Top Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#1E1E1E] text-white z-50 flex items-center justify-between px-4 border-b border-[#2A2A2A] shadow-md print:hidden">
-        <Link href="/dashboard">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#1E1E1E] text-white z-50 flex items-center justify-between px-3.5 sm:px-4 border-b border-[#2A2A2A] shadow-md print:hidden">
+        <Link href="/dashboard" className="shrink-0">
           <Logo variant="horizontal" theme="dark" size="sm" />
         </Link>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <button
-            type="button"
-            aria-label="Mi perfil"
-            title="Mi perfil y empresa"
-            onClick={() => {
-              setProfileInitialTab('perfil');
-              setProfileOpen(true);
-            }}
-            className="p-1.5 rounded bg-[#2A2A2A] hover:bg-[#353535] text-gray-200 border border-[#3A3A3A]"
-          >
-            <UserCog className="w-4 h-4" />
-          </button>
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <ThemeToggle className="h-9 w-9 p-0" />
+          {!isTerreno && <AlertsBellButton variant="mobile-header" />}
           <button
             type="button"
             aria-label="Ver mi cuenta"
             onClick={() => setIsPlanModalOpen(true)}
-            className="px-2 py-1 rounded bg-[#FF6A00]/20 text-[#FF6A00] border border-[#FF6A00]/40 text-[10px] font-bold font-mono"
+            className="h-9 px-2.5 rounded-xl bg-[#FF6A00]/20 text-[#FF6A00] border border-[#FF6A00]/40 text-[11px] font-bold font-mono inline-flex items-center whitespace-nowrap"
           >
             {currentPlanDetails.nombre.replace('Plan ', '')}
           </button>
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="p-2 rounded-md hover:bg-[#2A2A2A] text-gray-200"
+            className="h-9 w-9 inline-flex items-center justify-center rounded-xl hover:bg-[#2A2A2A] text-gray-200"
             aria-label="Abrir menú"
           >
-            {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </div>
@@ -400,6 +391,29 @@ export default function Sidebar() {
                   <Bell size={15} className="shrink-0 text-[#FF6A00]" />
                   <span>Notificaciones Push</span>
                 </button>
+                {!isTerreno && (
+                  <button
+                    type="button"
+                    aria-label="Abrir guía del Centro de Mando"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      if (pathname === '/dashboard') {
+                        window.dispatchEvent(new Event('obratrack_start_dashboard_tour'));
+                      } else {
+                        try {
+                          sessionStorage.setItem('obratrack_open_tour_on_dashboard', '1');
+                        } catch {
+                          // Ignore storage errors
+                        }
+                        router.push('/dashboard');
+                      }
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <HelpCircle size={15} className="shrink-0 text-[#FF6A00]" />
+                    <span>Guía</span>
+                  </button>
+                )}
                 <Link href="/planes" onClick={() => setMobileOpen(false)}>Suscripción</Link>
                 <button type="button" onClick={() => { setPasswordOpen(true); setMobileOpen(false); }}>Cambiar contraseña</button>
                 <button type="button" onClick={handleLogout} className="!text-red-400 hover:!text-red-300">Cerrar sesión</button>

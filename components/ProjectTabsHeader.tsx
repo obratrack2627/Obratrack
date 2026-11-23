@@ -227,7 +227,7 @@ export default function ProjectTabsHeader({
               <Search className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Buscar</span>
             </button>
-            <AlertsBellButton compact />
+            <AlertsBellButton compact className="hidden md:inline-flex" />
             {canShareClientSummary && (
               <button
                 type="button"

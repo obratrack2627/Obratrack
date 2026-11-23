@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   AlertCircle,
   AlertTriangle,
@@ -51,31 +52,46 @@ function readAlertsFromStore(): OperationalAlert[] {
   });
 }
 
-export function AlertsBellButton({ compact = false }: { compact?: boolean }) {
+export function AlertsBellButton({
+  compact = false,
+  variant = 'default',
+  className = '',
+}: {
+  compact?: boolean;
+  variant?: 'default' | 'mobile-header';
+  className?: string;
+}) {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [alerts, setAlerts] = useState<OperationalAlert[]>([]);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const refresh = () => setAlerts(readAlertsFromStore());
     refresh();
     const onOpen = () => {
+      if (buttonRef.current && buttonRef.current.offsetParent === null) return;
       refresh();
       setOpen(true);
     };
     window.addEventListener('obratrack_cloud_synced', refresh);
+    window.addEventListener('obratrack_profile_updated', refresh);
     window.addEventListener('obratrack_open_alerts_drawer', onOpen);
     return () => {
       window.removeEventListener('obratrack_cloud_synced', refresh);
+      window.removeEventListener('obratrack_profile_updated', refresh);
       window.removeEventListener('obratrack_open_alerts_drawer', onOpen);
     };
-  }, []);
+  }, [pathname]);
 
   const criticalCount = alerts.filter((a) => a.severity === 'critical').length;
   const totalCount = alerts.length;
+  const isMobileHeader = variant === 'mobile-header';
 
   return (
     <>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => {
           setAlerts(readAlertsFromStore());
@@ -83,17 +99,27 @@ export function AlertsBellButton({ compact = false }: { compact?: boolean }) {
         }}
         aria-label={`Centro de alertas (${totalCount})`}
         title={`Centro de alertas (${totalCount})`}
-        className={`relative inline-flex items-center gap-1.5 rounded-xl border border-[#E5DFC9] dark:border-[#263040] bg-white/85 dark:bg-[#1E2633] ${
-          compact ? 'p-2' : 'px-2.5 py-1.5'
-        } text-xs text-gray-700 dark:text-gray-200 hover:border-[#FF6A00] hover:text-[#FF6A00] transition-colors shrink-0`}
+        className={
+          isMobileHeader
+            ? `relative inline-flex items-center justify-center h-9 w-9 rounded-xl bg-[#2A2A2A] hover:bg-[#353535] text-gray-200 border border-[#3A3A3A] hover:border-[#FF6A00]/70 transition-colors shrink-0 ${className}`
+            : `relative inline-flex items-center gap-1.5 rounded-xl border border-[#E5DFC9] dark:border-[#263040] bg-white/85 dark:bg-[#1E2633] ${
+                compact ? 'p-2' : 'px-2.5 py-2'
+              } text-xs text-gray-700 dark:text-gray-200 hover:border-[#FF6A00] hover:text-[#FF6A00] transition-colors shrink-0 ${className}`
+        }
       >
         <Bell className={`w-4 h-4 ${criticalCount > 0 ? 'text-red-500' : totalCount > 0 ? 'text-[#FF6A00]' : ''}`} />
-        {!compact && <span className="hidden sm:inline font-medium">Alertas</span>}
+        {!compact && !isMobileHeader && <span className="hidden sm:inline font-medium">Alertas</span>}
         {totalCount > 0 && (
           <span
-            className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-mono font-bold text-white ${
-              criticalCount > 0 ? 'bg-[#D94336]' : 'bg-[#FF6A00]'
-            }`}
+            className={
+              isMobileHeader
+                ? `absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[17px] h-[17px] px-1 rounded-full text-[9px] font-mono font-bold text-white ring-2 ring-[#1E1E1E] ${
+                    criticalCount > 0 ? 'bg-[#D94336]' : 'bg-[#FF6A00]'
+                  }`
+                : `inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-mono font-bold text-white ${
+                    criticalCount > 0 ? 'bg-[#D94336]' : 'bg-[#FF6A00]'
+                  }`
+            }
           >
             {totalCount > 99 ? '99+' : totalCount}
           </span>

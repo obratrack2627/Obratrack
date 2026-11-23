@@ -25,8 +25,6 @@ import {
   ShieldCheck,
   Zap,
   MapPin,
-  HelpCircle,
-  Search,
 } from 'lucide-react';
 import DashboardOnboardingTour, {
   DashboardFirstStepsChecklist,
@@ -156,11 +154,26 @@ export default function DashboardPage() {
       setActiveUser(updatedUser);
       computeOnboardingState(updatedUser, dataService.getProyectos(), false);
     };
+    const onStartTour = () => {
+      setTourStep(0);
+      setTourOpen(true);
+    };
+    try {
+      if (sessionStorage.getItem('obratrack_open_tour_on_dashboard') === '1') {
+        sessionStorage.removeItem('obratrack_open_tour_on_dashboard');
+        setTourStep(0);
+        setTourOpen(true);
+      }
+    } catch {
+      // Ignore storage errors
+    }
     window.addEventListener('obratrack_cloud_synced', onSync);
     window.addEventListener('obratrack_profile_updated', onProfileUpdated);
+    window.addEventListener('obratrack_start_dashboard_tour', onStartTour);
     return () => {
       window.removeEventListener('obratrack_cloud_synced', onSync);
       window.removeEventListener('obratrack_profile_updated', onProfileUpdated);
+      window.removeEventListener('obratrack_start_dashboard_tour', onStartTour);
     };
   }, [router]);
 
@@ -289,11 +302,11 @@ export default function DashboardPage() {
       {/* Cabecera Principal */}
       <div
         data-tour-zone="header"
-        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#141A23] p-6 md:pr-16 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm"
+        className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-[#141A23] p-4 sm:p-6 md:pr-16 rounded-2xl border border-kraft-200 dark:border-[#263040] shadow-sm"
       >
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-[#6B8F72]/15 text-[#6B8F72] border border-[#6B8F72]/30">
+        <div className="space-y-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-[#6B8F72]/15 text-[#6B8F72] border border-[#6B8F72]/30 shrink-0">
               <span className="w-2 h-2 rounded-full bg-[#6B8F72] animate-pulse"></span>
               Hoy
             </span>
@@ -312,42 +325,20 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new Event('obratrack_open_command_palette'))}
-            aria-label="Búsqueda rápida (Ctrl+K)"
-            title="Búsqueda rápida (Ctrl+K)"
-            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-kraft-50 dark:bg-[#1E2530] text-gray-700 dark:text-gray-200 text-xs font-medium border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] hover:text-[#FF6A00] transition-all"
-          >
-            <Search className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Buscar</span>
-            <kbd className="hidden xl:inline-flex items-center rounded bg-black/5 dark:bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-gray-500 dark:text-gray-400">
-              Ctrl K
-            </kbd>
-          </button>
-          <AlertsBellButton />
-          <button
-            type="button"
-            onClick={startTour}
-            aria-label="Abrir guía del Centro de Mando"
-            className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-kraft-50 dark:bg-[#1E2530] text-navy-900 dark:text-gray-200 font-heading font-bold text-sm border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00]/60 hover:text-[#FF6A00] transition-all"
-          >
-            <HelpCircle className="w-4 h-4 text-[#FF6A00]" />
-            <span>Guía</span>
-          </button>
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center gap-2 w-full sm:w-auto shrink-0">
+          <AlertsBellButton className="hidden md:inline-flex" />
           <Link
             href="/cotizador"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF6A00] to-[#E55F00] text-white font-heading font-bold text-sm shadow-md shadow-[#FF6A00]/20 hover:opacity-95 transition-all"
+            className="inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#FF6A00] to-[#E55F00] text-white font-heading font-bold text-sm shadow-md shadow-[#FF6A00]/20 hover:opacity-95 transition-all whitespace-nowrap"
           >
-            <Sparkles className="w-4 h-4" />
+            <Sparkles className="w-4 h-4 shrink-0" />
             <span>ObraBot</span>
           </Link>
           <Link
             href="/proyectos"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-kraft-100 dark:bg-[#1E2530] text-navy-900 dark:text-gray-100 font-heading font-bold text-sm border border-kraft-200 dark:border-[#263040] hover:bg-kraft-200 dark:hover:bg-[#263040] transition-all"
+            className="inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2.5 rounded-xl bg-kraft-100 dark:bg-[#1E2530] text-navy-900 dark:text-gray-100 font-heading font-bold text-sm border border-kraft-200 dark:border-[#263040] hover:bg-kraft-200 dark:hover:bg-[#263040] transition-all whitespace-nowrap"
           >
-            <Plus className="w-4 h-4 text-[#FF6A00]" />
+            <Plus className="w-4 h-4 text-[#FF6A00] shrink-0" />
             <span>Gestionar Obras</span>
           </Link>
         </div>
@@ -583,8 +574,8 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0">
-                      <div className="w-32">
+                    <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 w-full sm:w-auto min-w-0">
+                      <div className="flex-1 sm:flex-none sm:w-32 min-w-[100px]">
                         <div className="flex justify-between text-xs font-mono mb-1">
                           <span className="text-gray-500">Avance</span>
                           <strong className="text-[#FF6A00]">{avance}%</strong>
@@ -597,7 +588,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <Link
                           href={`/proyectos/${p.id}/gantt`}
                           className="px-3 py-1.5 rounded-lg bg-white dark:bg-[#1E2530] text-navy-900 dark:text-gray-200 text-xs font-heading font-bold border border-kraft-200 dark:border-[#263040] hover:bg-[#FF6A00] hover:text-white transition-colors"
