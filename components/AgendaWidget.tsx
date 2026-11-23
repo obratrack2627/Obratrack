@@ -177,8 +177,15 @@ export default function AgendaWidget({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {visibleEvents.slice(0, 6).map((evt) => {
-            const isOverdue = !evt.completado && evt.fecha < today;
-            const isToday = !evt.completado && evt.fecha === today;
+            const linkedProj = evt.proyecto_id
+              ? proyectos.find((p) => p.id === evt.proyecto_id)
+              : undefined;
+            const projFinished =
+              linkedProj?.estado === 'terminado' ||
+              linkedProj?.estado === 'cancelada' ||
+              Number(linkedProj?.porcentaje_avance_ponderado || 0) >= 100;
+            const isOverdue = !evt.completado && !projFinished && evt.fecha < today;
+            const isToday = !evt.completado && !projFinished && evt.fecha === today;
             return (
               <div
                 key={evt.id}
@@ -227,6 +234,11 @@ export default function AgendaWidget({
                     <span className="px-2 py-0.5 rounded-full bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] text-gray-600 dark:text-gray-300">
                       {EVENT_TYPE_LABELS[evt.tipo] || evt.tipo}
                     </span>
+                    {projFinished && !evt.completado && (
+                      <span className="px-2 py-0.5 rounded-full bg-[#6B8F72]/15 text-[#6B8F72] font-bold">
+                        Obra terminada
+                      </span>
+                    )}
                     {isOverdue && (
                       <span className="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 font-bold">
                         Vencido

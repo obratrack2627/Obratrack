@@ -19,6 +19,10 @@ import ModalOverlay from '@/components/ModalOverlay';
 import { dataService } from '@/lib/data-service';
 import {
   computeOperationalAlerts,
+  dismissedAlertsStorageKey,
+  filterDismissedAlerts,
+  persistDismissedIds,
+  readDismissedIds,
   type OperationalAlert,
   type OperationalAlertCategory,
 } from '@/lib/operational-alerts';
@@ -63,11 +67,18 @@ export function AlertsBellButton({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [alerts, setAlerts] = useState<OperationalAlert[]>([]);
+  const [allAlerts, setAllAlerts] = useState<OperationalAlert[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
+  const loadState = () => {
+    const user = dataService.getActiveUser();
+    setAllAlerts(readAlertsFromStore());
+    setDismissedIds(readDismissedIds(dismissedAlertsStorageKey(user?.id)));
+  };
+
   useEffect(() => {
-    const refresh = () => setAlerts(readAlertsFromStore());
+    const refresh = () => loadState();
     refresh();
     const onOpen = () => {
       if (buttonRef.current && buttonRef.current.offsetParent === null) return;
@@ -76,13 +87,37 @@ export function AlertsBellButton({
     };
     window.addEventListener('obratrack_cloud_synced', refresh);
     window.addEventListener('obratrack_profile_updated', refresh);
+    window.addEventListener('obratrack_alerts_dismissed_changed', refresh);
     window.addEventListener('obratrack_open_alerts_drawer', onOpen);
     return () => {
       window.removeEventListener('obratrack_cloud_synced', refresh);
       window.removeEventListener('obratrack_profile_updated', refresh);
+      window.removeEventListener('obratrack_alerts_dismissed_changed', refresh);
       window.removeEventListener('obratrack_open_alerts_drawer', onOpen);
     };
   }, [pathname]);
+
+  const alerts = filterDismissedAlerts(allAlerts, dismissedIds);
+  const hiddenCount = Math.max(0, allAlerts.length - alerts.length);
+
+  const handleDismiss = (alertId: string) => {
+    const user = dataService.getActiveUser();
+    const next = new Set(dismissedIds);
+    next.add(alertId);
+    setDismissedIds(persistDismissedIds(dismissedAlertsStorageKey(user?.id), next));
+  };
+
+  const handleDismissAll = () => {
+    const user = dataService.getActiveUser();
+    const next = new Set(dismissedIds);
+    for (const item of alerts) next.add(item.id);
+    setDismissedIds(persistDismissedIds(dismissedAlertsStorageKey(user?.id), next));
+  };
+
+  const handleRestoreHidden = () => {
+    const user = dataService.getActiveUser();
+    setDismissedIds(persistDismissedIds(dismissedAlertsStorageKey(user?.id), []));
+  };
 
   const criticalCount = alerts.filter((a) => a.severity === 'critical').length;
   const totalCount = alerts.length;
@@ -94,7 +129,7 @@ export function AlertsBellButton({
         ref={buttonRef}
         type="button"
         onClick={() => {
-          setAlerts(readAlertsFromStore());
+          loadState();
           setOpen(true);
         }}
         aria-label={`Centro de alertas (${totalCount})`}
@@ -126,16 +161,33 @@ export function AlertsBellButton({
         )}
       </button>
 
-      {open && <AlertsDrawer alerts={alerts} onClose={() => setOpen(false)} />}
+      {open && (
+        <AlertsDrawer
+          alerts={alerts}
+          hiddenCount={hiddenCount}
+          onDismiss={handleDismiss}
+          onDismissAll={handleDismissAll}
+          onRestoreHidden={handleRestoreHidden}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   );
 }
 
 export default function AlertsDrawer({
   alerts,
+  hiddenCount = 0,
+  onDismiss,
+  onDismissAll,
+  onRestoreHidden,
   onClose,
 }: {
   alerts: OperationalAlert[];
+  hiddenCount?: number;
+  onDismiss?: (alertId: string) => void;
+  onDismissAll?: () => void;
+  onRestoreHidden?: () => void;
   onClose: () => void;
 }) {
   const [filter, setFilter] = useState<OperationalAlertCategory | 'todas'>('todas');
@@ -171,40 +223,64 @@ export default function AlertsDrawer({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar centro de alertas"
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#1E2633] transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {alerts.length > 0 && onDismissAll && (
+              <button
+                type="button"
+                onClick={onDismissAll}
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold text-gray-500 dark:text-gray-400 hover:text-[#D94336] hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                title="Quitar todas las alertas visibles"
+              >
+                Quitar todas
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar centro de alertas"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#1E2633] transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {alerts.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 px-5 py-3 border-b border-[#E5DFC9] dark:border-[#263040] bg-[#FAF8F5] dark:bg-[#0F141C]">
-            {categoriesPresent.map((cat) => {
-              const count =
-                cat === 'todas'
-                  ? alerts.length
-                  : alerts.filter((a) => a.category === cat).length;
-              const active = filter === cat;
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setFilter(cat)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
-                    active
-                      ? 'bg-[#FF6A00] text-white'
-                      : 'bg-white dark:bg-[#141A23] text-gray-600 dark:text-gray-300 border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00]/60'
-                  }`}
-                >
-                  <span>{CATEGORY_META[cat].label}</span>
-                  <span className="font-mono text-[10px] opacity-85">{count}</span>
-                </button>
-              );
-            })}
+        {(alerts.length > 0 || hiddenCount > 0) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-b border-[#E5DFC9] dark:border-[#263040] bg-[#FAF8F5] dark:bg-[#0F141C]">
+            <div className="flex flex-wrap gap-1.5">
+              {alerts.length > 0 &&
+                categoriesPresent.map((cat) => {
+                  const count =
+                    cat === 'todas'
+                      ? alerts.length
+                      : alerts.filter((a) => a.category === cat).length;
+                  const active = filter === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setFilter(cat)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                        active
+                          ? 'bg-[#FF6A00] text-white'
+                          : 'bg-white dark:bg-[#141A23] text-gray-600 dark:text-gray-300 border border-[#E5DFC9] dark:border-[#263040] hover:border-[#FF6A00]/60'
+                      }`}
+                    >
+                      <span>{CATEGORY_META[cat].label}</span>
+                      <span className="font-mono text-[10px] opacity-85">{count}</span>
+                    </button>
+                  );
+                })}
+            </div>
+            {hiddenCount > 0 && onRestoreHidden && (
+              <button
+                type="button"
+                onClick={onRestoreHidden}
+                className="text-[11px] font-semibold text-[#FF6A00] hover:underline whitespace-nowrap"
+              >
+                Restaurar ocultas ({hiddenCount})
+              </button>
+            )}
           </div>
         )}
 
@@ -244,25 +320,40 @@ export default function AlertsDrawer({
                     : 'text-[#FF6A00]';
 
               return (
-                <Link
+                <div
                   key={alert.id}
-                  href={alert.href}
-                  onClick={onClose}
-                  className={`block p-3.5 rounded-xl border ${sevClass} hover:border-[#FF6A00] transition-colors space-y-1`}
+                  className={`p-3.5 rounded-xl border ${sevClass} hover:border-[#FF6A00] transition-colors flex items-start gap-2`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <SevIcon className={`w-4 h-4 shrink-0 ${sevIconColor}`} />
-                      <span className="text-xs font-bold text-navy-900 dark:text-white truncate">
-                        {alert.title}
-                      </span>
+                  <Link
+                    href={alert.href}
+                    onClick={onClose}
+                    className="flex-1 min-w-0 space-y-1 block"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <SevIcon className={`w-4 h-4 shrink-0 ${sevIconColor}`} />
+                        <span className="text-xs font-bold text-navy-900 dark:text-white truncate">
+                          {alert.title}
+                        </span>
+                      </div>
+                      <Icon className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
                     </div>
-                    <Icon className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                  </div>
-                  <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed pl-6">
-                    {alert.detail}
-                  </p>
-                </Link>
+                    <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed pl-6">
+                      {alert.detail}
+                    </p>
+                  </Link>
+                  {onDismiss && (
+                    <button
+                      type="button"
+                      onClick={() => onDismiss(alert.id)}
+                      aria-label={`Quitar alerta ${alert.title}`}
+                      title="Quitar del centro de alertas"
+                      className="p-1 rounded-lg text-gray-400 hover:text-[#D94336] hover:bg-black/5 dark:hover:bg-white/10 transition-colors shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               );
             })
           )}

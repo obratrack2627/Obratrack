@@ -4,7 +4,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { computeOperationalAlerts } = require('../lib/operational-alerts.ts');
+const {
+  computeOperationalAlerts,
+  filterDismissedAlerts,
+  isProjectCompletedOrClosed,
+} = require('../lib/operational-alerts.ts');
 const {
   PROJECT_TEMPLATES,
   buildTemplateActivities,
@@ -206,6 +210,83 @@ test('computeOperationalAlerts detecta sobrecosto, accidentes, materiales urgent
   for (let i = 1; i < alerts.length; i++) {
     assert.ok(severityOrder[alerts[i - 1].severity] <= severityOrder[alerts[i].severity]);
   }
+});
+
+test('computeOperationalAlerts no marca hitos atrasados ni alertas de ejecución para obras terminadas o con partidas al 100%, y filterDismissedAlerts oculta descartadas', () => {
+  const today = '2026-06-20';
+  const proyectos = [
+    {
+      id: 'p-term',
+      empresa_id: 'emp1',
+      nombre: 'Baño Terminado',
+      fecha_inicio: '2026-06-01',
+      fecha_termino_estimada: '2026-06-10',
+      estado: 'terminado',
+      porcentaje_avance_ponderado: 100,
+      monto_cotizado: 800000,
+      trabajadores_ids: ['u1'],
+    },
+    {
+      id: 'p-100',
+      empresa_id: 'emp1',
+      nombre: 'Terraza 100% Partidas',
+      fecha_inicio: '2026-06-01',
+      fecha_termino_estimada: '2026-06-12',
+      estado: 'activo',
+      porcentaje_avance_ponderado: 100,
+      monto_cotizado: 900000,
+      trabajadores_ids: ['u1'],
+    },
+    {
+      id: 'p-open',
+      empresa_id: 'emp1',
+      nombre: 'Cocina En Curso',
+      fecha_inicio: '2026-06-01',
+      fecha_termino_estimada: '2026-06-30',
+      estado: 'activo',
+      porcentaje_avance_ponderado: 40,
+      monto_cotizado: 1200000,
+      trabajadores_ids: ['u1'],
+    },
+  ];
+  const actividades = [
+    { id: 'a-t1', proyecto_id: 'p-term', nombre: 'Cerámica', fecha_inicio: '2026-06-01', fecha_termino: '2026-06-05', porcentaje_avance: 100, estado: 'terminado', orden: 1 },
+    { id: 'a-100-1', proyecto_id: 'p-100', nombre: 'Estructura', fecha_inicio: '2026-06-01', fecha_termino: '2026-06-08', porcentaje_avance: 100, estado: 'terminado', orden: 1 },
+    { id: 'a-open-1', proyecto_id: 'p-open', nombre: 'Muebles', fecha_inicio: '2026-06-05', fecha_termino: '2026-06-25', porcentaje_avance: 40, estado: 'en_progreso', orden: 1 },
+  ];
+  const agenda = [
+    { id: 'ev-term', titulo: 'Entrega Baño', fecha: '2026-06-10', tipo: 'visita_terreno', completado: false, proyecto_id: 'p-term', proyecto_nombre: 'Baño Terminado' },
+    { id: 'ev-100', titulo: 'Revisión Terraza', fecha: '2026-06-12', tipo: 'inspeccion_obra', completado: false, proyecto_id: 'p-100', proyecto_nombre: 'Terraza 100% Partidas' },
+    { id: 'ev-open', titulo: 'Visita Cocina', fecha: '2026-06-15', tipo: 'visita_terreno', completado: false, proyecto_id: 'p-open', proyecto_nombre: 'Cocina En Curso' },
+    { id: 'ev-general', titulo: 'Cotizar proveedor', fecha: '2026-06-18', tipo: 'recordatorio', completado: false },
+  ];
+
+  assert.equal(isProjectCompletedOrClosed(proyectos[0], actividades), true);
+  assert.equal(isProjectCompletedOrClosed(proyectos[1], actividades), true);
+  assert.equal(isProjectCompletedOrClosed(proyectos[2], actividades), false);
+
+  const alerts = computeOperationalAlerts({
+    proyectos,
+    actividades,
+    materiales: [],
+    bitacora: [],
+    imprevistos: [],
+    reclamos: [],
+    asistencias: [],
+    usuarios: [{ id: 'u1', empresa_id: 'emp1', nombre: 'Pedro', rol: 'terreno', activo: true }],
+    agenda,
+    today,
+  });
+
+  assert.ok(!alerts.some((a) => a.id === 'agenda-ev-term'), 'No debe alertar hito de obra terminada');
+  assert.ok(!alerts.some((a) => a.id === 'agenda-ev-100'), 'No debe alertar hito de obra con partidas al 100%');
+  assert.ok(!alerts.some((a) => a.id === 'asist-p-100'), 'No debe pedir asistencia en obra completada al 100%');
+  assert.ok(alerts.some((a) => a.id === 'agenda-ev-open'), 'Sí debe alertar hito atrasado de obra abierta');
+  assert.ok(alerts.some((a) => a.id === 'agenda-ev-general'), 'Sí debe alertar hito general sin obra');
+
+  const afterDismiss = filterDismissedAlerts(alerts, ['agenda-ev-open']);
+  assert.ok(!afterDismiss.some((a) => a.id === 'agenda-ev-open'));
+  assert.ok(afterDismiss.some((a) => a.id === 'agenda-ev-general'));
 });
 
 test('PROJECT_TEMPLATES tiene 6 plantillas y buildTemplateActivities/shiftActivityDates conservan duraciones contiguas', () => {

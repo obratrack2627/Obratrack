@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Zap,
   MapPin,
+  X,
 } from 'lucide-react';
 import DashboardOnboardingTour, {
   DashboardFirstStepsChecklist,
@@ -34,7 +35,13 @@ import { DashboardSkeleton } from '@/components/PageSkeletons';
 import { AlertsBellButton } from '@/components/AlertsDrawer';
 import AgendaWidget from '@/components/AgendaWidget';
 import { dataService } from '@/lib/data-service';
-import { EventoAgenda, Proyecto, ReporteWhatsApp, Usuario } from '@/types/database';
+import {
+  dismissedDashboardAlertsKey,
+  isProjectCompletedOrClosed,
+  persistDismissedIds,
+  readDismissedIds,
+} from '@/lib/operational-alerts';
+import { Actividad, EventoAgenda, Proyecto, ReporteWhatsApp, Usuario } from '@/types/database';
 import { formatDate } from '@/lib/utils';
 import { aiHeaders } from '@/lib/ai/client';
 
@@ -58,8 +65,10 @@ const checklistHiddenKey = (userId: string) => `obratrack_dashboard_checklist_hi
 export default function DashboardPage() {
   const router = useRouter();
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
+  const [actividades, setActividades] = useState<Actividad[]>([]);
   const [reportes, setReportes] = useState<ReporteWhatsApp[]>([]);
   const [eventosAgenda, setEventosAgenda] = useState<EventoAgenda[]>([]);
+  const [dismissedDeadlineIds, setDismissedDeadlineIds] = useState<Set<string>>(new Set());
   const [whatsappPendingCount, setWhatsappPendingCount] = useState(0);
   const [activeUser, setActiveUser] = useState<Usuario | null>(null);
   const [teamCount, setTeamCount] = useState(0);
@@ -113,6 +122,8 @@ export default function DashboardPage() {
 
     const projs = dataService.getProyectos();
     setProyectos(projs);
+    setActividades(dataService.getActividades());
+    setDismissedDeadlineIds(readDismissedIds(dismissedDashboardAlertsKey(user?.id)));
 
     const reps = dataService.getReportes();
     setReportes(reps);
@@ -144,8 +155,10 @@ export default function DashboardPage() {
       const syncedProjs = dataService.getProyectos();
       setActiveUser(syncedUser);
       setProyectos(syncedProjs);
+      setActividades(dataService.getActividades());
       setReportes(dataService.getReportes());
       setEventosAgenda(dataService.getEventosAgenda());
+      setDismissedDeadlineIds(readDismissedIds(dismissedDashboardAlertsKey(syncedUser?.id)));
       computeOnboardingState(syncedUser, syncedProjs, false);
       void loadWhatsAppPending();
     };
@@ -226,8 +239,9 @@ export default function DashboardPage() {
   const reportesPendientes = reportes.filter((r) => r.estado === 'pendiente');
   const totalReportesPorValidar = reportesPendientes.length + whatsappPendingCount;
 
-  // Alertas de obras críticas (con plazo próximo o atrasadas)
+  // Alertas de obras críticas (con plazo próximo o atrasadas; excluye obras completadas al 100%)
   const alertas = obrasActivas
+    .filter((p) => !isProjectCompletedOrClosed(p, actividades))
     .map((p) => {
       let diasRestantes = 99999;
       try { diasRestantes = calendarDays(chileToday(), p.fecha_termino_estimada); } catch { /* Sin fecha válida: no inventar un vencimiento. */ }
@@ -236,7 +250,7 @@ export default function DashboardPage() {
       let nivel: 'critico' | 'advertencia' | 'ok' = 'ok';
       let mensaje = 'En cronograma';
 
-      if (diasRestantes < 0) {
+      if (diasRestantes < 0 && avance < 100) {
         nivel = 'critico';
         mensaje = `Plazo vencido hace ${Math.abs(diasRestantes)} días (${avance}% avance)`;
       } else if (diasRestantes <= 7 && avance < 75) {
@@ -256,6 +270,20 @@ export default function DashboardPage() {
       };
     })
     .filter((a) => a.nivel !== 'ok');
+
+  const visibleAlertas = alertas.filter((a) => !dismissedDeadlineIds.has(a.proyecto.id));
+
+  const dismissDeadlineAlert = (projectId: string) => {
+    const next = new Set(dismissedDeadlineIds);
+    next.add(projectId);
+    setDismissedDeadlineIds(persistDismissedIds(dismissedDashboardAlertsKey(activeUser?.id), next));
+  };
+
+  const dismissAllDeadlineAlerts = () => {
+    const next = new Set(dismissedDeadlineIds);
+    for (const item of visibleAlertas) next.add(item.proyecto.id);
+    setDismissedDeadlineIds(persistDismissedIds(dismissedDashboardAlertsKey(activeUser?.id), next));
+  };
 
   // Datos para gráficos de flujo de caja (solo obras vigentes, activas primero)
   const chartDataFinanzas = [...proyectosVigentes]
@@ -470,23 +498,34 @@ export default function DashboardPage() {
       </div></CompactSummary>
 
       {/* Alertas Operacionales Críticas */}
-      {alertas.length > 0 && (
+      {visibleAlertas.length > 0 && (
         <div
           data-tour-zone="alerts"
           className="p-4 rounded-2xl bg-[#D94336]/10 border border-[#D94336]/30 text-navy-900 dark:text-gray-100 space-y-3"
         >
-          <div className="flex items-center gap-2 text-[#D94336] font-heading font-bold text-sm">
-            <AlertTriangle className="w-4 h-4" />
-            <span>Alertas de Plazo y Avance en Obras ({alertas.length})</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[#D94336] font-heading font-bold text-sm">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>Alertas de Plazo y Avance en Obras ({visibleAlertas.length})</span>
+            </div>
+            <button
+              type="button"
+              onClick={dismissAllDeadlineAlerts}
+              className="text-xs font-semibold text-[#D94336] hover:underline shrink-0"
+            >
+              Quitar todas
+            </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {alertas.map((a, i) => (
-              <Link
-                key={i}
-                href={`/proyectos/${a.proyecto.id}/gantt`}
-                className="p-3 rounded-xl bg-white dark:bg-[#141A23] border border-[#D94336]/30 hover:border-[#D94336] transition-all flex items-start justify-between gap-3 shadow-sm"
+            {visibleAlertas.map((a) => (
+              <div
+                key={a.proyecto.id}
+                className="p-3 rounded-xl bg-white dark:bg-[#141A23] border border-[#D94336]/30 hover:border-[#D94336] transition-all flex items-start justify-between gap-2 shadow-sm"
               >
-                <div>
+                <Link
+                  href={`/proyectos/${a.proyecto.id}/gantt`}
+                  className="flex-1 min-w-0"
+                >
                   <h4 className="font-heading font-bold text-sm text-navy-900 dark:text-white">
                     {a.proyecto.nombre}
                   </h4>
@@ -494,11 +533,22 @@ export default function DashboardPage() {
                   <p className="text-[11px] text-gray-500 font-mono mt-1">
                     Entrega: {formatDate(a.proyecto.fecha_termino_estimada)}
                   </p>
+                </Link>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => dismissDeadlineAlert(a.proyecto.id)}
+                    aria-label={`Quitar alerta de ${a.proyecto.nombre}`}
+                    title="Quitar esta alerta"
+                    className="p-1 rounded-md text-gray-400 hover:text-[#D94336] hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-[#D94336] text-white">
+                    {a.avance}%
+                  </span>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-[#D94336] text-white shrink-0">
-                  {a.avance}%
-                </span>
-              </Link>
+              </div>
             ))}
           </div>
         </div>

@@ -61,12 +61,80 @@ const CATEGORY_WEIGHT: Record<OperationalAlertCategory, number> = {
   asistencia: 5,
 };
 
+const DISMISSED_ALERTS_EVENT = 'obratrack_alerts_dismissed_changed';
+
+export function dismissedAlertsStorageKey(userId?: string | null): string {
+  return `obratrack_dismissed_alerts:${userId || 'anon'}`;
+}
+
+export function dismissedDashboardAlertsKey(userId?: string | null): string {
+  return `obratrack_dismissed_dashboard_alerts:${userId || 'anon'}`;
+}
+
+export function readDismissedIds(storageKey: string): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((item): item is string => typeof item === 'string' && item.length > 0));
+  } catch {
+    return new Set();
+  }
+}
+
+export function persistDismissedIds(storageKey: string, ids: Iterable<string>): Set<string> {
+  const next = new Set(Array.from(ids).filter((item) => typeof item === 'string' && item.length > 0));
+  if (typeof window !== 'undefined') {
+    try {
+      if (next.size === 0) {
+        window.localStorage.removeItem(storageKey);
+      } else {
+        window.localStorage.setItem(storageKey, JSON.stringify(Array.from(next)));
+      }
+      window.dispatchEvent(new Event(DISMISSED_ALERTS_EVENT));
+    } catch {
+      // Ignorar restricciones de almacenamiento en modo privado
+    }
+  }
+  return next;
+}
+
+export function filterDismissedAlerts<T extends { id: string }>(
+  alerts: T[],
+  dismissedIds: Iterable<string>,
+): T[] {
+  const hidden = dismissedIds instanceof Set ? dismissedIds : new Set(dismissedIds);
+  if (hidden.size === 0) return alerts;
+  return alerts.filter((alert) => !hidden.has(alert.id));
+}
+
+export function isProjectCompletedOrClosed(
+  proj: Proyecto | undefined,
+  actividades: Actividad[],
+): boolean {
+  if (!proj) return false;
+  if (proj.estado === 'terminado' || proj.estado === 'cancelada') return true;
+  const projActs = actividades.filter((a) => a.proyecto_id === proj.id);
+  if (projActs.length > 0 && projActs.every((a) => Number(a.porcentaje_avance) >= 100)) {
+    return true;
+  }
+  if (projActs.length === 0 && Number(proj.porcentaje_avance_ponderado) >= 100) {
+    return true;
+  }
+  return false;
+}
+
 export function computeOperationalAlerts(
   input: ComputeOperationalAlertsInput,
 ): OperationalAlert[] {
   const today = input.today || chileToday();
   const alerts: OperationalAlert[] = [];
   const activeProjects = input.proyectos.filter((p) => p.estado === 'activo');
+  const openExecutionProjects = activeProjects.filter(
+    (p) => !isProjectCompletedOrClosed(p, input.actividades),
+  );
   const projectMap = new Map(input.proyectos.map((p) => [p.id, p]));
 
   // 1. Financieras: costos directos >= 85% o sobrecosto >= 100% del monto contratado
@@ -129,7 +197,7 @@ export function computeOperationalAlerts(
   }
 
   // 3. Materiales urgentes faltantes para faenas próximas (7 días)
-  for (const proj of activeProjects) {
+  for (const proj of openExecutionProjects) {
     const projActs = input.actividades.filter((a) => a.proyecto_id === proj.id);
     const projMats = input.materiales.filter((m) => m.proyecto_id === proj.id);
     const projLogs = input.bitacora.filter((b) => b.proyecto_id === proj.id);
@@ -153,7 +221,7 @@ export function computeOperationalAlerts(
   }
 
   // 4. Partidas Gantt vencidas (< 100% y fecha_termino < hoy)
-  for (const proj of activeProjects) {
+  for (const proj of openExecutionProjects) {
     const overdue = input.actividades.filter(
       (a) =>
         a.proyecto_id === proj.id &&
@@ -188,7 +256,7 @@ export function computeOperationalAlerts(
   }
 
   // 5. Obras activas con cuadrilla asignada y sin asistencia registrada hoy
-  for (const proj of activeProjects) {
+  for (const proj of openExecutionProjects) {
     const crew = assignedCrew(proj, input.usuarios);
     if (!crew.length) continue;
     const hasToday = input.asistencias.some(
@@ -208,9 +276,19 @@ export function computeOperationalAlerts(
     }
   }
 
-  // 6. Hitos de Agenda para hoy o vencidos
+  // 6. Hitos de Agenda para hoy o vencidos (excluye obras terminadas, canceladas o con partidas al 100%)
   for (const evt of input.agenda) {
     if (evt.completado || !evt.fecha || evt.fecha > today) continue;
+    const relatedProject = evt.proyecto_id
+      ? projectMap.get(evt.proyecto_id)
+      : evt.proyecto_nombre
+        ? input.proyectos.find(
+            (p) => p.nombre.trim().toLowerCase() === evt.proyecto_nombre!.trim().toLowerCase(),
+          )
+        : undefined;
+    if (relatedProject && isProjectCompletedOrClosed(relatedProject, input.actividades)) {
+      continue;
+    }
     const isOverdue = evt.fecha < today;
     alerts.push({
       id: `agenda-${evt.id}`,
