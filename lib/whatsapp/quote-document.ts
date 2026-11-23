@@ -14,6 +14,7 @@ export async function buildQuotePdfBuffer(
   params: {
     cotizacion: CotizacionEstimacion;
     empresaId: string;
+    aprobada?: boolean;
     actor?: {
       nombre?: string;
       email?: string;
@@ -62,14 +63,15 @@ export async function buildQuotePdfBuffer(
   return {
     bytes: pdf.output("arraybuffer"),
     filename: doc.filename,
-    caption: `Cotización aprobada · ${doc.proyecto.nombre} · Total ${quoteMoney(doc.total)}`,
+    caption: `Cotización ${params.aprobada === false ? 'preliminar' : 'aprobada'} · ${doc.proyecto.nombre} · Total ${quoteMoney(doc.total)}`,
   };
 }
 
-/** Genera el PDF oficial cuando se aprueba/convierte una cotización por WhatsApp. */
+/** Genera el PDF tras aprobar, convertir o pedir el archivo de una cotización guardada. */
 export async function quotePdfDocument(sb: any, receipt: any, to: string) {
   const action = receipt?.acciones;
-  const budgetId = action?.presupuesto_seleccion_id || action?.presupuesto_cotizacion_id;
+  const requested = action?.tipo === 'obrabot_cotizacion' ? action.presupuesto_pdf_id : null;
+  const budgetId = requested || action?.presupuesto_seleccion_id || action?.presupuesto_cotizacion_id;
   if (!receipt?.persistido || typeof budgetId !== "string" || !budgetId) return null;
 
   const { data: actor, error: actorError } = await sb
@@ -88,7 +90,7 @@ export async function quotePdfDocument(sb: any, receipt: any, to: string) {
 
   if (
     !actor ||
-    !["admin", "supervisor"].includes(actor.rol) ||
+    (requested ? actor.rol !== "admin" : !["admin", "supervisor"].includes(actor.rol)) ||
     !canonicalPhone(to) ||
     canonicalPhone(actor.telefono_whatsapp || "") !== canonicalPhone(to)
   )
@@ -99,7 +101,10 @@ export async function quotePdfDocument(sb: any, receipt: any, to: string) {
     );
 
   const budget = await findBudget(sb, receipt.empresa_id, budgetId);
-  if (!budget?.cotizacion || ['rechazada','anulada'].includes(budget.estado)) return null;
+  if (!budget?.cotizacion || ['rechazada', 'anulada'].includes(budget.estado) || (requested && budget.estado === 'no_elegida')) {
+    if (requested) throw new AIError('QUOTE_PDF_MISSING', 'La cotización ya no está disponible para descargar.', 404);
+    return null;
+  }
   const expectedProject=action.presupuesto_proyecto_id || action.proyecto_contexto_id;
   if(expectedProject && budget.proyecto_id && expectedProject!==budget.proyecto_id)
     throw new AIError('QUOTE_PDF_FORBIDDEN','La cotización no corresponde a la obra de esta conversación.',403);
@@ -107,6 +112,7 @@ export async function quotePdfDocument(sb: any, receipt: any, to: string) {
   return buildQuotePdfBuffer(sb, {
     cotizacion: budget.cotizacion,
     empresaId: receipt.empresa_id,
+    aprobada: requested ? budget.estado === 'aprobada' : undefined,
     actor,
   });
 }

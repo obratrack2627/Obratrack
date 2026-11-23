@@ -82,6 +82,24 @@ test('la bandeja del administrador aprueba la misma solicitud que ingresó un su
   assert.equal(await obrabotWhatsAppFile(db, receipt, '56912345678'), null);
 });
 
+test('el PDF contextual usa la cotización aprobada correcta, respeta el rol y no interviene en cierres', async () => {
+  const db = database();
+  const draft = await handleQuoteTurn(db, admin, 'plataforma', text, 'draft-for-pdf');
+  const rows = [{ message_id: 'quote', acciones: { solicitud_cotizacion: draft.solicitud } }];
+  function send(message, actor = admin) {
+    const event = { id: 'file-request', from: '56912345678', type: 'text', text: { body: message } };
+    return quoteWhatsAppTurn(db, actor, event, [event], undefined, undefined, rows);
+  }
+  assert.equal(await send('Dame el PDF del cierre de jornada'), null);
+  assert.equal(await send('Haz una cotización de terraza en PDF'), null);
+  assert.equal(await send('Genera una cotización en PDF'), null);
+  assert.match((await send('Dámelo en PDF', supervisor)).respuesta, /administrador/);
+  assert.match((await send('Dámelo en PDF')).respuesta, /necesita aprobación/);
+  await handleQuoteTurn(db, admin, 'plataforma', `aprueba cotización ${draft.solicitud} 1`);
+  const result = await send('¿Me puedes mandar la cotización en PDF?');
+  assert.deepEqual(result.acciones.archivo_cotizacion, { id: draft.solicitud, formato: 'pdf' });
+});
+
 test('lee una planilla de valores e identifica filas incompletas antes de guardar', async () => {
   const book = new ExcelJS.Workbook();
   const sheet = book.addWorksheet('Presupuesto');
