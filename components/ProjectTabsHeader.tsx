@@ -15,7 +15,6 @@ import {
   FolderOpen,
   FileText,
   ClipboardCheck,
-  Search,
   MessageCircle,
 } from 'lucide-react';
 import { ProjectStatusSelect } from '@/components/ProjectStatus';
@@ -216,17 +215,7 @@ export default function ProjectTabsHeader({
           </div>
 
           {/* Acciones rápidas del proyecto */}
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap">
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new Event('obratrack_open_command_palette'))}
-              aria-label="Búsqueda rápida (Ctrl+K)"
-              title="Búsqueda rápida (Ctrl+K)"
-              className="inline-flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-xl bg-kraft-50 dark:bg-[#1E2530] text-gray-600 dark:text-gray-300 border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] hover:text-[#FF6A00] text-xs font-medium transition-colors shrink-0"
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Buscar</span>
-            </button>
+          <div className={`${canShareClientSummary || onOpenMaps ? 'flex' : 'hidden md:flex'} items-center gap-1.5 sm:gap-2 shrink-0 flex-nowrap`}>
             <AlertsBellButton compact className="hidden md:inline-flex" />
             {canShareClientSummary && (
               <button
