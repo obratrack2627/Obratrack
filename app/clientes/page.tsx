@@ -3,7 +3,7 @@ import CompactSummary from '@/components/CompactSummary';
 import ModalOverlay from '@/components/ModalOverlay';
 import ClientProjectAssignments from '@/components/ClientProjectAssignments';
 import { toast } from '@/components/ToastProvider';
-import { downloadClientesCsv } from '@/lib/excel-export';
+import { downloadClientesExcel } from '@/lib/excel-export';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
@@ -21,7 +21,7 @@ import {
   Users,
   Search,
   Edit3,
-  Download,
+  FileSpreadsheet,
   AlertTriangle,
   ExternalLink,
   ArrowUpDown,
@@ -320,14 +320,19 @@ export default function ClientesPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => {
-                downloadClientesCsv(clientes, proyectos);
-                toast('Clientes exportados en CSV.', 'success');
+              onClick={async () => {
+                try {
+                  await downloadClientesExcel(clientes, proyectos, dataService.getEmpresa()?.nombre);
+                  toast('Clientes exportados en Excel.', 'success');
+                } catch {
+                  toast('No se pudo generar el Excel de clientes.', 'error');
+                }
               }}
+              aria-label="Exportar clientes en Excel"
               className="px-3 py-2.5 bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm flex items-center gap-1.5 font-heading transition-all"
             >
-              <Download className="w-4 h-4 text-[#FF6A00]" />
-              <span className="hidden sm:inline">CSV</span>
+              <FileSpreadsheet className="w-4 h-4 text-[#6B8F72]" />
+              <span className="hidden sm:inline">Excel</span>
             </button>
             <button
               onClick={() => setIsCreateModalOpen(true)}

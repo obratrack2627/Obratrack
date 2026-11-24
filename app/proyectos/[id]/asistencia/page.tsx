@@ -8,7 +8,7 @@ import {
   Plus,
   X,
   Search,
-  Download,
+  FileSpreadsheet,
   UserMinus,
   ArrowRight,
   Check,
@@ -33,6 +33,7 @@ import CrewAttendanceEditor, {
   crewSecondary,
 } from "@/components/CrewAttendanceEditor";
 import { dataService } from "@/lib/data-service";
+import { downloadProjectAttendanceExcel } from "@/lib/excel-export";
 import {
   assignedCrew,
   crewAttendance,
@@ -259,48 +260,28 @@ export default function ProjectCrewPage() {
       `Asistencia guardada para ${targets.length} ${targets.length === 1 ? "persona" : "personas"}.`,
     );
   };
-  const exportHistory = () => {
-    const csv = (value: unknown) => {
-      const text = String(value ?? "");
-      return `"${(/^[=+@\-\t\r]/.test(text) ? "'" : "") + text.replace(/"/g, '""')}"`;
-    };
-    const rows = [
-      [
-        "Fecha",
-        "Trabajador",
-        "Rol",
-        "Estado",
-        "Entrada",
-        "Salida",
-        "Horas",
-        "Origen",
-        "Registrado por",
-        "Observación",
-      ],
-      ...history.map((row) => [
-        row.fecha,
-        row.trabajador_nombre,
-        row.trabajador_rol,
-        attendanceLabels[row.estado],
-        row.hora_entrada,
-        row.hora_salida,
-        row.horas_trabajadas,
-        row.origen,
-        row.registrado_por,
-        row.observacion,
-      ]),
-    ];
-    const url = URL.createObjectURL(
-      new Blob(
-        ["\uFEFF" + rows.map((row) => row.map(csv).join(",")).join("\n")],
-        { type: "text/csv;charset=utf-8;" },
-      ),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Asistencia_${projectId}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const exportHistory = async () => {
+    try {
+      await downloadProjectAttendanceExcel(
+        history.map((row) => ({
+          fecha: row.fecha,
+          trabajador: row.trabajador_nombre,
+          rol: row.trabajador_rol || "",
+          estado: row.estado,
+          hora_entrada: row.hora_entrada || "",
+          hora_salida: row.hora_salida || "",
+          horas_trabajadas: Number(row.horas_trabajadas) || 0,
+          origen: row.origen,
+          registrado_por: row.registrado_por || "",
+          observacion: row.observacion || "",
+        })),
+        project?.nombre || projectId,
+        dataService.getEmpresa()?.nombre,
+      );
+      setNotice("Historial de asistencia descargado en Excel.");
+    } catch {
+      setError("No se pudo generar el Excel de asistencia.");
+    }
   };
   return (
     <div
@@ -531,11 +512,11 @@ export default function ProjectCrewPage() {
                   <button
                     type="button"
                     className={crewSecondary}
-                    onClick={exportHistory}
+                    onClick={() => void exportHistory()}
                     disabled={!history.length}
                   >
-                    <Download size={16} />
-                    Exportar historial
+                    <FileSpreadsheet size={16} className="text-[#6B8F72]" />
+                    Exportar Excel
                   </button>
                 </>
               )}

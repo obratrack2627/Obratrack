@@ -1,5 +1,4 @@
 'use client';
-import { csvCell } from '@/lib/work-calendar';
 import { chileToday } from '@/lib/ai/project-deadlines';
 
 import CompactSummary from '@/components/CompactSummary';
@@ -13,7 +12,6 @@ import {
   Clock,
   Building2,
   Calendar,
-  Download,
   ArrowRight,
   Smartphone,
   Sparkles,
@@ -23,7 +21,7 @@ import {
 import Navbar from '@/components/Navbar';
 import { toast } from '@/components/ToastProvider';
 import { aggregateMonthlyAttendance } from '@/lib/attendance-monthly';
-import { downloadMonthlyAttendanceExcel } from '@/lib/excel-export';
+import { downloadDailyAttendanceExcel, downloadMonthlyAttendanceExcel } from '@/lib/excel-export';
 import { dataService } from '@/lib/data-service';
 import { Proyecto, AsistenciaObrero } from '@/types/database';
 import { formatDate } from '@/lib/utils';
@@ -101,55 +99,19 @@ export default function ControlAsistenciaGlobalPage() {
     );
   }, [asistencias, proyectos, mesFiltro, obraFiltro, searchTerm]);
 
-  const handleExportarMensualExcel = async () => {
-    if (monthlyFilteredRows.length === 0) {
-      showToast('No hay marcajes registrados en el mes seleccionado.', 'info');
-      return;
-    }
-    try {
-      await downloadMonthlyAttendanceExcel(
-        monthlyFilteredRows,
-        mesFiltro,
-        dataService.getEmpresa()?.nombre,
-      );
-      showToast(`Planilla mensual ${mesFiltro} descargada en Excel.`, 'success');
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : 'No se pudo generar el Excel mensual.', 'error');
-    }
-  };
-
-  const handleExportarConsolidado = () => {
+  const handleExportarExcel = async () => {
+    const empresaNombre = dataService.getEmpresa()?.nombre;
     if (viewMode === 'mensual') {
       if (monthlyFilteredRows.length === 0) {
-        showToast('No hay registros mensuales de asistencia para exportar.', 'info');
+        showToast('No hay marcajes registrados en el mes seleccionado.', 'info');
         return;
       }
-      const headers = ['Mes', 'Trabajador', 'Cargo', 'Presentes', 'Atrasos', 'Ausencias', 'Licencias/Permisos', 'Días', 'Horas', 'Obras'];
-      const rows = monthlyFilteredRows.map((r) =>
-        [
-          mesFiltro,
-          r.trabajador,
-          r.cargo,
-          r.presentes,
-          r.atrasos,
-          r.ausentes,
-          r.licenciasPermisos,
-          r.totalDias,
-          r.totalHoras,
-          r.obras.join(' · '),
-        ]
-          .map(csvCell)
-          .join(','),
-      );
-      const csv = '\uFEFF' + [headers.map(csvCell).join(','), ...rows].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Consolidado_Mensual_Asistencia_${mesFiltro}.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
-      showToast('Resumen mensual CSV descargado.', 'success');
+      try {
+        await downloadMonthlyAttendanceExcel(monthlyFilteredRows, mesFiltro, empresaNombre);
+        showToast(`Planilla mensual ${mesFiltro} descargada en Excel.`, 'success');
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'No se pudo generar el Excel mensual.', 'error');
+      }
       return;
     }
 
@@ -157,20 +119,26 @@ export default function ControlAsistenciaGlobalPage() {
       showToast('No hay registros de asistencia para exportar.', 'info');
       return;
     }
-    const headers = ['Fecha', 'Obra', 'Trabajador', 'Cargo', 'Estado', 'Entrada', 'Salida', 'Horas', 'Origen'];
-    const rows = asistenciasFiltradas.map((a) => [
-      a.fecha, proyectos.find(p=>p.id===a.proyecto_id)?.nombre || a.proyecto_id,
-      a.trabajador_nombre, a.trabajador_rol || '', a.estado, a.hora_entrada || '',
-      a.hora_salida || '', a.horas_trabajadas || 0, a.origen,
-    ].map(csvCell).join(','));
-    const csv = '\uFEFF' + [headers.map(csvCell).join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Consolidado_Asistencia_ObraTrack_${fechaFiltro}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    try {
+      await downloadDailyAttendanceExcel(
+        asistenciasFiltradas.map((a) => ({
+          fecha: a.fecha,
+          obra: proyectos.find((p) => p.id === a.proyecto_id)?.nombre || a.proyecto_id,
+          trabajador: a.trabajador_nombre,
+          cargo: a.trabajador_rol || '',
+          estado: a.estado,
+          hora_entrada: a.hora_entrada || '',
+          hora_salida: a.hora_salida || '',
+          horas_trabajadas: Number(a.horas_trabajadas) || 0,
+          origen: a.origen,
+        })),
+        fechaFiltro,
+        empresaNombre,
+      );
+      showToast(`Planilla de asistencia ${fechaFiltro} descargada en Excel.`, 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo generar el Excel diario.', 'error');
+    }
   };
 
   const asistenciasBase = asistencias.filter((a) => {
@@ -228,22 +196,13 @@ export default function ControlAsistenciaGlobalPage() {
         subtitle="Asistencia diaria y consolidado mensual de tus obras."
         action={
           <div className="flex items-center gap-2">
-            {viewMode === 'mensual' && (
-              <button
-                type="button"
-                onClick={handleExportarMensualExcel}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] hover:border-[#FF6A00] text-navy-900 dark:text-white text-xs font-heading font-bold shadow-sm transition-colors"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-[#6B8F72]" />
-                <span className="hidden sm:inline">Excel (.xlsx)</span>
-              </button>
-            )}
             <button
-              onClick={handleExportarConsolidado}
+              type="button"
+              onClick={handleExportarExcel}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF6A00] hover:bg-[#E05E00] text-white text-xs font-heading font-bold shadow-sm transition-colors"
             >
-              <Download className="w-4 h-4" />
-              <span>Exportar asistencia</span>
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Exportar Excel</span>
             </button>
           </div>
         }
@@ -585,11 +544,11 @@ export default function ControlAsistenciaGlobalPage() {
               {monthlyFilteredRows.length > 0 && (
                 <button
                   type="button"
-                  onClick={handleExportarMensualExcel}
+                  onClick={handleExportarExcel}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] hover:border-[#FF6A00] text-xs font-heading font-semibold text-navy-900 dark:text-white transition-colors"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-[#6B8F72]" />
-                  <span>Descargar Excel (.xlsx)</span>
+                  <span>Descargar Excel</span>
                 </button>
               )}
             </div>
