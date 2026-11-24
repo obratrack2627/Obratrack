@@ -2017,3 +2017,80 @@ test('el recibo de entrega vincula el WAMID efectivamente aceptado con el mensaj
  assert.equal(saved[0].meta_message_id,'wamid.pdf.accepted');
  assert.equal(saved[0].source_message_id,'source');
 });
+
+test('pausa humana permite retomar ObraBot por audio, webhook atrapa fallo de archivo ObraBot y restoreQuoteContext tolera columna pendiente', async () => {
+  // 1) Retomar pausa humana mediante nota de voz ("Retomar obra bot.")
+  const sb = database();
+  sb.db.whatsapp_mensajes = [
+    {
+      message_id: 'paused-1',
+      empresa_id: user.empresa_id,
+      actor_id: user.id,
+      acciones: { tipo: 'solicitar_datos_obra', rol_actor: 'admin', pausa_humana: true, derivacion_humana: 'Crear obra' },
+      borrador_obra: { nombre: 'Bodega', monto_cotizado: 200000 },
+    },
+  ];
+  const from = sb.from.bind(sb);
+  sb.from = (table) => {
+    const q = from(table);
+    q.update = () => q;
+    return q;
+  };
+  const resumed = await processPersonalMessage(
+    sb,
+    { id: 'voice-resume', from: '56912345678', type: 'audio', audio: { id: 'aud-resume' } },
+    {
+      media: async () => ({ mimeType: 'audio/ogg', data: 'YXVkaW8=' }),
+      transcribe: async () => 'Retomar obra bot.',
+      chat: async () => assert.fail('No debe invocar modelo al retomar'),
+    },
+  );
+  assert.equal(resumed.acciones.pausa_humana, false);
+  assert.match(resumed.respuesta, /ObraBot está activo/);
+
+  // 2) Webhook atrapa fallo al enviar archivo de obrabot_cotizacion y avisa sin devolver 503
+  setup();
+  const sbHook = database();
+  const fromHook = sbHook.from.bind(sbHook);
+  sbHook.from = (table) => {
+    const query = fromHook(table);
+    query.update = () => ({ ...query, eq: async () => ({ error: null }) });
+    return query;
+  };
+  const sent = [];
+  const handler = createWhatsAppWebhook({
+    client: () => sbHook,
+    process: async () => ({
+      persistido: true,
+      actor_id: user.id,
+      empresa_id: user.empresa_id,
+      respuesta: 'Cotización aprobada.',
+      acciones: { tipo: 'obrabot_cotizacion', archivo_cotizacion: { id: 'e234caf9-cfb2-47cd-8c04-9c6f8fbfb5a2', formato: 'pdf' } },
+    }),
+    send: async (_to, text) => { sent.push(text); },
+    sendDocument: async () => { throw new Error('Meta upload failed'); },
+  });
+  const res = await handler(request(event([{ id: 'obrabot-file-fail', from: '56912345678', type: 'text', text: { body: 'aprueba' } }])));
+  assert.equal(res.status, 200);
+  assert.ok(sent.some((t) => /Cotización aprobada/.test(t)));
+  assert.ok(sent.some((t) => /no pude enviar el PDF aquí/.test(t)));
+
+  // 3) restoreQuoteContext no rompe con 503 si la columna meta_message_id aún no se migró
+  const { restoreQuoteContext } = require('../lib/whatsapp/quote-context.ts');
+  const dbMissingCol = {
+    from(table) {
+      return {
+        select() { return this; },
+        eq() { return this; },
+        async maybeSingle() {
+          if (table === 'whatsapp_respuestas_envios') {
+            return { data: null, error: { code: '42703', message: 'column meta_message_id does not exist' } };
+          }
+          return { data: null, error: null };
+        },
+      };
+    },
+  };
+  const restored = await restoreQuoteContext(dbMissingCol, user, [{ id: 'm1', context: { id: 'wamid.out' } }], []);
+  assert.equal(restored.items[0].context.id, 'wamid.out');
+});

@@ -14,10 +14,16 @@ export async function restoreQuoteContext(db: any, actor: any, items: any[], his
       if (!button) {
         const link = await db.from('whatsapp_respuestas_envios').select('source_message_id,presupuesto_ref')
           .eq('empresa_id', actor.empresa_id).eq('actor_id', actor.id).eq('meta_message_id', id).maybeSingle();
-        if (link.error) throw new AIError('QUOTE_CONTEXT_READ', 'No pude consultar la referencia del mensaje.', 503);
-        id = link.data?.source_message_id || id;
-        if (!link.data?.source_message_id && link.data?.presupuesto_ref && actor.rol === 'admin') {
-          sources.push({ message_id: id, acciones: { rol_actor: actor.rol, presupuesto_pdf_id: link.data.presupuesto_ref } });
+        if (link.error) {
+          const code = String(link.error.code || '');
+          const msg = String(link.error.message || '');
+          const missingCol = code === '42703' || code === 'PGRST204' || /meta_message_id|source_message_id|presupuesto_ref/i.test(msg);
+          if (!missingCol) throw new AIError('QUOTE_CONTEXT_READ', 'No pude consultar la referencia del mensaje.', 503);
+        } else {
+          id = link.data?.source_message_id || id;
+          if (!link.data?.source_message_id && link.data?.presupuesto_ref && actor.rol === 'admin') {
+            sources.push({ message_id: id, acciones: { rol_actor: actor.rol, presupuesto_pdf_id: link.data.presupuesto_ref } });
+          }
         }
       }
       if (!sources.some(row => row.message_id === id)) {

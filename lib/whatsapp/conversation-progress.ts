@@ -12,7 +12,7 @@ export function progressAfter(previous: any, step: string, fields: Record<string
 }
 
 export const pausedReply = 'Dejé esta gestión en Reportes de WhatsApp para que la revise un administrador de tu empresa. ObraBot queda en pausa. Para volver a hablar conmigo, escribe «Retomar ObraBot».';
-export const resumeBot = (text: string) => /^retomar obrabot[.!]?$/i.test(text.trim());
+export const resumeBot = (text: string) => /^retomar\s+obra\s*bot[.!]?$/i.test(text.trim());
 export const recallsContact = (text: string) => /^(?:pero )?ya (?:te (?:di|envi[eé]|pas[eé]|dije|mand[eé])|lo (?:di|envi[eé]|pas[eé])) (?:el |mi |su |los |esos )?(?:n[uú]mero|tel[eé]fono|celular|correo|datos)(?: del cliente)?[.!]?$/i.test(text.trim());
 
 export function notifyReview(db: any, receipt: any) {

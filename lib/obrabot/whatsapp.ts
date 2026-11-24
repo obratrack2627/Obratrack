@@ -23,6 +23,25 @@ function isQuotePdfRequest(text: string) {
 
 type WhatsAppQuoteReply = QuoteReply & { presupuestoPdfId?: string };
 
+function sanitizeQuoteAuditText(raw: string): string {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      if (line.includes('|') || line.includes('\t')) {
+        const cols = line.replace(/^\||\|$/g, '').split(/\||\t/).map((c) => c.trim());
+        if (cols.length >= 4) return `${cols[0]} (${cols[2]} ${cols[1]})`;
+      }
+      return line
+        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[correo]')
+        .replace(/\$\s*\d[\d.,]*/g, '[monto]')
+        .replace(/(?:\+?56\s*)?9[\d .-]{7,13}/g, '[teléfono]');
+    });
+  const summary = lines.join(' · ').replace(/\s+/g, ' ').trim();
+  return summary ? summary.slice(0, 400) : 'Solicitud de cotización a ObraBot';
+}
+
 export function quoteReference(row: any) {
   const actions = row?.acciones;
   const review = actions?.archivo_cotizacion?.id || actions?.solicitud_cotizacion;
@@ -115,7 +134,7 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     reply.pasoPendiente, reply.respuesta) : null;
   const { data, error } = await db.rpc('aplicar_lote_copiloto', {
     p_id: inbound.id, p_empresa: actor.empresa_id, p_actor: actor.id, p_phone: canonicalPhone(inbound.from),
-    p_texto: 'Solicitud de cotización a ObraBot', p_respuesta: progress?.pausa_humana ? pausedReply : reply.respuesta,
+    p_texto: sanitizeQuoteAuditText(text), p_respuesta: progress?.pausa_humana ? pausedReply : reply.respuesta,
     p_cotizacion: null,
     p_acciones: {
       tipo: 'obrabot_cotizacion', ...progress, rol_actor: actor.rol, archivo_cotizacion: reply.archivo,

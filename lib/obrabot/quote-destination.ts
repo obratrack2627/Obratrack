@@ -345,6 +345,7 @@ export async function handleDestinationTurn(db: any, actor: Actor, channel: Chan
       return { respuesta: `${error.message}\n\n${previewText(vista)}` };
     }
   }
+  if (/\b(?:a|en)\s+(?:la\s+|el\s+|esta\s+|esa\s+)?(?:obra|proyecto)\b/i.test(first)) return null;
   const names = fieldsFrom([first, ...lines]).equipo || splitTeam(first.match(assignment)?.[1] || '');
   if (!names.length) return yes.test(clean) || clean === 'asignar equipo'
     ? { respuesta: 'Envía los nombres completos separados por comas. Ejemplo: «Equipo: Ana Pérez, Juan Soto».' } : null;

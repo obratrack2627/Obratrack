@@ -159,8 +159,17 @@ export function createWhatsAppWebhook(
               if (deps.sendDocument) {
                 if (result.acciones?.archivo_cotizacion) {
                   stage = 'obrabot_quote_file';
-                  const file = await obrabotWhatsAppFile(sb, result, message.from);
-                  if (file) await sendOnce(`obrabot_quote:${file.mime}`, () => deps.sendDocument!(message.from, file.bytes, file.filename, file.caption, file.mime));
+                  try {
+                    const file = await obrabotWhatsAppFile(sb, result, message.from);
+                    if (file) await sendOnce(`obrabot_quote:${file.mime}`, () => deps.sendDocument!(message.from, file.bytes, file.filename, file.caption, file.mime));
+                  } catch (docError) {
+                    console.error('whatsapp_document_send_failure', {
+                      stage,
+                      code: aiErrorResponse(docError).code,
+                    });
+                    const formatLabel = result.acciones.archivo_cotizacion.formato === 'excel' ? 'Excel' : 'PDF';
+                    await sendOnce('obrabot_quote_notice', () => deps.send(message.from, `La cotización quedó lista en ObraTrack, pero no pude enviar el ${formatLabel} aquí. Descárgala desde ObraTrack → ObraBot.`)).catch(() => {});
+                  }
                 }
                 stage = 'daily_close_pdf';
                 try {

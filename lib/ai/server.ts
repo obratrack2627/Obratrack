@@ -143,7 +143,10 @@ export function createChatHandler(
       const { client, user } = await deps.authorize(request);
       const body = await readAIRequest(request);
       const actor = { ...user, rol: user.rol_original ?? user.rol };
-      const quoteCommand = isQuoteWorkflow(body.mensaje) || isDestinationCommand(body.mensaje);
+      const quoteWorkflow = isQuoteWorkflow(body.mensaje);
+      const quoteDestinationCmd = isDestinationCommand(body.mensaje);
+      const explicitDestinationUuid = /[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}/i.test(body.mensaje);
+      const quoteCommand = quoteWorkflow || (quoteDestinationCmd && (actor.rol === 'admin' || explicitDestinationUuid));
       const destinationContinuation = actor.rol === 'admin' && isDestinationContinuation(body.mensaje) && getSupabaseAdmin();
       if (quoteCommand || destinationContinuation) {
         if (actor.rol !== 'admin') throw new AIError('OBRABOT_ADMIN', 'Esta acción está reservada al administrador.', 403);

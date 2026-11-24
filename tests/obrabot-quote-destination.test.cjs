@@ -121,3 +121,28 @@ test('la selección no cruza canales y una respuesta a una cotización anterior 
   assert.equal(isDestinationContinuation('Crear obra\nDirección: Av. Principal 321\nCliente: Mario Rojas'), true);
   await assert.rejects(handleDestinationTurn(db, { ...actor, rol: 'supervisor' }, 'whatsapp', `Crea obra con cotización ${quote}`), { status: 403 });
 });
+
+test('paso equipo no secuestra asignaciones dirigidas a otra obra y p_texto conserva intención redactada sin PII', async () => {
+  const db = fixture((name, args) => {
+    if (name === 'obrabot_destinar_cotizacion' && args.p_modo === 'crear') {
+      return { data: { modo: 'crear', obra: vista.obra, proyecto_id: proyecto, monto_nuevo: 119000, equipo: [], equipo_pendiente: [] } };
+    }
+    throw new Error(`No debe invocar ${name} para otra obra`);
+  });
+  await rememberQuoteDestination(db, actor, 'whatsapp', quote);
+  const send = (id, text) =>
+    quoteWhatsAppTurn(db, actor, { id, type: 'text', from: '56912345678', text: { body: text } }, [{ id, type: 'text', text: { body: text } }]);
+
+  await send('t1', 'Crear obra');
+  const created = await send('t2', 'Dirección: Av. Italia 1230\nCliente: Juan Pérez\n912345678\njuan@example.test');
+  assert.match(created.respuesta, /Creé la obra/);
+
+  const savedTexts = db.calls.filter((c) => c.name === 'aplicar_lote_copiloto').map((c) => c.args.p_texto);
+  assert.equal(savedTexts[0], 'Crear obra');
+  assert.match(savedTexts[1], /Dirección: Av\. Italia 1230/);
+  assert.ok(!savedTexts[1].includes('juan@example.test'));
+  assert.ok(!savedTexts[1].includes('912345678'));
+
+  // Estando en paso 'equipo' para Quincho Maipú, asignar alguien a OTRA obra no debe ser secuestrado
+  assert.equal(await handleDestinationTurn(db, actor, 'whatsapp', 'Asigna a Pedro Soto a la obra Casa Norte'), null);
+});
