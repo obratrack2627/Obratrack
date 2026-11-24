@@ -212,3 +212,16 @@ Mano de obra`);
   assert.equal(pavers.partidas_venta[0].subtotal, 4450000);
   assert.match(pavers.resumen_ejecutivo, /Nivelación de cámara/);
 });
+
+test('la transcripción de una foto conserva el total de cada fila y pide otra imagen si hay texto ilegible', async () => {
+  const { transcribeQuoteImage } = require('../lib/obrabot/quote-input.ts');
+  const { readPastedQuote } = require('../lib/obrabot/quote-message.ts');
+  const source = { bytes: fs.readFileSync('tests/fixtures/wall-crack.png'), mime: 'image/png' };
+  const message = await transcribeQuoteImage(source, async (_prompt, options) => {
+    assert.equal(options.image.mimeType, 'image/png');
+    assert.equal(options.tools, undefined);
+    return JSON.stringify({ completo: true, texto: 'Radier gimnasio\n8 cemento $ 24.000\nTotal $ 24.000' });
+  });
+  assert.equal(readPastedQuote(message).partidas_venta[0].subtotal, 24000);
+  await assert.rejects(transcribeQuoteImage(source, async () => '{"completo":false,"texto":""}'), /No pude leer/);
+});

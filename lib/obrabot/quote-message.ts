@@ -8,8 +8,8 @@ const projectTotal = /^total(?:\s+(?:del? proyecto|general|con iva))?\s*:?$/i;
 const laborLabel = /^(?:mano de obra|obra de mano)$/i;
 const materialsTotal = /^(?:total(?: de)? )?materiales\s*:?$/i;
 const priceByArea = new RegExp(String.raw`^\$\s*(${clp})\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(?:m[2²]|m(?:t|ts|etros?)?\.?\s+cuadrados?)\.?$`, 'i');
-const quantityPrefix = /^(\d+(?:[,.]\d+)?)\s+(.+)$/;
-const leadingUnit = /^(m[³3]|m[²2]|(?:mt|mts|metros?)\.?\s+c[uú]bicos?|(?:mt|mts|metros?)\.?\s+cuadrados?|kg|litros?|unidades?|sacos?|cajas?)\s+(?:de\s+)?(.+)$/i;
+const quantityPrefix = /^(\d+(?:[,.]\d+)?)\s+(\S.*)$/;
+const leadingUnit = /^(m[³3]|m[²2]|(?:mt|mts|metros?)\.?\s+c[uú]bicos?|(?:mt|mts|metros?)\.?\s+cuadrados?|kg|litros?|unidades?|sacos?|cajas?)\s+(?:de\s+)?(\S.*)$/i;
 const requestLine = /^(?:[¿¡]\s*)?(?:puedes |podemos |podr[ií]as |necesito (?:que )?|quiero )?(?:hacer|hace[rs]?|realiz[ae]r?|arm[ae]r?|prepar[ae]r?|gener[ae]r?|cotiza[rs]?|haz(?:me)?)\b.{0,35}\bcotizaci[oó]n\b/i;
 const quoteTitle = /^(?:presupuesto|cotizaci[oó]n) (?:de |para |por )/i;
 const chargeLine = /^(?:(?:para (?:dar )?inicio|para iniciar|anticipo|condiciones de pago|forma de pago|(?:el )?saldo)\b|(?:se solicita|solicitamos)\b.*%)/i;
@@ -30,6 +30,7 @@ export function isNaturalQuoteRequest(text: string) {
 }
 
 export function isPastedQuote(text: string) {
+  if (text.length > 16000) return false;
   const [first, ...body] = quoteLines(text.trim());
   if (isNaturalQuoteRequest(first)) return body.some(line => moneyAtEnd.test(line) || priceByArea.test(line));
   const labels = body.flatMap(line => line.match(moneyAtEnd)?.[1].trim() || []);
@@ -59,7 +60,7 @@ function paymentPlan(text: string) {
   const percentages = Array.from(new Set(Array.from(text.matchAll(/(\d{1,3}(?:[.,]\d+)?)\s*%/g), match => number(match[1]))));
   if (percentages.length !== 2 || !/material/i.test(text) || !/(?:mano de obra|obra de mano)/i.test(text)) return undefined;
   // Vincular cada porcentaje al concepto más cercano, independientemente del orden.
-  const materials = /(?:(\d{1,3}(?:[.,]\d+)?)\s*%[^.\d%]{0,90}materiales?|materiales?\s*[:=]?\s*(\d{1,3}(?:[.,]\d+)?)\s*%)/i.exec(text);
+  const materials = /(?:(\d{1,3}(?:[.,]\d+)?)\s*%[^.\d%]{0,90}materiales?|materiales?\s*(?:[:=]\s*)?(\d{1,3}(?:[.,]\d+)?)\s*%)/i.exec(text);
   const percentage = materials?.[1] ?? materials?.[2];
   if (!percentage) return undefined;
   const advance = number(percentage);
@@ -72,7 +73,8 @@ export function readPastedQuote(text: string, providedTitle?: string) {
   if (/\b(?:sin iva|no incluye iva|m[aá]s iva|precios? netos?)\b/i.test(text)) {
     invalid('Para preparar esta cotización, confirma los valores finales con IVA incluido.');
   }
-  const rawLines = quoteLines(text);
+  if (text.length > 16000) invalid('Divide el presupuesto en un listado más breve para conservar el detalle en esta cotización.');
+  const rawLines = quoteLines(text.trim());
   if (!providedTitle && requestLine.test(rawLines[0])) rawLines.shift();
   const lines: Line[] = [];
   const scope: string[] = [];
@@ -101,7 +103,7 @@ export function readPastedQuote(text: string, providedTitle?: string) {
       checkTotal('precio por metro cuadrado', statedAreaPrice, unitPrice);
       lines.push({ nombre: title || 'Instalación por metro cuadrado', unidad: 'm²', cantidad: number(area[2]), precio_unitario: unitPrice });
       statedAreaPrice = undefined;
-    } else if (/^(?:total(?:\s+(?:del? proyecto|general|con iva))?|total materiales|materiales)\s*[:$ ]*$/.test(key)) {
+    } else if (!money && !/\d/.test(key) && (projectTotal.test(key.split('$')[0]) || materialsTotal.test(key.split('$')[0]))) {
       continue;
     } else if (money && projectTotal.test(money[1].trim())) {
       declaredTotal = amount(money[2]);
