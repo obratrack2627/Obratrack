@@ -1,3 +1,4 @@
+import { pausedReply, progressAfter } from './conversation-progress';
 import { AIError } from '@/lib/ai/errors';
 
 const recoverable = new Set([
@@ -14,12 +15,13 @@ export async function persistWhatsAppAIFailure(
 ) {
   if (!(error instanceof AIError) || !recoverable.has(error.code)) return null;
   console.warn('whatsapp_ai_unavailable', { code: error.code, messageId: message.id });
-  const response = `${error.message}\n\nNo ejecuté esta solicitud. Puedes volver a intentarlo con un mensaje nuevo o enviarlo como texto si era un audio.`;
+  const progress = progressAfter(context.actions.seguimiento, 'Procesar solicitud', { motivo: error.code }, error.message, true);
+  const response = progress.pausa_humana ? pausedReply : `${error.message}\n\nNo ejecuté esta solicitud. Puedes volver a intentarlo con un mensaje nuevo o enviarlo como texto si era un audio.`;
   const { data, error: saveError } = await sb.rpc('aplicar_lote_copiloto', {
     p_id: message.id, p_empresa: user.empresa_id, p_actor: user.id, p_phone: phone,
     p_texto: items.map(item => item.text?.body || `[${item.type || 'mensaje'} recibido]`).join('\n'),
     p_respuesta: response, p_cotizacion: null,
-    p_acciones: { ...context.actions, rol_actor: user.rol, error_ia: error.code },
+    p_acciones: { ...context.actions, ...progress, rol_actor: user.rol, error_ia: error.code },
     p_changed: {}, p_deleted: {}, p_adjunto: null, p_borrador: context.draft, p_aviso: null,
   });
   if (saveError || !data?.message_id) throw new AIError('WHATSAPP_DATABASE_SAVE', 'No se confirmó el guardado del mensaje.', 503);

@@ -1,4 +1,7 @@
-import { clientInputLines } from '@/lib/whatsapp/client-input';
+import { quoteSessionMs } from '@/lib/whatsapp/quote-context';
+import { requestsQuotedProject } from '@/lib/whatsapp/quote-intake';
+import { recallsContact } from '@/lib/whatsapp/conversation-progress';
+import { askPhone, phoneChoices, clientInputLines } from '@/lib/whatsapp/client-input';
 import { canonicalPhone } from '@/lib/phone';
 import { AIError } from '@/lib/ai/errors';
 import { completeRows } from '@/lib/supabase/pagination';
@@ -97,7 +100,7 @@ function destinationReply(result: QuoteDestination, teamRequested = false) {
 
 type Session =
   | { paso: 'opciones'; id: string }
-  | { paso: 'crear'; id: string; datos: CreateFields }
+  | { paso: 'crear'; id: string; datos: CreateFields; telefonos?: string[] }
   | { paso: 'vincular'; id: string }
   | { paso: 'confirmar'; id: string; vista: LinkPreview }
   | { paso: 'equipo'; proyecto: string };
@@ -107,7 +110,7 @@ async function loadSession(db: any, actor: Actor, channel: Channel) {
     .eq('empresa_id', actor.empresa_id).eq('actor_id', actor.id).eq('canal', channel).maybeSingle();
   if (error) failed(error);
   if (!data) return null;
-  if (Date.now() - Date.parse(data.actualizado_at) <= 20 * 60 * 1000) return data.estado as Session;
+  if (Date.now() - Date.parse(data.actualizado_at) <= quoteSessionMs) return data.estado as Session;
   return null;
 }
 
@@ -144,7 +147,7 @@ function commandText(text: string) {
 
 function conversationalMode(text: string) {
   const clean = commandText(text);
-  if (startCreate.test(clean)) return 'crear';
+  if (startCreate.test(clean) || requestsQuotedProject(clean)) return 'crear';
   if (startLink.test(clean)) return 'vincular';
   if (askOptions.test(clean)) return 'opciones';
   return null;
@@ -160,7 +163,7 @@ const isBarePhone = (value: string) => /^\+?[\d ()-]+$/.test(value) && !!canonic
 export function isDestinationContinuation(text: string) {
   const clean = commandText(text);
   const firstField = clientInputLines(text)[0] || '';
-  return field.test(fold(firstField)) || isBarePhone(firstField) || emailAddress.test(firstField) || projectReference.test(clean) || !!parseLinkChoice(clean) || yes.test(clean) || cancel.test(clean) ||
+  return recallsContact(clean) || /^(?:retom(?:a|ar|emos)|continu(?:a|ar|emos))$/.test(clean) || field.test(fold(firstField)) || isBarePhone(firstField) || emailAddress.test(firstField) || projectReference.test(clean) || !!parseLinkChoice(clean) || yes.test(clean) || cancel.test(clean) ||
     /^(?:crear (?:una |la )?obra|vincular a (?:una |la )?obra|asignar equipo)$/.test(clean) || assignment.test(clean);
 }
 
@@ -239,6 +242,9 @@ export async function handleDestinationTurn(db: any, actor: Actor, channel: Chan
     const explicitId = first.match(new RegExp(`cotizaci[oó]n\\s+(${quoteUuid})\\b`, 'i'))?.[1].toLowerCase();
     const id = explicitId || (quotedId === undefined ? (state && 'id' in state ? state.id : undefined) : quotedId);
     if (!id) return null;
+    if (state?.paso === 'crear' && start === 'crear' && state.id !== id && Object.keys(state.datos).length) {
+      return { respuesta: 'Tienes una obra en preparación con otra cotización. Puedes completarla o escribir «Cancelar» antes de elegir la nueva cotización.' };
+    }
     if (state?.paso === 'crear' && state.id === id && start === 'crear') {
       state = { ...state };
     } else {
@@ -263,15 +269,26 @@ export async function handleDestinationTurn(db: any, actor: Actor, channel: Chan
   }
   if (state.paso === 'crear') {
     const params = fieldsFrom(start ? lines : [first, ...lines]);
-    if (!start && state === previous && !Object.keys(params).length) return null;
+    if (!start && state === previous && !Object.keys(params).length && !recallsContact(message) && !/^(?:retomar|retoma|retomemos|continua|continuar|continuemos)$/.test(clean)) return null;
     const datos = { ...state.datos, ...params };
     if (params.cliente && state.datos.cliente && fold(params.cliente) !== fold(state.datos.cliente)) {
       datos.telefono = params.telefono;
       datos.correo = params.correo;
     }
+    const phones = phoneChoices(message, params.cliente && state.datos.cliente !== params.cliente ? [] : state.telefonos);
+    const waiting = async (question: string) => {
+      await saveSession(db, actor, channel, { ...state, paso: 'crear', id: state.id, datos, telefonos: phones.options });
+      const pasoPendiente = channel === 'whatsapp'
+        ? { id: state.id, datos: { ...datos, telefonos: phones.options } }
+        : undefined;
+      return { respuesta: question, pasoPendiente };
+    };
+    if (phones.options.length > 1) {
+      delete datos.telefono;
+      return waiting(askPhone(phones.options));
+    }
     if (!datos.direccion || !datos.cliente) {
-      await saveSession(db, actor, channel, { ...state, datos });
-      return { respuesta: createHelp(datos) };
+      return waiting(createHelp(datos));
     }
     try {
       const output = await quoteDestination(db, actor, channel, state.id, 'crear', datos) as QuoteDestination;
@@ -280,15 +297,14 @@ export async function handleDestinationTurn(db: any, actor: Actor, channel: Chan
       return { respuesta: destinationReply(output, !!datos.equipo?.length), obra: output.proyecto_id };
     } catch (error) {
       if (!(error instanceof AIError) || !['OBRABOT_CLIENT_REQUIRED', 'OBRABOT_CLIENT_AMBIGUOUS', 'OBRABOT_CLIENT_CONTACT_EXISTS'].includes(error.code)) throw error;
-      await saveSession(db, actor, channel, { ...state, datos });
-      if (error.code !== 'OBRABOT_CLIENT_REQUIRED') return { respuesta: error.message };
+      if (error.code !== 'OBRABOT_CLIENT_REQUIRED') return waiting(error.message);
       const missing = [
         !canonicalPhone(datos.telefono || '') && 'Teléfono: número de contacto',
         !emailAddress.test(datos.correo || '') && 'Correo: correo electrónico del cliente',
       ].filter(Boolean);
-      return { respuesta: missing.length
+      return waiting(missing.length
         ? `Para registrar a ${datos.cliente} como cliente nuevo, falta:\n${missing.join('\n')}`
-        : error.message };
+        : error.message);
     }
   }
   if (state.paso === 'vincular' || state.paso === 'confirmar') {

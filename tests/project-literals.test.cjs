@@ -43,7 +43,11 @@ test('retomar una cotización acepta lenguaje natural sin ejecutar preguntas, ne
 test('una fecha no se convierte en teléfono al completar una obra y dos teléfonos distintos requieren aclaración',()=>{
  const previous={nombre:'Cobertizo',cliente_nombre:'Pedro Morales',cliente_rut:'12345678-5',cliente_email:'pedro@example.test',monto_cotizado:561332};
  const date=projectIntake(actor,null,previous,[],'2026-11-12');assert.match(date.question,/Teléfono/);assert.equal(date.draft.cliente_telefono,undefined);
- const phones=projectIntake(actor,null,previous,[],'912345678\n987654321');assert.match(phones.question,/Teléfono/);assert.equal(phones.draft.cliente_telefono,undefined);
+ const phones=projectIntake(actor,null,previous,[],'912345678\n987654321');assert.match(phones.question,/Cuál corresponde al cliente/);
+ assert.deepEqual(phones.draft.telefonos_pendientes, ['+56912345678','+56987654321']);
+ const chosen = projectIntake(actor,null,phones.draft,[],'987654321');
+ assert.equal(chosen.actions[0].cliente_telefono,'+56987654321');
+ assert.equal(phones.draft.cliente_telefono,undefined);
 });
 
 test('la captura reutiliza Juan Campos aunque falten contactos y pide solo el monto de la obra',()=>{

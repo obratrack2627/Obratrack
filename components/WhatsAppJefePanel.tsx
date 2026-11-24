@@ -24,6 +24,7 @@ import { ReportFeedSkeleton } from "./PageSkeletons";
 import ChatMessageFormatter from "./ChatMessageFormatter";
 import WhatsAppAvisosPanel from "./WhatsAppAvisosPanel";
 const labels: Record<string, string> = {
+  revision_humana: "Revisión humana",
   consulta: "Consulta",
   registro: "Registro de obra",
   fotografia: "Evidencia",
@@ -73,6 +74,7 @@ export default function WhatsAppJefePanel() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tipo") === "revision_humana") setType("revision_humana");
     if (new URLSearchParams(window.location.search).get("tab") === "envios")
       setTab("envios");
     const user = dataService.getActiveUser();
@@ -119,6 +121,15 @@ export default function WhatsAppJefePanel() {
     } finally {
       if (!signal?.aborted) setBusy(false);
     }
+  }
+  async function finishReview(id: string) {
+    try {
+      const res = await fetch('/api/whatsapp/mensajes', {
+        method: 'PATCH', headers: { ...await aiHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ message_id: id }),
+      });
+      if (!res.ok) throw new Error('No se pudo cerrar la revisión.');
+      await refresh();
+    } catch (e) { setError((e as Error).message); }
   }
   useEffect(() => {
     if (tab !== "registros") return;
@@ -422,7 +433,7 @@ export default function WhatsAppJefePanel() {
           )}
           <div className="space-y-3">
             {messages.map((m) => {
-              const category =
+              const category = m.acciones?.derivacion_humana ? "revision_humana" :
                 m.categoria ||
                 (m.adjunto
                   ? "fotografia"
@@ -439,7 +450,7 @@ export default function WhatsAppJefePanel() {
                     : category === "aviso"
                       ? Send
                       : ClipboardList;
-              const rawTitle =
+              const rawTitle = m.acciones?.derivacion_humana ||
                 m.cotizacion?.titulo_proyecto ||
                 m.acciones?.titulo ||
                 labels[category] ||
@@ -453,6 +464,8 @@ export default function WhatsAppJefePanel() {
                   key={m.message_id}
                   className="min-w-0 rounded-2xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-3.5 sm:p-4 space-y-2.5"
                 >
+                  {m.acciones?.derivacion_humana && canActivate && (m.revision_resuelta_at ? <p>Revisión resuelta</p> :
+                    <button type="button" className="btn-secondary" onClick={() => void finishReview(m.message_id)}>Resolver y reactivar ObraBot</button>)}
                   <div className="flex items-start gap-3 min-w-0">
                     <span className="shrink-0 rounded-xl bg-obra-orange/10 p-2 text-obra-orange mt-0.5">
                       <Icon className="h-4 w-4" />
@@ -586,7 +599,7 @@ export default function WhatsAppJefePanel() {
                         <p className="text-xs text-gray-500 mb-2">
                           Respuesta de ObraTrack
                         </p>
-                        <ChatMessageFormatter className="message-content" content={m.respuesta || ""} />
+                        <ChatMessageFormatter className="message-content" content={m.acciones?.pendiente_humano || m.respuesta || ""} />
                       </div>
                     </div>
                     {actions.length > 0 && (

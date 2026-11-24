@@ -1950,3 +1950,70 @@ test('redelivery del mismo evento no repite texto ni PDF aunque falle guardar se
  assert.equal((await handler(request(event([message])))).status,200);assert.equal((await handler(request(event([message])))).status,200);
  assert.equal(texts,1);assert.equal(pdfs,1);
 });
+
+test('un botón, texto o audio recupera la cotización original aunque haya otra más reciente', async () => {
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const makeQuote = id => normalizeQuote({
+    id, titulo_proyecto: id,
+    materiales: [{ nombre: 'Madera', cantidad: 1, unidad: 'un', precio_unitario_estimado: 1500 }],
+    mano_de_obra: [],
+  });
+  const oldQuote = makeQuote('quote-old');
+  const newQuote = makeQuote('quote-new');
+  const scoped = { empresa_id: user.empresa_id, actor_id: user.id };
+  const reply = 'Crea la obra con esa cotización';
+  const context = { id: 'wamid.out.pdf' };
+  const requests = [
+    { type: 'text', context, text: { body: reply } },
+    { type: 'audio', context, audio: { id: 'voice' } },
+    { type: 'interactive', interactive: { type: 'button_reply', button_reply: { id: 'ot:quote:create:sent-pdf' } } },
+  ];
+  for (const request of requests) {
+    const sb = database();
+    sb.db.presupuestos = [oldQuote, newQuote].map(cotizacion => ({
+      id: cotizacion.id, empresa_id: user.empresa_id, cotizacion, estado: 'borrador',
+    }));
+    sb.db.whatsapp_mensajes = [
+      { ...scoped, message_id: 'latest', cotizacion: newQuote },
+      { ...scoped, message_id: 'sent-pdf', acciones: { tipo: 'obrabot_cotizacion', rol_actor: 'admin', presupuesto_pdf_id: oldQuote.id } },
+    ];
+    sb.db.whatsapp_respuestas_envios = [{ ...scoped, meta_message_id: context.id, source_message_id: 'sent-pdf' }];
+    const result = await processPersonalMessage(sb, { id: 'create-quoted', from: '56912345678', ...request }, {
+      chat: async () => assert.fail('La referencia es explícita'),
+      media: async () => ({ mimeType: 'audio/ogg', data: 'YXVkaW8=' }),
+      transcribe: async () => reply,
+    });
+    assert.equal(result.borrador_obra?.presupuesto_cotizacion_id, oldQuote.id, request.type);
+  }
+});
+
+test('dos repeticiones sin avance derivan el trámite una vez, silencian el bot y permiten retomar',async()=>{
+ const sb=database();
+ sb.db.whatsapp_mensajes=[{message_id:'draft',empresa_id:user.empresa_id,actor_id:user.id,acciones:{rol_actor:'admin'},borrador_obra:{nombre:'Terraza',monto_cotizado:190000,cliente_nombre:'Ana Soto'}}];
+ const from=sb.from.bind(sb);
+ sb.from=table=>{const q=from(table);q.update=()=>q;return q;};
+ const turn=(id,body)=>processPersonalMessage(sb,{id,from:'56912345678',type:'text',text:{body}},{chat:async()=>assert.fail('El borrador debe gestionarse sin modelo')});
+ await turn('first','Continúa');
+ assert.equal((await turn('again','Ya te di el número')).acciones.seguimiento.repeticiones,1);
+ const paused=await turn('last','Ya te di el número');
+ assert.equal(paused.acciones.derivacion_humana,'Crear obra');
+ assert.equal((await turn('last','Ya te di el número')).message_id,paused.message_id);
+ assert.equal((await turn('silent','Crea otra obra')).acciones.silencio_humano,true);
+ const resumed=await turn('resume','Retomar ObraBot');
+ assert.equal(resumed.acciones.pausa_humana,false);
+ assert.equal(resumed.borrador_obra.nombre,'Terraza');
+});
+
+test('el recibo de entrega vincula el WAMID efectivamente aceptado con el mensaje autorizado',async()=>{
+ const {deliverReplyOnce}=require('../lib/whatsapp/reply-delivery.ts');
+ const saved = [];
+ const db = {rpc:async()=>({data:{claimed:true}}),from(table){
+   assert.equal(table,'whatsapp_respuestas_envios');
+   const query={update(values){saved.push(values);return this;},eq(){return this;}};
+   return query;
+ }};
+ const accepted=await deliverReplyOnce(db,{persistido:true,empresa_id:'e',actor_id:'a',cotizacion:{id:'q'}},'source','quote_pdf',async()=>'wamid.pdf.accepted');
+ assert.equal(accepted,true);
+ assert.equal(saved[0].meta_message_id,'wamid.pdf.accepted');
+ assert.equal(saved[0].source_message_id,'source');
+});

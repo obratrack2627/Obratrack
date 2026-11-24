@@ -142,13 +142,13 @@ export async function sendAcceptedQuotePdfToWhatsApp(
     if (!phone) return false;
     const source=`web-quote:${params.cotizacion.id}:${createHash('sha256').update(JSON.stringify(params.cotizacion)).digest('hex')}`;
     const deliveryClient = getSupabaseAdmin() || sb;
-    return await deliverReplyOnce(deliveryClient,{persistido:true,empresa_id:params.user.empresa_id,actor_id:params.user.id},source,'quote_pdf',async()=>{
+    return await deliverReplyOnce(deliveryClient,{persistido:true,empresa_id:params.user.empresa_id,actor_id:params.user.id,cotizacion:params.cotizacion},source,'quote_pdf',async()=>{
     const doc = await buildQuotePdfBuffer(sb, {
       cotizacion: params.cotizacion,
       empresaId: params.user.empresa_id,
       actor: actor || params.user,
     });
-    await sendMetaDocument(phone, doc.bytes, doc.filename, doc.caption);
+    return sendMetaDocument(phone, doc.bytes, doc.filename, doc.caption);
     },false);
   } catch (error) {
     console.error("quote_whatsapp_pdf_failure", {
