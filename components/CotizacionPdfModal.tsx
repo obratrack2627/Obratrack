@@ -226,7 +226,7 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
             <table key={title} className="quote-table" aria-label={title}>
             <colgroup><col style={{ width: '6.5%' }} /><col style={{ width: '42.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '8%' }} /><col style={{ width: '17%' }} /><col style={{ width: '18.5%' }} /></colgroup>
             <thead><tr>{['ÍTEM', title, 'UNIDAD', 'CANT.', 'PRECIO UNIT.', amountLabel].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
-            <tbody>{items.map((item, index) => <tr key={index}><td>{String(index + 1).padStart(2, '0')}</td><td><strong>{item.nombre}</strong>{item.descripcion && <small>{item.descripcion}</small>}</td><td>{item.unidad}</td><td>{item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })}</td><td>{quoteMoney(item.precioUnit)}</td><td><strong>{quoteMoney(item.total)}</strong></td></tr>)}</tbody>
+            <tbody>{items.map((item, index) => <tr key={index}><td>{String(index + 1).padStart(2, '0')}</td><td><strong>{item.nombre}</strong>{item.descripcion && <small>{item.descripcion}</small>}</td><td>{item.precioUnit === null && item.unidad === 'gl' ? '' : item.unidad}</td><td>{item.precioUnit === null && item.unidad === 'gl' ? '' : item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })}</td><td>{item.precioUnit === null ? '—' : quoteMoney(item.precioUnit)}</td><td><strong>{quoteMoney(item.total)}</strong></td></tr>)}</tbody>
           </table>
           ))}
           <div className="quote-closing">

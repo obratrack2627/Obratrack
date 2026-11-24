@@ -437,7 +437,7 @@ export interface RecomendacionCobroCliente {
 export interface CotizacionEstimacion {
   modo_presupuesto?: 'estimado' | 'precio_acordado';
   tratamiento_iva?: 'neto' | 'incluido';
-  partidas_venta?: { nombre: string; unidad: string; cantidad: number; precio_unitario: number; subtotal: number }[];
+  partidas_venta?: { nombre: string; unidad: string; cantidad: number; precio_unitario: number; precio_partida?: number; subtotal: number }[];
   nombre_alternativa?: string;
   alternativas?: CotizacionEstimacion[];
   grupo_presupuesto_id?: string;
@@ -452,6 +452,7 @@ export interface CotizacionEstimacion {
   fecha_validez?: string;
   observaciones?: string;
   condiciones_pago?: string;
+  plazo_texto?: string;
   id: string;
   titulo_proyecto: string;
   tipo_obra: string;

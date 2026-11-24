@@ -67,7 +67,7 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     if (item.type === 'interactive' || item.type === 'button') return parseWhatsAppInteractiveReply(item);
     return item[item.type]?.caption;
   }).filter(Boolean).join('\n');
-  const quoteInput = isQuoteWorkflow(text);
+  const quoteInput = isQuoteWorkflow(text, items.some(item => item.type === 'image'));
   const destination = isDestinationCommand(text);
   const files = items.filter(item => ['image', 'document', 'audio'].includes(item.type));
   const contextualPdf = (transcription !== undefined || files.length === 0) && isQuotePdfRequest(text);

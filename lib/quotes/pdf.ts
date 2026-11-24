@@ -104,8 +104,7 @@ export function createQuotePdf(document: QuoteDocument) {
   function drawItems(items: QuoteLine[], startY: number, reference = false) {
     const firstPage = pdf.getCurrentPageInfo().pageNumber;
     const billedTotalLabel = document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL';
-    const body = items.map((item, i) => [String(i + 1).padStart(2, '0'), `${item.nombre}${item.descripcion ? '\n' + item.descripcion : ''}`, item.unidad, item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 }), quoteMoney(item.precioUnit), quoteMoney(item.total)]);
-    if (!reference && infoBottom > 112) body.unshift(['', 'Alcance del proyecto\n' + document.proyecto.descripcion, '', '', '', '']);
+    const body = items.map((item, i) => [String(i + 1).padStart(2, '0'), `${item.nombre}${item.descripcion ? '\n' + item.descripcion : ''}`, item.unidad === 'gl' && item.precioUnit === null ? '' : item.unidad, item.unidad === 'gl' && item.precioUnit === null ? '' : item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 }), item.precioUnit === null ? '—' : quoteMoney(item.precioUnit), quoteMoney(item.total)]);
     autoTable(pdf, {
       startY,
       margin: { left: MARGIN, right: MARGIN, top: 27, bottom: 23 },
@@ -174,6 +173,32 @@ export function createQuotePdf(document: QuoteDocument) {
   section(pdf, 'CONDICIONES DE PAGO', MARGIN, y);
   y += 5;
   paragraph(document.condiciones);
+
+  if (infoBottom > 112) {
+    y = Math.max(y + 8, summaryY + 65);
+    function beginScopePage() {
+      pdf.addPage();
+      drawBrand(pdf, document, MARGIN, 8, true);
+      y = 27;
+    }
+    if (y > 253) beginScopePage();
+    section(pdf, 'DESCRIPCIÓN DEL TRABAJO', MARGIN, y);
+    y += 5;
+    for (const block of document.proyecto.descripcion.split(/\n\s*\n/)) {
+      pdf.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(INK);
+      for (const line of pdf.splitTextToSize(block, WIDTH) as string[]) {
+        if (y > 273) {
+          beginScopePage();
+          section(pdf, 'DESCRIPCIÓN DEL TRABAJO (CONTINUACIÓN)', MARGIN, y);
+          y += 5;
+          pdf.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(INK);
+        }
+        pdf.text(line, MARGIN, y);
+        y += 4.1;
+      }
+      y += 2;
+    }
+  }
 
   const pages = pdf.getNumberOfPages();
   const companyFooter = [document.emisor.empresa, document.emisor.rut ? `RUT: ${document.emisor.rut}` : '']

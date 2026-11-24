@@ -7,9 +7,11 @@ export function commercialLines(raw: any): NonNullable<CotizacionEstimacion['par
   return raw.map((line: any) => {
     if (typeof line.nombre !== 'string' || !line.nombre.trim() || line.nombre.length > 500 || typeof line.unidad !== 'string' || !line.unidad.trim() || line.unidad.length > 30) fail('Revisa el nombre y la unidad de las partidas.');
     if (!Number.isFinite(line.cantidad) || line.cantidad <= 0 || line.cantidad > 1e9 || !Number.isSafeInteger(line.precio_unitario) || line.precio_unitario < 0) fail('Revisa cantidades y precios acordados en CLP.');
-    const subtotal = Number((BigInt(Math.round(line.cantidad * 1e6)) * BigInt(line.precio_unitario) + BigInt(500000)) / BigInt(1000000));
+    const fixed = line.precio_partida;
+    if (fixed != null && (!Number.isSafeInteger(fixed) || fixed < 0)) fail('Revisa el importe de la partida en CLP.');
+    const subtotal = fixed ?? Number((BigInt(Math.round(line.cantidad * 1e6)) * BigInt(line.precio_unitario) + BigInt(500000)) / BigInt(1000000));
     if (!Number.isSafeInteger(subtotal)) fail('El precio supera el rango admitido.');
-    return { nombre: line.nombre.trim(), unidad: line.unidad.trim(), cantidad: line.cantidad, precio_unitario: line.precio_unitario, subtotal };
+    return { nombre: line.nombre.trim(), unidad: line.unidad.trim(), cantidad: line.cantidad, precio_unitario: line.precio_unitario, ...(fixed != null ? { precio_partida: fixed } : {}), subtotal };
   });
 }
 export function agreedTotals(lines: NonNullable<CotizacionEstimacion['partidas_venta']>, iva: unknown) {

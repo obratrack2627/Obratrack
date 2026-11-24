@@ -3,7 +3,8 @@ import { AIError } from '@/lib/ai/errors';
 import { quoteLinePreview, saleLines } from '@/lib/quotes/document';
 import { normalizeQuote } from '@/lib/ai/protocol';
 import type { CotizacionEstimacion } from '@/types/database';
-import { readQuoteSource, readTextQuote, type QuoteSource } from './quote-input';
+import { isNaturalQuoteRequest, isPastedQuote, readPastedQuote } from './quote-message';
+import { readQuoteSource, readTextQuote, transcribeQuoteImage, type QuoteSource } from './quote-input';
 import type { QuoteFormat } from './quote-files';
 import { handleDestinationTurn, rememberQuoteDestination, type QuoteDestination } from './quote-destination';
 
@@ -23,8 +24,9 @@ const starter = /^(?:nueva cotizaci[oó]n|cotizaci[oó]n con precios|(?:prepara|
 const startHelp = /^(?:quiero hacer una )?cotizaci[oó]n pactada[.!]?$/i;
 const starterHelp = 'Envía «Nueva cotización» seguido del nombre. Agrega una partida por línea con el formato Material | Unidad | Cantidad | Precio unitario con IVA, o adjunta un Excel, PDF o foto.';
 
-export function isQuoteWorkflow(text: string) {
-  return starter.test(text) || startHelp.test(text) || /^(?:cotizaciones pendientes|(?:revisa|aprueba|corrige|devuelve) cotizaci[oó]n\b|(?:pdf|excel) (?:de (?:la )?)?cotizaci[oó]n\b)/i.test(text.trim());
+export function isQuoteWorkflow(text: string, hasImage = false) {
+  if (hasImage && isNaturalQuoteRequest(text) && !starter.test(text)) return true;
+  return isPastedQuote(text) || starter.test(text) || startHelp.test(text) || /^(?:cotizaciones pendientes|(?:revisa|aprueba|corrige|devuelve) cotizaci[oó]n\b|(?:pdf|excel) (?:de (?:la )?)?cotizaci[oó]n\b)/i.test(text.trim());
 }
 
 function requireAdmin(actor: Actor) {
@@ -48,7 +50,7 @@ function preview(row: QuoteReview) {
   const totals = quote.estructura_financiera;
   const lines = saleLines(quote).map(quoteLinePreview);
   const detail = [...lines.slice(0, 8), ...(lines.length > 8 ? [`Vista resumida de ${lines.length} partidas. Revisa el detalle completo en la bandeja web antes de aprobar.`] : [])];
-  return [`${quote.titulo_proyecto} · revisión ${row.revision}`, 'Materiales y partidas · IVA incluido', ...detail, `Neto ${formatCLP(totals.precio_sugerido_neto)} · IVA ${formatCLP(totals.iva_19)} · Total ${formatCLP(totals.precio_total_con_iva)}`,
+  return [`${quote.titulo_proyecto} · revisión ${row.revision}`, 'Materiales y partidas · IVA incluido', ...detail, ...(quote.hitos_pago || []).map(h => `${h.nombre} (${h.porcentaje}%) · ${formatCLP(h.monto)}`), `Neto ${formatCLP(totals.precio_sugerido_neto)} · IVA ${formatCLP(totals.iva_19)} · Total ${formatCLP(totals.precio_total_con_iva)}`,
     row.estado === 'pendiente' ? `Para confirmar esta versión, escribe «aprueba cotización ${row.id} ${row.revision}».` : row.estado === 'aprobada' ? `Para usarla en una obra, escribe «Usa cotización ${row.id}».` : `Estado ${row.estado}.`].join('\n');
 }
 
@@ -86,10 +88,16 @@ function draftId(actor: Actor, requestId?: string) {
   return `${hash.slice(0,8)}-${hash.slice(8,12)}-${hash.slice(12,16)}-${hash.slice(16,20)}-${hash.slice(20,32)}`;
 }
 
-async function makeDraft(title: string, lines: string, id: string, source?: QuoteSource) {
-  if (!title.trim() || title.trim().length > 150) throw new AIError('OBRABOT_QUOTE_INPUT', 'Indica un nombre de hasta 150 caracteres para la cotización.', 422);
-  const partidas = source ? await readQuoteSource(source) : readTextQuote(lines);
-  const draft = normalizeQuote({ titulo_proyecto: title.trim(), modo_presupuesto: 'precio_acordado', tratamiento_iva: 'incluido', partidas_venta: partidas, materiales: [], mano_de_obra: [] });
+type DraftInput = Omit<Partial<CotizacionEstimacion>, 'hitos_pago'> & {
+  titulo_proyecto: string;
+  partidas_venta: NonNullable<CotizacionEstimacion['partidas_venta']>;
+  hitos_pago?: Pick<NonNullable<CotizacionEstimacion['hitos_pago']>[number], 'nombre' | 'porcentaje'>[];
+};
+
+function makeDraft(input: DraftInput, id: string) {
+  const title = input.titulo_proyecto.trim();
+  if (!title || title.length > 150) throw new AIError('OBRABOT_QUOTE_INPUT', 'Indica un nombre de hasta 150 caracteres para la cotización.', 422);
+  const draft = normalizeQuote({ ...input, titulo_proyecto: title, modo_presupuesto: 'precio_acordado', tratamiento_iva: 'incluido', materiales: [], mano_de_obra: [] });
   return { ...draft, id: `cot-${id}`, consejos_experto_pyme: [] };
 }
 
@@ -99,7 +107,7 @@ export async function reviewQuote(db: any, actor: Actor, id: string, revision: n
   let draft;
   if (decision === 'corregir') {
     const previous = await getQuoteReview(db, actor, id);
-    draft = await makeDraft(previous.borrador.titulo_proyecto, input || '', id);
+    draft = makeDraft({ ...previous.borrador, partidas_venta: readTextQuote(input || '') }, id);
   }
   if (decision === 'devolver' && (!input?.trim() || input.length > 1000)) throw new AIError('OBRABOT_QUOTE_INPUT', 'Indica el motivo de la devolución.', 422);
   const { data, error } = await db.rpc('obrabot_revisar_cotizacion', { p_empresa: actor.empresa_id, p_actor: actor.id, p_id: id, p_revision: revision, p_decision: decision, p_cambios: draft, p_observacion: decision === 'devolver' ? input : undefined });
@@ -109,16 +117,26 @@ export async function reviewQuote(db: any, actor: Actor, id: string, revision: n
 
 export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, text: string, requestId?: string, source?: QuoteSource, context?: { quotedId?: string | null; permiteVincular?: boolean }): Promise<QuoteReply | null> {
   const message = text.trim();
-  if (!isQuoteWorkflow(message)) return handleDestinationTurn(db, actor, channel, message, context?.quotedId);
+  const hasImage = source?.mime.startsWith('image/') ?? false;
+  if (!isQuoteWorkflow(message, hasImage)) return handleDestinationTurn(db, actor, channel, message, context?.quotedId);
   if (channel === 'plataforma') requireAdmin(actor);
   const start = message.match(starter);
-  if (start || startHelp.test(message)) {
+  const pasted = isPastedQuote(message);
+  const photoQuote = hasImage && isNaturalQuoteRequest(message) && !start;
+  if (start || pasted || photoQuote || startHelp.test(message)) {
     if (!['admin', 'supervisor'].includes(actor.rol)) throw new AIError('OBRABOT_ADMIN', 'La preparación de cotizaciones corresponde al supervisor o administrador.', 403);
-    if (!start) return { respuesta: starterHelp };
-    const rows = message.slice(start[0].length).trim();
-    if (!rows && !source) return { respuesta: starterHelp };
+    const rows = start ? message.slice(start[0].length).trim() : message;
+    if ((!start && !pasted && !photoQuote) || (!rows && !source)) return { respuesta: starterHelp };
     const id = draftId(actor, requestId);
-    const draft = await makeDraft(start[1], rows, id, source);
+    let input: DraftInput;
+    if (pasted || (start && rows.includes('$') && !rows.split('\n')[0].includes('|'))) input = readPastedQuote(rows, start?.[1]);
+    else if (source && photoQuote) input = readPastedQuote(await transcribeQuoteImage(source));
+    else if (source) input = { titulo_proyecto: start?.[1] || 'Cotización de obra', partidas_venta: await readQuoteSource(source) };
+    else input = { titulo_proyecto: start?.[1] || '', partidas_venta: readTextQuote(rows) };
+    if ((input.resumen_ejecutivo?.length || 0) > 6000 || (input.condiciones_pago?.length || 0) > 6000) {
+      throw new AIError('OBRABOT_QUOTE_INPUT', 'El detalle o las condiciones superan los 6.000 caracteres. Acorta el texto para conservarlo completo en el PDF.', 422);
+    }
+    const draft = makeDraft(input, id);
     const { error } = await db.rpc('obrabot_registrar_cotizacion', { p_empresa: actor.empresa_id, p_actor: actor.id, p_id: id, p_origen: channel, p_borrador: draft });
     if (error) dbError(error);
     if (actor.rol === 'supervisor') return { respuesta: 'Guardé la solicitud pendiente de revisión por el administrador.' };
