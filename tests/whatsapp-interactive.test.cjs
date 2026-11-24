@@ -656,3 +656,55 @@ test("crear una cotización para una obra ya existente sin cotización, gantt ni
   assert.equal(lastRpc.p_acciones.presupuesto_proyecto_id, "p-bodega");
   assert.deepEqual(turn2.interactive.buttons.map((b) => b.id), ["ot:team:assign", "ot:team:skip"]);
 });
+
+test("cotizaciones pactadas pendientes y aprobadas muestran botones 1-tap sin escribir UUIDs", () => {
+  const quoteId = "35e18dcb-fab1-403b-95b9-21834d98aef1";
+  const pendingCard = buildWhatsAppInteractivePayload({
+    message_id: "wamid.pending",
+    acciones: { solicitud_cotizacion: quoteId, revision_cotizacion: 2, rol_actor: "admin" },
+  });
+  assert.equal(pendingCard.kind, "buttons");
+  assert.deepEqual(pendingCard.buttons.map((b) => b.id), [`ot:review:approve:${quoteId}:2`, "ot:menu:open"]);
+  for (const b of pendingCard.buttons) assert.ok(b.title.length <= 20, `Título excede 20 chars: ${b.title}`);
+  assert.equal(
+    parseWhatsAppInteractiveReply({
+      type: "interactive",
+      interactive: { type: "button_reply", button_reply: pendingCard.buttons[0] },
+    }),
+    `aprueba cotización ${quoteId} 2`,
+  );
+
+  // Supervisor no recibe botón de aprobación
+  const pendingSupervisor = buildWhatsAppInteractivePayload(
+    { message_id: "wamid.pending-sup", acciones: { solicitud_cotizacion: quoteId, revision_cotizacion: 1 } },
+    { role: "supervisor" },
+  );
+  assert.equal(pendingSupervisor, null);
+
+  // Cotización aprobada con PDF ya adjuntado ofrece Crear obra, Vincular a obra y Descargar Excel
+  const approvedWithPdf = buildWhatsAppInteractivePayload({
+    message_id: "wamid.approved-pdf",
+    acciones: {
+      cotizacion_aprobada_id: quoteId,
+      archivo_cotizacion: { id: quoteId, formato: "pdf" },
+      rol_actor: "admin",
+    },
+  });
+  assert.equal(approvedWithPdf.kind, "buttons");
+  assert.deepEqual(approvedWithPdf.buttons.map((b) => b.title), ["Crear obra", "Vincular a obra", "Descargar Excel"]);
+  for (const b of approvedWithPdf.buttons) assert.ok(b.title.length <= 20, `Título excede 20 chars: ${b.title}`);
+  assert.equal(
+    parseWhatsAppInteractiveReply({
+      type: "interactive",
+      interactive: { type: "button_reply", button_reply: approvedWithPdf.buttons[1] },
+    }),
+    `Vincula cotización ${quoteId} a una obra`,
+  );
+  assert.equal(
+    parseWhatsAppInteractiveReply({
+      type: "interactive",
+      interactive: { type: "button_reply", button_reply: approvedWithPdf.buttons[2] },
+    }),
+    `excel cotización ${quoteId}`,
+  );
+});

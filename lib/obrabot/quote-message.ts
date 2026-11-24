@@ -3,11 +3,15 @@ import { commercialLines } from '@/lib/quotes/commercial';
 import { formatCLP } from '@/lib/utils';
 
 const clp = String.raw`(?:\d{1,3}(?:[.\u00a0 ]\d{3})+|\d+)`;
-const moneyAtEnd = new RegExp(String.raw`^(.+?)\s*\$\s*(${clp})\s*(?:(c\/u|cada uno|unitario|en total))?\.?$`, 'i');
-const projectTotal = /^total(?:\s+(?:del? proyecto|general|con iva))?\s*:?$/i;
+const ivaSuffix = String.raw`(?:\s*(?:\+?\s*m[aá]s\s+iva|\+\s*iva|sin\s+iva|iva\s+incluido|con\s+iva|netos?))?`;
+const moneyAtEnd = new RegExp(String.raw`^(.+?)\s*\$\s*(${clp})\s*(?:(c\/u|cada uno|unitario|en total))?${ivaSuffix}\.?$`, 'i');
+const projectTotal = /^total(?:\s+(?:del? proyecto|general|con iva|neto))?\s*:?$/i;
 const laborLabel = /^(?:mano de obra|obra de mano)$/i;
 const materialsTotal = /^(?:total(?: de)? )?materiales\s*:?$/i;
-const priceByArea = new RegExp(String.raw`^\$\s*(${clp})\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(?:m[2²]|m(?:t|ts|etros?)?\.?\s+cuadrados?)\.?$`, 'i');
+const priceByArea = new RegExp(String.raw`^\$\s*(${clp})\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(?:m[2²]|m(?:t|ts|etros?)?\.?\s+cuadrados?)${ivaSuffix}\.?$`, 'i');
+const netIvaPattern = /(?:(?:\b(?:sin\s+iva|no\s+incluye\s+iva|m[aá]s\s+iva|(?:precios?|valores?)\s+netos?)\b)|\+\s*iva\b)/i;
+const includedIvaPattern = /\b(?:iva\s+incluido|con\s+iva(?:\s+incluido)?|incluye\s+iva)\b/i;
+const ivaDeclarationLine = /^(?:(?:todos\s+los\s+)?(?:precios?|valores?|montos?)\s+)?(?:son\s+)?(?:(?:netos?\s*)?(?:m[aá]s|\+)\s*iva|sin\s+iva|no\s+incluye(?:n)?\s+iva|(?:precios?|valores?)\s+netos?|iva\s+incluido|con\s+iva(?:\s+incluido)?|incluye(?:n)?\s+iva)\.?$/i;
 const quantityPrefix = /^(\d+(?:[,.]\d+)?)\s+(\S.*)$/;
 const leadingUnit = /^(m[³3]|m[²2]|(?:mt|mts|metros?)\.?\s+c[uú]bicos?|(?:mt|mts|metros?)\.?\s+cuadrados?|kg|litros?|unidades?|sacos?|cajas?)\s+(?:de\s+)?(\S.*)$/i;
 const requestLine = /^(?:[¿¡]\s*)?(?:puedes |podemos |podr[ií]as |necesito (?:que )?|quiero )?(?:hacer|hace[rs]?|realiz[ae]r?|arm[ae]r?|prepar[ae]r?|gener[ae]r?|cotiza[rs]?|haz(?:me)?)\b.{0,35}\bcotizaci[oó]n\b/i;
@@ -69,10 +73,13 @@ function paymentPlan(text: string) {
   return [{ nombre: 'Anticipo para materiales', porcentaje: advance }, { nombre: 'Saldo de mano de obra', porcentaje: balance }];
 }
 
-export function readPastedQuote(text: string, providedTitle?: string) {
-  if (/\b(?:sin iva|no incluye iva|m[aá]s iva|precios? netos?)\b/i.test(text)) {
-    invalid('Para preparar esta cotización, confirma los valores finales con IVA incluido.');
+export function readPastedQuote(text: string, providedTitle?: string, defaultIva?: 'incluido' | 'neto') {
+  const hasNetIva = netIvaPattern.test(text);
+  const hasIncludedIva = includedIvaPattern.test(text);
+  if (hasNetIva && hasIncludedIva) {
+    invalid('Confirma si los valores de esta cotización son con IVA incluido o netos más IVA.');
   }
+  const tratamiento_iva: 'incluido' | 'neto' = hasNetIva ? 'neto' : hasIncludedIva ? 'incluido' : (defaultIva ?? 'incluido');
   if (text.length > 16000) invalid('Divide el presupuesto en un listado más breve para conservar el detalle en esta cotización.');
   const rawLines = quoteLines(text.trim());
   if (!providedTitle && requestLine.test(rawLines[0])) rawLines.shift();
@@ -86,13 +93,16 @@ export function readPastedQuote(text: string, providedTitle?: string) {
   let statedAreaPrice: number | undefined;
   let days: RegExpMatchArray | null = null;
   let inScope = false;
+  const bareTotalLine = new RegExp(String.raw`^\$\s*(${clp})${ivaSuffix}\.?$`, 'i');
   for (const line of rawLines) {
     if (!line) {
       if (scope.length && scope.at(-1) !== '') scope.push('');
       continue;
     }
+    if (ivaDeclarationLine.test(line)) continue;
     const key = fold(line);
     const money = line.match(moneyAtEnd);
+    const bareTotal = line.match(bareTotalLine);
     if (chargeLine.test(line)) {
       payment.push(line);
     } else if (key.startsWith('valor por metro cuadrado') && money) {
@@ -109,14 +119,14 @@ export function readPastedQuote(text: string, providedTitle?: string) {
       declaredTotal = amount(money[2]);
     } else if (money && materialsTotal.test(money[1].trim())) {
       declaredMaterials = amount(money[2]);
-    } else if (/^\$\s*\d/.test(line) && new RegExp(String.raw`^\$\s*${clp}$`).test(line)) {
-      declaredTotal = amount(line.replace(/^\$\s*/, ''));
+    } else if (bareTotal) {
+      declaredTotal = amount(bareTotal[1]);
     } else if (/^(?:descripci[oó]n (?:del trabajo|de la obra)|alcance|datos del trabajo)\s*:?$/i.test(line)) {
       inScope = true;
       scope.push(line);
     } else if (money && !inScope) {
       const label = money[1].trim().replace(/:$/, '').trim();
-      if (/^(?:descuento|recargo|iva|neto|subtotal)\b/i.test(label)) invalid('Confirma los importes finales de las partidas con IVA y los descuentos ya aplicados.');
+      if (/^(?:descuento|recargo|iva|neto|subtotal)\b/i.test(label)) invalid('Confirma los importes finales de las partidas con los descuentos ya aplicados.');
       if (laborLabel.test(label)) laborRows.push(lines.length);
       lines.push(pricedLine(label, amount(money[2]), money[3] != null && money[3].toLowerCase() !== 'en total'));
     } else if (line.includes('$') && !inScope) {
@@ -139,6 +149,7 @@ export function readPastedQuote(text: string, providedTitle?: string) {
   return {
     titulo_proyecto: title || partidas.slice(0, 3).map(line => line.nombre).join(', '),
     partidas_venta: partidas,
+    tratamiento_iva,
     resumen_ejecutivo: scope.join('\n').trim(),
     condiciones_pago: conditions || undefined,
     hitos_pago: paymentPlan(conditions),

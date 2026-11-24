@@ -24,6 +24,8 @@ async function submitQuote(request: NextRequest) {
     const message = form?.get('mensaje');
     const requestId = form?.get('solicitud');
     const file = form?.get('archivo');
+    const rawIva = form?.get('tratamiento_iva');
+    const tratamientoIva = rawIva === 'neto' ? 'neto' : rawIva === 'incluido' ? 'incluido' : undefined;
     if (typeof message !== 'string' || !message.trim() || message.length > 32000 || typeof requestId !== 'string' || !requestId.trim() || requestId.length > 100 || (file && (typeof file === 'string' || file.size > 3000000))) {
       throw new AIError('OBRABOT_QUOTE_INPUT', 'Revisa el mensaje y adjunta solo un Excel, PDF o foto de hasta 3 MB.', 422);
     }
@@ -31,7 +33,7 @@ async function submitQuote(request: NextRequest) {
       bytes: Buffer.from(await file.arrayBuffer()),
       mime: /\.xlsx$/i.test(file.name) ? excelMime : file.type,
     } : undefined;
-    const result = await handleQuoteTurn(db, actor, 'plataforma', message, requestId, source, { permiteVincular: plan === 'pro_ia' });
+    const result = await handleQuoteTurn(db, actor, 'plataforma', message, requestId, source, { permiteVincular: plan === 'pro_ia', tratamientoIva });
     if (!result) throw new AIError('OBRABOT_QUOTE_INPUT', 'Indica una acción de cotización.', 422);
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { return errorJSON(error); }

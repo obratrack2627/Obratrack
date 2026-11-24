@@ -157,11 +157,19 @@ export function createChatHandler(
         const reply = await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
         const file = reply?.archivo;
         if (reply) return NextResponse.json({
-          respuesta: reply.respuesta, accion: null, cotizacion: null, sugerencias: [],
+          respuesta: reply.respuesta, accion: null, cotizacion: null,
+          sugerencias: file
+            ? (plan.data?.plan_id === 'pro_ia' ? ['Crear obra', 'Vincular a obra'] : [])
+            : reply.solicitud && reply.revision
+              ? [`aprueba cotización ${reply.solicitud} ${reply.revision}`]
+              : [],
           ...(file ? { accion_ejecutada: {
             tipo: 'obrabot_cotizacion', titulo: 'Cotización aprobada', resultado_texto: 'Archivo listo para descargar.', detalles: {},
             link_destino: `/api/obrabot/cotizaciones/${file.id}?formato=${file.formato}`,
             link_texto: file.formato === 'excel' ? 'Descargar Excel' : 'Descargar PDF',
+          } } : reply.solicitud && reply.revision ? { accion_ejecutada: {
+            tipo: 'obrabot_cotizacion', titulo: 'Cotización lista para revisión', resultado_texto: 'Puedes aprobarla aquí o en la bandeja del Cotizador.', detalles: {},
+            link_destino: '/cotizador#cotizaciones-obrabot', link_texto: 'Abrir bandeja de revisión',
           } } : reply.obra ? { accion_ejecutada: {
             tipo: 'obrabot_destino_cotizacion', titulo: 'Gestión de obra', resultado_texto: 'Obra disponible en ObraTrack.', detalles: {},
             link_destino: `/proyectos/${encodeURIComponent(reply.obra)}/presupuestos`, link_texto: 'Ver obra',

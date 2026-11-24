@@ -18,11 +18,11 @@ export type QuoteReview = {
   presupuesto_id: string | null;
   destino?: QuoteDestination;
 };
-export type QuoteReply = { pasoPendiente?: { id: string; datos: Record<string, unknown> }; respuesta: string; archivo?: { id: string; formato: QuoteFormat }; solicitud?: string; obra?: string; cotizacionAprobadaId?: string };
+export type QuoteReply = { pasoPendiente?: { id: string; datos: Record<string, unknown> }; respuesta: string; archivo?: { id: string; formato: QuoteFormat; origen?: 'presupuesto' }; solicitud?: string; revision?: number; obra?: string; cotizacionAprobadaId?: string };
 const uuid = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
 const starter = /^(?:nueva cotizaci[oó]n|cotizaci[oó]n con precios|(?:prepara|genera|hazme) (?:una |la )?cotizaci[oó]n con (?:estos )?precios)\b[ \t]*:?[ \t]*([^\n]*)/i;
 const startHelp = /^(?:quiero hacer una )?cotizaci[oó]n pactada[.!]?$/i;
-const starterHelp = 'Envía «Nueva cotización» seguido del nombre. Agrega una partida por línea con el formato Material | Unidad | Cantidad | Precio unitario con IVA, o adjunta un Excel, PDF o foto.';
+const starterHelp = 'Perfecto, preparemos tu cotización pactada. Puedes:\n• Pegar tu lista de partidas con precios en $ (IVA incluido o más IVA)\n• Enviar una foto, PDF o planilla Excel del presupuesto\n• O escribir «Nueva cotización: Nombre» seguido de líneas Material | Unidad | Cantidad | Precio';
 
 export function isQuoteWorkflow(text: string, hasImage = false) {
   if (hasImage && isNaturalQuoteRequest(text) && !starter.test(text)) return true;
@@ -45,13 +45,31 @@ function formatCLP(amount: number) {
   return `$${amount.toLocaleString('es-CL')}`;
 }
 
-function preview(row: QuoteReview) {
+function preview(row: QuoteReview, channel: Channel = 'plataforma') {
   const quote = row.borrador;
   const totals = quote.estructura_financiera;
   const lines = saleLines(quote).map(quoteLinePreview);
   const detail = [...lines.slice(0, 8), ...(lines.length > 8 ? [`Vista resumida de ${lines.length} partidas. Revisa el detalle completo en la bandeja web antes de aprobar.`] : [])];
-  return [`${quote.titulo_proyecto} · revisión ${row.revision}`, 'Materiales y partidas · IVA incluido', ...detail, ...(quote.hitos_pago || []).map(h => `${h.nombre} (${h.porcentaje}%) · ${formatCLP(h.monto)}`), `Neto ${formatCLP(totals.precio_sugerido_neto)} · IVA ${formatCLP(totals.iva_19)} · Total ${formatCLP(totals.precio_total_con_iva)}`,
-    row.estado === 'pendiente' ? `Para confirmar esta versión, escribe «aprueba cotización ${row.id} ${row.revision}».` : row.estado === 'aprobada' ? `Para usarla en una obra, escribe «Usa cotización ${row.id}».` : `Estado ${row.estado}.`].join('\n');
+  const ivaLabel = quote.tratamiento_iva === 'neto'
+    ? 'Materiales y partidas · Valores netos (+19% IVA)'
+    : 'Materiales y partidas · IVA incluido';
+  const nextStep = row.estado === 'pendiente'
+    ? channel === 'whatsapp'
+      ? 'Toca «Aprobar y PDF» o responde «Aprobar» para confirmar esta versión y recibir el PDF.'
+      : `Para confirmar esta versión, apruébala en la bandeja o escribe «aprueba cotización ${row.id} ${row.revision}».`
+    : row.estado === 'aprobada'
+      ? channel === 'whatsapp'
+        ? 'Responde «Crear obra», «Vincular a obra» o «Excel» para continuar.'
+        : `Para usarla en una obra, escribe «Usa cotización ${row.id}».`
+      : `Estado ${row.estado}.`;
+  return [
+    `${quote.titulo_proyecto} · revisión ${row.revision}`,
+    ivaLabel,
+    ...detail,
+    ...(quote.hitos_pago || []).map(h => `${h.nombre} (${h.porcentaje}%) · ${formatCLP(h.monto)}`),
+    `Neto ${formatCLP(totals.precio_sugerido_neto)} · IVA ${formatCLP(totals.iva_19)} · Total ${formatCLP(totals.precio_total_con_iva)}`,
+    nextStep,
+  ].join('\n');
 }
 
 export async function getQuoteReview(db: any, actor: Actor, id: string) {
@@ -97,7 +115,8 @@ type DraftInput = Omit<Partial<CotizacionEstimacion>, 'hitos_pago'> & {
 function makeDraft(input: DraftInput, id: string) {
   const title = input.titulo_proyecto.trim();
   if (!title || title.length > 150) throw new AIError('OBRABOT_QUOTE_INPUT', 'Indica un nombre de hasta 150 caracteres para la cotización.', 422);
-  const draft = normalizeQuote({ ...input, titulo_proyecto: title, modo_presupuesto: 'precio_acordado', tratamiento_iva: 'incluido', materiales: [], mano_de_obra: [] });
+  const tratamiento_iva = input.tratamiento_iva === 'neto' ? 'neto' : 'incluido';
+  const draft = normalizeQuote({ ...input, titulo_proyecto: title, modo_presupuesto: 'precio_acordado', tratamiento_iva, materiales: [], mano_de_obra: [] });
   return { ...draft, id: `cot-${id}`, consejos_experto_pyme: [] };
 }
 
@@ -107,7 +126,14 @@ export async function reviewQuote(db: any, actor: Actor, id: string, revision: n
   let draft;
   if (decision === 'corregir') {
     const previous = await getQuoteReview(db, actor, id);
-    draft = makeDraft({ ...previous.borrador, partidas_venta: readTextQuote(input || '') }, id);
+    const rawEdit = (input || '').trim();
+    const prevIva = previous.borrador.tratamiento_iva === 'neto' ? 'neto' : 'incluido';
+    if (rawEdit.includes('$') && !rawEdit.split('\n')[0].includes('|')) {
+      const parsed = readPastedQuote(rawEdit, previous.borrador.titulo_proyecto, prevIva);
+      draft = makeDraft({ ...previous.borrador, ...parsed, titulo_proyecto: previous.borrador.titulo_proyecto }, id);
+    } else {
+      draft = makeDraft({ ...previous.borrador, partidas_venta: readTextQuote(rawEdit), tratamiento_iva: prevIva }, id);
+    }
   }
   if (decision === 'devolver' && (!input?.trim() || input.length > 1000)) throw new AIError('OBRABOT_QUOTE_INPUT', 'Indica el motivo de la devolución.', 422);
   const { data, error } = await db.rpc('obrabot_revisar_cotizacion', { p_empresa: actor.empresa_id, p_actor: actor.id, p_id: id, p_revision: revision, p_decision: decision, p_cambios: draft, p_observacion: decision === 'devolver' ? input : undefined });
@@ -115,7 +141,7 @@ export async function reviewQuote(db: any, actor: Actor, id: string, revision: n
   return data as QuoteReview;
 }
 
-export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, text: string, requestId?: string, source?: QuoteSource, context?: { quotedId?: string | null; permiteVincular?: boolean }): Promise<QuoteReply | null> {
+export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, text: string, requestId?: string, source?: QuoteSource, context?: { quotedId?: string | null; permiteVincular?: boolean; tratamientoIva?: 'incluido' | 'neto' }): Promise<QuoteReply | null> {
   const message = text.trim();
   const hasImage = source?.mime.startsWith('image/') ?? false;
   if (!isQuoteWorkflow(message, hasImage)) return handleDestinationTurn(db, actor, channel, message, context?.quotedId);
@@ -128,11 +154,12 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
     const rows = start ? message.slice(start[0].length).trim() : message;
     if ((!start && !pasted && !photoQuote) || (!rows && !source)) return { respuesta: starterHelp };
     const id = draftId(actor, requestId);
+    const defaultIva = context?.tratamientoIva;
     let input: DraftInput;
-    if (pasted || (start && rows.includes('$') && !rows.split('\n')[0].includes('|'))) input = readPastedQuote(rows, start?.[1]);
-    else if (source && photoQuote) input = readPastedQuote(await transcribeQuoteImage(source));
-    else if (source) input = { titulo_proyecto: start?.[1] || 'Cotización de obra', partidas_venta: await readQuoteSource(source) };
-    else input = { titulo_proyecto: start?.[1] || '', partidas_venta: readTextQuote(rows) };
+    if (pasted || (start && rows.includes('$') && !rows.split('\n')[0].includes('|'))) input = readPastedQuote(rows, start?.[1], defaultIva);
+    else if (source && photoQuote) input = readPastedQuote(await transcribeQuoteImage(source), undefined, defaultIva);
+    else if (source) input = { titulo_proyecto: start?.[1] || 'Cotización de obra', partidas_venta: await readQuoteSource(source), tratamiento_iva: defaultIva };
+    else input = { titulo_proyecto: start?.[1] || '', partidas_venta: readTextQuote(rows), tratamiento_iva: defaultIva };
     if ((input.resumen_ejecutivo?.length || 0) > 6000 || (input.condiciones_pago?.length || 0) > 6000) {
       throw new AIError('OBRABOT_QUOTE_INPUT', 'El detalle o las condiciones superan los 6.000 caracteres. Acorta el texto para conservarlo completo en el PDF.', 422);
     }
@@ -140,7 +167,8 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
     const { error } = await db.rpc('obrabot_registrar_cotizacion', { p_empresa: actor.empresa_id, p_actor: actor.id, p_id: id, p_origen: channel, p_borrador: draft });
     if (error) dbError(error);
     if (actor.rol === 'supervisor') return { respuesta: 'Guardé la solicitud pendiente de revisión por el administrador.' };
-    return { respuesta: preview(await getQuoteReview(db, actor, id)), solicitud: id };
+    const created = await getQuoteReview(db, actor, id);
+    return { respuesta: preview(created, channel), solicitud: id, revision: created.estado === 'pendiente' ? created.revision : undefined };
   }
   requireAdmin(actor);
   if (/^cotizaciones pendientes$/i.test(message)) {
@@ -151,7 +179,10 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
   if (read) {
     const verb = read[1].toLowerCase();
     const id = read[2].toLowerCase();
-    if (verb === 'revisa') return { respuesta: preview(await getQuoteReview(db, actor, id)), solicitud: id };
+    if (verb === 'revisa') {
+      const reviewed = await getQuoteReview(db, actor, id);
+      return { respuesta: preview(reviewed, channel), solicitud: id, revision: reviewed.estado === 'pendiente' ? reviewed.revision : undefined };
+    }
     await getApprovedQuote(db, actor, id);
     return { respuesta: 'Aquí está el archivo de la cotización aprobada.', archivo: { id, formato: verb as QuoteFormat } };
   }
@@ -162,7 +193,7 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
   const alreadyApproved = verb === 'aprueba' && (await getQuoteReview(db, actor, id)).estado === 'aprobada';
   const approved = await reviewQuote(db, actor, id, Number(decision[3]), verb === 'aprueba' ? 'aprobar' : verb === 'corrige' ? 'corregir' : 'devolver', decision[4]);
   if (verb === 'devuelve') return { respuesta: 'La solicitud quedó devuelta con la observación.' };
-  if (verb === 'corrige') return { respuesta: preview(approved), solicitud: id };
+  if (verb === 'corrige') return { respuesta: preview(approved, channel), solicitud: id, revision: approved.estado === 'pendiente' ? approved.revision : undefined };
   if (alreadyApproved) return { respuesta: `Esta cotización ya está aprobada. Escribe «PDF cotización ${id}» si quieres descargarla de nuevo.` };
   const canLink = context?.permiteVincular !== false;
   if (canLink) await rememberQuoteDestination(db, actor, channel, id);

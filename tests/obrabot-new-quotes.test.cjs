@@ -225,3 +225,87 @@ test('la transcripción de una foto conserva el total de cada fila y pide otra i
   assert.equal(readPastedQuote(message).partidas_venta[0].subtotal, 24000);
   await assert.rejects(transcribeQuoteImage(source, async () => '{"completo":false,"texto":""}'), /No pude leer/);
 });
+
+test('convergencia de motores: soporta valores netos + IVA, aprobación contextual sin UUID y Excel para Motor A y Motor B', async () => {
+  const { readPastedQuote } = require('../lib/obrabot/quote-message.ts');
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+
+  // 1. Cotización pegada con "Más IVA" calcula 19% IVA adicional y genera Excel neto editable
+  const netMsg = `Cotización de hormigón estampado
+Valor por metro cuadrado $ 37.000
+$37.000 x 84 mts cuadrados
+Más IVA`;
+  const parsedNet = readPastedQuote(netMsg);
+  assert.equal(parsedNet.tratamiento_iva, 'neto');
+  assert.equal(parsedNet.partidas_venta[0].subtotal, 3108000);
+  assert.throws(() => readPastedQuote(`${netMsg}\nIVA incluido`), /IVA incluido o netos/);
+
+  const db = database();
+  const budgets = new Map();
+  const origFrom = db.from.bind(db);
+  db.from = (table) => {
+    if (table !== 'presupuestos') return origFrom(table);
+    let filters = [];
+    return {
+      select() { return this; },
+      eq(k, v) { filters.push(r => r[k] === v); return this; },
+      async maybeSingle() {
+        return { data: [...budgets.values()].find(r => filters.every(f => f(r))) || null };
+      },
+    };
+  };
+
+  // Turno 1: Admin pega cotización neta en WhatsApp -> recibe preview con revisión y sin exigir UUID
+  const ev1 = { id: 'wamid-net-1', type: 'text', from: '56912345678', text: { body: netMsg } };
+  const reply1 = await quoteWhatsAppTurn(db, admin, ev1, [ev1]);
+  assert.match(reply1.respuesta, /Valores netos \(\+19% IVA\)/);
+  assert.match(reply1.respuesta, /3\.108\.000/);
+  assert.match(reply1.respuesta, /590\.520/);
+  assert.match(reply1.respuesta, /3\.698\.520/);
+  assert.equal(reply1.acciones.revision_cotizacion, 1);
+  assert.ok(reply1.acciones.solicitud_cotizacion);
+
+  // Turno 2: Admin responde simplemente "Aprobar" sin escribir ningún UUID
+  const ev2 = { id: 'wamid-net-2', type: 'text', from: '56912345678', text: { body: 'Aprobar' } };
+  const rowsAfterPreview = [{ message_id: reply1.message_id, acciones: reply1.acciones, created_at: new Date().toISOString() }];
+  const reply2 = await quoteWhatsAppTurn(db, admin, ev2, [ev2], undefined, undefined, rowsAfterPreview);
+  assert.match(reply2.respuesta, /Cotización aprobada/);
+  assert.deepEqual(reply2.acciones.archivo_cotizacion, { id: reply1.acciones.solicitud_cotizacion, formato: 'pdf' });
+  assert.equal(reply2.acciones.cotizacion_aprobada_id, reply1.acciones.solicitud_cotizacion);
+
+  // Turno 3: Admin pide "Dámelo en Excel" -> genera Excel neto con fórmulas de Neto + IVA 19% + Total
+  const ev3 = { id: 'wamid-net-3', type: 'text', from: '56912345678', text: { body: 'Dámelo en Excel' } };
+  const rowsAfterApprove = [{ message_id: reply2.message_id, acciones: reply2.acciones, created_at: new Date().toISOString() }, ...rowsAfterPreview];
+  const reply3 = await quoteWhatsAppTurn(db, admin, ev3, [ev3], undefined, undefined, rowsAfterApprove);
+  assert.deepEqual(reply3.acciones.archivo_cotizacion, { id: reply1.acciones.solicitud_cotizacion, formato: 'excel' });
+  const netExcel = await obrabotWhatsAppFile(db, reply3, '56912345678');
+  const netSheet = (await new ExcelJS.Workbook().xlsx.load(Buffer.from(netExcel.bytes))).worksheets[0];
+  assert.equal(netSheet.getRow(1).getCell(4).value, 'Precio unitario neto');
+  assert.equal(netSheet.getCell('D2').value, 37000);
+  assert.deepEqual(netSheet.getCell('E2').value, { formula: 'ROUND(C2*D2,0)', result: 3108000 });
+  assert.deepEqual(netSheet.getCell('E4').value, { formula: 'SUM(E2:E2)', result: 3108000 });
+  assert.deepEqual(netSheet.getCell('E5').value, { formula: 'ROUND(E4*19/100,0)', result: 590520 });
+  assert.deepEqual(netSheet.getCell('E6').value, { formula: 'E4+E5', result: 3698520 });
+
+  // Turno 4: Supervisor no puede descargar Excel contextual
+  const supExcel = await quoteWhatsAppTurn(db, supervisor, ev3, [ev3], undefined, undefined, rowsAfterApprove);
+  assert.match(supExcel.respuesta, /administrador/);
+
+  // Turno 5: Cotización de Motor A (presupuestos) también descarga Excel editable vía WhatsApp
+  const motorAQuote = normalizeQuote({
+    id: 'cot-motora-1',
+    titulo_proyecto: 'Pintura fachada',
+    materiales: [{ nombre: 'Látex', cantidad: 2, unidad: 'galón', precio_unitario_estimado: 25000 }],
+    mano_de_obra: [{ rol: 'Pintor', cantidad_personas: 1, dias_estimados: 2, valor_jornal_diario: 45000 }],
+  });
+  budgets.set(motorAQuote.id, { id: motorAQuote.id, empresa_id: admin.empresa_id, estado: 'borrador', cotizacion: motorAQuote });
+  const motorARows = [{ message_id: 'wamid-ma', cotizacion: motorAQuote, acciones: { presupuesto_cotizacion_id: motorAQuote.id } }];
+  const evMotorAExcel = { id: 'wamid-ma-xlsx', type: 'text', from: '56912345678', text: { body: 'Envíame la cotización en Excel' } };
+  const replyMotorA = await quoteWhatsAppTurn(db, admin, evMotorAExcel, [evMotorAExcel], undefined, undefined, motorARows);
+  assert.deepEqual(replyMotorA.acciones.archivo_cotizacion, { id: motorAQuote.id, formato: 'excel', origen: 'presupuesto' });
+  const motorAFile = await obrabotWhatsAppFile(db, replyMotorA, '56912345678');
+  assert.ok(motorAFile && motorAFile.filename.endsWith('.xlsx'));
+  const maSheet = (await new ExcelJS.Workbook().xlsx.load(Buffer.from(motorAFile.bytes))).worksheets[0];
+  assert.equal(maSheet.getRow(1).getCell(4).value, 'Precio unitario neto');
+  assert.equal(maSheet.getCell('A2').value, 'Látex');
+});

@@ -80,7 +80,13 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
 
     if (quoteButtonSource(item, "create")) return "Crea la obra con esta cotización";
     if (quoteButtonSource(item, "pdf")) return "Generar PDF";
+    if (id.startsWith("ot:review:approve:")) {
+      const [quoteId, rev] = id.slice("ot:review:approve:".length).split(":");
+      if (quoteId && rev) return `aprueba cotización ${quoteId} ${rev}`;
+    }
     if (id.startsWith("ot:approved:create:")) return `Crea la obra con la cotización ${id.slice("ot:approved:create:".length)}`;
+    if (id.startsWith("ot:approved:link:")) return `Vincula cotización ${id.slice("ot:approved:link:".length)} a una obra`;
+    if (id.startsWith("ot:approved:excel:")) return `excel cotización ${id.slice("ot:approved:excel:".length)}`;
 
     switch (id) {
       case "ot:menu:create_project":
@@ -213,7 +219,7 @@ export function directInteractiveMenuReply(batchItems: any[]): { respuesta: stri
     case "ot:menu:agreed_quote":
       return {
         respuesta:
-          "Perfecto, preparemos una cotización pactada. Indícame el trabajo, el precio total ya acordado (con IVA incluido o + IVA), el cliente y los días estimados.",
+          "Perfecto, preparemos tu cotización pactada. Puedes pegar tu lista de partidas con precios en $ (IVA incluido o más IVA), enviar una foto, PDF o Excel del presupuesto, o indicarme el trabajo y el monto acordado.",
       };
     case "ot:menu:prices":
       return {
@@ -340,12 +346,34 @@ export function buildWhatsAppInteractivePayload(
   const pdfButton = role === "admin" && result.message_id
     ? [{ id: `ot:quote:pdf:${result.message_id}`, title: "Generar PDF" }]
     : [];
+  if (actions.solicitud_cotizacion && typeof actions.revision_cotizacion === "number" && role === "admin") {
+    return {
+      kind: "buttons",
+      body: "¿Aprobamos esta cotización para generar el PDF?",
+      footer: "ObraBot · Revisión",
+      buttons: [
+        { id: `ot:review:approve:${actions.solicitud_cotizacion}:${actions.revision_cotizacion}`, title: "✅ Aprobar y PDF" },
+        { id: "ot:menu:open", title: "📋 Menú principal" },
+      ],
+    };
+  }
   if (actions.cotizacion_aprobada_id && role === "admin") {
+    const approvedButtons =
+      actions.archivo_cotizacion?.formato === "pdf"
+        ? [
+            { id: `ot:approved:create:${actions.cotizacion_aprobada_id}`, title: "Crear obra" },
+            { id: `ot:approved:link:${actions.cotizacion_aprobada_id}`, title: "Vincular a obra" },
+            { id: `ot:approved:excel:${actions.cotizacion_aprobada_id}`, title: "Descargar Excel" },
+          ]
+        : [
+            { id: `ot:approved:create:${actions.cotizacion_aprobada_id}`, title: "Crear obra" },
+            ...pdfButton,
+          ];
     return {
       kind: "buttons",
       body: "¿Qué quieres hacer con esta cotización aprobada?",
       footer: "ObraBot · Cotizador",
-      buttons: [{ id: `ot:approved:create:${actions.cotizacion_aprobada_id}`, title: "Crear obra" }, ...pdfButton],
+      buttons: approvedButtons,
     };
   }
 

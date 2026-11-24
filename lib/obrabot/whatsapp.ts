@@ -13,12 +13,56 @@ import { parseWhatsAppInteractiveReply, quoteButtonSource } from '@/lib/whatsapp
 const pdfRequestWords = new Set(
   'pdf por favor el la un una de del en como formato archivo documento copia cotizacion presupuesto esta este esa ese lo eso me mi quiero quisiera necesito que podrias puedes puede das envias mandas enviar mandarme mandar enviarme mandame enviame enviamelo mandamelo damelo dame dalo pasame pasamelo pasa pasalo pasar pasarme entregar entregarme entregame entregamelo entrega adjuntar adjuntarme adjunta adjuntame adjuntalo adjuntamelo descarga descargar descargalo generar generarme genera generame generalo generamelo hazlo hazmelo haz hacer preparar preparame preparalo compartir comparteme compartelo porfa exporta exportar exportalo'.split(' '),
 );
+const excelRequestWords = new Set([...pdfRequestWords, 'excel', 'xlsx', 'planilla', 'hoja', 'calculo']);
 
 function isQuotePdfRequest(text: string) {
   const words = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/[¿?¡!.,]/g, ' ').trim().split(/\s+/);
   if (!words.includes('pdf') || !words.every(word => pdfRequestWords.has(word))) return false;
   return !words.some((word, index) => ['un', 'una'].includes(word) && ['cotizacion', 'presupuesto'].includes(words[index + 1]));
+}
+
+function isQuoteExcelRequest(text: string) {
+  const words = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[¿?¡!.,]/g, ' ').trim().split(/\s+/);
+  if (!words.some(word => word === 'excel' || word === 'xlsx') || !words.every(word => excelRequestWords.has(word))) return false;
+  return !words.some((word, index) => ['un', 'una'].includes(word) && ['cotizacion', 'presupuesto'].includes(words[index + 1]));
+}
+
+function isShortQuoteApproval(text: string) {
+  const clean = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[¿?¡!.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  return /^(?:si\s+)?(?:aprueba|aprobar|aprobada|confirmo)(?:\s+(?:la|esta|esa)\s+(?:cotizacion|version|revision))?$/.test(clean);
+}
+
+function findPendingQuoteReview(rows: any[], replyContextId?: string, text = ''): { id: string; revision: number } | null {
+  const isFresh = (row: any) => !row?.created_at || !(Date.now() - Date.parse(row.created_at) > quoteSessionMs);
+  const extract = (row: any) => {
+    const id = row?.acciones?.solicitud_cotizacion;
+    const revision = row?.acciones?.revision_cotizacion;
+    if (typeof id === 'string' && validQuoteId(id) && typeof revision === 'number' && !row?.acciones?.cotizacion_aprobada_id && !row?.borrador_obra) {
+      return { id, revision };
+    }
+    return null;
+  };
+  if (replyContextId) {
+    const replied = rows.find(row => row.message_id === replyContextId);
+    return replied ? extract(replied) : null;
+  }
+  const last = rows[0];
+  if (last && isFresh(last)) {
+    const immediate = extract(last);
+    if (immediate) return immediate;
+  }
+  if (/\bcotizaci[oó]n\b/i.test(text)) {
+    const approvedIds = new Set(rows.map(row => row?.acciones?.cotizacion_aprobada_id).filter(Boolean));
+    for (const row of rows) {
+      if (!isFresh(row)) break;
+      const candidate = extract(row);
+      if (candidate && !approvedIds.has(candidate.id)) return candidate;
+    }
+  }
+  return null;
 }
 
 type WhatsAppQuoteReply = QuoteReply & { presupuestoPdfId?: string };
@@ -44,14 +88,16 @@ function sanitizeQuoteAuditText(raw: string): string {
 
 export function quoteReference(row: any) {
   const actions = row?.acciones;
-  const review = actions?.archivo_cotizacion?.id || actions?.solicitud_cotizacion;
+  const archive = actions?.archivo_cotizacion;
+  const review = (archive?.origen !== 'presupuesto' ? archive?.id : null) || actions?.solicitud_cotizacion;
   if (typeof review === 'string' && validQuoteId(review)) return { review };
-  const budget = actions?.presupuesto_pdf_id || actions?.presupuesto_seleccion_id || actions?.presupuesto_cotizacion_id || row?.cotizacion?.id;
+  const budget = (archive?.origen === 'presupuesto' ? archive?.id : null) || actions?.presupuesto_pdf_id || actions?.presupuesto_seleccion_id || actions?.presupuesto_cotizacion_id || row?.cotizacion?.id;
   return typeof budget === 'string' && budget ? { budget } : null;
 }
 
-async function requestedQuotePdf(db: any, actor: Actor, rows: any[], sourceId?: string): Promise<WhatsAppQuoteReply> {
-  if (actor.rol !== 'admin') return { respuesta: 'El PDF de la cotización está disponible para el administrador.' };
+async function requestedQuoteFile(db: any, actor: Actor, rows: any[], format: 'pdf' | 'excel', sourceId?: string): Promise<WhatsAppQuoteReply> {
+  const label = format === 'excel' ? 'Excel' : 'PDF';
+  if (actor.rol !== 'admin') return { respuesta: `El ${label} de la cotización está disponible para el administrador.` };
   let receipt = sourceId && rows.find(row => row.message_id === sourceId);
   if (sourceId && !receipt) {
     const { data, error } = await db.from('whatsapp_mensajes').select('acciones,cotizacion')
@@ -62,20 +108,23 @@ async function requestedQuotePdf(db: any, actor: Actor, rows: any[], sourceId?: 
   const ref = sourceId ? quoteReference(receipt) : rows.map(quoteReference).find(Boolean);
   if (!ref) {
     return { respuesta: sourceId
-      ? 'No pude identificar esa cotización. Para recibir la última de este chat, escribe «Envíame la cotización en PDF» en un mensaje nuevo.'
+      ? `No pude identificar esa cotización. Para recibir la última de este chat, escribe «Envíame la cotización en ${label}» en un mensaje nuevo.`
       : 'No encontré una cotización en esta conversación. Pídeme una nueva o indícame el código de la que quieres descargar.' };
   }
   if (ref.review) {
     const quote = await getQuoteReview(db, actor, ref.review);
     if (!quote.presupuesto_id || quote.estado !== 'aprobada') {
-      return { respuesta: 'Esta cotización necesita aprobación antes de enviarse en PDF.', solicitud: ref.review };
+      return { respuesta: `Esta cotización necesita aprobación antes de enviarse en ${label}.`, solicitud: ref.review, revision: quote.revision };
     }
-    return { respuesta: 'Aquí tienes el PDF de la cotización aprobada.', archivo: { id: ref.review, formato: 'pdf' } };
+    return { respuesta: `Aquí tienes el ${label} de la cotización aprobada.`, archivo: { id: ref.review, formato: format } };
   }
   if (!ref.budget) return { respuesta: 'No encontré la cotización en Presupuestos.' };
   const budget = await findBudget(db, actor.empresa_id, ref.budget);
   if (!budget?.cotizacion || ['rechazada', 'anulada', 'no_elegida'].includes(budget.estado)) {
     return { respuesta: 'La cotización ya no está disponible para descargar. Revísala en ObraTrack → Presupuestos.' };
+  }
+  if (format === 'excel') {
+    return { respuesta: 'Aquí tienes el Excel de la cotización.', archivo: { id: budget.id, formato: 'excel', origen: 'presupuesto' } };
   }
   return { respuesta: 'Aquí tienes el PDF de la cotización.', presupuestoPdfId: budget.id };
 }
@@ -89,13 +138,20 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
   const quoteInput = isQuoteWorkflow(text, items.some(item => item.type === 'image'));
   const destination = isDestinationCommand(text);
   const files = items.filter(item => ['image', 'document', 'audio'].includes(item.type));
-  const contextualPdf = (transcription !== undefined || files.length === 0) && isQuotePdfRequest(text);
-  if (!contextualPdf && !quoteInput && !destination && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
+  const noAttachment = transcription !== undefined || files.length === 0;
+  const contextualPdf = noAttachment && isQuotePdfRequest(text);
+  const contextualExcel = noAttachment && !contextualPdf && isQuoteExcelRequest(text);
+  const contextualFileFormat: 'pdf' | 'excel' | null = contextualPdf ? 'pdf' : contextualExcel ? 'excel' : null;
+  const replyContextId = items.find(item => item.context?.id)?.context?.id;
+  const pendingReview = noAttachment && !quoteInput && !destination && !contextualFileFormat && isShortQuoteApproval(text)
+    ? findPendingQuoteReview(conversationRows, replyContextId, text)
+    : null;
+  if (!contextualFileFormat && !quoteInput && !destination && !pendingReview && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
   const last = conversationRows[0];
   const draft = last?.acciones?.rol_actor === actor.rol && last.borrador_obra &&
     !(Date.now() - Date.parse(last.created_at) > quoteSessionMs) ? last.borrador_obra : null;
-  if (draft && !contextualPdf && !quoteInput && !destination) return null;
-  let keepDraft = contextualPdf;
+  if (draft && !contextualFileFormat && !quoteInput && !destination) return null;
+  let keepDraft = Boolean(contextualFileFormat);
   let reply: WhatsAppQuoteReply | null;
   try {
     let source: QuoteSource | undefined;
@@ -107,21 +163,25 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
       const mime = downloaded.mimeType === 'application/octet-stream' && /\.xlsx$/i.test(file.document?.filename || '') ? excelMime : downloaded.mimeType;
       source = { bytes: Buffer.from(downloaded.data, 'base64'), mime };
     }
-    const sourceId = items.map(item => quoteButtonSource(item, 'create')).find(Boolean) || items.find(item => item.context?.id)?.context?.id;
+    const sourceId = items.map(item => quoteButtonSource(item, 'create')).find(Boolean) || replyContextId;
     const ref = sourceId ? quoteReference(conversationRows.find(row => row.message_id === sourceId)) : undefined;
     const shortCreate = /^(?:crea|crear) (?:la |una )?obra[.!]?$/i.test(text.trim());
     const latest = !sourceId && (destination || shortCreate) ? conversationRows.map(quoteReference).find(Boolean) : undefined;
     const quotedId = sourceId ? ref?.review || null : latest ? latest.review || null : undefined;
-    const createText = shortCreate && quotedId ? `Crea la obra con la cotización ${quotedId}` : text;
+    const createText = pendingReview
+      ? `aprueba cotización ${pendingReview.id} ${pendingReview.revision}`
+      : shortCreate && quotedId ? `Crea la obra con la cotización ${quotedId}` : text;
     if (shortCreate && (ref?.budget || latest?.budget || sourceId && !ref)) return null;
     const explicitQuote = text.match(/cotizaci[oó]n\s+([\w-]+)/i)?.[1];
-    if (draft && !contextualPdf && !quoteInput) {
+    if (draft && !contextualFileFormat && !quoteInput) {
       if (!(destination || shortCreate) || (!quotedId && !(explicitQuote && validQuoteId(explicitQuote)))) return null;
       keepDraft = true;
       reply = { respuesta: 'Tienes una obra en preparación. Puedes completarla o escribir «Cancelar» antes de usar otra cotización.' };
-    } else if (contextualPdf) {
-      const pdfSource = items.map(item => quoteButtonSource(item, 'pdf')).find(Boolean) || sourceId;
-      reply = await requestedQuotePdf(db, actor, conversationRows, pdfSource);
+    } else if (contextualFileFormat) {
+      const pdfSource = contextualFileFormat === 'pdf'
+        ? (items.map(item => quoteButtonSource(item, 'pdf')).find(Boolean) || sourceId)
+        : sourceId;
+      reply = await requestedQuoteFile(db, actor, conversationRows, contextualFileFormat, pdfSource);
     } else {
       reply = await handleQuoteTurn(db, actor, 'whatsapp', createText, inbound.id, source, { quotedId });
     }
@@ -138,7 +198,8 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     p_cotizacion: null,
     p_acciones: {
       tipo: 'obrabot_cotizacion', ...progress, rol_actor: actor.rol, archivo_cotizacion: reply.archivo,
-      cotizacion_aprobada_id: reply.cotizacionAprobadaId, solicitud_cotizacion: reply.solicitud, presupuesto_pdf_id: reply.presupuestoPdfId, proyecto_contexto_id: reply.obra,
+      cotizacion_aprobada_id: reply.cotizacionAprobadaId, solicitud_cotizacion: reply.solicitud,
+      revision_cotizacion: reply.revision, presupuesto_pdf_id: reply.presupuestoPdfId, proyecto_contexto_id: reply.obra,
     },
     p_changed: {}, p_deleted: {}, p_adjunto: null, p_borrador: keepDraft ? draft : null, p_aviso: null,
   });
@@ -153,6 +214,11 @@ export async function obrabotWhatsAppFile(db: any, receipt: any, to: string) {
   if (error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude comprobar el destinatario.', 503);
   const phone = canonicalPhone(to);
   if (!actor || actor.rol !== 'admin' || !phone || phone !== canonicalPhone(actor.telefono_whatsapp || '')) return null;
+  if (file.origen === 'presupuesto') {
+    const budget = await findBudget(db, actor.empresa_id, file.id);
+    if (!budget?.cotizacion || ['rechazada', 'anulada', 'no_elegida'].includes(budget.estado)) return null;
+    return quoteFile(db, actor.empresa_id, budget.cotizacion, file.formato);
+  }
   const quote = await getApprovedQuote(db, actor, file.id);
   return quoteFile(db, actor.empresa_id, quote, file.formato);
 }
