@@ -2,41 +2,173 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { X, Plus, Check } from 'lucide-react';
+import { X, Plus, Check, FileCheck2, Sparkles } from 'lucide-react';
 import ModalOverlay from './ModalOverlay';
 import MoneyAmount from './MoneyAmount';
 import QuoteEditor from './QuoteEditor';
 import CotizacionPdfModal from './CotizacionPdfModal';
+import type { ImportedBudgetSummary } from './BudgetImportDialog';
 import { aiHeaders } from '@/lib/ai/client';
 import { dataService } from '@/lib/data-service';
 import { budgetStatuses, type Presupuesto, type BudgetStatus } from '@/lib/presupuestos';
 import type { CotizacionEstimacion } from '@/types/database';
 import { formatCLP } from '@/lib/utils';
 
-const input = 'w-full min-w-0 max-w-full rounded-lg border border-kraft-200 dark:border-gray-600 bg-white dark:bg-[#141A23] p-2 text-sm';
+const input = 'w-full min-w-0 max-w-full rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#0F141C] px-3 py-2 text-sm text-navy-900 dark:text-gray-100 focus:border-obra-orange focus:outline-none focus:ring-2 focus:ring-obra-orange/15 transition-all';
 export const budgetLabels: Record<BudgetStatus, string> = { borrador: 'Borrador', enviada: 'Enviada', aprobada: 'Aprobada', rechazada: 'Rechazada', anulada: 'Anulada', no_elegida: 'No elegida' };
 const name = (row: Presupuesto) => row.cotizacion.nombre_alternativa || row.nombre_alternativa || row.cotizacion.titulo_proyecto;
 
-function blankQuote(): CotizacionEstimacion {
+function blankQuote(defaults?: { title?: string; client?: string; location?: string }): CotizacionEstimacion {
   return {
-    id: `cot-${crypto.randomUUID()}`, modo_presupuesto: 'precio_acordado', titulo_proyecto: '', tipo_obra: 'General', comuna_region: '', duracion_dias_estimada: 1,
-    resumen_ejecutivo: '', materiales: [], mano_de_obra: [], partidas_venta: [{ nombre: 'Alcance completo', unidad: 'gl', cantidad: 1, precio_unitario: 0, subtotal: 0 }],
+    id: `cot-${crypto.randomUUID()}`,
+    modo_presupuesto: 'precio_acordado',
+    titulo_proyecto: defaults?.title || '',
+    tipo_obra: 'General',
+    comuna_region: defaults?.location || '',
+    cliente_nombre: defaults?.client || '',
+    duracion_dias_estimada: 1,
+    resumen_ejecutivo: '',
+    materiales: [],
+    mano_de_obra: [],
+    partidas_venta: [{ nombre: 'Alcance completo', unidad: 'gl', cantidad: 1, precio_unitario: 0, subtotal: 0 }],
     estructura_financiera: { costo_materiales_total: 0, costo_mano_obra_total: 0, costo_directo: 0, gastos_generales_porcentaje: 0, gastos_generales_monto: 0, imprevistos_porcentaje: 0, imprevistos_monto: 0, margen_utilidad_porcentaje: 0, margen_utilidad_monto: 0, precio_sugerido_neto: 0, iva_19: 0, precio_total_con_iva: 0, ahorro_compras_estrategicas: 0, tipo_utilidad: 'recargo_costos' },
-    actividades_gantt: [], radar_proveedores: [], consejos_experto_pyme: [], fecha_creacion: new Date().toISOString(),
+    actividades_gantt: [],
+    radar_proveedores: [],
+    consejos_experto_pyme: [],
+    fecha_creacion: new Date().toISOString(),
   };
 }
 
-export function BudgetCreateDialog({ projectId, projects, onClose, onSaved }: { projectId?: string; projects: { id: string; nombre: string }[]; onClose: () => void; onSaved: (row: Presupuesto) => void }) {
-  const [initial] = useState(blankQuote);
+export function BudgetCreateDialog({
+  projectId,
+  projects,
+  initialQuote,
+  importSummary,
+  defaultTitle,
+  defaultClient,
+  defaultLocation,
+  onClose,
+  onSaved,
+}: {
+  projectId?: string;
+  projects: { id: string; nombre: string }[];
+  initialQuote?: CotizacionEstimacion;
+  importSummary?: ImportedBudgetSummary;
+  defaultTitle?: string;
+  defaultClient?: string;
+  defaultLocation?: string;
+  onClose: () => void;
+  onSaved: (row: Presupuesto) => void;
+}) {
+  const [initial] = useState<CotizacionEstimacion>(
+    () =>
+      initialQuote ||
+      blankQuote(
+        projectId
+          ? { title: defaultTitle, client: defaultClient, location: defaultLocation }
+          : undefined,
+      ),
+  );
   const [project, setProject] = useState(projectId || '');
-  const [kind, setKind] = useState<'principal'|'complementario'>('principal');
-  return <ModalOverlay onClose={onClose} aria-label="Nuevo presupuesto" className="fixed inset-0 flex items-center justify-center p-3 bg-black/60 backdrop-blur-sm">
-    <div className="relative w-full max-w-5xl rounded-2xl bg-white dark:bg-[#141A23] p-3 sm:p-5 space-y-3">
-      <div className="flex items-center justify-between gap-3"><h2 className="font-bold text-lg">Nuevo presupuesto</h2><button type="button" aria-label="Cerrar presupuesto nuevo" onClick={onClose}><X size={20} /></button></div>
-      <div className="grid sm:grid-cols-2 gap-3"><label className="text-sm space-y-1"><span>Obra</span><select aria-label="Obra del nuevo presupuesto" className={input} value={project} onChange={(e) => setProject(e.target.value)} disabled={!!projectId}><option value="">Crear la obra después de elegir</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}</select></label><label className="text-sm space-y-1"><span>Alcance</span><select aria-label="Tipo de alcance" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} className={input}><option value="principal">Principal · define el presupuesto base</option><option value="complementario">Complementario · se suma a la obra</option></select></label></div>
-      <QuoteEditor initial={initial} projectId={project || undefined} groupType={kind} onCancel={onClose} onSaved={onSaved} />
-    </div>
-  </ModalOverlay>;
+  const [kind, setKind] = useState<'principal' | 'complementario'>('principal');
+
+  return (
+    <ModalOverlay
+      onClose={onClose}
+      aria-label="Nuevo presupuesto"
+      className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm"
+    >
+      <div className="relative w-full max-w-4xl max-h-full overflow-y-auto rounded-3xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] shadow-2xl">
+        <div className="sticky top-0 z-20 bg-gradient-to-r from-navy-900 via-[#151D2B] to-navy-900 text-white px-5 py-4 flex items-center justify-between gap-3 border-b border-navy-700/80">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#FF6A00] to-[#FF8A3D] flex items-center justify-center text-white shadow-md shadow-obra-orange/25 shrink-0">
+              {importSummary ? <Sparkles size={20} /> : <FileCheck2 size={20} />}
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-heading font-bold text-base sm:text-lg text-white truncate">
+                {importSummary ? 'Presupuesto importado' : 'Nuevo presupuesto'}
+              </h2>
+              <p className="text-xs text-gray-300 truncate">
+                {importSummary
+                  ? 'Revisa los materiales y montos extraídos en formato ObraTrack antes de guardar.'
+                  : 'Ingresa tus partidas y el monto acordado; el neto y el IVA se calculan automáticamente.'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label="Cerrar presupuesto nuevo"
+            onClick={onClose}
+            className="p-2 rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-4 sm:p-6 space-y-5">
+          {importSummary && (
+            <div
+              role="status"
+              className="rounded-2xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/30 px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-900 dark:text-emerald-200"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Check size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <p className="font-medium">
+                  Traspasado desde <strong className="break-all">{importSummary.archivo}</strong> · {importSummary.partidas}{' '}
+                  {importSummary.partidas === 1 ? 'partida' : 'partidas'}
+                  {importSummary.materiales > 0 ? ` y ${importSummary.materiales} materiales` : ''}.
+                </p>
+              </div>
+              <span className="rounded-full bg-white/80 dark:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-700 px-2.5 py-0.5 text-[11px] font-semibold">
+                {importSummary.tratamiento_iva === 'neto' ? 'Neto + IVA' : 'IVA incluido'}
+              </span>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-kraft-200/90 dark:border-[#263040] bg-kraft-50/60 dark:bg-[#0F141C] p-3.5 sm:p-4 grid sm:grid-cols-2 gap-3.5">
+            <label className="block text-xs font-semibold text-navy-900 dark:text-gray-200 space-y-1.5">
+              <span>Obra</span>
+              <select
+                aria-label="Obra del nuevo presupuesto"
+                className={input}
+                value={project}
+                onChange={(e) => setProject(e.target.value)}
+                disabled={!!projectId}
+              >
+                <option value="">Crear la obra después de elegir</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-semibold text-navy-900 dark:text-gray-200 space-y-1.5">
+              <span>Alcance</span>
+              <select
+                aria-label="Tipo de alcance"
+                value={kind}
+                onChange={(e) => setKind(e.target.value as typeof kind)}
+                className={input}
+              >
+                <option value="principal">Principal · define el presupuesto base</option>
+                <option value="complementario">Complementario · se suma a la obra</option>
+              </select>
+            </label>
+          </div>
+
+          <QuoteEditor
+            embedded
+            initial={initial}
+            projectId={project || undefined}
+            groupType={kind}
+            onCancel={onClose}
+            onSaved={onSaved}
+          />
+        </div>
+      </div>
+    </ModalOverlay>
+  );
 }
 
 export function BudgetAlternativeDialog({ source, onClose, onSaved }: { source: Presupuesto; onClose: () => void; onSaved: (row: Presupuesto) => void }) {

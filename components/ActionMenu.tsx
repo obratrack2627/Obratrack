@@ -1,7 +1,21 @@
 'use client';
 import { useEffect, useRef, useId, type ReactNode } from 'react';
 import { MoreHorizontal, ChevronDown } from 'lucide-react';
-export default function ActionMenu({ label = 'Más acciones', children, above = false, text, darkSurface = false }: { label?: string; children: ReactNode; above?: boolean; text?: string; darkSurface?: boolean }) {
+export default function ActionMenu({
+  label = 'Más acciones',
+  children,
+  above = false,
+  text,
+  darkSurface = false,
+  variant = 'default',
+}: {
+  label?: string;
+  children: ReactNode;
+  above?: boolean;
+  text?: string;
+  darkSurface?: boolean;
+  variant?: 'default' | 'primary';
+}) {
   const root = useRef<HTMLDetailsElement>(null);
   const id = useId();
   useEffect(() => {
@@ -11,17 +25,19 @@ export default function ActionMenu({ label = 'Más acciones', children, above = 
     document.addEventListener('pointerdown', pointer); document.addEventListener('click', click); document.addEventListener('keydown', key);
     return () => { document.removeEventListener('pointerdown', pointer); document.removeEventListener('click', click); document.removeEventListener('keydown', key); };
   }, []);
+  const summaryTone =
+    variant === 'primary'
+      ? 'border-transparent bg-gradient-to-r from-[#FF6A00] to-[#F97316] text-white shadow-md shadow-obra-orange/25 hover:from-[#E55F00] hover:to-[#EA580C] px-4 py-2 rounded-xl font-heading'
+      : darkSurface
+        ? 'border-[#2F3B4E] bg-[#1B222D] text-gray-100 shadow-sm hover:border-[#FF6A00] hover:bg-[#232C3B] px-2.5 rounded-lg'
+        : 'border-kraft-200 bg-white text-gray-600 hover:border-obra-orange dark:bg-[#141A23] dark:border-[#263040] dark:text-gray-200 px-2.5 rounded-lg';
   return <details ref={root} className="relative shrink-0 action-menu">
     <summary
       aria-label={label}
       aria-controls={id}
-      className={`list-none cursor-pointer inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg border px-2.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-obra-orange ${
-        darkSurface
-          ? 'border-[#2F3B4E] bg-[#1B222D] text-gray-100 shadow-sm hover:border-[#FF6A00] hover:bg-[#232C3B]'
-          : 'border-kraft-200 bg-white text-gray-600 hover:border-obra-orange dark:bg-[#141A23] dark:border-[#263040] dark:text-gray-200'
-      }`}
+      className={`list-none [&::-webkit-details-marker]:hidden cursor-pointer inline-flex min-h-9 min-w-9 items-center justify-center border transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-obra-orange ${summaryTone}`}
     >
-      {text ? <><span className="mr-1 text-sm font-semibold">{text}</span><ChevronDown size={16} aria-hidden="true" /></> : <><MoreHorizontal size={18} aria-hidden="true" />{label === 'Cuenta' && <span className="ml-1.5 text-xs font-medium">Cuenta</span>}</>}
+      {text ? <><span className="mr-1.5 text-sm font-bold">{text}</span><ChevronDown size={16} aria-hidden="true" /></> : <><MoreHorizontal size={18} aria-hidden="true" />{label === 'Cuenta' && <span className="ml-1.5 text-xs font-medium">Cuenta</span>}</>}
     </summary>
     <div
       id={id}

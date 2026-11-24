@@ -3,7 +3,7 @@ import MoneyAmount from './MoneyAmount';
 import ActionMenu from './ActionMenu';
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, FolderPlus, Search } from "lucide-react";
+import { ArrowUpRight, FolderPlus, RefreshCw, Search, Upload } from "lucide-react";
 import { aiHeaders } from "@/lib/ai/client";
 import { dataService } from "@/lib/data-service";
 import {
@@ -13,8 +13,9 @@ import {
 } from "@/lib/presupuestos";
 import { formatDate } from "@/lib/utils";
 import { canonicalPhone } from "@/lib/phone";
-import type { Cliente, Proyecto } from "@/types/database";
+import type { Cliente, CotizacionEstimacion, Proyecto } from "@/types/database";
 import CotizacionPdfModal from "./CotizacionPdfModal";
+import BudgetImportDialog, { type ImportedBudgetSummary } from "./BudgetImportDialog";
 import { BudgetCreateDialog, BudgetAlternativeDialog, BudgetChoiceDialog, BudgetGroupCard, BudgetHistoryDialog } from './BudgetAlternatives';
 
 const labels: Record<BudgetStatus, string> = {
@@ -105,6 +106,11 @@ export default function PresupuestosPanel({
     [selected, setSelected] = useState<Presupuesto | null>(null);
   const [editSelected, setEditSelected] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importedDraft, setImportedDraft] = useState<{
+    quote: CotizacionEstimacion;
+    summary: ImportedBudgetSummary;
+  } | null>(null);
   const [variantSource, setVariantSource] = useState<Presupuesto | null>(null);
   const [history, setHistory] = useState<Presupuesto | null>(null);
   const [groupFilter, setGroupFilter] = useState('');
@@ -205,25 +211,50 @@ export default function PresupuestosPanel({
         .includes(search.toLocaleLowerCase("es")),
   );
 
+  const currentProject = projectId ? projects.find((p) => p.id === projectId) || null : null;
+  const currentClient = currentProject?.cliente_id
+    ? clients.find((c) => c.id === currentProject.cliente_id) || null
+    : null;
+
   return (
     <section className="space-y-4" aria-label="Presupuestos de obras">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold text-navy-900 dark:text-white">
           Presupuestos
         </h2>
-        <div className="flex flex-wrap gap-3 items-center">
-          <ActionMenu label="Crear presupuesto" text="Crear presupuesto">
+        <div className="flex flex-wrap gap-2.5 items-center">
+          <button
+            type="button"
+            onClick={() => setImporting(true)}
+            className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-obra-orange/40 bg-orange-50/80 dark:bg-[#FF6A00]/10 px-3.5 py-2 text-sm font-heading font-bold text-obra-orange hover:bg-obra-orange hover:text-white shadow-xs transition-all"
+          >
+            <Upload className="w-4 h-4 shrink-0" />
+            <span>Subir presupuesto</span>
+          </button>
+          <ActionMenu label="Crear presupuesto" text="Crear presupuesto" variant="primary">
             <Link href={projectId ? `/proyectos/${projectId}/ia` : '/cotizador'}>Con ObraBot</Link>
-            <button type="button" onClick={() => setCreating(true)}>Precio acordado</button>
+            <button
+              type="button"
+              onClick={() => {
+                setImportedDraft(null);
+                setCreating(true);
+              }}
+            >
+              Precio acordado
+            </button>
+            <button type="button" onClick={() => setImporting(true)}>
+              Importar desde archivo
+            </button>
           </ActionMenu>
           <button
+            type="button"
             disabled={busy}
             onClick={refresh}
-            className="text-sm underline text-gray-700 dark:text-gray-300"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:border-obra-orange/50 hover:text-navy-900 dark:hover:text-white transition-colors disabled:opacity-50"
           >
-            {busy ? "Actualizando…" : "Actualizar"}
+            <RefreshCw className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`} />
+            <span>{busy ? "Actualizando…" : "Actualizar"}</span>
           </button>
-
         </div>
       </div>
 
@@ -476,7 +507,42 @@ export default function PresupuestosPanel({
         onSaved={(row) => { setSelected(row); setEditSelected(false); setRows((prev) => prev.map((r) => r.id === row.id ? row : r)); }}
       />
       {history && <BudgetHistoryDialog row={history} onClose={() => setHistory(null)} />}
-      {creating && <BudgetCreateDialog projectId={projectId} projects={projects} onClose={() => setCreating(false)} onSaved={(row) => { setCreating(false); setSelected(row); setEditSelected(false); void refresh(); }} />}
+      {importing && (
+        <BudgetImportDialog
+          projectId={projectId}
+          projectName={currentProject?.nombre}
+          clientName={currentClient?.nombre}
+          projectLocation={[currentProject?.direccion, currentProject?.comuna].filter(Boolean).join(', ')}
+          onClose={() => setImporting(false)}
+          onImported={(quote, summary) => {
+            setImporting(false);
+            setImportedDraft({ quote, summary });
+            setCreating(true);
+          }}
+        />
+      )}
+      {creating && (
+        <BudgetCreateDialog
+          projectId={projectId}
+          projects={projects}
+          initialQuote={importedDraft?.quote}
+          importSummary={importedDraft?.summary}
+          defaultTitle={currentProject?.nombre}
+          defaultClient={currentClient?.nombre}
+          defaultLocation={[currentProject?.direccion, currentProject?.comuna].filter(Boolean).join(', ')}
+          onClose={() => {
+            setCreating(false);
+            setImportedDraft(null);
+          }}
+          onSaved={(row) => {
+            setCreating(false);
+            setImportedDraft(null);
+            setSelected(row);
+            setEditSelected(false);
+            void refresh();
+          }}
+        />
+      )}
       {variantSource && <BudgetAlternativeDialog source={variantSource} onClose={() => setVariantSource(null)} onSaved={(row) => { setVariantSource(null); setSelected(row); setEditSelected(true); void refresh(); }} />}
       {choice && <BudgetChoiceDialog row={choice} onClose={() => setChoice(null)} onSaved={(result) => {
         setChoice(null); setCreatedNotice({ id: result.proyecto.id, nombre: result.proyecto.nombre, partidas: result.actividadesCreadas || 0, materiales: result.materialesCargados || 0 });
