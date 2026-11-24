@@ -278,7 +278,10 @@ export async function handleDestinationTurn(db: any, actor: Actor, channel: Chan
     const phones = phoneChoices(message, params.cliente && state.datos.cliente !== params.cliente ? [] : state.telefonos);
     const waiting = async (question: string) => {
       await saveSession(db, actor, channel, { ...state, paso: 'crear', id: state.id, datos, telefonos: phones.options });
-      return { respuesta: question, pasoPendiente: { id: state.id, datos: { ...datos, telefonos: phones.options } } };
+      const pasoPendiente = channel === 'whatsapp'
+        ? { id: state.id, datos: { ...datos, telefonos: phones.options } }
+        : undefined;
+      return { respuesta: question, pasoPendiente };
     };
     if (phones.options.length > 1) {
       delete datos.telefono;

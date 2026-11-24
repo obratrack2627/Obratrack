@@ -68,13 +68,15 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     return item[item.type]?.caption;
   }).filter(Boolean).join('\n');
   const quoteInput = isQuoteWorkflow(text);
+  const destination = isDestinationCommand(text);
   const files = items.filter(item => ['image', 'document', 'audio'].includes(item.type));
   const contextualPdf = (transcription !== undefined || files.length === 0) && isQuotePdfRequest(text);
-  if (!contextualPdf && !quoteInput && !isDestinationCommand(text) && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
+  if (!contextualPdf && !quoteInput && !destination && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
   const last = conversationRows[0];
   const draft = last?.acciones?.rol_actor === actor.rol && last.borrador_obra &&
     !(Date.now() - Date.parse(last.created_at) > quoteSessionMs) ? last.borrador_obra : null;
-  if (draft && !contextualPdf && !quoteInput && !isDestinationCommand(text)) return null;
+  if (draft && !contextualPdf && !quoteInput && !destination) return null;
+  let keepDraft = contextualPdf;
   let reply: WhatsAppQuoteReply | null;
   try {
     let source: QuoteSource | undefined;
@@ -89,13 +91,21 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     const sourceId = items.map(item => quoteButtonSource(item, 'create')).find(Boolean) || items.find(item => item.context?.id)?.context?.id;
     const ref = sourceId ? quoteReference(conversationRows.find(row => row.message_id === sourceId)) : undefined;
     const shortCreate = /^(?:crea|crear) (?:la |una )?obra[.!]?$/i.test(text.trim());
-    const latest = !sourceId && (isDestinationCommand(text) || shortCreate) ? conversationRows.map(quoteReference).find(Boolean) : undefined;
+    const latest = !sourceId && (destination || shortCreate) ? conversationRows.map(quoteReference).find(Boolean) : undefined;
     const quotedId = sourceId ? ref?.review || null : latest ? latest.review || null : undefined;
     const createText = shortCreate && quotedId ? `Crea la obra con la cotización ${quotedId}` : text;
     if (shortCreate && (ref?.budget || latest?.budget || sourceId && !ref)) return null;
-    reply = contextualPdf
-      ? await requestedQuotePdf(db, actor, conversationRows, items.map(item => quoteButtonSource(item, 'pdf')).find(Boolean) || sourceId)
-      : await handleQuoteTurn(db, actor, 'whatsapp', createText, inbound.id, source, { quotedId });
+    const explicitQuote = text.match(/cotizaci[oó]n\s+([\w-]+)/i)?.[1];
+    if (draft && !contextualPdf && !quoteInput) {
+      if (!(destination || shortCreate) || (!quotedId && !(explicitQuote && validQuoteId(explicitQuote)))) return null;
+      keepDraft = true;
+      reply = { respuesta: 'Tienes una obra en preparación. Puedes completarla o escribir «Cancelar» antes de usar otra cotización.' };
+    } else if (contextualPdf) {
+      const pdfSource = items.map(item => quoteButtonSource(item, 'pdf')).find(Boolean) || sourceId;
+      reply = await requestedQuotePdf(db, actor, conversationRows, pdfSource);
+    } else {
+      reply = await handleQuoteTurn(db, actor, 'whatsapp', createText, inbound.id, source, { quotedId });
+    }
   } catch (error) {
     if (!(error instanceof AIError) || error.status >= 500) throw error;
     reply = { respuesta: error.message };
@@ -111,7 +121,7 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
       tipo: 'obrabot_cotizacion', ...progress, rol_actor: actor.rol, archivo_cotizacion: reply.archivo,
       cotizacion_aprobada_id: reply.cotizacionAprobadaId, solicitud_cotizacion: reply.solicitud, presupuesto_pdf_id: reply.presupuestoPdfId, proyecto_contexto_id: reply.obra,
     },
-    p_changed: {}, p_deleted: {}, p_adjunto: null, p_borrador: contextualPdf ? draft : null, p_aviso: null,
+    p_changed: {}, p_deleted: {}, p_adjunto: null, p_borrador: keepDraft ? draft : null, p_aviso: null,
   });
   if (error || !data?.message_id) throw new AIError('OBRABOT_QUOTE_DB', 'No pude confirmar la respuesta de la cotización.', 503);
   return { ...data, persistido: true };

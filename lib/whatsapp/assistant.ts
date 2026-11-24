@@ -251,7 +251,7 @@ export async function processPersonalMessage(
     const { data, error } = await sb.rpc('aplicar_lote_copiloto', {
       p_id: message.id, p_empresa: user.empresa_id, p_actor: user.id, p_phone: senderPhone,
       p_texto: input, p_respuesta: resume ? 'ObraBot está activo. Podemos continuar con la gestión pendiente.' : 'Mensaje recibido durante la revisión humana.',
-      p_acciones: { rol_actor: user.rol, caso_humano_id: resume ? undefined : review.message_id, pausa_humana: !resume, silencio_humano: !resume, proyecto_contexto_id: reviewProject || null, borrador_registro: latest.acciones.borrador_registro },
+      p_acciones: { tipo: latest.acciones.tipo, rol_actor: user.rol, caso_humano_id: resume ? undefined : review.message_id, pausa_humana: !resume, silencio_humano: !resume, proyecto_contexto_id: reviewProject || null, borrador_registro: latest.acciones.borrador_registro },
       p_cotizacion: null, p_changed: {}, p_deleted: {}, p_adjunto: null, p_borrador: latest.borrador_obra || null, p_aviso: null,
     });
     if (error || !data?.message_id) throw new AIError('WHATSAPP_DATABASE_SAVE', 'No pude guardar la gestión.', 503);

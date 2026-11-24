@@ -3,7 +3,8 @@ import { waitUntil } from '@vercel/functions';
 import { sendPushIdempotent } from '@/lib/push/server';
 
 export function progressAfter(previous: any, step: string, fields: Record<string, unknown>, question: string, failed = false) {
-  const signature = createHash('sha256').update(JSON.stringify([step, Object.entries(fields).sort(), question])).digest('hex');
+  const orderedFields = Object.entries(fields).sort(([first], [second]) => first.localeCompare(second));
+  const signature = createHash('sha256').update(JSON.stringify([step, orderedFields, question])).digest('hex');
   const repeats = previous?.firma === signature ? (previous.repeticiones || 0) + 1 : Number(failed);
   const seguimiento = { firma: signature, repeticiones: repeats };
   if (repeats < 2) return { seguimiento };

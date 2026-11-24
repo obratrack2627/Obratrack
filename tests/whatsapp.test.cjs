@@ -1951,16 +1951,40 @@ test('redelivery del mismo evento no repite texto ni PDF aunque falle guardar se
  assert.equal(texts,1);assert.equal(pdfs,1);
 });
 
-test('una respuesta al PDF saliente usa la cotización de ese PDF aunque haya otra más reciente',async()=>{
- const {normalizeQuote}=require('../lib/ai/protocol.ts');
- const make=(id)=>normalizeQuote({id,titulo_proyecto:id,materiales:[{nombre:'Madera',cantidad:1,unidad:'un',precio_unitario_estimado:1500}],mano_de_obra:[]});
- const a=make('quote-old'), b=make('quote-new'), sb=database();
- const scoped={empresa_id:user.empresa_id,actor_id:user.id};
- sb.db.presupuestos=[a,b].map(cotizacion=>({id:cotizacion.id,empresa_id:user.empresa_id,cotizacion,estado:'borrador'}));
- sb.db.whatsapp_mensajes=[{...scoped,message_id:'latest',cotizacion:b},{...scoped,message_id:'sent-pdf',acciones:{tipo:'obrabot_cotizacion',rol_actor:'admin',presupuesto_pdf_id:a.id}}];
- sb.db.whatsapp_respuestas_envios=[{...scoped,meta_message_id:'wamid.out.pdf',source_message_id:'sent-pdf'}];
- const result=await processPersonalMessage(sb,{id:'tap-old-pdf',from:'56912345678',type:'text',context:{id:'wamid.out.pdf'},text:{body:'Crea la obra con esa cotización'}},{chat:async()=>assert.fail('La referencia es explícita')});
- assert.equal(result.borrador_obra.presupuesto_cotizacion_id,a.id);
+test('un botón, texto o audio recupera la cotización original aunque haya otra más reciente', async () => {
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const makeQuote = id => normalizeQuote({
+    id, titulo_proyecto: id,
+    materiales: [{ nombre: 'Madera', cantidad: 1, unidad: 'un', precio_unitario_estimado: 1500 }],
+    mano_de_obra: [],
+  });
+  const oldQuote = makeQuote('quote-old');
+  const newQuote = makeQuote('quote-new');
+  const scoped = { empresa_id: user.empresa_id, actor_id: user.id };
+  const reply = 'Crea la obra con esa cotización';
+  const context = { id: 'wamid.out.pdf' };
+  const requests = [
+    { type: 'text', context, text: { body: reply } },
+    { type: 'audio', context, audio: { id: 'voice' } },
+    { type: 'interactive', interactive: { type: 'button_reply', button_reply: { id: 'ot:quote:create:sent-pdf' } } },
+  ];
+  for (const request of requests) {
+    const sb = database();
+    sb.db.presupuestos = [oldQuote, newQuote].map(cotizacion => ({
+      id: cotizacion.id, empresa_id: user.empresa_id, cotizacion, estado: 'borrador',
+    }));
+    sb.db.whatsapp_mensajes = [
+      { ...scoped, message_id: 'latest', cotizacion: newQuote },
+      { ...scoped, message_id: 'sent-pdf', acciones: { tipo: 'obrabot_cotizacion', rol_actor: 'admin', presupuesto_pdf_id: oldQuote.id } },
+    ];
+    sb.db.whatsapp_respuestas_envios = [{ ...scoped, meta_message_id: context.id, source_message_id: 'sent-pdf' }];
+    const result = await processPersonalMessage(sb, { id: 'create-quoted', from: '56912345678', ...request }, {
+      chat: async () => assert.fail('La referencia es explícita'),
+      media: async () => ({ mimeType: 'audio/ogg', data: 'YXVkaW8=' }),
+      transcribe: async () => reply,
+    });
+    assert.equal(result.borrador_obra?.presupuesto_cotizacion_id, oldQuote.id, request.type);
+  }
 });
 
 test('dos repeticiones sin avance derivan el trámite una vez, silencian el bot y permiten retomar',async()=>{
