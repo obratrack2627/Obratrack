@@ -20,6 +20,7 @@ import {
   FileText,
   GitPullRequest,
   Landmark,
+  Lock,
   Mail,
   MapPin,
   MapPinned,
@@ -139,7 +140,16 @@ export default function LandingPage() {
   const [activePlanSlide, setActivePlanSlide] = useState(0);
 
   const tiltRef = useRef<HTMLDivElement | null>(null);
+  const heroSectionRef = useRef<HTMLElement | null>(null);
   const plansCarouselRef = useRef<HTMLDivElement | null>(null);
+
+  const handleHeroMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    const el = heroSectionRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty('--hx', `${(e.clientX - rect.left).toFixed(0)}px`);
+    el.style.setProperty('--hy', `${(e.clientY - rect.top).toFixed(0)}px`);
+  };
 
   const scrollToPlan = (index: number) => {
     setActivePlanSlide(index);
@@ -551,86 +561,137 @@ export default function LandingPage() {
         )}
       </header>
 
-      {/* Hero Section */}
-      <section className="py-14 sm:py-20 lg:py-24 bg-[#F3EFE6] dark:bg-[#0B0E14] border-b border-[#DDD5C5] dark:border-[#263040] landing-wireframe relative overflow-hidden">
-        <div className="landing-blob-1 pointer-events-none absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#FF6A00]/10 blur-3xl" />
-        <div className="landing-blob-2 pointer-events-none absolute -bottom-28 -left-24 w-96 h-96 rounded-full bg-[#6B8F72]/15 blur-3xl" />
+      {/* Hero Section with Interactive CAD Blueprint Reveal */}
+      <section
+        ref={heroSectionRef}
+        onMouseMove={handleHeroMouseMove}
+        className="py-14 sm:py-20 lg:py-24 bg-[#F3EFE6] dark:bg-[#0B0E14] border-b border-[#DDD5C5] dark:border-[#263040] landing-wireframe relative overflow-hidden"
+      >
+        <div className="landing-blob-1 pointer-events-none absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#FF6A00]/15 blur-3xl" />
+        <div className="landing-blob-2 pointer-events-none absolute -bottom-28 -left-24 w-96 h-96 rounded-full bg-[#6B8F72]/20 blur-3xl" />
+
+        {/* Interactive CAD Blueprint Overlay revealed around cursor on desktop */}
+        <div aria-hidden="true" className="hidden lg:block pointer-events-none absolute inset-0 landing-cad-layer">
+          <svg
+            viewBox="0 0 1440 760"
+            preserveAspectRatio="xMidYMid slice"
+            className="w-full h-full text-[#FF6A00]/35 dark:text-[#38BDF8]/35"
+            fill="none"
+          >
+            <g stroke="currentColor" strokeDasharray="6 6" strokeWidth="1">
+              <line x1="140" y1="0" x2="140" y2="760" />
+              <line x1="520" y1="0" x2="520" y2="760" />
+              <line x1="920" y1="0" x2="920" y2="760" />
+              <line x1="1300" y1="0" x2="1300" y2="760" />
+              <line x1="0" y1="140" x2="1440" y2="140" />
+              <line x1="0" y1="620" x2="1440" y2="620" />
+            </g>
+            <g stroke="currentColor" strokeWidth="1.2">
+              <circle cx="140" cy="56" r="13" />
+              <circle cx="520" cy="56" r="13" />
+              <circle cx="920" cy="56" r="13" />
+              <circle cx="1300" cy="56" r="13" />
+              <path d="M 960 540 L 1120 420 L 1280 540 Z" />
+              <line x1="960" y1="565" x2="1280" y2="565" />
+            </g>
+            <g fill="currentColor" fontSize="10" fontFamily="monospace" textAnchor="middle">
+              <text x="140" y="60">EJE A</text>
+              <text x="520" y="60">EJE B</text>
+              <text x="920" y="60">EJE C</text>
+              <text x="1300" y="60">EJE D</text>
+              <text x="1120" y="582">COTA 25,00 m · NCh</text>
+            </g>
+          </svg>
+        </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
-          <div className="border-l-4 border-[#FF6A00] pl-3.5 mb-6 landing-reveal">
-            <div className="text-base sm:text-xl font-heading font-bold text-[#1E1E1E] dark:text-white">
+          <div className="inline-flex flex-wrap items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#FAF8F5]/90 dark:bg-[#141A23]/90 border border-[#D6CEC0] dark:border-[#263040] shadow-xs mb-6 landing-reveal">
+            <span className="w-2 h-2 rounded-full bg-[#FF6A00] animate-pulse" />
+            <span className="text-xs sm:text-sm font-heading font-bold text-[#1E1E1E] dark:text-white">
               El <span className="text-[#FF6A00] italic">copiloto</span> digital del constructor
-            </div>
+            </span>
+            <span className="hidden sm:inline text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#161D27] text-[#9AC2A2]">
+              SAAS CHILE · V2
+            </span>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
             {/* Left Column */}
             <div className="lg:col-span-7 landing-reveal landing-delay-1">
-              <h1 className="font-heading text-[32px] sm:text-5xl lg:text-[54px] font-extrabold text-[#1E1E1E] dark:text-white tracking-tight leading-[1.1] sm:leading-[1.08]">
+              <h1 className="font-heading text-[32px] sm:text-5xl lg:text-[56px] font-extrabold text-[#1E1E1E] dark:text-white tracking-tight leading-[1.1] sm:leading-[1.06]">
                 Cotiza en minutos.
                 <br />
-                <span className="text-[#FF6A00]">
+                <span className="landing-text-gradient">
                   Controla tu obra, Gantt y pagos desde WhatsApp.
                 </span>
               </h1>
 
-              <p className="text-base sm:text-lg text-[#334155] dark:text-gray-300 mt-6 leading-relaxed max-w-2xl">
+              <p className="text-base sm:text-lg text-[#3A352E] dark:text-gray-300 mt-6 leading-relaxed max-w-2xl">
                 Diseñado para contratistas y constructoras PyME en Chile. Compara materiales en vivo entre{' '}
                 <strong className="text-[#1E1E1E] dark:text-white">
                   Sodimac, Construmart, Easy, Imperial y Dimaco
                 </strong>
                 , ordena tu Carta Gantt con{' '}
-                <strong className="text-[#1E1E1E] dark:text-white">ObraBot</strong> y emite Estados de Pago en PDF con tu propio membrete.
+                <strong className="text-[#1E1E1E] dark:text-white">ObraBot</strong> y emite Estados de Pago en PDF cifrado con tu propio membrete.
               </p>
 
               <div className="mt-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5">
                 <Link
                   href="/login"
-                  className="landing-shimmer px-7 py-4 rounded-xl bg-[#FF6A00] text-white font-heading font-bold text-base hover:bg-[#E05E00] transition shadow-lg shadow-[#FF6A00]/30 flex items-center justify-center gap-2"
+                  className="landing-shimmer px-7 py-4 rounded-xl bg-[#FF6A00] text-white font-heading font-bold text-base hover:bg-[#E05E00] transition shadow-xl shadow-[#FF6A00]/30 flex items-center justify-center gap-2"
                 >
                   <Zap className="w-5 h-5 fill-white" />
                   <span>Probar Plan Gratis (1 Obra)</span>
                 </Link>
                 <a
                   href="#como-funciona"
-                  className="px-6 py-4 rounded-xl bg-[#161D27] dark:bg-[#141A23] border-2 border-[#161D27] dark:border-gray-400 text-white font-heading font-bold text-base hover:bg-[#1E2735] dark:hover:bg-white dark:hover:text-[#141A23] transition flex items-center justify-center gap-2 shadow-sm group"
+                  className="px-6 py-4 rounded-xl bg-[#161D27] dark:bg-[#141A23] border-2 border-[#161D27] dark:border-[#2C3748] text-white font-heading font-bold text-base hover:bg-[#1E2735] transition flex items-center justify-center gap-2 shadow-md group"
                 >
                   <PlayCircle className="w-5 h-5 text-[#FF6A00] group-hover:scale-110 transition-transform" />
                   <span>Simular ObraBot en Vivo</span>
                 </a>
               </div>
 
-              <div className="mt-10 pt-8 border-t border-[#E5E7EB] dark:border-[#263040] grid grid-cols-2 sm:grid-cols-4 gap-5">
-                <div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#FF6A00] font-heading">5 Cadenas</div>
-                  <div className="text-xs text-[#1E1E1E] dark:text-white font-bold mt-0.5">Catálogos en Vivo</div>
-                  <div className="text-[11px] text-[#64748B] dark:text-gray-400 font-mono">Precios CLP reales</div>
-                </div>
-                <div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-obra-green font-heading">100%</div>
-                  <div className="text-xs text-[#1E1E1E] dark:text-white font-bold mt-0.5">Cálculo Determinista</div>
-                  <div className="text-[11px] text-[#64748B] dark:text-gray-400 font-mono">Neto, margen e IVA 19%</div>
-                </div>
-                <div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-[#1E1E1E] dark:text-white font-heading">0 Apps</div>
-                  <div className="text-xs text-[#1E1E1E] dark:text-white font-bold mt-0.5">Para Terreno</div>
-                  <div className="text-[11px] text-[#64748B] dark:text-gray-400 font-mono">Reportan por WhatsApp</div>
-                </div>
-                <div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-emerald-700 dark:text-emerald-400 font-heading">$12.990</div>
-                  <div className="text-xs text-[#1E1E1E] dark:text-white font-bold mt-0.5">Plan Pro Mensual</div>
-                  <div className="text-[11px] text-[#64748B] dark:text-gray-400 font-mono">CLP IVA incluido · Flow</div>
-                </div>
+              <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { val: '5 Cadenas', valClass: 'text-[#FF6A00]', title: 'Catálogos en Vivo', sub: 'Precios CLP reales' },
+                  { val: '100%', valClass: 'text-obra-green', title: 'Determinista', sub: 'Neto, margen e IVA' },
+                  { val: '0 Apps', valClass: 'text-[#1E1E1E] dark:text-white', title: 'Para Terreno', sub: 'Vía WhatsApp' },
+                  { val: '$12.990', valClass: 'text-emerald-700 dark:text-emerald-400', title: 'Plan Pro Mensual', sub: 'IVA incl. · Flow.cl' },
+                ].map((stat) => (
+                  <div
+                    key={stat.title}
+                    className="p-3.5 rounded-2xl bg-[#FAF8F5]/85 dark:bg-[#141A23]/85 backdrop-blur-xs border border-[#DDD5C5] dark:border-[#263040] shadow-xs hover:border-[#FF6A00]/50 transition"
+                  >
+                    <div className={`text-xl sm:text-2xl font-extrabold font-heading ${stat.valClass}`}>
+                      {stat.val}
+                    </div>
+                    <div className="text-xs text-[#1E1E1E] dark:text-white font-bold mt-0.5">{stat.title}</div>
+                    <div className="text-[10px] text-[#64748B] dark:text-gray-400 font-mono">{stat.sub}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Right Column: Interactive 3D-Tilt Deterministic Quote Card */}
-            <div className="lg:col-span-5 landing-reveal landing-delay-2">
+            {/* Right Column: Interactive 3D-Tilt Deterministic Quote Card + Orbiting Telemetry Badges */}
+            <div className="lg:col-span-5 landing-reveal landing-delay-2 relative">
+              {/* Floating Orbit Chip Top-Right */}
+              <div className="landing-badge-float hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#161D27]/95 text-white border border-[#FF6A00]/50 shadow-xl text-[11px] font-mono absolute -top-4 right-4 z-20">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>5 ferreterías en vivo</span>
+              </div>
+
+              {/* Floating Orbit Chip Bottom-Left */}
+              <div className="landing-badge-float-delayed hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#FAF8F5] dark:bg-[#1E2735] text-[#1E1E1E] dark:text-white border border-[#D6CEC0] dark:border-[#2F3C4F] shadow-xl text-[11px] font-mono font-bold absolute -bottom-4 -left-3 z-20">
+                <Lock className="w-3.5 h-3.5 text-[#FF6A00]" />
+                <span>EDP PDF cifrado con RUT</span>
+              </div>
+
               <div
                 ref={tiltRef}
                 onMouseMove={handleTiltMove}
                 onMouseLeave={handleTiltLeave}
-                className="landing-tilt bg-[#161D27] text-white rounded-2xl border-2 border-[#2C3748] p-5 shadow-2xl relative"
+                className="landing-tilt landing-top-beam bg-[#161D27] text-white rounded-2xl border-2 border-[#2C3748] p-5 shadow-[0_24px_60px_-15px_rgba(22,29,39,0.55)] relative"
               >
                 <div className="flex items-center justify-between pb-4 border-b border-[#2C3748] mb-4">
                   <div className="flex items-center gap-2">
@@ -759,12 +820,42 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Infinite Architectural Capability & Retail Marquee Ribbon */}
+      <div className="bg-[#111720] border-b border-[#2C3748] py-3 overflow-hidden select-none" aria-hidden="true">
+        <div className="landing-marquee-track items-center gap-8 text-[11px] font-mono font-bold tracking-wider text-slate-300">
+          {[0, 1].map((loop) => (
+            <div key={loop} className="flex items-center gap-8 shrink-0">
+              <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /> SODIMAC</span>
+              <span className="text-slate-600">✦</span>
+              <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-500" /> CONSTRUMART</span>
+              <span className="text-slate-600">✦</span>
+              <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-400" /> EASY</span>
+              <span className="text-slate-600">✦</span>
+              <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500" /> IMPERIAL</span>
+              <span className="text-slate-600">✦</span>
+              <span className="inline-flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#6B8F72]" /> DIMACO</span>
+              <span className="text-slate-600">✦</span>
+              <span className="text-[#FF6A00]">CARTA GANTT TÁCTIL</span>
+              <span className="text-slate-600">✦</span>
+              <span className="text-[#9AC2A2]">EDP PDF CIFRADO CON RUT</span>
+              <span className="text-slate-600">✦</span>
+              <span>WHATSAPP CLOUD API</span>
+              <span className="text-slate-600">✦</span>
+              <span>ASISTENCIA Y JORNALES</span>
+              <span className="text-slate-600">✦</span>
+              <span>WEBPAY · CUENTARUT · FLOW.CL</span>
+              <span className="text-slate-600">✦</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Section 2: Interactive Radar Ferretero (Dark Slate Band #161D27) */}
       <section id="radar-ferretero" className="scroll-mt-24 py-20 landing-slate-blueprint text-white border-b border-[#2C3748]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-3xl mx-auto mb-12 landing-reveal">
-            <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
-              PROVEEDORES INTEGRADOS EN OBRABOT
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1E2735] border border-[#2F3C4F] text-[11px] font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
+              <span>[ 01 // RADAR RETAIL ]</span>
             </span>
             <h2 className="text-3xl sm:text-5xl font-extrabold font-heading text-white mt-2">
               Radar Ferretero en Vivo
@@ -948,8 +1039,8 @@ export default function LandingPage() {
       <section id="como-funciona" className="scroll-mt-24 py-20 bg-[#F3EFE6] dark:bg-[#0B0E14] border-b border-[#DDD5C5] dark:border-[#263040]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-3xl mx-auto mb-10 landing-reveal">
-            <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
-              WHATSAPP CLOUD API + OBRABOT
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8F5] dark:bg-[#141A23] border border-[#D6CEC0] dark:border-[#263040] text-[11px] font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
+              <span>[ 02 // WHATSAPP CLOUD API + OBRABOT ]</span>
             </span>
             <h2 className="text-3xl sm:text-5xl font-extrabold font-heading text-[#1E1E1E] dark:text-white mt-2">
               Cómo opera ObraTrack en la faena real
@@ -1046,7 +1137,7 @@ export default function LandingPage() {
             {/* Step 2 (Dark Focal Center Card #161D27) */}
             <div
               onMouseMove={handleSpotlightMove}
-              className="landing-spotlight mt-3 lg:mt-0 bg-[#161D27] text-white border-2 border-[#FF6A00] rounded-3xl p-6 shadow-xl relative landing-reveal landing-delay-1"
+              className="landing-spotlight landing-top-beam mt-3 lg:mt-0 bg-[#161D27] text-white border-2 border-[#FF6A00] rounded-3xl p-6 shadow-xl relative landing-reveal landing-delay-1"
             >
               <div className="absolute -top-3.5 left-6 px-3 py-0.5 rounded-full bg-[#FF6A00] text-white font-mono font-bold text-[10px] uppercase tracking-wider shadow-sm">
                 2. MOTOR OBRABOT IA CHILE
@@ -1177,8 +1268,8 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
             <div className="lg:col-span-5 landing-reveal">
-              <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
-                COBRANZA FORMAL Y ORDENADA
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8F5] dark:bg-[#141A23] border border-[#D6CEC0] dark:border-[#263040] text-[11px] font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
+                <span>[ 03 // FINANZAS Y COBRANZA EDP ]</span>
               </span>
               <h2 className="text-3xl sm:text-4xl font-extrabold font-heading text-[#1E1E1E] dark:text-white mt-2 leading-tight">
                 Estados de Pago en PDF con el membrete de tu constructora
@@ -1277,8 +1368,8 @@ export default function LandingPage() {
                         </div>
                       </div>
                     </div>
-                    <span className="font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg bg-[#EBF2ED] dark:bg-[#18261D] text-obra-green">
-                      FOLIO EDP-003
+                    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg bg-[#EBF2ED] dark:bg-[#18261D] text-obra-green">
+                      <Lock className="w-3 h-3" /> FOLIO EDP-003 · CLAVE RUT
                     </span>
                   </div>
 
@@ -1360,8 +1451,8 @@ export default function LandingPage() {
       <section id="modulos" className="scroll-mt-24 py-20 landing-slate-blueprint text-white border-b border-[#2C3748]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-3xl mx-auto mb-14 landing-reveal">
-            <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
-              ECOSISTEMA REAL EN PRODUCCIÓN
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1E2735] border border-[#2F3C4F] text-[11px] font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
+              <span>[ 04 // ECOSISTEMA EN PRODUCCIÓN ]</span>
             </span>
             <h2 className="text-3xl sm:text-5xl font-extrabold font-heading text-white mt-2">
               Mucho más que presupuestos: toda tu obra en un solo lugar
@@ -1374,40 +1465,58 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
               {
+                code: 'MOD-01',
                 icon: ClipboardCheck,
                 iconBg: 'bg-[#FF6A00]/15 text-[#FF6A00]',
                 title: 'Asistencia y Cálculo de Jornales',
                 desc: 'Control exclusivo de administración y jefes de obra para registrar presencia, atrasos y calcular jornales automáticamente sin planillas sueltas.',
+                chip: 'Presente · Jornal calculado RPC',
+                chipColor: 'text-[#FF6A00]',
               },
               {
+                code: 'MOD-02',
                 icon: FileCheck2,
                 iconBg: 'bg-[#6B8F72]/20 text-[#9AC2A2]',
                 title: 'Cierres de Jornada en PDF',
                 desc: 'Consolida avances, incidencias y resumen del día en un PDF limpio que también puedes recibir en forma privada por WhatsApp.',
+                chip: 'Cierre_Diario.pdf · WhatsApp ✓',
+                chipColor: 'text-[#9AC2A2]',
               },
               {
+                code: 'MOD-03',
                 icon: MapPinned,
                 iconBg: 'bg-[#121821] text-[#FF6A00]',
                 title: 'Georreferenciación Google Maps',
                 desc: 'Ubica cada proyecto con dirección y comuna de Chile directamente en Google Maps para compartir rutas rápidas a tu equipo. Incluido desde el Plan Gratis.',
+                chip: 'Las Condes · Ruta activa ↗',
+                chipColor: 'text-amber-300',
               },
               {
+                code: 'MOD-04',
                 icon: BellRing,
                 iconBg: 'bg-emerald-500/20 text-emerald-300',
                 title: 'Avisos a Cuadrillas con Trazabilidad',
                 desc: 'Pídele a ObraBot que envíe instrucciones individuales por WhatsApp a tu equipo y revisa su estado real: pendiente, enviado, entregado o leído.',
+                chip: 'Cuadrilla · ✓✓ Entregado y leído',
+                chipColor: 'text-emerald-300',
               },
               {
+                code: 'MOD-05',
                 icon: GitPullRequest,
                 iconBg: 'bg-amber-500/20 text-amber-300',
                 title: 'Adicionales y Solicitudes de Cambio',
                 desc: 'Separa incidentes internos de adicionales del cliente. El contrato y plazo solo cambian cuando registras la aprobación explícita del mandante.',
+                chip: 'Adicional aprobado · +Plazo / +CLP',
+                chipColor: 'text-amber-300',
               },
               {
+                code: 'MOD-06',
                 icon: Smartphone,
                 iconBg: 'bg-white/10 text-white',
                 title: 'PWA Móvil, Push y Respaldo Total',
                 desc: 'Instálala en tu celular con modo claro/oscuro, notificaciones Push, caché local si se corta internet y exportación completa a Excel (.xlsx) y JSON (Ley 21.719).',
+                chip: 'PWA · .XLSX · Backup .JSON',
+                chipColor: 'text-sky-300',
               },
             ].map((mod, idx) => {
               const Icon = mod.icon;
@@ -1415,17 +1524,29 @@ export default function LandingPage() {
                 <div
                   key={mod.title}
                   onMouseMove={handleSpotlightMove}
-                  className={`landing-spotlight bg-[#1E2735] border border-[#2F3C4F] hover:border-[#FF6A00]/70 rounded-3xl p-6 landing-reveal ${
+                  className={`landing-spotlight bg-[#1E2735] border border-[#2F3C4F] hover:border-[#FF6A00]/70 rounded-3xl p-6 flex flex-col justify-between landing-reveal ${
                     idx % 3 === 1 ? 'landing-delay-1' : idx % 3 === 2 ? 'landing-delay-2' : ''
                   }`}
                 >
-                  <div className={`w-11 h-11 rounded-2xl flex items-center justify-center mb-4 ${mod.iconBg}`}>
-                    <Icon className="w-5 h-5" />
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${mod.iconBg}`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400 px-2 py-0.5 rounded bg-[#121821] border border-[#2A3546]">
+                        {mod.code}
+                      </span>
+                    </div>
+                    <h3 className="font-heading font-bold text-lg text-white">{mod.title}</h3>
+                    <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+                      {mod.desc}
+                    </p>
                   </div>
-                  <h3 className="font-heading font-bold text-lg text-white">{mod.title}</h3>
-                  <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
-                    {mod.desc}
-                  </p>
+
+                  <div className="mt-5 pt-3.5 border-t border-[#2A3546] flex items-center justify-between text-[11px] font-mono">
+                    <span className={`font-semibold ${mod.chipColor}`}>{mod.chip}</span>
+                    <span className="w-2 h-2 rounded-full bg-[#6B8F72]" />
+                  </div>
                 </div>
               );
             })}
@@ -1437,8 +1558,8 @@ export default function LandingPage() {
       <section className="py-20 bg-[#F3EFE6] dark:bg-[#0F141C] border-b border-[#DDD5C5] dark:border-[#263040]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="max-w-3xl mb-12 landing-reveal">
-            <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
-              COMPARATIVA DE MERCADO
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8F5] dark:bg-[#141A23] border border-[#D6CEC0] dark:border-[#263040] text-[11px] font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
+              <span>[ 05 // COMPARATIVA DE MERCADO ]</span>
             </span>
             <h2 className="text-3xl sm:text-5xl font-extrabold font-heading text-[#1E1E1E] dark:text-white mt-2">
               ¿Por qué ObraTrack y no un ERP costoso o planillas sueltas?
@@ -1490,7 +1611,7 @@ export default function LandingPage() {
 
             <div
               onMouseMove={handleSpotlightMove}
-              className="landing-spotlight bg-white dark:bg-[#141A23] border-2 border-[#FF6A00] rounded-3xl p-6 shadow-xl shadow-[#FF6A00]/10 flex flex-col relative landing-reveal landing-delay-2"
+              className="landing-spotlight landing-top-beam bg-white dark:bg-[#141A23] border-2 border-[#FF6A00] rounded-3xl p-6 shadow-xl shadow-[#FF6A00]/10 flex flex-col relative landing-reveal landing-delay-2"
             >
               <div className="w-9 h-9 rounded-xl bg-[#FF6A00] text-white flex items-center justify-center mb-4">
                 <Check className="w-5 h-5" />
@@ -1516,8 +1637,8 @@ export default function LandingPage() {
       <section id="calculadora-roi" className="scroll-mt-24 py-20 bg-[#EAE3D5] dark:bg-[#0B0E14] border-b border-[#D6CEC0] dark:border-[#263040]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-2xl mx-auto mb-12 landing-reveal">
-            <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
-              ESTIMADOR DE IMPACTO
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8F5] dark:bg-[#141A23] border border-[#D6CEC0] dark:border-[#263040] text-[11px] font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
+              <span>[ 06 // ESTIMADOR DE IMPACTO ]</span>
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold font-heading text-[#1E1E1E] dark:text-white mt-2">
               ¿Cuánto margen puedes proteger en tus obras?
@@ -1544,6 +1665,9 @@ export default function LandingPage() {
                     value={roiObras}
                     onChange={(e) => setRoiObras(Number(e.target.value))}
                     aria-label="Obras activas simultáneas"
+                    style={{
+                      background: `linear-gradient(to right, #FF6A00 ${((roiObras - 1) / 11) * 100}%, rgba(148,163,184,0.32) ${((roiObras - 1) / 11) * 100}%)`,
+                    }}
                     className="landing-range w-full cursor-pointer"
                   />
                 </div>
@@ -1561,6 +1685,9 @@ export default function LandingPage() {
                     value={roiMonto}
                     onChange={(e) => setRoiMonto(Number(e.target.value))}
                     aria-label="Presupuesto promedio por obra"
+                    style={{
+                      background: `linear-gradient(to right, #FF6A00 ${((roiMonto - 3000000) / 57000000) * 100}%, rgba(148,163,184,0.32) ${((roiMonto - 3000000) / 57000000) * 100}%)`,
+                    }}
                     className="landing-range w-full cursor-pointer"
                   />
                 </div>
@@ -1579,6 +1706,9 @@ export default function LandingPage() {
                     value={roiMeses}
                     onChange={(e) => setRoiMeses(Number(e.target.value))}
                     aria-label="Duración promedio por obra en meses"
+                    style={{
+                      background: `linear-gradient(to right, #FF6A00 ${((roiMeses - 1) / 11) * 100}%, rgba(148,163,184,0.32) ${((roiMeses - 1) / 11) * 100}%)`,
+                    }}
                     className="landing-range w-full cursor-pointer"
                   />
                 </div>
@@ -1590,7 +1720,7 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="bg-[#161D27] text-white border-2 border-[#FF6A00] rounded-2xl p-6 text-center shadow-xl">
+              <div className="landing-top-beam bg-[#161D27] text-white border-2 border-[#FF6A00] rounded-2xl p-6 text-center shadow-[0_20px_50px_-12px_rgba(255,106,0,0.22)] relative">
                 <span className="text-xs font-mono text-[#FF6A00] font-bold uppercase tracking-wider">
                   PROYECCIÓN DE MARGEN PROTEGIDO
                 </span>
@@ -1642,8 +1772,8 @@ export default function LandingPage() {
       <section id="precios" className="scroll-mt-24 py-24 bg-[#F3EFE6] dark:bg-[#0F141C] border-b border-[#DDD5C5] dark:border-[#263040]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="text-center max-w-3xl mx-auto mb-12 landing-reveal">
-            <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
-              TARIFAS OFICIALES EN CHILE
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8F5] dark:bg-[#141A23] border border-[#D6CEC0] dark:border-[#263040] text-[11px] font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
+              <span>[ 07 // PLANES CLAROS EN CLP ]</span>
             </span>
             <h2 className="text-3xl sm:text-5xl font-extrabold font-heading text-[#1E1E1E] dark:text-white mt-2">
               Planes claros en pesos chilenos (IVA incluido)
@@ -1734,7 +1864,7 @@ export default function LandingPage() {
                     idx === 1 ? 'landing-delay-1' : idx === 2 ? 'landing-delay-2' : ''
                   } ${
                     isPro
-                      ? 'bg-[#161D27] text-white border-2 border-[#FF6A00] shadow-2xl shadow-[#161D27]/25'
+                      ? 'landing-top-beam bg-gradient-to-b from-[#1C2533] to-[#161D27] text-white border-2 border-[#FF6A00] shadow-[0_24px_60px_-15px_rgba(255,106,0,0.25)]'
                       : isProIa
                       ? 'bg-[#FAF8F5] dark:bg-[#141A23] border-2 border-[#6B8F72] shadow-lg'
                       : 'bg-[#FAF8F5] dark:bg-[#141A23] border-2 border-[#D6CEC0] dark:border-[#263040] shadow-sm'
@@ -1882,8 +2012,8 @@ export default function LandingPage() {
       <section className="py-20 bg-[#EAE3D5] dark:bg-[#0B0E14] border-b border-[#D6CEC0] dark:border-[#263040]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-12 landing-reveal">
-            <span className="text-xs font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
-              RESOLVEMOS TUS DUDAS
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8F5] dark:bg-[#141A23] border border-[#D6CEC0] dark:border-[#263040] text-[11px] font-mono font-bold text-[#FF6A00] uppercase tracking-widest">
+              <span>[ 08 // PREGUNTAS FRECUENTES ]</span>
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold font-heading text-[#1E1E1E] dark:text-white mt-2">
               Preguntas frecuentes sobre ObraTrack
@@ -1931,29 +2061,37 @@ export default function LandingPage() {
       {/* Footer (Official Dark Logo Variant) */}
       <footer className="bg-[#0B0E14] text-white pt-16 pb-24 sm:pb-12 border-t-4 border-[#FF6A00]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="bg-gradient-to-r from-[#141A23] via-[#1C2432] to-[#141A23] border-2 border-[#FF6A00]/50 rounded-3xl p-8 sm:p-12 text-center max-w-4xl mx-auto shadow-2xl mb-16 landing-reveal">
-            <h2 className="text-3xl sm:text-4xl font-extrabold font-heading text-white">
-              Empieza a ordenar tu faena hoy mismo sin costo
-            </h2>
-            <p className="text-slate-300 mt-3 text-base max-w-xl mx-auto">
-              Crea tu cuenta gratis en 1 minuto, prueba la Carta Gantt y Google Maps en tu primera obra y escala cuando necesites ObraBot o WhatsApp IA.
-            </p>
-            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link
-                href="/login"
-                className="landing-shimmer w-full sm:w-auto px-8 py-4 rounded-xl bg-[#FF6A00] text-white font-heading font-extrabold text-base hover:bg-[#E05E00] transition shadow-lg shadow-[#FF6A00]/30"
-              >
-                Crear Cuenta Gratis (Plan 1 Obra)
-              </Link>
-              <a
-                href="https://wa.me/56948743041?text=Hola,%20quiero%20ver%20una%20demo%20de%20ObraTrack"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:w-auto px-6 py-4 rounded-xl bg-white/10 border border-white/20 text-white font-mono text-xs hover:bg-white/20 transition flex items-center justify-center gap-2"
-              >
-                <MessageSquare className="w-4 h-4 text-[#9AC2A2]" />
-                <span>Hablar por WhatsApp</span>
-              </a>
+          <div className="landing-top-beam landing-slate-blueprint border-2 border-[#FF6A00]/60 rounded-3xl p-8 sm:p-12 text-center max-w-4xl mx-auto shadow-[0_24px_70px_-15px_rgba(255,106,0,0.22)] mb-16 relative overflow-hidden landing-reveal">
+            <div className="pointer-events-none absolute -top-20 -left-20 w-64 h-64 rounded-full bg-[#FF6A00]/15 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-20 -right-20 w-64 h-64 rounded-full bg-[#6B8F72]/20 blur-3xl" />
+            <div className="relative z-10">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/15 text-[11px] font-mono text-[#9AC2A2] mb-4">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#FF6A00] animate-pulse" />
+                LISTO EN 60 SEGUNDOS · SIN TARJETA
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-extrabold font-heading text-white">
+                Empieza a ordenar tu faena hoy mismo sin costo
+              </h2>
+              <p className="text-slate-300 mt-3 text-base max-w-xl mx-auto">
+                Crea tu cuenta gratis en 1 minuto, prueba la Carta Gantt y Google Maps en tu primera obra y escala cuando necesites ObraBot o WhatsApp IA.
+              </p>
+              <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Link
+                  href="/login"
+                  className="landing-shimmer w-full sm:w-auto px-8 py-4 rounded-xl bg-[#FF6A00] text-white font-heading font-extrabold text-base hover:bg-[#E05E00] transition shadow-lg shadow-[#FF6A00]/30"
+                >
+                  Crear Cuenta Gratis (Plan 1 Obra)
+                </Link>
+                <a
+                  href="https://wa.me/56948743041?text=Hola,%20quiero%20ver%20una%20demo%20de%20ObraTrack"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto px-6 py-4 rounded-xl bg-white/10 border border-white/20 text-white font-mono text-xs hover:bg-white/20 transition flex items-center justify-center gap-2"
+                >
+                  <MessageSquare className="w-4 h-4 text-[#9AC2A2]" />
+                  <span>Hablar por WhatsApp</span>
+                </a>
+              </div>
             </div>
           </div>
 
