@@ -18,11 +18,38 @@ type Pending = {
   result: AccionAsistenteIA;
 };
 const memory = new Map<string, Pending>();
+const undoMemory = new Map<string, Pending>();
 const tenant = () => {
   const empresa = dataService.getActiveUser()?.empresa_id;
   if (!empresa) throw new Error("Inicia sesión para guardar las acciones.");
   return empresa;
 };
+
+function isReversibleJob(job: Pending): boolean {
+  if (job.changed.usuarios?.length || job.deleted.usuarios?.length) return false;
+  if (job.changed.documentos_obra?.some((r) => ["acta_recepcion", "cierre_diario"].includes(r.categoria))) return false;
+  if (job.changed.imprevistos?.some((r) => r.asistencia_id)) return false;
+  return Object.values(job.changed).some((r) => r.length > 0) || Object.values(job.deleted).some((r) => r.length > 0);
+}
+
+export function canUndoAIWrite(id?: string): boolean {
+  if (!id) return false;
+  const empresa = dataService.getActiveUser()?.empresa_id;
+  if (!empresa) return false;
+  return undoMemory.get(id)?.empresa === empresa;
+}
+
+export async function undoAIWrite(id: string) {
+  const empresa = tenant();
+  const inverse = undoMemory.get(id);
+  if (!inverse || inverse.empresa !== empresa) {
+    throw new Error("Esta acción ya no se puede deshacer en esta sesión.");
+  }
+  await persist(inverse);
+  undoMemory.delete(id);
+  await dataService.pullFromCloudServer();
+  window.dispatchEvent(new CustomEvent("obratrack_cloud_synced"));
+}
 const pendingKey = (empresa: string) => `obratrack_ia_pendientes_v1_${empresa}`;
 
 function remember(job: Pending) {
@@ -237,11 +264,12 @@ export function executeAI(input: any, currentId?: string) {
         clientes: dataService.getClientes(),
         actividades: dataService.getActividades(),
         usuarios: dataService.getUsuarios(),
+        agenda: dataService.getEventosAgenda(),
       },
       currentId,
     );
     if (!actions.length)
-      return { result: undefined, pendingId: undefined, warning: "" };
+      return { result: undefined, pendingId: undefined, jobId: undefined, warning: "" };
     const before = snapshot();
     const backup = new Map(
       Object.keys(localStorage)
@@ -282,11 +310,23 @@ export function executeAI(input: any, currentId?: string) {
     remember(job);
     try {
       await persist(job);
-      return { result, pendingId: undefined, warning: "" };
+      let jobId: string | undefined;
+      if (isReversibleJob(job)) {
+        const inverse: Pending = {
+          id: `undo-${job.id}`,
+          empresa,
+          ...changesBetween(delta, before),
+          result: { ...result, titulo: `Deshacer: ${result.titulo}` },
+        };
+        undoMemory.set(job.id, inverse);
+        jobId = job.id;
+      }
+      return { result, pendingId: undefined, jobId, warning: "" };
     } catch (error) {
       return {
         result: undefined,
         pendingId: job.id,
+        jobId: undefined,
         warning: `Los cambios quedaron en este dispositivo; su guardado en la nube está pendiente. ${(error as Error).message}`,
       };
     }

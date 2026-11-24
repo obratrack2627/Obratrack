@@ -23,17 +23,36 @@ function checked(result: any): any[] {
 }
 
 /** Lecturas actuales por mensaje; sin caché de roles, permisos o conversaciones. */
-export async function loadWhatsAppContext(sb: any, user: any, users: any[]) {
+export async function loadWhatsAppContext(
+  sb: any,
+  user: any,
+  users: any[],
+  options?: { lightweightIfIdle?: boolean },
+) {
   const companyResult = Promise.resolve(
     sb.from("empresas").select("id,plan_id").eq("id", user.empresa_id),
   );
   const projectResult = Promise.resolve(
     completeRows(() => sb.from("proyectos").select("*").eq("empresa_id", user.empresa_id)),
   );
+  // Solo se consulta el historial cuando el plan vigente habilita el canal.
+  const historyResult = companyResult.then((result) => {
+    const company = checked(result)[0];
+    return company?.plan_id === "pro_ia"
+      ? sb
+          .from("whatsapp_mensajes")
+          .select("*")
+          .eq("empresa_id", user.empresa_id)
+          .eq("actor_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(80)
+      : Promise.resolve({ data: [] });
+  });
 
-  // Las tablas de obra dependen de sus IDs, pero no del historial ni del plan.
-  const tablesResult = projectResult.then(async (result) => {
-    const projects = checked(result);
+  // Las tablas hijas pesadas se omiten en saludos o toques de menú cuando no hay borrador ni pausa activa.
+  const tablesResult = Promise.all([projectResult, historyResult]).then(async ([projRes, histRes]) => {
+    const projects = checked(projRes);
+    const historyRows = checked(histRes);
     const ids = projects.map((p) => p.id);
     const names = [
       "clientes",
@@ -41,6 +60,29 @@ export async function loadWhatsAppContext(sb: any, user: any, users: any[]) {
       ...whatsappChildTables,
       "proyecto_trabajadores",
     ];
+    const latest = historyRows.find((r) => r.acciones?.tipo !== "agrupado_en_lote");
+    const hasPendingFlow = Boolean(
+      latest?.borrador_obra ||
+        latest?.acciones?.pausa_humana ||
+        latest?.acciones?.borrador_registro ||
+        latest?.acciones?.detalles?.borrador ||
+        latest?.acciones?.detalles?.borrador_registro ||
+        latest?.acciones?.edicion_nombre_pendiente,
+    );
+    if (options?.lightweightIfIdle && !hasPendingFlow) {
+      const crewRes = ids.length
+        ? await completeProjectRows(sb, "proyecto_trabajadores", ids, ["proyecto_id", "usuario_id"])
+        : { data: [] };
+      const tables: Record<string, any[]> = {
+        usuarios: users.filter((u) => u.empresa_id === user.empresa_id),
+        proyectos: projects,
+      };
+      for (const name of names) {
+        tables[name] = name === "proyecto_trabajadores" ? checked(crewRes) : [];
+      }
+      return tables;
+    }
+
     const results = await Promise.all([
       completeRows(() => sb.from("clientes").select("*").eq("empresa_id", user.empresa_id)),
       completeRows(() => sb.from("agenda_eventos").select("*").eq("empresa_id", user.empresa_id)),
@@ -58,19 +100,7 @@ export async function loadWhatsAppContext(sb: any, user: any, users: any[]) {
     });
     return tables;
   });
-  // Solo se consulta el historial cuando el plan vigente habilita el canal.
-  const historyResult = companyResult.then((result) => {
-    const company = checked(result)[0];
-    return company?.plan_id === "pro_ia"
-      ? sb
-          .from("whatsapp_mensajes")
-          .select("*")
-          .eq("empresa_id", user.empresa_id)
-          .eq("actor_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(80)
-      : Promise.resolve({ data: [] });
-  });
+
   const [company, tables, history] = await Promise.all([
     companyResult,
     tablesResult,

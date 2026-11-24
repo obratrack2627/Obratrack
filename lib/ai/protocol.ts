@@ -33,6 +33,8 @@ export const ACTION_TYPES = [
   "generar_reporte",
   "agendar_visita",
   "agendar_evento",
+  "actualizar_evento",
+  "eliminar_evento",
   "generar_mensaje_whatsapp",
   "enviar_mensaje_equipo",
   "crear_solicitud_cambio",
@@ -478,6 +480,13 @@ export function validateAction(raw: any): AIAction {
     required("titulo");
     if (!validDate(a.fecha)) fail("Indica la fecha de la visita.");
     required("hora");
+  }
+  if (a.tipo === "actualizar_evento") {
+    if (!text(a.evento_id) && !text(a.titulo)) fail("Indica el título o ID del compromiso a modificar.");
+    if (a.fecha !== undefined && !validDate(a.fecha)) fail("Indica una fecha válida YYYY-MM-DD para el compromiso.");
+  }
+  if (a.tipo === "eliminar_evento") {
+    if (!text(a.evento_id) && !text(a.titulo)) fail("Indica el título o ID del compromiso a eliminar.");
   }
   if (a.tipo === "generar_mensaje_whatsapp") required("mensaje");
   if (a.tipo === "enviar_mensaje_equipo") {

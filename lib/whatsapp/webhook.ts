@@ -9,7 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 import { serverFetch } from "@/lib/server-fetch";
 import { processPersonalMessage } from "@/lib/whatsapp/assistant";
 import { DEFAULT_WHATSAPP_BURST, type WhatsAppBurstConfig } from "@/lib/whatsapp/burst";
-import { sendMetaText, sendMetaInteractive, sendMetaDocument, validMetaSignature } from "@/lib/whatsapp/meta";
+import { sendMetaText, sendMetaInteractive, sendMetaDocument, sendMetaReadAndTyping, validMetaSignature } from "@/lib/whatsapp/meta";
 import { buildWhatsAppInteractivePayload } from "./interactive";
 import { dailyCloseDocument } from './daily-close-document';
 import { quotePdfDocument } from './quote-document';
@@ -56,6 +56,7 @@ export function createWhatsAppWebhook(
     send: typeof sendMetaText;
     sendInteractive?: typeof sendMetaInteractive;
     sendDocument?: typeof sendMetaDocument;
+    markReadAndTyping?: typeof sendMetaReadAndTyping;
     client: () => any;
     burst?: WhatsAppBurstConfig;
   } = {
@@ -63,6 +64,7 @@ export function createWhatsAppWebhook(
     send: sendMetaText,
     sendInteractive: sendMetaInteractive,
     sendDocument: sendMetaDocument,
+    markReadAndTyping: sendMetaReadAndTyping,
     burst: DEFAULT_WHATSAPP_BURST,
     client: () =>
       createClient(
@@ -125,6 +127,9 @@ export function createWhatsAppWebhook(
             console.info('whatsapp_message_received', { messageId, type: message.type });
             if (Date.now() > deadline)
               throw new Error("El lote continuará en el siguiente intento.");
+            if (deps.markReadAndTyping && message.id) {
+              void deps.markReadAndTyping(message.id).catch(() => {});
+            }
             stage = "process";
             const processOptions =
               deps.burst || deps.process === processPersonalMessage

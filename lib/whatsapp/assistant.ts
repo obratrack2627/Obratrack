@@ -205,7 +205,19 @@ export async function processPersonalMessage(
             .eq('empresa_id', user.empresa_id),
         ),
       );
-  const loaded = await loadWhatsAppContext(sb, user, companyUsers);
+  const isPureQuickMenuOrGreeting =
+    Boolean(directInteractiveMenuReply(batchItems)) ||
+    (batchItems.every((item) => item?.type === 'text' || item?.type === 'interactive') &&
+      !batchItems.some((item) => ['image', 'document', 'audio'].includes(item?.type)) &&
+      (() => {
+        const previewText = batchItems
+          .map((item) => (item.type === 'text' ? item.text?.body : parseWhatsAppInteractiveReply(item)))
+          .filter(Boolean)
+          .join('\n')
+          .trim();
+        return isGreetingOrMenuRequest(previewText) || previewText === '¿Qué obras tengo?';
+      })());
+  const loaded = await loadWhatsAppContext(sb, user, companyUsers, { lightweightIfIdle: isPureQuickMenuOrGreeting });
   const { company, tables } = loaded;
   if (["terreno", "supervisor"].includes(user.rol)) {
     const assigned = new Set(
@@ -297,7 +309,7 @@ export async function processPersonalMessage(
     conversationRows = conversationRows.filter(row => row.acciones?.rol_actor === 'supervisor' &&
       (assigned.has(row.acciones?.proyecto_contexto_id) || row.borrador_obra && !row.acciones?.proyecto_contexto_id));
   }
-  const history = conversationRows.slice(0, 6);
+  const history = conversationRows.slice(0, 16);
   const lastRowTime = history[0]?.created_at ? Date.parse(history[0].created_at) : NaN;
   const staleHistory = Number.isFinite(lastRowTime) && Date.now() - lastRowTime > quoteSessionMs;
   let pendingPerson = staleHistory

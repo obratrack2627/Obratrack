@@ -67,6 +67,8 @@ export function actionReply(result: any): string {
     generar_reporte: "Preparé el reporte",
     agendar_visita: "Agendé la visita",
     agendar_evento: "Agendé el evento",
+    actualizar_evento: "Actualicé el compromiso en la agenda",
+    eliminar_evento: "Eliminé el compromiso de la agenda",
     crear_solicitud_cambio: "Registré la solicitud de cambio",
     registrar_asistencia: "Registré la asistencia",
     registrar_documento: "Guardé el documento en la obra",

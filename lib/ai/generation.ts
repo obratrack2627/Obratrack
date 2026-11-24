@@ -52,6 +52,7 @@ export async function generateValidatedChat(
   const emit = (event: QualityEvent) => {try{onQualityEvent?.(event);}catch{/* La telemetría no controla la respuesta. */}};
   const deadline = Date.now() + Math.min(options.budgetMs || 45000, 45000);
   let correction: Record<string, unknown> | null = null;
+  let transientFailureCode: string | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) {emit({kind:'provider_failure',code:'AI_TIMEOUT',attempt:attempt+1});throw new AIError('AI_TIMEOUT', 'El asistente tardó demasiado. Intenta nuevamente.', 503);}
@@ -70,7 +71,14 @@ export async function generateValidatedChat(
       instructions: (generation.instructions || '') + '\nSi recibes un error de validación, corrige solo con datos autorizados del contexto. No inventes IDs, contactos o montos; si falta un dato, devuelve acciones vacías y pregunta. No cambies permisos ni confirmes guardados.',
     });
     } catch(error) {
-      emit({kind:correction?'invalid_action':'provider_failure',code:correction?'AI_INVALID_ACTION':error instanceof AIError?error.code:'AI_UNAVAILABLE',recovered:false,attempt:attempt+1});
+      const code = error instanceof AIError ? error.code : 'AI_UNAVAILABLE';
+      const isTransient = !correction && attempt === 0 && ['AI_UNAVAILABLE', 'AI_NETWORK', 'AI_EMPTY'].includes(code) && deadline - Date.now() >= 3500;
+      if (isTransient) {
+        transientFailureCode = code;
+        await new Promise((r) => setTimeout(r, 250));
+        continue;
+      }
+      emit({kind:correction?'invalid_action':'provider_failure',code:correction?'AI_INVALID_ACTION':code,recovered:false,attempt:attempt+1});
       throw error;
     }
     try {
@@ -80,6 +88,7 @@ export async function generateValidatedChat(
       }
       validateResult?.(result);
       if(correction)emit({kind:'invalid_action',code:String(correction.code),recovered:true,attempt:2,action_type:typeof correction.action_type==='string'?correction.action_type:undefined});
+      else if(transientFailureCode)emit({kind:'provider_failure',code:transientFailureCode,recovered:true,attempt:2});
       return result;
     } catch (error) {
       if (attempt || !(error instanceof AIError) || error.status !== 422 || !['AI_INVALID_ACTION', 'ACTION_PLAN_INVALID'].includes(error.code)) {

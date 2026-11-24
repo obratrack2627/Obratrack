@@ -236,6 +236,29 @@ export async function activateMetaWebhook(fetcher: typeof fetch = serverFetch) {
     throw new AIError("WHATSAPP_CONNECTION", "No se pudo comprobar la conexión con Meta. Intenta nuevamente.", 503);
   }
 }
+export async function sendMetaReadAndTyping(messageId: string, fetcher: typeof fetch = serverFetch) {
+  const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
+  const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;
+  if (!token || !phone || !messageId) return;
+  try {
+    await fetcher(`https://graph.facebook.com/${version()}/${phone}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      signal: AbortSignal.timeout(3000),
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        status: "read",
+        message_id: messageId,
+        typing_indicator: { type: "text" },
+      }),
+    });
+  } catch {
+    // Indicador de lectura y escritura best-effort; no interrumpe la respuesta principal.
+  }
+}
 export async function sendMetaText(to: string, text: string) {
   const token = process.env.WHATSAPP_CLOUD_API_ACCESS_TOKEN;
   const phone = process.env.WHATSAPP_CLOUD_API_PHONE_NUMBER_ID;

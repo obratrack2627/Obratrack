@@ -79,13 +79,15 @@ export function prepareActionPlan(
     clientes: any[];
     actividades: any[];
     usuarios: any[];
+    agenda?: any[];
   },
   currentId?: string,
 ): AIAction[] {
   const projects = context.proyectos.map(p => ({ ...p })),
     clients = context.clientes.map(c => ({ ...c })),
     users = context.usuarios.map(u => ({ ...u })),
-    activities = context.actividades.map(a => ({ ...a }));
+    activities = context.actividades.map(a => ({ ...a })),
+    events = (context.agenda || []).map(e => ({ ...e, nombre: e.titulo || e.nombre || '' }));
   const actions = flattenActions(input);
   // Se verifica el lote completo antes de modificar el primer registro.
   for (const [i, a] of Array.from(actions.entries())) {
@@ -124,6 +126,35 @@ export function prepareActionPlan(
       if (a.nuevo_nombre !== undefined) worker.nombre = a.nuevo_nombre;
       if (a.telefono !== undefined) worker.telefono_whatsapp = a.telefono;
       if (a.especialidades !== undefined) worker.especialidades = a.especialidades;
+    }
+    if (['agendar_evento', 'agendar_visita'].includes(a.tipo)) {
+      if (a.proyecto_id || a.proyecto_nombre) {
+        const p = resolveEntity(projects, a.proyecto_id || a.proyecto_nombre, currentId);
+        if (!p.id.startsWith('planned-')) a.proyecto_id = p.id;
+      } else if (currentId) {
+        const current = projects.find((p) => p.id === currentId);
+        if (current) a.proyecto_id = current.id;
+      }
+      events.push({ id: `planned-evt-${i}`, nombre: a.titulo, titulo: a.titulo, proyecto_id: a.proyecto_id });
+    }
+    if (['actualizar_evento', 'eliminar_evento'].includes(a.tipo) && context.agenda !== undefined) {
+      let scopedEvents = events;
+      if (a.proyecto_id || a.proyecto_nombre) {
+        const p = resolveEntity(projects, a.proyecto_id || a.proyecto_nombre, currentId);
+        if (!p.id.startsWith('planned-')) a.proyecto_id = p.id;
+        scopedEvents = events.filter((e) => !e.proyecto_id || e.proyecto_id === p.id);
+      } else if (currentId) {
+        const byProject = events.filter((e) => e.proyecto_id === currentId);
+        if (byProject.length) scopedEvents = byProject;
+      }
+      const ev = resolveEntity(scopedEvents, a.evento_id || a.titulo);
+      if (!ev.id.startsWith('planned-')) a.evento_id = ev.id;
+      a.titulo = ev.nombre;
+      if (a.tipo === 'actualizar_evento' && a.nuevo_titulo) ev.nombre = a.nuevo_titulo;
+      if (a.tipo === 'eliminar_evento') {
+        const idx = events.findIndex((x) => x.id === ev.id);
+        if (idx >= 0) events.splice(idx, 1);
+      }
     }
     if (PROJECT_ACTIONS.has(a.tipo)) {
       const p = resolveEntity(

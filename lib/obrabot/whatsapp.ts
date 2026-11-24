@@ -3,7 +3,8 @@ import { progressAfter, pausedReply } from '@/lib/whatsapp/conversation-progress
 import { AIError } from '@/lib/ai/errors';
 import { canonicalPhone } from '@/lib/phone';
 import { findBudget } from '@/lib/presupuestos';
-import { getApprovedQuote, getQuoteReview, handleQuoteTurn, isQuoteWorkflow, type Actor, type QuoteReply } from './quotes';
+import { getApprovedQuote, getQuoteReview, handleQuoteTurn, isQuoteWorkflow, tryNaturalQuoteEdit, type Actor, type QuoteReply } from './quotes';
+import { looksLikeNaturalQuoteEdit } from './quote-edit-natural';
 import { excelMime, quoteFile } from './quote-files';
 import type { QuoteSource } from './quote-input';
 import type { downloadMetaMedia } from '@/lib/whatsapp/meta';
@@ -146,8 +147,14 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
   const pendingReview = noAttachment && !quoteInput && !destination && !contextualFileFormat && isShortQuoteApproval(text)
     ? findPendingQuoteReview(conversationRows, replyContextId, text)
     : null;
-  if (!contextualFileFormat && !quoteInput && !destination && !pendingReview && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
   const last = conversationRows[0];
+  const freshRows = conversationRows.filter(r => !r?.created_at || !(Date.now() - Date.parse(r.created_at) > quoteSessionMs));
+  const recentReviewIds = replyContextId
+    ? [quoteReference(freshRows.find(r => r.message_id === replyContextId))?.review].filter((v): v is string => Boolean(v))
+    : freshRows.map(r => quoteReference(r)?.review).filter((v): v is string => Boolean(v));
+  const immediateQuoteContext = Boolean(last?.acciones?.tipo === 'obrabot_cotizacion' && !last?.acciones?.proyecto_contexto_id && !last?.borrador_obra);
+  const maybeNaturalEdit = noAttachment && !quoteInput && !destination && !contextualFileFormat && !pendingReview && actor.rol === 'admin' && recentReviewIds.length > 0 && looksLikeNaturalQuoteEdit(text);
+  if (!contextualFileFormat && !quoteInput && !destination && !pendingReview && !maybeNaturalEdit && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
   const draft = last?.acciones?.rol_actor === actor.rol && last.borrador_obra &&
     !(Date.now() - Date.parse(last.created_at) > quoteSessionMs) ? last.borrador_obra : null;
   if (draft && !contextualFileFormat && !quoteInput && !destination) return null;
@@ -182,6 +189,10 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
         ? (items.map(item => quoteButtonSource(item, 'pdf')).find(Boolean) || sourceId)
         : sourceId;
       reply = await requestedQuoteFile(db, actor, conversationRows, contextualFileFormat, pdfSource);
+    } else if (maybeNaturalEdit) {
+      reply = await tryNaturalQuoteEdit(db, actor, 'whatsapp', text, recentReviewIds, immediateQuoteContext, inbound.id);
+      if (!reply && !isDestinationContinuation(text)) return null;
+      if (!reply) reply = await handleQuoteTurn(db, actor, 'whatsapp', createText, inbound.id, source, { quotedId });
     } else {
       reply = await handleQuoteTurn(db, actor, 'whatsapp', createText, inbound.id, source, { quotedId });
     }

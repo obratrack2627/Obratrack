@@ -4,6 +4,7 @@ import { quoteLinePreview, saleLines } from '@/lib/quotes/document';
 import { normalizeQuote } from '@/lib/ai/protocol';
 import type { CotizacionEstimacion } from '@/types/database';
 import { isNaturalQuoteRequest, isPastedQuote, readPastedQuote } from './quote-message';
+import { applyNaturalQuoteEdit, looksLikeNaturalQuoteEdit, matchesQuoteTitleHint } from './quote-edit-natural';
 import { readQuoteSource, readTextQuote, transcribeQuoteImage, type QuoteSource } from './quote-input';
 import type { QuoteFormat } from './quote-files';
 import { handleDestinationTurn, rememberQuoteDestination, type QuoteDestination } from './quote-destination';
@@ -139,6 +140,72 @@ export async function reviewQuote(db: any, actor: Actor, id: string, revision: n
   const { data, error } = await db.rpc('obrabot_revisar_cotizacion', { p_empresa: actor.empresa_id, p_actor: actor.id, p_id: id, p_revision: revision, p_decision: decision, p_cambios: draft, p_observacion: decision === 'devolver' ? input : undefined });
   if (error || !data) dbError(error);
   return data as QuoteReview;
+}
+
+export async function tryNaturalQuoteEdit(
+  db: any,
+  actor: Actor,
+  channel: Channel,
+  text: string,
+  candidateIds: string[],
+  immediateQuoteContext: boolean,
+  requestId?: string,
+): Promise<QuoteReply | null> {
+  if (actor.rol !== 'admin' || !candidateIds.length || !looksLikeNaturalQuoteEdit(text)) return null;
+  if (/\b(?:carta\s+gantt|asistencia|bit[aá]cora|trabajador|cuadrilla|incidente)\b/i.test(text)) return null;
+  const uniqueIds = Array.from(new Set(candidateIds.filter(Boolean))).slice(0, 5);
+  const reviews: QuoteReview[] = [];
+  for (const id of uniqueIds) {
+    try {
+      reviews.push(await getQuoteReview(db, actor, id));
+    } catch {
+      // Ignorar cotizaciones eliminadas o no accesibles.
+    }
+  }
+  if (!reviews.length) return null;
+  let target: QuoteReview | null = null;
+  let bestScore = 0;
+  for (const rev of reviews) {
+    const score = matchesQuoteTitleHint(rev.borrador.titulo_proyecto, text);
+    if (score > bestScore) {
+      bestScore = score;
+      target = rev;
+    }
+  }
+  if (!target) {
+    if (!immediateQuoteContext && !/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text)) return null;
+    target = reviews[0];
+  }
+  const patch = applyNaturalQuoteEdit(target.borrador, text);
+  if (!patch) return null;
+  if (target.estado === 'pendiente') {
+    const draft = makeDraft(patch, target.id);
+    const { data, error } = await db.rpc('obrabot_revisar_cotizacion', {
+      p_empresa: actor.empresa_id,
+      p_actor: actor.id,
+      p_id: target.id,
+      p_revision: target.revision,
+      p_decision: 'corregir',
+      p_cambios: draft,
+      p_observacion: undefined,
+    });
+    if (error || !data) dbError(error);
+    const updated = data as QuoteReview;
+    return { respuesta: preview(updated, channel), solicitud: updated.id, revision: updated.revision };
+  }
+  // Si ya estaba aprobada, crear una nueva solicitud derivada sin alterar el histórico aprobado.
+  const newId = draftId(actor, requestId ? `${requestId}:edit` : undefined);
+  const draft = makeDraft(patch, newId);
+  const { error } = await db.rpc('obrabot_registrar_cotizacion', {
+    p_empresa: actor.empresa_id,
+    p_actor: actor.id,
+    p_id: newId,
+    p_origen: channel,
+    p_borrador: draft,
+  });
+  if (error) dbError(error);
+  const created = await getQuoteReview(db, actor, newId);
+  return { respuesta: preview(created, channel), solicitud: newId, revision: created.revision };
 }
 
 export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, text: string, requestId?: string, source?: QuoteSource, context?: { quotedId?: string | null; permiteVincular?: boolean; tratamientoIva?: 'incluido' | 'neto' }): Promise<QuoteReply | null> {

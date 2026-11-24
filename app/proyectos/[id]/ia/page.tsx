@@ -1,36 +1,17 @@
 'use client';
-import MoneyAmount from "@/components/MoneyAmount";
+import MoneyAmount from '@/components/MoneyAmount';
 import CompactSummary from '@/components/CompactSummary';
-
 import { conversationRequest } from '@/lib/ai/conversation';
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
-  ArrowLeft,
-  Sparkles,
-  Send,
-  Mic,
-  MicOff,
   Bot,
-  User,
-  CheckCircle2,
-  AlertTriangle,
-  GanttChartSquare,
-  Wallet,
   Trash2,
   Phone,
-  Calendar,
-  Building2,
-  DollarSign,
-  TrendingUp,
-  MapPin,
-  MessageSquare,
   Lock,
   ArrowRight,
-  ExternalLink,
 } from 'lucide-react';
-import Navbar from '@/components/Navbar';
 import ProjectTabsHeader from '@/components/ProjectTabsHeader';
 import { ProjectWorkspaceSkeleton } from '@/components/PageSkeletons';
 import { toast } from '@/components/ToastProvider';
@@ -46,21 +27,22 @@ import {
   Cliente,
   SubscriptionPlanId,
   MensajeChatProyecto,
-  AccionAsistenteIA,
 } from '@/types/database';
-import { formatDate } from '@/lib/utils';
 import GoogleMapsProjectViewer from '@/components/GoogleMapsProjectViewer';
 import ModalOverlay from '@/components/ModalOverlay';
-import ChatMessageFormatter from '@/components/ChatMessageFormatter';
-import { aiContext, requestAI, applyAIResponse } from '@/lib/ai/client';
-import AIMessageTools from '@/components/AIMessageTools';
+import { requestAIStream, applyAIResponse } from '@/lib/ai/client';
 import ObraBotWhatsAppLink from '@/components/ObraBotWhatsAppLink';
-import { quoteIntroText } from '@/lib/ai/quote-format';
-
+import {
+  ObraBotComposer,
+  ObraBotMessageBubble,
+  ObraBotStreamingBubble,
+  fileToChatImage,
+} from '@/components/ObraBotChatShared';
 
 export default function ProyectoIAPage() {
   const params = useParams();
   const projectId = params?.id as string;
+  const abortRef = useRef<AbortController | null>(null);
 
   const [proyecto, setProyecto] = useState<Proyecto | null>(null);
   const [actividades, setActividades] = useState<Actividad[]>([]);
@@ -71,19 +53,19 @@ export default function ProyectoIAPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [cliente, setCliente] = useState<Cliente | null>(null);
 
-  const [activeUser, setActiveUser] = useState<Usuario | null>(null);
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('gratis');
 
   const [mensajes, setMensajes] = useState<MensajeChatProyecto[]>([]);
   const [inputTexto, setInputTexto] = useState('');
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [cargando, setCargando] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  const [streamStage, setStreamStage] = useState('');
+  const [streamText, setStreamText] = useState('');
   const [isMapsModalOpen, setIsMapsModalOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const hasAccess = ['pro','pro_ia'].includes(activePlan);
+  const hasAccess = ['pro', 'pro_ia'].includes(activePlan);
 
   const loadData = () => {
     if (!projectId) return;
@@ -104,23 +86,18 @@ export default function ProyectoIAPage() {
     setImprevistos(imps);
     setUsuarios(usrs);
     setCliente(cli || null);
-
-    const user = dataService.getActiveUser();
-    setActiveUser(user);
     setActivePlan(dataService.getActivePlan());
 
-    // Cargar historial persistente local
     const historialLocal = dataService.getProyectoChatHistorial(projectId);
     if (historialLocal.length > 0) {
       setMensajes(historialLocal);
     } else if (proj) {
-      // Mensaje de bienvenida inicial contextualizado a la obra
       const bienvenida: MensajeChatProyecto = {
         id: 'welcome-' + projectId,
         proyecto_id: projectId,
         empresa_id: proj.empresa_id,
         remitente: 'agente',
-        texto: `Estoy trabajando con la obra **${proj.nombre}**. Puedes consultar sus pendientes, cotizar un adicional o buscar materiales.`,
+        texto: `Estoy trabajando con la obra **${proj.nombre}**. Puedes consultar sus pendientes, cotizar un adicional, agendar visitas o subir una foto de avance/incidente.`,
         created_at: new Date().toISOString(),
         sugerencias: [
           '¿Cuánto saldo nos queda por cobrar al cliente?',
@@ -136,7 +113,6 @@ export default function ProyectoIAPage() {
   useEffect(() => {
     loadData();
 
-    // Sincronizar desde Supabase en segundo plano
     if (projectId) {
       void dataService.loadProyectoChatFromSupabase(projectId).then((synced) => {
         if (synced && synced.length > 0) {
@@ -148,57 +124,83 @@ export default function ProyectoIAPage() {
     const planHandler = (e: any) => {
       if (e.detail) setActivePlan(e.detail);
     };
-    const refresh=()=>loadData();
+    const refresh = () => loadData();
     window.addEventListener('obratrack_plan_changed', planHandler);
-    window.addEventListener('obratrack_cloud_synced',refresh);
-    return () => {window.removeEventListener('obratrack_plan_changed', planHandler);window.removeEventListener('obratrack_cloud_synced',refresh);};
+    window.addEventListener('obratrack_cloud_synced', refresh);
+    return () => {
+      window.removeEventListener('obratrack_plan_changed', planHandler);
+      window.removeEventListener('obratrack_cloud_synced', refresh);
+    };
   }, [projectId]);
 
   useEffect(() => {
     const feed = messagesEndRef.current?.parentElement;
     if (feed) feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
-  }, [mensajes]);
+  }, [mensajes, cargando, streamText]);
 
-  const showToast = (msg: string) => {
-    toast(msg);
-  };
+  const showToast = (msg: string) => toast(msg);
 
-  const handleLimpiarHistorial = () => {
-    setConfirmClearOpen(true);
-  };
+  const handleLimpiarHistorial = () => setConfirmClearOpen(true);
 
   const confirmLimpiarHistorial = () => {
     setConfirmClearOpen(false);
+    if (!projectId) return;
     dataService.clearProyectoChatHistorial(projectId);
-    setMensajes([]);
     loadData();
     showToast('Historial del proyecto reiniciado.');
   };
 
-  const handleEnviarMensaje = async (textoAEnviar?: string) => {
-    const query = (textoAEnviar || inputTexto).trim();
-    if (!query || cargando || !proyecto || !['pro','pro_ia'].includes(dataService.getActivePlan())) return;
+  const handleStop = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+  };
 
+  const updateLocalMessage = (id: string, patch: Partial<MensajeChatProyecto>) => {
+    setMensajes((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  };
+
+  const handleEnviarMensaje = async (textoAEnviar?: string) => {
+    const rawText = (textoAEnviar ?? inputTexto).trim();
+    const fileToUse = textoAEnviar !== undefined ? null : attachedFile;
+    if ((!rawText && !fileToUse) || cargando || !proyecto || !['pro', 'pro_ia'].includes(dataService.getActivePlan())) return;
+
+    if (fileToUse && !fileToUse.type.startsWith('image/')) {
+      showToast('En el chat de obra puedes adjuntar fotos JPG, PNG o WebP. Para planillas Excel o PDF usa el Cotizador.');
+      return;
+    }
+
+    const displayUserText = fileToUse ? `${rawText ? rawText + '\n' : ''}📷 ${fileToUse.name}` : rawText;
     const userMsg: MensajeChatProyecto = {
       id: 'usr-p-' + Date.now(),
       proyecto_id: projectId,
       empresa_id: proyecto.empresa_id,
       remitente: 'usuario',
-      texto: query,
+      texto: displayUserText,
       created_at: new Date().toISOString(),
     };
 
     dataService.saveProyectoMensajeChat(userMsg);
     setMensajes((prev) => [...prev, userMsg]);
-    setInputTexto('');
+    if (textoAEnviar === undefined) {
+      setInputTexto('');
+      setAttachedFile(null);
+    }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
     setCargando(true);
+    setStreamStage('Cargando contexto de la obra…');
+    setStreamText('');
+    const startedAt = Date.now();
 
     try {
+      const imagen = fileToUse ? await fileToChatImage(fileToUse) : undefined;
+      const query = rawText || 'Analiza esta foto de la obra e indícame cómo registrarla.';
       const totalPagado = pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0);
       const totalImprevistos = imprevistos.reduce((sum, i) => sum + Number(i.monto || 0), 0);
       const totalMateriales = materiales.reduce(
         (sum, m) => sum + Number(m.subtotal || m.cantidad * m.precio_unitario || 0),
-        0
+        0,
       );
       const saldoPendiente = Math.max(0, (proyecto.monto_cotizado || 0) - totalPagado);
 
@@ -252,12 +254,26 @@ export default function ProyectoIAPage() {
           .map((u) => ({ id: u.id, nombre: u.nombre, rol: u.rol })),
       };
 
-      const data = await requestAI(`/api/proyectos/${projectId}/chat`, {
-        mensaje: query, historial: conversationRequest(mensajes, query), contexto_proyecto: contextoProyecto, contexto_cotizacion: [...mensajes].reverse().find(m => m.cotizacion_generada)?.cotizacion_generada,
-      });
-      const processed = await applyAIResponse(data, projectId);
+      const data = await requestAIStream(
+        `/api/proyectos/${projectId}/chat`,
+        {
+          mensaje: query,
+          historial: conversationRequest(mensajes, query),
+          contexto_proyecto: contextoProyecto,
+          contexto_cotizacion: [...mensajes].reverse().find((m) => m.cotizacion_generada)?.cotizacion_generada,
+          ...(imagen ? { imagen } : {}),
+        },
+        {
+          onStage: (s) => setStreamStage(s),
+          onText: (t) => setStreamText(t),
+        },
+        controller.signal,
+      );
+      const processed = await applyAIResponse(data, projectId, { confirmCritical: true });
       loadData();
-      if (processed.accion_ejecutada && processed.accion_ejecutada.tipo !== 'solicitar_datos_persona') showToast(processed.accion_ejecutada.titulo);
+      if (processed.accion_ejecutada && processed.accion_ejecutada.tipo !== 'solicitar_datos_persona') {
+        showToast(processed.accion_ejecutada.titulo);
+      }
 
       const agenteMsg: MensajeChatProyecto = {
         id: 'agt-p-' + Date.now(),
@@ -265,70 +281,58 @@ export default function ProyectoIAPage() {
         empresa_id: proyecto.empresa_id,
         remitente: 'agente',
         ...processed,
+        latencia_ms: Date.now() - startedAt,
         created_at: new Date().toISOString(),
       };
 
       dataService.saveProyectoMensajeChat(agenteMsg);
       setMensajes((prev) => [...prev, agenteMsg]);
     } catch (err: any) {
-      console.error(err);
+      const aborted = err?.name === 'AbortError' || controller.signal.aborted;
       const errorMsg = err?.message || 'Error de comunicación con el asistente.';
-      showToast(errorMsg);
+      if (!aborted) showToast(errorMsg);
       const agenteErrorMsg: MensajeChatProyecto = {
         id: 'agt-err-' + Date.now(),
         proyecto_id: projectId,
-        empresa_id: proyecto?.empresa_id,
+        empresa_id: proyecto.empresa_id,
         remitente: 'agente',
-        texto: `⚠️ No pude procesar tu mensaje: ${errorMsg}. Por favor intenta nuevamente.`,
+        texto: aborted ? 'Solicitud detenida.' : `No pude procesar tu mensaje: ${errorMsg}`,
+        es_error: !aborted,
+        reintentar_texto: !aborted && rawText ? rawText : undefined,
         created_at: new Date().toISOString(),
-        sugerencias: [
-          '¿Cuánto saldo nos queda por cobrar?',
-          '¿Cómo vamos con la Carta Gantt?',
-        ],
       };
       setMensajes((prev) => [...prev, agenteErrorMsg]);
+    } finally {
+      abortRef.current = null;
+      setCargando(false);
+      setStreamStage('');
+      setStreamText('');
+    }
+  };
+
+  const handleConfirmCritical = async (messageId: string, rawResponse: Record<string, any>) => {
+    setCargando(true);
+    try {
+      const processed = await applyAIResponse(rawResponse, projectId, { confirmCritical: false });
+      updateLocalMessage(messageId, { ...processed, confirmacion_pendiente: undefined });
+      loadData();
+      if (processed.accion_ejecutada) showToast(processed.accion_ejecutada.titulo);
+    } catch (err: any) {
+      updateLocalMessage(messageId, {
+        texto: err?.message || 'No se pudo ejecutar la acción.',
+        confirmacion_pendiente: undefined,
+        es_error: true,
+      });
     } finally {
       setCargando(false);
     }
   };
 
-  const handleVoiceInput = () => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      showToast('Tu navegador no soporta reconocimiento de voz nativo. Por favor escribe tu mensaje.');
-      return;
-    }
-
-    if (isListening) {
-      setIsListening(false);
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'es-CL';
-      recognition.continuous = false;
-      recognition.interimResults = false;
-
-      recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
-      recognition.onerror = () => setIsListening(false);
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        if (transcript) {
-          setInputTexto(transcript);
-          handleEnviarMensaje(transcript).catch(console.error);
-        }
-      };
-
-      recognition.start();
-    } catch (err) {
-      console.error('Speech recognition error:', err);
-      setIsListening(false);
-    }
+  const handleCancelCritical = (messageId: string) => {
+    updateLocalMessage(messageId, {
+      texto: 'Acción cancelada. No se realizaron cambios.',
+      confirmacion_pendiente: undefined,
+    });
   };
 
   if (!proyecto) {
@@ -341,8 +345,6 @@ export default function ProyectoIAPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-screen">
-
-      {/* Modal Google Maps */}
       <GoogleMapsProjectViewer
         isOpen={isMapsModalOpen}
         onClose={() => setIsMapsModalOpen(false)}
@@ -355,55 +357,55 @@ export default function ProyectoIAPage() {
         onOpenMaps={() => setIsMapsModalOpen(true)}
       />
 
-      <div className="p-6 max-w-6xl w-full mx-auto space-y-6 flex-1 flex flex-col">
-        {/* Barra de Métricas en Vivo de la Obra */}
-        <CompactSummary><div className="workspace-metrics grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm">
-            <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Avance Físico</p>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-xl font-bold font-mono text-[#FF6A00]">{pctAvance}%</span>
-              <span className="text-[10px] text-gray-500 font-sans">
-                {actividades.filter((a) => a.estado === 'terminada').length} de {actividades.length} partidas
-              </span>
+      <div className="p-4 sm:p-6 max-w-6xl w-full mx-auto space-y-6 flex-1 flex flex-col">
+        <CompactSummary>
+          <div className="workspace-metrics grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm">
+              <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Avance Físico</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-xl font-bold font-mono text-[#FF6A00]">{pctAvance}%</span>
+                <span className="text-[10px] text-gray-500 font-sans">
+                  {actividades.filter((a) => a.estado === 'terminada').length} de {actividades.length} partidas
+                </span>
+              </div>
             </div>
-          </div>
 
-          <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm">
-            <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Presupuesto Total</p>
-            <p className="text-xl font-bold font-mono text-navy-900 dark:text-white mt-1">
-              <MoneyAmount value={proyecto.monto_cotizado || 0} />
-            </p>
-          </div>
-
-          <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm">
-            <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Saldo Por Cobrar</p>
-            <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
-              <MoneyAmount value={saldoPendiente} />
-            </p>
-          </div>
-
-          <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Mandante / Cliente</p>
-              <p className="text-xs font-bold font-heading text-navy-900 dark:text-white mt-1 truncate max-w-[120px]">
-                {cliente?.nombre || 'No asignado'}
+            <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm">
+              <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Presupuesto Total</p>
+              <p className="text-xl font-bold font-mono text-navy-900 dark:text-white mt-1">
+                <MoneyAmount value={proyecto.monto_cotizado || 0} />
               </p>
             </div>
-            {cliente?.telefono && (
-              <a
-                href={`https://wa.me/${cliente.telefono.replace(/[^0-9]/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-colors"
-                title="Abrir WhatsApp del cliente"
-              >
-                <Phone className="w-3.5 h-3.5" />
-              </a>
-            )}
-          </div>
-        </div></CompactSummary>
 
-        {/* Bloqueo si el usuario no tiene Plan Pro + IA */}
+            <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm">
+              <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Saldo Por Cobrar</p>
+              <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
+                <MoneyAmount value={saldoPendiente} />
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-2xl p-3.5 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-mono font-semibold uppercase text-gray-400">Mandante / Cliente</p>
+                <p className="text-xs font-bold font-heading text-navy-900 dark:text-white mt-1 truncate max-w-[120px]">
+                  {cliente?.nombre || 'No asignado'}
+                </p>
+              </div>
+              {cliente?.telefono && (
+                <a
+                  href={`https://wa.me/${cliente.telefono.replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-colors"
+                  title="Abrir WhatsApp del cliente"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
+          </div>
+        </CompactSummary>
+
         {!hasAccess ? (
           <div className="flex-1 bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-3xl p-10 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
             <div className="w-16 h-16 rounded-3xl bg-[#FF6A00]/15 text-[#FF6A00] flex items-center justify-center border border-[#FF6A00]/30 shadow-inner">
@@ -433,33 +435,27 @@ export default function ProyectoIAPage() {
             </div>
           </div>
         ) : (
-          /* Área de Conversación Persistente del Proyecto */
-          <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-3xl shadow-sm flex flex-col overflow-hidden h-[calc(100dvh-14rem)] min-h-[340px] sm:min-h-[480px]">
-            {/* Cabecera del Agente */}
-            <div className="px-6 py-3.5 bg-gradient-to-r from-[#141A23] to-[#1E2638] text-white flex items-center justify-between border-b border-[#263040]">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-2xl bg-[#FF6A00]/20 border border-[#FF6A00]/40 flex items-center justify-center text-[#FF6A00]">
+          <div className="bg-white dark:bg-[#141A23] border border-[#E5DFC9] dark:border-[#263040] rounded-3xl shadow-sm flex flex-col overflow-hidden h-[calc(100dvh-14rem)] min-h-[360px] sm:min-h-[480px]">
+            <div className="px-5 py-3.5 bg-gradient-to-r from-[#141A23] to-[#1E2638] text-white flex items-center justify-between border-b border-[#263040]">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-2xl bg-[#FF6A00]/20 border border-[#FF6A00]/40 flex items-center justify-center text-[#FF6A00] shrink-0">
                   <Bot className="w-5 h-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h4 className="font-heading font-bold text-xs tracking-wide flex items-center gap-2">
-                    <span>ObraBot · {proyecto.nombre}</span>
-                    <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px] font-mono font-bold">
-                      Obra seleccionada
+                    <span className="truncate">ObraBot · {proyecto.nombre}</span>
+                    <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[9px] font-mono font-bold shrink-0">
+                      Obra activa
                     </span>
                   </h4>
                   <p className="text-[10px] text-gray-400 font-sans">
-                    Consulta y gestiona esta obra
+                    Texto, dictado por voz y fotos de obra
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <ObraBotWhatsAppLink
-                  activePlan={activePlan}
-                  projectName={proyecto?.nombre}
-                  compact
-                />
+              <div className="flex items-center gap-2 shrink-0">
+                <ObraBotWhatsAppLink activePlan={activePlan} projectName={proyecto?.nombre} compact />
                 <button
                   type="button"
                   onClick={handleLimpiarHistorial}
@@ -472,155 +468,37 @@ export default function ProyectoIAPage() {
               </div>
             </div>
 
-            {/* Mensajes */}
-            <div className="flex-1 min-h-0 p-4 sm:p-6 overflow-y-auto space-y-4 text-xs font-sans">
+            <div className="flex-1 min-h-0 p-4 sm:p-6 overflow-y-auto space-y-4 bg-kraft-50/40 dark:bg-[#0B0E14] text-xs font-sans">
               {mensajes.map((m) => (
-                <div
+                <ObraBotMessageBubble
                   key={m.id}
-                  className={`flex gap-3 ${m.remitente === 'usuario' ? 'justify-end' : 'justify-start'}`}
-                >
-                  {m.remitente === 'agente' && (
-                    <div className="w-8 h-8 rounded-2xl bg-[#FF6A00]/15 text-[#FF6A00] flex-shrink-0 flex items-center justify-center border border-[#FF6A00]/30 mt-0.5 shadow-sm">
-                      <Sparkles className="w-4 h-4" />
-                    </div>
-                  )}
-
-                  <div className="max-w-[80%] space-y-2">
-                    <div
-                      className={`p-4 rounded-3xl ${
-                        m.remitente === 'usuario'
-                          ? 'bg-[#FF6A00] text-white rounded-tr-none shadow-sm'
-                          : 'bg-gray-100 dark:bg-[#1A2230] text-navy-900 dark:text-gray-100 rounded-tl-none border border-gray-200 dark:border-[#263040]'
-                      }`}
-                    >
-                      {(() => {
-                        const content = m.comparacion_materiales?.resumen || quoteIntroText(m.texto, m.cotizacion_generada);
-                        return content ? (
-                          <ChatMessageFormatter
-                            content={content}
-                            isUser={m.remitente === 'usuario'}
-                          />
-                        ) : null;
-                      })()}
-                      <AIMessageTools message={m} />
-                      <span
-                        className={`block text-[9px] mt-1.5 text-right ${
-                          m.remitente === 'usuario' ? 'text-white/70' : 'text-gray-400'
-                        }`}
-                      >
-                        {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-
-                    {/* Tarjeta de Cambio guardado */}
-                    {m.accion_ejecutada && m.accion_ejecutada.tipo !== 'solicitar_datos_persona' && (
-                      <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-3 space-y-1.5 text-left animate-in fade-in-50">
-                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold font-heading text-xs">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>{m.accion_ejecutada.titulo}</span>
-                        </div>
-                        <p className="text-[11px] text-gray-600 dark:text-gray-300">
-                          {m.accion_ejecutada.resultado_texto}
-                        </p>
-                        {m.accion_ejecutada.enlace_whatsapp && (
-                          <a
-                            href={m.accion_ejecutada.enlace_whatsapp}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 mt-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs transition-colors"
-                          >
-                            <span>Enviar mensaje al cliente por WhatsApp</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                        {m.accion_ejecutada.link_destino && !m.accion_ejecutada.enlace_whatsapp && (
-                          <Link
-                            href={m.accion_ejecutada.link_destino}
-                            className="inline-block mt-1 text-xs font-bold text-[#FF6A00] hover:underline"
-                          >
-                            {m.accion_ejecutada.link_texto || 'Ver en la obra ➔'}
-                          </Link>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Sugerencias Rápidas */}
-                    {m.sugerencias && m.sugerencias.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {m.sugerencias.map((sug, sIdx) => (
-                          <button
-                            key={sIdx}
-                            onClick={() => handleEnviarMensaje(sug)}
-                            className="px-3 py-1.5 bg-white dark:bg-[#1A2230] hover:bg-[#FF6A00]/10 border border-gray-200 dark:border-[#263040] hover:border-[#FF6A00] text-navy-900 dark:text-gray-300 rounded-xl text-[11px] transition-colors text-left"
-                          >
-                            {sug}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {m.remitente === 'usuario' && (
-                    <div className="w-8 h-8 rounded-2xl bg-navy-800 text-white flex-shrink-0 flex items-center justify-center mt-0.5 shadow-sm">
-                      <User className="w-4 h-4" />
-                    </div>
-                  )}
-                </div>
+                  message={m}
+                  onSelectSuggestion={(sug) => void handleEnviarMensaje(sug)}
+                  onRetry={(retryText) => void handleEnviarMensaje(retryText)}
+                  onConfirmCritical={handleConfirmCritical}
+                  onCancelCritical={handleCancelCritical}
+                  onFeedbackChange={(id, val) => updateLocalMessage(id, { feedback: val })}
+                  onUndone={() => loadData()}
+                />
               ))}
 
               {cargando && (
-                <div className="flex items-center gap-2.5 text-gray-400 text-xs py-3">
-                  <Bot className="w-4 h-4 text-[#FF6A00] animate-bounce" />
-                  <span>Consultando datos de la obra y analizando respuesta...</span>
-                </div>
+                <ObraBotStreamingBubble stage={streamStage} partialText={streamText} onStop={handleStop} />
               )}
 
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Bar */}
-            <div className="p-4 border-t border-gray-200 dark:border-[#263040] bg-gray-50/70 dark:bg-[#141A23]/70">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void handleEnviarMensaje();
-                }}
-                className="flex items-center gap-2.5"
-              >
-                <button
-                  type="button"
-                  onClick={handleVoiceInput}
-                  className={`p-2.5 rounded-2xl transition-all ${
-                    isListening
-                      ? 'bg-rose-500 text-white animate-pulse'
-                      : 'bg-white dark:bg-[#1A2230] text-gray-500 hover:text-[#FF6A00] border border-gray-200 dark:border-[#263040]'
-                  }`}
-                  title={isListening ? 'Escuchando...' : 'Hablar por micrófono'}
-                >
-                  {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                </button>
-
-                <textarea
-                  rows={2}
-                  value={inputTexto}
-                  aria-label="Mensaje para el asistente de la obra"
-                  onChange={(e) => setInputTexto(e.target.value)}
-                  onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void handleEnviarMensaje();}}}
-                  placeholder="Pregunta o pide una acción para esta obra"
-                  disabled={cargando}
-                  className="flex-1 min-w-0 px-4 py-2.5 bg-white dark:bg-[#1A2230] border border-gray-200 dark:border-[#263040] rounded-2xl text-xs text-navy-900 dark:text-white placeholder-gray-400 focus:outline-none focus:border-[#FF6A00] shadow-sm"
-                />
-
-                <button
-                  type="submit"
-                  aria-label="Enviar mensaje"
-                  disabled={!inputTexto.trim() || cargando}
-                  className="p-2.5 bg-[#FF6A00] hover:bg-[#E55F00] disabled:opacity-40 text-white rounded-2xl shadow-md transition-all flex items-center justify-center"
-                >
-                  <Send className="w-5 h-5" />
-                </button>
-              </form>
-            </div>
+            <ObraBotComposer
+              value={inputTexto}
+              onChange={setInputTexto}
+              onSubmit={() => void handleEnviarMensaje()}
+              onStop={handleStop}
+              busy={cargando}
+              attachedFile={attachedFile}
+              onAttachFile={setAttachedFile}
+              placeholder="Pregunta, dicta por voz o adjunta una foto de esta obra…"
+            />
           </div>
         )}
       </div>

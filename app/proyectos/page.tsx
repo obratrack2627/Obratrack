@@ -53,7 +53,6 @@ import {
   ClipboardCheck,
   LayoutGrid,
   List,
-  Columns3,
   Copy,
   FileSpreadsheet,
   ArrowUpDown,
@@ -83,7 +82,7 @@ export default function ProyectosPage() {
   const [projectToDelete, setProjectToDelete] = useState<Proyecto | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [viewingMapsProject, setViewingMapsProject] = useState<Proyecto | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'kanban'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [sortBy, setSortBy] = useState<'default' | 'entrega' | 'avance_asc' | 'monto_desc' | 'nombre'>('default');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [duplicatingProject, setDuplicatingProject] = useState<Proyecto | null>(null);
@@ -866,18 +865,6 @@ export default function ProyectosPage() {
                       <List className="w-3.5 h-3.5" />
                       <span className="hidden md:inline">Tabla</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setViewMode('kanban')}
-                      className={`px-2.5 py-1.5 rounded-lg text-[11px] font-heading font-semibold inline-flex items-center gap-1 transition-all ${
-                        viewMode === 'kanban'
-                          ? 'bg-white dark:bg-[#141A23] text-navy-900 dark:text-white shadow-sm'
-                          : 'text-gray-500 hover:text-navy-900 dark:text-gray-400 dark:hover:text-white'
-                      }`}
-                    >
-                      <Columns3 className="w-3.5 h-3.5" />
-                      <span className="hidden md:inline">Kanban</span>
-                    </button>
                   </div>
                 )}
               </div>
@@ -1168,132 +1155,6 @@ export default function ProyectosPage() {
                         })}
                       </tbody>
                     </table>
-                  </div>
-                </div>
-              );
-            }
-
-            if (!isTerreno && viewMode === 'kanban') {
-              const kanbanColumns: Array<{
-                estado: ProjectStatus;
-                label: string;
-                accent: string;
-              }> = [
-                { estado: 'pendiente', label: 'Pendientes', accent: 'border-amber-400/50' },
-                { estado: 'activo', label: 'En Curso', accent: 'border-obra-green/50' },
-                { estado: 'pausado', label: 'Pausadas', accent: 'border-slate-400/50' },
-                { estado: 'terminado', label: 'Terminadas', accent: 'border-blue-500/50' },
-              ];
-              return (
-                <div className="space-y-3">
-                  {statusFilter !== 'todos' && (
-                    <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-900 dark:text-amber-200">
-                      <span>
-                        El filtro de estado está mostrando solo{' '}
-                        <strong>{projectStatusLabel(statusFilter)}</strong>.
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setStatusFilter('todos')}
-                        className="font-heading font-bold text-obra-orange hover:underline"
-                      >
-                        Mostrar todas las columnas
-                      </button>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
-                    {kanbanColumns.map((col) => {
-                      const colItems = filteredProyectos.filter((p) => p.estado === col.estado);
-                      return (
-                        <div
-                          key={col.estado}
-                          className={`rounded-2xl bg-kraft-50/70 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] border-t-4 ${col.accent} p-3 space-y-3`}
-                        >
-                          <div className="flex items-center justify-between px-1">
-                            <h3 className="font-heading font-bold text-xs uppercase tracking-wider text-navy-900 dark:text-white">
-                              {col.label}
-                            </h3>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] text-gray-700 dark:text-gray-200">
-                              {colItems.length}
-                            </span>
-                          </div>
-                          {colItems.length === 0 ? (
-                            <p className="text-[11px] text-gray-400 dark:text-gray-500 text-center py-6 border border-dashed border-kraft-200 dark:border-[#263040] rounded-xl">
-                              Sin obras en esta etapa
-                            </p>
-                          ) : (
-                            <div className="space-y-2.5">
-                              {colItems.map((proj) => {
-                                const avance = proj.porcentaje_avance_ponderado || 0;
-                                return (
-                                  <div
-                                    key={proj.id}
-                                    data-project-id={proj.id}
-                                    className="rounded-xl bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] p-3.5 shadow-sm space-y-2.5"
-                                  >
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div className="min-w-0">
-                                        <Link
-                                          href={`/proyectos/${proj.id}/gantt`}
-                                          className="font-heading font-bold text-sm text-navy-900 dark:text-white hover:text-obra-orange line-clamp-2"
-                                        >
-                                          {proj.nombre}
-                                        </Link>
-                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                                          {proj.cliente?.nombre || 'Cliente Particular'}
-                                        </p>
-                                      </div>
-                                      <ActionMenu label={`Acciones de ${proj.nombre}`}>
-                                        <button type="button" onClick={() => setSummaryProject(proj)}>Resumen mandante</button>
-                                        <button type="button" onClick={() => handleOpenDuplicate(proj)}>Duplicar obra</button>
-                                        <button type="button" onClick={() => handleOpenEdit(proj)}>Editar obra</button>
-                                        <button type="button" className="text-red-600" onClick={() => setProjectToDelete(proj)}>Eliminar obra</button>
-                                      </ActionMenu>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <div className="flex justify-between text-[11px]">
-                                        <span className="text-gray-500 dark:text-gray-400">Avance</span>
-                                        <span className="font-mono font-bold text-obra-orange">{avance}%</span>
-                                      </div>
-                                      <div className="h-1.5 bg-kraft-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                                        <div
-                                          className="h-full bg-obra-orange rounded-full"
-                                          style={{ width: `${avance}%` }}
-                                        />
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-kraft-100 dark:border-[#263040]">
-                                      <select
-                                        aria-label={`Cambiar estado de ${proj.nombre}`}
-                                        value={proj.estado}
-                                        onChange={(e) =>
-                                          handleQuickChangeStatus(proj, e.target.value as ProjectStatus)
-                                        }
-                                        className="text-[11px] font-mono bg-kraft-50 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] rounded-lg px-2 py-1 text-navy-900 dark:text-gray-100 focus:outline-none focus:border-obra-orange"
-                                      >
-                                        {projectStatuses.map((st) => (
-                                          <option key={st.value} value={st.value}>
-                                            {st.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <Link
-                                        href={`/proyectos/${proj.id}/gantt`}
-                                        className="text-[11px] font-heading font-bold text-obra-orange hover:underline shrink-0"
-                                      >
-                                        Abrir →
-                                      </Link>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
                   </div>
                 </div>
               );

@@ -527,6 +527,8 @@ export type TipoAccionIA =
   | 'desasignar_trabajador'
   | 'agendar_visita'
   | 'agendar_evento'
+  | 'actualizar_evento'
+  | 'eliminar_evento'
   | 'registrar_pago'
   | 'crear_recordatorio'
   | 'enviar_cotizacion_cliente'
@@ -569,6 +571,12 @@ export interface MensajeChatCotizador {
   cotizacion_generada?: CotizacionEstimacion;
   comparacion_materiales?: import('@/lib/materials/types').ComparacionMateriales;
   pendiente_sincronizacion?: string;
+  job_id?: string;
+  latencia_ms?: number;
+  feedback?: 'up' | 'down';
+  es_error?: boolean;
+  reintentar_texto?: string;
+  confirmacion_pendiente?: { resumen: string; rawResponse: Record<string, any> };
 }
 
 export interface MensajeChatProyecto {
@@ -582,6 +590,12 @@ export interface MensajeChatProyecto {
   comparacion_materiales?: import('@/lib/materials/types').ComparacionMateriales;
   pendiente_sincronizacion?: string;
   accion_ejecutada?: AccionAsistenteIA;
+  job_id?: string;
+  latencia_ms?: number;
+  feedback?: 'up' | 'down';
+  es_error?: boolean;
+  reintentar_texto?: string;
+  confirmacion_pendiente?: { resumen: string; rawResponse: Record<string, any> };
   created_at: string;
 }
 

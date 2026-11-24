@@ -38,6 +38,9 @@ const materialQuery = {
 // Cada acción contiene solo su contrato; el servidor sigue siendo autoritativo.
 const actionProperties: Record<string, any> = {
   nuevo_nombre: string,
+  nuevo_titulo: string,
+  evento_id: string,
+  completado: { type: "boolean" },
   especialidades: array(string),
   usuario_id: string,
   material_id: string,
@@ -109,6 +112,8 @@ const actionFields: Record<typeof ACTION_TYPES[number], string> = {
   "generar_reporte": "titulo resumen",
   "agendar_visita": "titulo fecha hora comuna_lugar tipo_evento descripcion",
   "agendar_evento": "titulo fecha hora comuna_lugar tipo_evento descripcion",
+  "actualizar_evento": "evento_id titulo nuevo_titulo fecha hora comuna_lugar tipo_evento descripcion completado",
+  "eliminar_evento": "evento_id titulo",
   "generar_mensaje_whatsapp": "mensaje telefono trabajador_nombre trabajadores_nombres roles_destino",
   "enviar_mensaje_equipo": "mensaje roles_destino trabajadores_nombres",
   "crear_solicitud_cambio": "subtipo titulo descripcion monto dias prioridad materiales fecha",

@@ -33,9 +33,12 @@ import {
 import { checkActionPermissions } from "./permissions";
 import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
 import { randomUUID } from "node:crypto";
+import { AsyncResource } from "node:async_hooks";
 import { canAccessWeb, WEB_ACCESS_ERROR, isSessionJWT } from '@/lib/auth/access';
-import { handleQuoteTurn, isQuoteWorkflow } from '@/lib/obrabot/quotes';
+import { handleQuoteTurn, isQuoteWorkflow, tryNaturalQuoteEdit } from '@/lib/obrabot/quotes';
+import { looksLikeNaturalQuoteEdit } from '@/lib/obrabot/quote-edit-natural';
 import { getSupabaseAdmin, requireSupabaseAdmin } from '@/lib/supabase/admin';
+import { validateFileContent } from '@/lib/supabase/file-validation';
 import { isDestinationCommand, isDestinationContinuation } from '@/lib/obrabot/quote-destination';
 
 export async function authorizeAI(request: NextRequest, options?: { adminOnly?: boolean }) {
@@ -91,10 +94,11 @@ export function errorJSON(error: unknown) {
 
 export async function readAIRequest(request: NextRequest) {
   const raw = await request.text();
-  if (raw.length > 180000)
+  const maxBytes = raw.includes('"imagen"') ? 4500000 : 180000;
+  if (raw.length > maxBytes)
     throw new AIError(
       "REQUEST_TOO_LARGE",
-      "La conversación es demasiado extensa. Inicia una conversación nueva.",
+      "La conversación o imagen adjunta es demasiado extensa. Reduce su tamaño o inicia una conversación nueva.",
       413,
     );
   let body: any;
@@ -119,8 +123,22 @@ export async function readAIRequest(request: NextRequest) {
       "Divide el mensaje en instrucciones más breves (hasta 6000 caracteres).",
       400,
     );
+  let imagen: { mimeType: string; data: string } | undefined;
+  if (body.imagen != null) {
+    const mime = typeof body.imagen?.mimeType === 'string' ? body.imagen.mimeType.trim() : '';
+    const b64 = typeof body.imagen?.data === 'string' ? body.imagen.data.trim() : '';
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mime) || !b64 || b64.length > 4100000) {
+      throw new AIError('AI_IMAGE_INVALID', 'Adjunta una imagen JPG, PNG o WebP de hasta 3 MB.', 422);
+    }
+    const bytes = Buffer.from(b64, 'base64');
+    if (!bytes.length || bytes.length > 3000000) {
+      throw new AIError('AI_IMAGE_INVALID', 'Adjunta una imagen JPG, PNG o WebP de hasta 3 MB.', 422);
+    }
+    await validateFileContent(bytes, mime);
+    imagen = { mimeType: mime, data: bytes.toString('base64') };
+  }
   const historial = conversationHistory(body.historial, body.mensaje);
-  return { ...body, mensaje: body.mensaje.trim(), historial, historial_original: body.historial };
+  return { ...body, mensaje: body.mensaje.trim(), historial, historial_original: body.historial, imagen };
 }
 
 // Dependencias explícitas permiten probar la ruta sin una clave ni una base de producción.
@@ -138,37 +156,70 @@ export function createChatHandler(
     project: chatAgenteProyectoGemini,
   },
 ) {
-  return async (request: NextRequest, projectId?: string) => {
+  const runChat = async (request: NextRequest, projectId?: string, onStage?: (label: string) => void): Promise<NextResponse> => {
     try {
+      onStage?.('Verificando sesión y permisos…');
       const { client, user } = await deps.authorize(request);
       const body = await readAIRequest(request);
       const actor = { ...user, rol: user.rol_original ?? user.rol };
-      const quoteWorkflow = isQuoteWorkflow(body.mensaje);
+      const rawTurns = Array.isArray(body.historial_original) ? body.historial_original : [];
+      const extractQuoteDetails = (m: any) => m?.cotizacion_obrabot || (m?.accion_ejecutada?.tipo === 'obrabot_cotizacion' ? m.accion_ejecutada.detalles : null);
+      const recentWebQuoteDetails = [...rawTurns]
+        .reverse()
+        .filter((m: any) => (m?.remitente === 'agente' || m?.rol === 'model') && extractQuoteDetails(m))
+        .map((m: any) => extractQuoteDetails(m) || {});
+      const lastWebTurn = [...rawTurns].reverse().find((m: any) => m?.remitente === 'agente' || m?.rol === 'model');
+      const lastQuoteDetails = extractQuoteDetails(lastWebTurn);
+      const webImmediateQuote = Boolean(lastQuoteDetails);
+      const pendingWebQuote = lastQuoteDetails && typeof lastQuoteDetails.solicitud_cotizacion === 'string' && typeof lastQuoteDetails.revision_cotizacion === 'number'
+        ? { id: lastQuoteDetails.solicitud_cotizacion as string, revision: lastQuoteDetails.revision_cotizacion as number }
+        : null;
+      const shortWebApprove = Boolean(
+        pendingWebQuote &&
+          /^(?:s[ií],?\s*)?(?:aprueba|aprobar|aprobada|confirmo)(?:\s+(?:la\s+|esta\s+)?cotizaci[oó]n)?[.!]?$/i.test(body.mensaje.trim()),
+      );
+      const recentWebQuoteIds = recentWebQuoteDetails
+        .map((d: any) => d.solicitud_cotizacion || d.cotizacion_aprobada_id)
+        .filter((v: unknown): v is string => typeof v === 'string' && v.length > 0);
+      const webNaturalQuoteEdit =
+        actor.rol === 'admin' &&
+        !projectId &&
+        recentWebQuoteIds.length > 0 &&
+        looksLikeNaturalQuoteEdit(body.mensaje) &&
+        Boolean(getSupabaseAdmin());
+      const quoteWorkflow = isQuoteWorkflow(body.mensaje) || shortWebApprove;
       const quoteDestinationCmd = isDestinationCommand(body.mensaje);
       const explicitDestinationUuid = /[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}/i.test(body.mensaje);
       const quoteCommand = quoteWorkflow || (quoteDestinationCmd && (actor.rol === 'admin' || explicitDestinationUuid));
       const destinationContinuation = actor.rol === 'admin' && isDestinationContinuation(body.mensaje) && getSupabaseAdmin();
-      if (quoteCommand || destinationContinuation) {
+      if (quoteCommand || destinationContinuation || webNaturalQuoteEdit) {
         if (actor.rol !== 'admin') throw new AIError('OBRABOT_ADMIN', 'Esta acción está reservada al administrador.', 403);
         const plan = await client.from('empresas').select('plan_id').eq('id', actor.empresa_id).maybeSingle();
         if (plan.error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude verificar el plan de la empresa.', 503);
         if (!['pro', 'pro_ia'].includes(plan.data?.plan_id)) throw new AIError('PLAN_REQUIRED', 'ObraBot requiere el plan Pro o Pro IA.', 403);
         const requestId = typeof body.request_id === 'string' && body.request_id.length <= 100 ? body.request_id : undefined;
-        const reply = await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
+        const effectiveMsg = shortWebApprove && pendingWebQuote
+          ? `aprueba cotización ${pendingWebQuote.id} ${pendingWebQuote.revision}`
+          : body.mensaje;
+        const reply = webNaturalQuoteEdit && !quoteCommand
+          ? await tryNaturalQuoteEdit(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, recentWebQuoteIds, webImmediateQuote, requestId)
+          : await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', effectiveMsg, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
         const file = reply?.archivo;
         if (reply) return NextResponse.json({
           respuesta: reply.respuesta, accion: null, cotizacion: null,
           sugerencias: file
             ? (plan.data?.plan_id === 'pro_ia' ? ['Crear obra', 'Vincular a obra'] : [])
             : reply.solicitud && reply.revision
-              ? [`aprueba cotización ${reply.solicitud} ${reply.revision}`]
+              ? ['Aprobar cotización', 'Cotizaciones pendientes']
               : [],
           ...(file ? { accion_ejecutada: {
-            tipo: 'obrabot_cotizacion', titulo: 'Cotización aprobada', resultado_texto: 'Archivo listo para descargar.', detalles: {},
+            tipo: 'obrabot_cotizacion', titulo: 'Cotización aprobada', resultado_texto: 'Archivo listo para descargar.',
+            detalles: { cotizacion_aprobada_id: file.id },
             link_destino: `/api/obrabot/cotizaciones/${file.id}?formato=${file.formato}`,
             link_texto: file.formato === 'excel' ? 'Descargar Excel' : 'Descargar PDF',
           } } : reply.solicitud && reply.revision ? { accion_ejecutada: {
-            tipo: 'obrabot_cotizacion', titulo: 'Cotización lista para revisión', resultado_texto: 'Puedes aprobarla aquí o en la bandeja del Cotizador.', detalles: {},
+            tipo: 'obrabot_cotizacion', titulo: 'Cotización lista para revisión', resultado_texto: 'Puedes aprobarla aquí con un clic o revisarla en la bandeja.',
+            detalles: { solicitud_cotizacion: reply.solicitud, revision_cotizacion: reply.revision },
             link_destino: '/cotizador#cotizaciones-obrabot', link_texto: 'Abrir bandeja de revisión',
           } } : reply.obra ? { accion_ejecutada: {
             tipo: 'obrabot_destino_cotizacion', titulo: 'Gestión de obra', resultado_texto: 'Obra disponible en ObraTrack.', detalles: {},
@@ -179,6 +230,7 @@ export function createChatHandler(
       const deadlineOnly =
         isProjectDeadlineQuestion(body.mensaje) &&
         !hasOtherWorkBeyondDeadline(body.mensaje);
+      onStage?.('Cargando contexto de tus obras…');
       const { company, context, service, tables } = await loadAIContext(
         client,
         user,
@@ -216,7 +268,7 @@ export function createChatHandler(
         if ((actions.length || registration.prepared || registration.question && registration.draft) && company.plan_id !== 'pro_ia')
           throw new AIError('PLAN_REQUIRED', 'Los cambios por ObraBot requieren Pro IA.', 403);
         try {
-          prepareActionPlan(actions, { proyectos: tables.proyectos, clientes: tables.clientes, actividades: tables.actividades || [], usuarios: tables.usuarios }, projectId);
+          prepareActionPlan(actions, { proyectos: tables.proyectos, clientes: tables.clientes, actividades: tables.actividades || [], usuarios: tables.usuarios, agenda: tables.agenda_eventos || [] }, projectId);
         } catch (error) {
           if (error instanceof AIError) throw error;
           throw new AIError('ACTION_PLAN_INVALID', error instanceof Error ? error.message : 'Revisa las referencias de las acciones.', 422);
@@ -378,42 +430,44 @@ export function createChatHandler(
         canonicalBudget = data;
         return data?.cotizacion || null;
       };
-      if(ragEligible(body.mensaje,user.rol))scheduleKnowledgeIndex(user.empresa_id);
+      if(ragEligible(body.mensaje,user.rol)){onStage?.('Consultando referencias y precios…');scheduleKnowledgeIndex(user.empresa_id);}
       const semanticReferences = await retrieveReferences(client,body.mensaje,user.rol);
+      onStage?.('Generando propuesta con ObraBot…');
       const capability = { referencias_semanticas:semanticReferences, preferencias_conversacion: preferences.state.valores, registro_persona: registrationDraft, acciones_habilitadas: company.plan_id === "pro_ia" };
-      if (projectId) {
-        if (!/^[a-zA-Z0-9_-]+$/.test(projectId))
-          throw new AIError("PROJECT_INVALID", "La obra no es válida.", 400);
-        const data = service.getProyectoById(projectId);
-        if (!data)
-          throw new AIError(
-            "PROJECT_FORBIDDEN",
-            "La obra no está disponible para tu cuenta.",
-            403,
-          );
-        const result = await deps.project({
-          historial: body.historial,
-          mensajeUsuario: body.mensaje,
-          contextoProyecto: {
-            ...data,
-            cotizacion_actual: await budgetContext(projectId),
-          },
-          options: { validateResult, onQualityEvent },
-          contextoDB: { ...context, ...capability, operacion_obra: operationsContext(tables, projectId, user.rol, body.mensaje), cliente_actual: user.rol === 'terreno' ? null : tables.clientes.find((c) => c.id === data.cliente_id) || null },
-        });
-        const queued = await finish(result, projectId);
-        if (queued) return queued;
-        if (result.cotizacion)
-          await saveBudget(client, user, result.cotizacion, projectId, isAlternativeRequest(body.mensaje) ? canonicalBudget : null);
-        return NextResponse.json(result);
-      }
-      const result = await deps.global(body.historial, body.mensaje, {
-        ...context,
-        ...capability,
-        proyecto_actual: tables.proyectos.find(project => project.id === referencedId) || null,
-        operacion_obra: operationsContext(tables, undefined, user.rol, body.mensaje),
-        cotizacion_actual: await budgetContext(),
-      }, { validateResult, onQualityEvent });
+        const genOptions = body.imagen ? { validateResult, onQualityEvent, image: body.imagen } : { validateResult, onQualityEvent };
+        if (projectId) {
+          if (!/^[a-zA-Z0-9_-]+$/.test(projectId))
+            throw new AIError("PROJECT_INVALID", "La obra no es válida.", 400);
+          const data = service.getProyectoById(projectId);
+          if (!data)
+            throw new AIError(
+              "PROJECT_FORBIDDEN",
+              "La obra no está disponible para tu cuenta.",
+              403,
+            );
+          const result = await deps.project({
+            historial: body.historial,
+            mensajeUsuario: body.mensaje,
+            contextoProyecto: {
+              ...data,
+              cotizacion_actual: await budgetContext(projectId),
+            },
+            options: genOptions,
+            contextoDB: { ...context, ...capability, operacion_obra: operationsContext(tables, projectId, user.rol, body.mensaje), cliente_actual: user.rol === 'terreno' ? null : tables.clientes.find((c) => c.id === data.cliente_id) || null },
+          });
+          const queued = await finish(result, projectId);
+          if (queued) return queued;
+          if (result.cotizacion)
+            await saveBudget(client, user, result.cotizacion, projectId, isAlternativeRequest(body.mensaje) ? canonicalBudget : null);
+          return NextResponse.json(result);
+        }
+        const result = await deps.global(body.historial, body.mensaje, {
+          ...context,
+          ...capability,
+          proyecto_actual: tables.proyectos.find(project => project.id === referencedId) || null,
+          operacion_obra: operationsContext(tables, undefined, user.rol, body.mensaje),
+          cotizacion_actual: await budgetContext(),
+        }, genOptions);
       const queued = await finish(result);
       if (queued) return queued;
       if (result.cotizacion) await saveBudget(client, user, result.cotizacion, undefined, isAlternativeRequest(body.mensaje) ? canonicalBudget : null);
@@ -421,5 +475,57 @@ export function createChatHandler(
     } catch (error) {
       return errorJSON(error);
     }
+  };
+
+  return async (request: NextRequest, projectId?: string) => {
+    const wantsStream = (request.headers.get('accept') || '').includes('text/event-stream');
+    if (!wantsStream) return runChat(request, projectId);
+
+    const encoder = new TextEncoder();
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const sendEvent = async (event: string, data: unknown) => {
+      try {
+        await writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      } catch {
+        // Cliente desconectado o abortado.
+      }
+    };
+
+    const pump = AsyncResource.bind(async () => {
+      try {
+        const res = await runChat(request, projectId, (stage) => {
+          void sendEvent('stage', { stage });
+        });
+        const payload = await res.json().catch(() => ({ error: 'Respuesta no válida del servidor.' }));
+        if (!res.ok || payload?.error) {
+          await sendEvent('error', { error: payload?.error || 'No se pudo completar la solicitud.', code: payload?.code });
+          return;
+        }
+        const fullText = typeof payload.respuesta === 'string' ? payload.respuesta : '';
+        if (fullText.length > 0) {
+          const step = Math.max(18, Math.ceil(fullText.length / 16));
+          for (let i = 0; i < fullText.length; i += step) {
+            await sendEvent('delta', { text: fullText.slice(0, i + step) });
+            await new Promise((r) => setTimeout(r, 12));
+          }
+        }
+        await sendEvent('done', payload);
+      } catch (err) {
+        const mapped = aiErrorResponse(err);
+        await sendEvent('error', { error: mapped.error, code: mapped.code });
+      } finally {
+        try { await writer.close(); } catch {}
+      }
+    });
+    void pump();
+
+    return new NextResponse(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'private, no-cache, no-store, no-transform',
+        Connection: 'keep-alive',
+      },
+    });
   };
 }

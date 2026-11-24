@@ -279,6 +279,8 @@ test("todas las operaciones del catálogo aceptan sus campos propios sin exigir 
     generar_reporte: {},
     agendar_visita: { titulo: "Visita", fecha: "2026-11-12", hora: "10:00" },
     agendar_evento: { titulo: "Visita", fecha: "2026-11-12", hora: "10:00" },
+    actualizar_evento: { titulo: "Visita", fecha: "2026-11-14", hora: "11:30" },
+    eliminar_evento: { titulo: "Visita" },
     generar_mensaje_whatsapp: { mensaje: "Revisar entrega" },
     enviar_mensaje_equipo: {
       mensaje: "Reunión en obra",

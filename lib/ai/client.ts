@@ -45,12 +45,17 @@ export function aiContext() {
       .map((c) => ({ id: c.id, nombre: c.nombre, telefono: c.telefono })),
   };
 }
-export async function requestAI(url: string, body: any) {
+export async function requestAI(url: string, body: any, externalSignal?: AbortSignal) {
+  const timeoutSignal = AbortSignal.timeout(65000);
+  const signal =
+    externalSignal && typeof AbortSignal.any === "function"
+      ? AbortSignal.any([timeoutSignal, externalSignal])
+      : externalSignal || timeoutSignal;
   const response = await fetch(url, {
     method: "POST",
     headers: await aiHeaders(),
     body: JSON.stringify({ request_id: crypto.randomUUID(), ...body }),
-    signal: AbortSignal.timeout(65000),
+    signal,
   });
   let data: any;
   try {
@@ -66,7 +71,128 @@ export async function requestAI(url: string, body: any) {
     throw new Error("La IA no incluyó una respuesta válida.");
   return data;
 }
-export async function applyAIResponse(data: any, projectId?: string) {
+
+export async function requestAIStream(
+  url: string,
+  body: any,
+  callbacks?: { onStage?: (stage: string) => void; onText?: (text: string) => void },
+  externalSignal?: AbortSignal,
+) {
+  const timeoutSignal = AbortSignal.timeout(65000);
+  const signal =
+    externalSignal && typeof AbortSignal.any === "function"
+      ? AbortSignal.any([timeoutSignal, externalSignal])
+      : externalSignal || timeoutSignal;
+  const baseHeaders = await aiHeaders();
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { ...baseHeaders, Accept: "text/event-stream" },
+    body: JSON.stringify({ request_id: crypto.randomUUID(), ...body }),
+    signal,
+  });
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("text/event-stream") || !response.body) {
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || data.error) {
+      throw new Error(data?.error || "No se pudo completar la solicitud.");
+    }
+    if (!data.respuesta?.trim()) throw new Error("La IA no incluyó una respuesta válida.");
+    callbacks?.onText?.(data.respuesta);
+    return data;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalData: any = null;
+  let streamError: string | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      let eventName = "message";
+      let dataStr = "";
+      for (const line of block.split(/\r?\n/)) {
+        if (line.startsWith("event:")) eventName = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+      }
+      if (!dataStr) continue;
+      let parsed: any;
+      try { parsed = JSON.parse(dataStr); } catch { continue; }
+      if (eventName === "stage" && typeof parsed?.stage === "string") {
+        callbacks?.onStage?.(parsed.stage);
+      } else if (eventName === "delta" && typeof parsed?.text === "string") {
+        callbacks?.onText?.(parsed.text);
+      } else if (eventName === "done") {
+        finalData = parsed;
+      } else if (eventName === "error") {
+        streamError = parsed?.error || "No se pudo completar la solicitud.";
+      }
+    }
+  }
+  if (streamError) throw new Error(streamError);
+  if (!finalData || !finalData.respuesta?.trim()) {
+    throw new Error("El servidor no devolvió una respuesta completa. Intenta nuevamente.");
+  }
+  return finalData;
+}
+
+export async function downloadProtectedFile(url: string, fallbackName = "ObraTrack_Archivo") {
+  const headers = await aiHeaders();
+  const res = await fetch(url, { headers: { Authorization: headers.Authorization } });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || "No se pudo descargar el archivo.");
+  }
+  const cd = res.headers.get("content-disposition") || "";
+  const match = /filename="?([^";]+)"?/i.exec(cd);
+  const filename = match?.[1] || fallbackName;
+  const blobUrl = URL.createObjectURL(await res.blob());
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+}
+
+export function describeCriticalAction(accion: any): string | null {
+  if (!accion) return null;
+  const list = accion.tipo === "lote_acciones" && Array.isArray(accion.acciones) ? accion.acciones : [accion];
+  for (const item of list) {
+    if (item?.tipo === "eliminar_proyecto") {
+      return `Eliminar la obra${item.proyecto_nombre ? ` «${item.proyecto_nombre}»` : ""}`;
+    }
+    if (item?.tipo === "eliminar_evento") {
+      return `Eliminar el compromiso «${item.titulo || "de la agenda"}»`;
+    }
+    if (item?.tipo === "actualizar_proyecto" && item.estado === "cancelada") {
+      return `Marcar la obra${item.proyecto_nombre ? ` «${item.proyecto_nombre}»` : ""} como cancelada`;
+    }
+  }
+  return null;
+}
+
+export async function applyAIResponse(
+  data: any,
+  projectId?: string,
+  options?: { confirmCritical?: boolean },
+) {
+  const criticalSummary = options?.confirmCritical ? describeCriticalAction(data.accion) : null;
+  if (criticalSummary) {
+    return {
+      texto: data.respuesta,
+      confirmacion_pendiente: {
+        resumen: criticalSummary,
+        rawResponse: { ...data },
+      },
+      sugerencias: data.sugerencias,
+    };
+  }
   // Una obra recién creada desde WhatsApp puede no existir todavía en la caché de esta pestaña.
   if (data.accion) {
     const current = await dataService.pullFromCloudServer();
@@ -111,6 +237,7 @@ export async function applyAIResponse(data: any, projectId?: string) {
       ? data.comparacion_materiales
       : undefined,
     pendiente_sincronizacion: action?.pendingId,
+    job_id: action?.jobId,
     sugerencias: data.sugerencias,
   };
 }

@@ -56,6 +56,7 @@ export function conversationRequest(input: unknown, query: string) {
       Object.assign(model,{registro_pendiente:details.borrador_registro || null,referencias_contacto:actionContacts(source.accion_ejecutada)});
       if(Object.hasOwn(details,'preferencias_conversacion'))Object.assign(model,{preferencias_conversacion:details.preferencias_conversacion});
       if(Object.hasOwn(details,'edicion_nombre_pendiente'))Object.assign(model,{edicion_nombre_pendiente:details.edicion_nombre_pendiente});
+      if(source.accion_ejecutada.tipo==='obrabot_cotizacion'&&(details.solicitud_cotizacion||details.cotizacion_aprobada_id))Object.assign(model,{cotizacion_obrabot:details});
     }
   }
   return selected;

@@ -73,6 +73,7 @@ export function planWhatsAppActions(service: DataService, input: any) {
       clientes: service.getClientes(),
       usuarios: service.getUsuarios(),
       actividades: service.getActividades(),
+      agenda: service.getEventosAgenda(),
     });
     const before = snapshot(service, empresa);
     const result = actions.length

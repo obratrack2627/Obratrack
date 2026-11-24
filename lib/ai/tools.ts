@@ -318,6 +318,33 @@ const MANAGER_TOOLS: OpenAIFunctionTool[] = [
     ['titulo', 'fecha', 'hora'],
   ),
   fn(
+    'actualizar_evento',
+    'Modifica, reprograma o marca como realizado un compromiso, visita o hito existente en la agenda de terreno.',
+    {
+      evento_id: { type: 'string', description: 'ID exacto del evento si aparece en agenda_eventos.' },
+      titulo: { type: 'string', description: 'Título actual del evento a identificar.' },
+      nuevo_titulo: { type: 'string', description: 'Nuevo título si pidieron renombrarlo.' },
+      proyecto_id: { type: 'string' },
+      fecha: { type: 'string', description: 'Nueva fecha YYYY-MM-DD.' },
+      hora: { type: 'string', description: 'Nueva hora HH:MM (24h).' },
+      tipo_evento: { type: 'string', enum: ['visita_terreno', 'reunion', 'hito', 'inspeccion', 'entrega'] },
+      comuna_lugar: { type: 'string' },
+      descripcion: { type: 'string' },
+      completado: { type: 'boolean', description: 'True para marcar el compromiso como realizado.' },
+    },
+    [],
+  ),
+  fn(
+    'eliminar_evento',
+    'Elimina o cancela un compromiso, visita o hito de la agenda de terreno cuando el usuario lo pide expresamente.',
+    {
+      evento_id: { type: 'string' },
+      titulo: { type: 'string', description: 'Título del evento a eliminar.' },
+      proyecto_id: { type: 'string' },
+    },
+    [],
+  ),
+  fn(
     'enviar_mensaje_equipo',
     'Envía un aviso real por WhatsApp a trabajadores o supervisores de una obra (solo cuando el usuario pide explícitamente enviar/avisar al equipo).',
     {
@@ -619,7 +646,7 @@ export function toolCallsToChatEnvelope(
       args.subtipo = args.tipo;
       delete args.tipo;
     }
-    if ((call.name === 'agendar_evento' || call.name === 'agendar_visita') && args.tipo && !args.tipo_evento) {
+    if ((call.name === 'agendar_evento' || call.name === 'agendar_visita' || call.name === 'actualizar_evento') && args.tipo && !args.tipo_evento) {
       args.tipo_evento = args.tipo;
       delete args.tipo;
     }

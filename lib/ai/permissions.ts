@@ -151,6 +151,15 @@ export function checkActionPermissions(
       403,
     );
   if (
+    actions.some((a) => a.tipo === "eliminar_evento") &&
+    !/\b(elimina\w*|borra\w*|cancela\w*|quita\w*|suspende\w*|desagenda\w*)\b/i.test(message)
+  )
+    throw new AIError(
+      "ACTION_FORBIDDEN",
+      "La eliminación del compromiso en la agenda debe solicitarse expresamente.",
+      403,
+    );
+  if (
     user.rol === "terreno" &&
     actions.some((a) => !workerActions.has(a.tipo) || (a.tipo === "actualizar_avance" && (a.responsable_id || a.responsable_nombre)))
   )

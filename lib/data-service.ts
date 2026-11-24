@@ -2692,6 +2692,50 @@ export class DataService {
         };
       }
 
+      case 'actualizar_evento': {
+        const agenda = this.getEventosAgenda();
+        const norm = (s: string) => s.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const target = agenda.find((e) => e.id === accion.evento_id) ||
+          agenda.find((e) => accion.titulo && norm(e.titulo) === norm(accion.titulo)) ||
+          agenda.find((e) => accion.titulo && norm(e.titulo).includes(norm(accion.titulo)));
+        if (!target) return null;
+        const actualizado = this.saveEventoAgenda({
+          ...target,
+          id: target.id,
+          created_at: target.created_at,
+          titulo: typeof accion.nuevo_titulo === 'string' && accion.nuevo_titulo.trim() ? accion.nuevo_titulo.trim() : target.titulo,
+          fecha: typeof accion.fecha === 'string' && accion.fecha.trim() ? accion.fecha.trim() : target.fecha,
+          hora: typeof accion.hora === 'string' && accion.hora.trim() ? accion.hora.trim() : target.hora,
+          tipo: accion.tipo_evento || target.tipo,
+          comuna_lugar: typeof accion.comuna_lugar === 'string' && accion.comuna_lugar.trim() ? accion.comuna_lugar.trim() : target.comuna_lugar,
+          descripcion: typeof accion.descripcion === 'string' && accion.descripcion.trim() ? accion.descripcion.trim() : target.descripcion,
+          proyecto_id: accion.proyecto_id || target.proyecto_id,
+          completado: typeof accion.completado === 'boolean' ? accion.completado : target.completado,
+        });
+        return {
+          tipo: 'actualizar_evento',
+          titulo: `Compromiso actualizado: ${actualizado.titulo}`,
+          detalles: actualizado,
+          resultado_texto: `Fecha: ${actualizado.fecha} a las ${actualizado.hora || '09:00'} hrs${actualizado.completado ? ' • Marcado como realizado' : ''}`,
+        };
+      }
+
+      case 'eliminar_evento': {
+        const agenda = this.getEventosAgenda();
+        const norm = (s: string) => s.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const target = agenda.find((e) => e.id === accion.evento_id) ||
+          agenda.find((e) => accion.titulo && norm(e.titulo) === norm(accion.titulo)) ||
+          agenda.find((e) => accion.titulo && norm(e.titulo).includes(norm(accion.titulo)));
+        if (!target) return null;
+        this.deleteEventoAgenda(target.id);
+        return {
+          tipo: 'eliminar_evento',
+          titulo: `Compromiso eliminado: ${target.titulo}`,
+          detalles: target,
+          resultado_texto: `Se quitó de la agenda (${target.fecha} ${target.hora || ''}).`.trim(),
+        };
+      }
+
       case 'generar_mensaje_whatsapp': {
         const tel = (accion.telefono || '').replace(/[^0-9]/g, '');
         const waLink = tel
