@@ -1,32 +1,17 @@
 'use client';
 
 import { ObraBotQuoteReviews } from '@/components/ObraBotQuoteReviews';
-import { projectStatusLabel } from '@/lib/project-status';
 import { conversationRequest } from '@/lib/ai/conversation';
 import React, { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
-import {
-  Bot,
-  Building2,
-  Users,
-  Calendar,
-  Trash2,
-  CheckSquare,
-  Square,
-  MessageCircle,
-  RotateCcw,
-} from 'lucide-react';
+import { Bot, RotateCcw } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { toast } from '@/components/ToastProvider';
 import { dataService } from '@/lib/data-service';
 import {
   MensajeChatCotizador,
   Proyecto,
-  Usuario,
-  EventoAgenda,
   SubscriptionPlanId,
 } from '@/types/database';
-import { formatCLP, formatDate } from '@/lib/utils';
 import PlanLockOverlay from '@/components/PlanLockOverlay';
 import { CloudChatHistory } from '@/lib/ai/cloud-chat-history';
 import { aiContext, aiHeaders, requestAIStream, applyAIResponse } from '@/lib/ai/client';
@@ -58,8 +43,6 @@ export default function CopilotoObreroPage() {
   const abortRef = useRef<AbortController | null>(null);
 
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [eventosAgenda, setEventosAgenda] = useState<EventoAgenda[]>([]);
   const [activePlan, setActivePlan] = useState<SubscriptionPlanId>('gratis');
 
   const [mensajesChat, setMensajesChat] = useState<MensajeChatCotizador[]>([INITIAL_CHAT_MESSAGE]);
@@ -96,8 +79,6 @@ export default function CopilotoObreroPage() {
     const current = dataService.getProyectos();
     setProyectos(current);
     setObraSeleccionada((selected) => (selected && !current.some((p) => p.id === selected) ? '' : selected));
-    setUsuarios(dataService.getUsuarios());
-    setEventosAgenda(dataService.getEventosAgenda());
   };
 
   useEffect(() => {
@@ -453,42 +434,31 @@ export default function CopilotoObreroPage() {
     });
   };
 
-  const handleToggleEvento = (id: string) => {
-    dataService.toggleEventoAgenda(id);
-    reloadData();
-  };
-
-  const handleDeleteEvento = (id: string) => {
-    dataService.deleteEventoAgenda(id);
-    reloadData();
-    showToast('Evento eliminado de la agenda.');
-  };
-
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-[var(--bg-page)] font-sans pb-8">
+    <div className="flex-1 flex flex-col min-h-[calc(100dvh-4rem)] md:min-h-dvh bg-[var(--bg-page)] font-sans">
       <Navbar title="ObraBot" subtitle="Cotizaciones y acciones para gestionar tus obras." />
 
-      <div className="p-4 md:p-6 max-w-7xl w-full mx-auto">
+      <div className="flex-1 flex flex-col p-3 sm:p-4 md:px-6 md:py-4 max-w-[1400px] w-full mx-auto">
         <PlanLockOverlay
           isLocked={!['pro', 'pro_ia'].includes(activePlan)}
           featureName="ObraBot"
           requiredPlan="pro"
           description="Cotiza trabajos, consulta materiales y organiza tu obra desde el chat."
         >
-          <div className="grid grid-cols-1 gap-6">
+          <div className="flex flex-col gap-3 sm:gap-4">
             <ObraBotQuoteReviews />
 
-            <div className="bg-white dark:bg-[#141A23] border border-kraft-200 dark:border-[#263040] rounded-3xl shadow-sm overflow-hidden flex flex-col h-[calc(100dvh-21rem)] sm:h-[calc(100dvh-14rem)] min-h-[360px] sm:min-h-[500px]">
-              <div className="bg-navy-900 text-white px-5 py-4 border-b border-navy-700 flex items-center justify-between gap-2">
+            <div className="bg-white dark:bg-[#141A23] border border-kraft-200/90 dark:border-[#263040] rounded-2xl sm:rounded-3xl shadow-md overflow-hidden flex flex-col h-[calc(100dvh-17.5rem)] sm:h-[calc(100dvh-15rem)] md:h-[calc(100dvh-12.5rem)] min-h-[440px] sm:min-h-[560px]">
+              <div className="bg-gradient-to-r from-navy-900 via-[#151D2B] to-navy-900 text-white px-4 sm:px-6 py-3.5 sm:py-4 border-b border-navy-700/80 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-obra-orange flex items-center justify-center text-white shadow-md shrink-0">
-                    <Bot className="w-6 h-6" />
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-obra-orange to-[#FF8A3D] flex items-center justify-center text-white shadow-md shadow-obra-orange/20 shrink-0">
+                    <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-heading font-bold text-sm text-white flex items-center gap-2">
+                    <h3 className="font-heading font-bold text-sm sm:text-base text-white flex items-center gap-2">
                       <span>Conversación con ObraBot</span>
                     </h3>
-                    <p className="text-[11px] text-gray-400 truncate">
+                    <p className="text-[11px] sm:text-xs text-gray-400 truncate">
                       Texto, voz, fotos de obra y archivos PDF/Excel
                     </p>
                   </div>
@@ -501,7 +471,7 @@ export default function CopilotoObreroPage() {
                     onClick={handleResetChat}
                     disabled={isChatLoading || isHistoryLoading}
                     title="Iniciar nueva conversación limpia"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-gray-300 hover:text-white border border-navy-700 text-[11px] font-bold transition-all shadow-sm"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-gray-200 hover:text-white border border-white/10 text-[11px] font-bold transition-all shadow-sm"
                   >
                     <RotateCcw className="w-3.5 h-3.5 text-obra-orange" />
                     <span className="hidden sm:inline">Nueva Conversación</span>
@@ -509,8 +479,8 @@ export default function CopilotoObreroPage() {
                 </div>
               </div>
 
-              <div className="border-b border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] px-4 py-2.5 flex flex-wrap items-center gap-2">
-                <label htmlFor="obra-copiloto" className="text-xs font-medium text-navy-900 dark:text-gray-200">
+              <div className="border-b border-kraft-200/80 dark:border-[#263040] bg-kraft-50/50 dark:bg-[#101620] px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-2.5">
+                <label htmlFor="obra-copiloto" className="text-xs font-semibold text-navy-900 dark:text-gray-200">
                   Obra:
                 </label>
                 <select
@@ -518,7 +488,7 @@ export default function CopilotoObreroPage() {
                   value={obraSeleccionada}
                   onChange={(e) => setObraSeleccionada(e.target.value)}
                   disabled={isChatLoading}
-                  className="max-w-full rounded-lg border border-kraft-200 dark:border-[#263040] bg-kraft-50 dark:bg-[#0F141C] text-navy-900 dark:text-gray-100 px-3 py-1.5 text-xs sm:text-sm"
+                  className="max-w-full rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] text-navy-900 dark:text-gray-100 px-3 py-1.5 text-xs sm:text-sm focus:border-obra-orange focus:outline-none focus:ring-2 focus:ring-obra-orange/15 transition-all"
                 >
                   <option value="">Consulta general o trabajo nuevo</option>
                   {proyectos.map((p) => (
@@ -527,7 +497,7 @@ export default function CopilotoObreroPage() {
                     </option>
                   ))}
                 </select>
-                <span className="ml-auto text-[11px] text-gray-500 dark:text-gray-400">
+                <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-white/80 dark:bg-[#141A23] border border-kraft-200/80 dark:border-[#263040] px-2.5 py-1 text-[11px] font-medium text-gray-500 dark:text-gray-400">
                   {obraSeleccionada
                     ? 'Sincronizado con la obra'
                     : isHistoryLoading
@@ -541,7 +511,7 @@ export default function CopilotoObreroPage() {
               {!obraSeleccionada && historyHasMore && (
                 <button
                   type="button"
-                  className="px-4 py-2 text-xs text-obra-orange hover:underline text-left bg-kraft-50/40 dark:bg-[#0B0E14]"
+                  className="px-4 sm:px-6 py-2 text-xs font-medium text-obra-orange hover:underline text-left bg-kraft-50/40 dark:bg-[#0B0E14]"
                   onClick={() => {
                     void cloudHistory.current
                       ?.older()
@@ -553,7 +523,7 @@ export default function CopilotoObreroPage() {
                 </button>
               )}
 
-              <div className="flex-1 min-h-0 p-4 sm:p-5 overflow-y-auto space-y-4 bg-kraft-50/40 dark:bg-[#0B0E14] text-xs">
+              <div className="flex-1 min-h-0 px-4 py-5 sm:px-6 sm:py-6 overflow-y-auto space-y-5 bg-kraft-50/40 dark:bg-[#0B0E14] text-xs">
                 {(mensajesChat.some((m) => (m.obra_contexto_id || '') === obraSeleccionada)
                   ? mensajesChat.filter((m) => (m.obra_contexto_id || '') === obraSeleccionada)
                   : [INITIAL_CHAT_MESSAGE]
@@ -588,152 +558,6 @@ export default function CopilotoObreroPage() {
                 placeholder="Describe lo que necesitas, dicta por micrófono o adjunta foto/PDF/Excel…"
               />
             </div>
-
-            <details className="rounded-xl border border-kraft-200 dark:border-[#263040] bg-white dark:bg-[#141A23] p-4 space-y-4">
-              <summary className="cursor-pointer text-sm font-semibold text-navy-900 dark:text-white">
-                Contexto y accesos de tus obras
-              </summary>
-
-              <div className="bg-white dark:bg-[#1A2230] border border-kraft-200 dark:border-[#263040] rounded-3xl p-5 shadow-sm space-y-3">
-                <div className="flex items-center justify-between border-b border-kraft-100 dark:border-[#263040] pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-obra-orange" />
-                    <h3 className="font-heading font-bold text-xs text-navy-900 dark:text-white">
-                      Obras en ObraTrack ({proyectos.length})
-                    </h3>
-                  </div>
-                  <Link href="/proyectos" className="text-[11px] font-mono text-obra-orange hover:underline font-bold">
-                    Ver todas ➔
-                  </Link>
-                </div>
-
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {proyectos.length === 0 ? (
-                    <p className="text-[11px] text-gray-400 italic">No hay obras creadas aún.</p>
-                  ) : (
-                    proyectos.slice(0, 4).map((p) => (
-                      <div
-                        key={p.id}
-                        className="bg-kraft-50/60 dark:bg-[#0F141C] hover:bg-kraft-100/80 dark:hover:bg-[#141A23] border border-kraft-200 dark:border-[#263040] p-2.5 rounded-xl transition-all space-y-1.5"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-xs text-navy-900 dark:text-white truncate">{p.nombre}</span>
-                          <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                            {formatCLP(p.monto_cotizado)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400">
-                          <span>
-                            📍 {p.comuna || 'Chile'} • {projectStatusLabel(p.estado)}
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            <Link href={`/proyectos/${p.id}/ia`} className="text-obra-orange text-xs font-bold">
-                              Cotizar con IA
-                            </Link>
-                            <Link
-                              href={`/proyectos/${p.id}/finanzas`}
-                              className="px-2 py-0.5 rounded bg-navy-900 dark:bg-[#FF6A00] hover:bg-navy-800 dark:hover:bg-[#E55F00] text-white font-mono font-bold text-[9px]"
-                            >
-                              Ver ➔
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-[#1A2230] border border-kraft-200 dark:border-[#263040] rounded-3xl p-5 shadow-sm space-y-3">
-                <div className="flex items-center justify-between border-b border-kraft-100 dark:border-[#263040] pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-obra-green" />
-                    <h3 className="font-heading font-bold text-xs text-navy-900 dark:text-white">
-                      Equipo de Faena ({usuarios.length})
-                    </h3>
-                  </div>
-                  <Link href="/equipo" className="text-[11px] font-mono text-obra-green hover:underline font-bold">
-                    Ver equipo ➔
-                  </Link>
-                </div>
-
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {usuarios.slice(0, 4).map((u) => (
-                    <div
-                      key={u.id}
-                      className="flex items-center justify-between bg-kraft-50/60 dark:bg-[#0F141C] border border-kraft-200 dark:border-[#263040] p-2.5 rounded-xl text-xs"
-                    >
-                      <div>
-                        <span className="font-bold text-navy-900 dark:text-white block">{u.nombre}</span>
-                        <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400">{u.rol.toUpperCase()}</span>
-                      </div>
-                      {u.telefono_whatsapp && (
-                        <a
-                          href={`https://wa.me/${u.telefono_whatsapp.replace(/[^0-9]/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-lg shadow-xs"
-                          title="Abrir WhatsApp"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-[#1A2230] border border-kraft-200 dark:border-[#263040] rounded-3xl p-5 shadow-sm space-y-3">
-                <div className="flex items-center justify-between border-b border-kraft-100 dark:border-[#263040] pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-purple-600" />
-                    <h3 className="font-heading font-bold text-xs text-navy-900 dark:text-white">
-                      Agenda de Terreno ({eventosAgenda.length})
-                    </h3>
-                  </div>
-                </div>
-
-                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                  {eventosAgenda.length === 0 ? (
-                    <p className="text-[11px] text-gray-400 italic">No hay visitas agendadas.</p>
-                  ) : (
-                    eventosAgenda.map((evt) => (
-                      <div
-                        key={evt.id}
-                        className={`p-2.5 rounded-xl border text-xs space-y-1 ${
-                          evt.completado
-                            ? 'bg-gray-50 dark:bg-[#0F141C]/50 border-gray-200 dark:border-[#263040] opacity-60'
-                            : 'bg-kraft-50/60 dark:bg-[#0F141C] border-kraft-200 dark:border-[#263040]'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-1.5">
-                          <button onClick={() => handleToggleEvento(evt.id)} className="flex items-start gap-1.5 text-left flex-1">
-                            {evt.completado ? (
-                              <CheckSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
-                            ) : (
-                              <Square className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                            )}
-                            <span
-                              className={`font-bold text-[11px] ${
-                                evt.completado ? 'line-through text-gray-500' : 'text-navy-900 dark:text-white'
-                              }`}
-                            >
-                              {evt.titulo}
-                            </span>
-                          </button>
-                          <button onClick={() => handleDeleteEvento(evt.id)} className="text-gray-400 hover:text-red-500">
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                        <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400 block pl-5">
-                          📅 {formatDate(evt.fecha)} • {evt.hora || '10:00'} hrs • {evt.comuna_lugar || 'Chile'}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </details>
           </div>
         </PlanLockOverlay>
       </div>
