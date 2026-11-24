@@ -31,11 +31,11 @@ test('el administrador revisa y confirma el vínculo de una cotización en el ce
   await quote.getByLabel('Obra existente').selectOption('p-existing');
   await quote.getByRole('button', { name: 'Revisar vínculo' }).click();
   await expect(quote.getByRole('button', { name: 'Confirmar vínculo' })).toBeDisabled();
-  await expect(quote.getByText('Presupuesto actual · $200.000.')).toBeVisible();
+  await expect(quote.getByText('Presupuesto actual: $200.000')).toBeVisible();
   await quote.getByLabel('Cómo aplicar la cotización').selectOption('adicional');
   expect(confirmations).toBe(0);
   await quote.getByRole('button', { name: 'Confirmar vínculo' }).click();
-  await expect(quote.getByText('Cotización vinculada · Terraza')).toBeVisible();
+  await expect(quote.getByText('Vinculada a obra · Terraza')).toBeVisible();
   await expect(quote.getByRole('link', { name: 'Ver obra' })).toHaveAttribute('href', '/proyectos/p-existing/presupuestos');
   expect(confirmations).toBe(1);
 });

@@ -497,6 +497,8 @@ export default function ProyectoIAPage() {
               busy={cargando}
               attachedFile={attachedFile}
               onAttachFile={setAttachedFile}
+              inputAriaLabel="Mensaje para el asistente de la obra"
+              submitAriaLabel="Enviar mensaje"
               placeholder="Pregunta, dicta por voz o adjunta una foto de esta obra…"
             />
           </div>

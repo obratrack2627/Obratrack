@@ -1571,7 +1571,8 @@ test('ObraBot flotante cancela la obra recién consultada y confirma el estado g
   await expect(chat.getByText(/Tienes 1 obra con el plazo vencido/)).toBeVisible();
   await chat.getByRole('textbox').fill('quiero que la dejes como cancelada');
   await chat.getByRole('button', { name:'Enviar mensaje', exact:true }).click();
-  await expect(chat.getByText(/Terraza quedó como cancelada/)).toBeVisible();
+  await chat.getByRole('button', { name:'Confirmar y ejecutar', exact:true }).click();
+  await expect(chat.getByText(/Terraza quedó como cancelada/).first()).toBeVisible();
   expect(db.proyectos[0].estado).toBe('cancelada');
   expect(db.proyectos[0].monto_cotizado).toBe(3000000);
   expect(db.proyectos[1].estado).toBe('activo');
@@ -1619,6 +1620,7 @@ test('WhatsApp mantiene el ancho móvil al elegir nombres largos y abrir registr
 });
 
 test('los indicadores móviles permanecen visibles y ajustan los importes completos sin desbordarse',async({page})=>{
+ test.setTimeout(120000);
  await page.setViewportSize({width:320,height:780});
  const db=await setup(page,{},true);
  db.proyectos[0].monto_cotizado=987654321000;

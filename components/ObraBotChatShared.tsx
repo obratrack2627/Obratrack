@@ -386,6 +386,8 @@ export function ObraBotComposer({
   busy,
   disabled,
   placeholder = 'Escribe o dicta tu solicitud, o adjunta foto/PDF/Excel…',
+  inputAriaLabel = 'Mensaje para ObraBot',
+  submitAriaLabel = 'Enviar mensaje',
   compact = false,
   allowFiles = true,
   attachedFile,
@@ -398,6 +400,8 @@ export function ObraBotComposer({
   busy: boolean;
   disabled?: boolean;
   placeholder?: string;
+  inputAriaLabel?: string;
+  submitAriaLabel?: string;
   compact?: boolean;
   allowFiles?: boolean;
   attachedFile?: File | null;
@@ -578,7 +582,7 @@ export function ObraBotComposer({
           maxLength={6000}
           value={value}
           disabled={disabled}
-          aria-label="Mensaje para ObraBot"
+          aria-label={inputAriaLabel}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -605,7 +609,7 @@ export function ObraBotComposer({
             type="button"
             onClick={onSubmit}
             disabled={busy || disabled || (!value.trim() && !attachedFile)}
-            aria-label="Enviar mensaje"
+            aria-label={submitAriaLabel}
             className="px-4 py-2.5 bg-obra-orange hover:bg-orange-600 text-white rounded-2xl font-heading font-bold text-xs inline-flex items-center gap-1.5 disabled:opacity-45 transition-all shadow-xs shrink-0"
           >
             {!compact && <span>Enviar</span>}

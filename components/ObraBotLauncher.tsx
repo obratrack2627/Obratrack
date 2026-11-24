@@ -373,6 +373,8 @@ export default function ObraBotLauncher() {
                 compact
                 attachedFile={attachedFile}
                 onAttachFile={setAttachedFile}
+                inputAriaLabel="Mensaje a ObraBot"
+                submitAriaLabel="Enviar mensaje"
                 placeholder="Escribe, dicta o adjunta…"
               />
             ) : (

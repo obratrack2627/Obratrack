@@ -481,7 +481,7 @@ export default function CopilotoObreroPage() {
 
               <div className="border-b border-kraft-200/80 dark:border-[#263040] bg-kraft-50/50 dark:bg-[#101620] px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-2.5">
                 <label htmlFor="obra-copiloto" className="text-xs font-semibold text-navy-900 dark:text-gray-200">
-                  Obra:
+                  Obra
                 </label>
                 <select
                   id="obra-copiloto"
@@ -555,6 +555,8 @@ export default function CopilotoObreroPage() {
                 disabled={isHistoryLoading}
                 attachedFile={attachedFile}
                 onAttachFile={setAttachedFile}
+                inputAriaLabel="Mensaje para el asistente"
+                submitAriaLabel="Enviar"
                 placeholder="Describe lo que necesitas, dicta por micrófono o adjunta foto/PDF/Excel…"
               />
             </div>
