@@ -661,7 +661,7 @@ export default function LandingPage() {
                 ].map((stat) => (
                   <div
                     key={stat.title}
-                    className="p-3.5 rounded-2xl bg-[#FAF8F5]/85 dark:bg-[#141A23]/85 backdrop-blur-xs border border-[#DDD5C5] dark:border-[#263040] shadow-xs hover:border-[#FF6A00]/50 transition"
+                    className="p-3.5 rounded-2xl bg-[#FAF8F5]/85 dark:bg-[#141A23]/85 backdrop-blur-sm border border-[#DDD5C5] dark:border-[#263040] shadow-xs hover:border-[#FF6A00]/50 transition"
                   >
                     <div className={`text-xl sm:text-2xl font-extrabold font-heading ${stat.valClass}`}>
                       {stat.val}
