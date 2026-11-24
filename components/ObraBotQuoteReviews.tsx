@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ObraBotQuoteDestination } from './ObraBotQuoteDestination';
+import { quoteLinePreview, saleLines } from '@/lib/quotes/document';
 import { aiHeaders } from '@/lib/ai/client';
 import type { QuoteReview, QuoteReply } from '@/lib/obrabot/quotes';
 
 const endpoint = '/api/obrabot/cotizaciones';
 const money = (amount: number) => `$${amount.toLocaleString('es-CL')}`;
-const editorText = (row: QuoteReview) => (row.borrador.partidas_venta || []).map(line => [line.nombre, line.unidad, String(line.cantidad).replace('.', ','), line.precio_unitario].join(' | ')).join('\n');
+const editorText = (row: QuoteReview) => (row.borrador.partidas_venta || []).map(line => [line.nombre, line.unidad, String(line.cantidad).replace('.', ','), line.precio_partida == null ? line.precio_unitario : `total ${line.precio_partida}`].join(' | ')).join('\n');
 
 export function ObraBotQuoteReviews() {
   const [rows, setRows] = useState<QuoteReview[]>([]);
@@ -92,7 +93,7 @@ export function ObraBotQuoteReviews() {
         {rows.map(row => <details key={row.id} className="rounded-lg border border-kraft-200 p-3">
           <summary className="cursor-pointer break-words text-sm">{row.borrador.titulo_proyecto} · {money(row.borrador.estructura_financiera.precio_total_con_iva)} · revisión {row.revision}</summary>
           <ul className="my-3 max-h-56 space-y-1 overflow-auto text-sm">
-            {(row.borrador.partidas_venta || []).map((line, i) => <li className="break-words" key={i}>{line.nombre} · {line.cantidad} {line.unidad} × {money(line.precio_unitario)} = {money(line.subtotal)}</li>)}
+            {saleLines(row.borrador).map((line, i) => <li className="break-words" key={i}>{quoteLinePreview(line)}</li>)}
           </ul>
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={busy} className={button} onClick={() => void run(() => submit(`aprueba cotización ${row.id} ${row.revision}`))}>Aprobar esta revisión</button>

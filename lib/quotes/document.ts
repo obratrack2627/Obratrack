@@ -27,7 +27,7 @@ export interface QuoteLine {
   descripcion: string;
   unidad: string;
   cantidad: number;
-  precioUnit: number;
+  precioUnit: number | null;
   total: number;
 }
 
@@ -44,6 +44,10 @@ const dateLabel = (value: string) => {
 export function quoteLinePreview(row: QuoteLine) {
   const quantity = row.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 });
   const plain = (text: string) => text.replace(/[\r\n*]+/g, ' ').trim();
+  if (row.precioUnit === null) {
+    const amount = row.unidad === 'gl' ? '' : ` · ${quantity} ${plain(row.unidad)}`;
+    return `• ${plain(row.nombre)}${amount} · ${formatCLP(row.total)}`;
+  }
   return `• ${plain(row.nombre)} · ${quantity} ${plain(row.unidad)} × ${formatCLP(row.precioUnit)} = ${formatCLP(row.total)}`;
 }
 
@@ -57,7 +61,7 @@ export function materialLines(quote: CotizacionEstimacion): QuoteLine[] {
 export function saleLines(quote: CotizacionEstimacion): QuoteLine[] {
   return (quote.partidas_venta || []).map(p => ({
     nombre: p.nombre, descripcion: '', unidad: p.unidad, cantidad: p.cantidad,
-    precioUnit: p.precio_unitario, total: p.subtotal,
+    precioUnit: p.precio_partida == null ? p.precio_unitario : null, total: p.subtotal,
   }));
 }
 
@@ -114,7 +118,7 @@ export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDo
     observaciones: [
       quote.modo_presupuesto === 'precio_acordado' ? (quote.tratamiento_iva === 'incluido' ? 'Precios acordados en CLP, IVA incluido en las partidas.' : 'Precios acordados netos en CLP. IVA del 19% desglosado al final.') : 'Valores netos en CLP. IVA del 19% desglosado al final.',
       ...(quote.modo_presupuesto === 'precio_acordado' ? [] : ['Precios estimados sujetos a confirmación de cantidades, disponibilidad y despacho.']),
-      quote.duracion_dias_estimada ? `Plazo estimado: ${quote.duracion_dias_estimada} día(s). Cronograma a acordar.` : 'Plazo de ejecución por acordar.',
+      quote.plazo_texto ? `Plazo estimado: ${quote.plazo_texto}.` : quote.duracion_dias_estimada ? `Plazo estimado: ${quote.duracion_dias_estimada} día(s). Cronograma a acordar.` : 'Plazo de ejecución por acordar.',
       ...(quote.observaciones ? [quote.observaciones] : []),
     ],
     condiciones,

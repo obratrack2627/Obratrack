@@ -671,6 +671,7 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
       typeof raw.condiciones_pago === "string"
         ? raw.condiciones_pago
         : undefined,
+    plazo_texto: typeof raw.plazo_texto === "string" ? raw.plazo_texto.slice(0, 100) : undefined,
     comuna_region: raw.comuna_region || "Por definir",
     ...(raw.metros_cuadrados
       ? {

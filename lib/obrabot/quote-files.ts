@@ -22,8 +22,10 @@ export async function quoteFile(db: any, empresaId: string, quote: CotizacionEst
   sheet.getRow(1).font = { bold: true };
   const lines = quote.partidas_venta ?? [];
   for (const line of lines) {
-    const row = sheet.addRow([line.nombre, line.unidad, line.cantidad, line.precio_unitario]);
-    row.getCell(5).value = { formula: `ROUND(C${row.number}*D${row.number},0)`, result: line.subtotal };
+    const fixed = line.precio_partida;
+    const lumpSum = fixed != null && line.unidad === 'gl';
+    const row = sheet.addRow([line.nombre, lumpSum ? null : line.unidad, lumpSum ? null : line.cantidad, fixed == null ? line.precio_unitario : null]);
+    row.getCell(5).value = fixed ?? { formula: `ROUND(C${row.number}*D${row.number},0)`, result: line.subtotal };
   }
   const totals = quote.estructura_financiera;
   sheet.addRow([]);

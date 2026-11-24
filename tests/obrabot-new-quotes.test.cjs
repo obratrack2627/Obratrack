@@ -125,3 +125,90 @@ test('PDF o foto se usan solo para extraer partidas, rechazan lecturas incomplet
     return JSON.stringify({ completo: false, partidas: [row] });
   }), /verificar todas/);
 });
+
+test('WhatsApp conserva las partidas, el plazo hábil y el reparto 60/40 hasta el PDF aprobado', async () => {
+  const db = database();
+  const message = `Podemos hacer esta cotización y sumar el total
+Logia $ 5.850.000
+Piso deck $ 2.950.000
+Corta vista $ 884.000
+Ventana 80x80 $ 215.000
+Fijo PVC + puerta madera $ 650.000
+Puerta wpc $ 680.000
+
+Total de proyecto $
+
+Descripción del trabajo:
+Tabiquería de 60 mm con OSB de 11,5 mm y fibrocemento de 8 mm.
+Estructura deck con perfiles 100x50x3 mm y acabado WPC.
+
+Datos del trabajo:
+Realización de trabajo aprox 35 días hábiles.
+Para dar inicio al proyecto se solicita el 60 % del proyecto lo cual equivale al valor materiales y el 40 % restante de obra de mano se solicitará previo aviso al cliente por porcentajes.`;
+  const event = { id: 'quote-logia', type: 'text', from: '56912345678', text: { body: message } };
+  const reply = await quoteWhatsAppTurn(db, admin, event, [event]);
+  assert.match(reply.respuesta, /11\.229\.000/);
+  assert.match(reply.respuesta, /6\.737\.400/);
+  assert.match(reply.respuesta, /4\.491\.600/);
+  const { p_id: id, p_borrador: saved } = db.calls[0].args;
+  assert.deepEqual(saved.partidas_venta.map(line => line.subtotal), [5850000, 2950000, 884000, 215000, 650000, 680000]);
+  assert.equal(saved.plazo_texto, '35 días hábiles');
+  assert.match(saved.resumen_ejecutivo, /100x50x3 mm/);
+  await handleQuoteTurn(db, admin, 'whatsapp', `aprueba cotización ${id} 1`);
+  const pdf = await obrabotWhatsAppFile(db, { ...reply, acciones: { ...reply.acciones, archivo_cotizacion: { id, formato: 'pdf' } } }, '56912345678');
+  assert.equal(Buffer.from(pdf.bytes).subarray(0, 5).toString(), '%PDF-');
+  const { buildQuoteDocument } = require('../lib/quotes/document.ts');
+  const doc = buildQuoteDocument(saved);
+  assert.equal(doc.items[3].nombre, 'Ventana 80x80');
+  assert.equal(doc.items[3].precioUnit, null);
+  assert.match(doc.condiciones, /6\.737\.400/);
+  assert.match(doc.observaciones.join(' '), /35 días hábiles/);
+});
+
+test('conserva el precio por partida del radier y valida el total del cobertizo y el precio por m² de adoquines', () => {
+  const { readPastedQuote } = require('../lib/obrabot/quote-message.ts');
+  const radier = `Realización de radier 10 mts cuadrados sector gimnasio
+• 8 cemento $ 24.000
+• 1.5 mts cúbicos arena $ 62.000
+• 1 mts cúbicos grava $ 31.000
+• 2 malla acma c92 $ 52.000
+• 2 fibra $ 18.000
+• 5 listones 1x5 $ 10.000
+• 2 topex latex $ 32.000
+Materiales $ 229.000
+Obra de mano $ 180.000
+Total $ 409.000`;
+  const rows = readPastedQuote(radier).partidas_venta;
+  assert.deepEqual(rows.map(row => row.subtotal), [24000, 62000, 31000, 52000, 18000, 10000, 32000, 180000]);
+  assert.equal(rows[0].cantidad, 8);
+  assert.equal(rows[1].unidad, 'mts cúbicos');
+  assert.equal(rows[1].cantidad, 1.5);
+  assert.throws(() => readPastedQuote(radier.replace('409.000', '410.000')), /410\.000.*409\.000/);
+
+  const roof = readPastedQuote(`Cobertizo antejardín estilo mediterráneo
+Realización de viga reticulada y pared revestida en piedra.
+Materiales:
+Viga reticulada $ 1.263 000
+Techumbre y cielo raso $ 1.785.000
+Revestimiento piedra $ 557.000
+Electricidad $ 187.000
+Conexión desagüe $ 115.000
+Pintura y terminación $ 435.000
+Total materiales $ 4.342.000
+Obra de mano $ 3.250.000
+Total de proyecto $ 7.592.000`);
+  assert.equal(roof.partidas_venta.reduce((sum, row) => sum + row.subtotal, 0), 7592000);
+
+  const pavers = readPastedQuote(`Cotización de instalación de adoquines
+Valor por metro cuadrado de adoquín $ 89.000
+$89.000 x 50 mts cuadrados
+$ 4.450.000
+Preparación de terreno
+Instalación de adoquín
+Nivelación de cámara
+Mano de obra`);
+  assert.equal(pavers.partidas_venta[0].precio_unitario, 89000);
+  assert.equal(pavers.partidas_venta[0].cantidad, 50);
+  assert.equal(pavers.partidas_venta[0].subtotal, 4450000);
+  assert.match(pavers.resumen_ejecutivo, /Nivelación de cámara/);
+});
