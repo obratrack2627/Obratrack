@@ -574,7 +574,7 @@ export function ObraBotComposer({
         </button>
 
         <textarea
-          rows={compact ? 2 : 2}
+          rows={2}
           maxLength={6000}
           value={value}
           disabled={disabled}
