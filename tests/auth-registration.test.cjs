@@ -76,10 +76,14 @@ test('mapSupabaseAuthError y validateSignUpFields traducen errores de base de da
   assert.match(mapSupabaseAuthError('CONTACT_DUPLICATE'),/RUT, número de teléfono o correo/);
   assert.match(mapSupabaseAuthError('CONTACT_INVALID_PHONE'),/teléfono ingresado no es válido/);
   assert.match(mapSupabaseAuthError('REGISTRATION_DETAILS_REQUIRED'),/Completa tu nombre completo y RUT personal/);
-  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),null);
-  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-9',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/RUT ingresado no es válido/);
-  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 ',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/número de teléfono válido/);
-  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@example.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),null);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'',email:'jorge@gmail.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/RUT personal/);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'11.111.111-1',email:'jorge@gmail.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/RUT ingresado no es válido/);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-9',email:'jorge@gmail.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/RUT ingresado no es válido/);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@yopmail.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/correo electrónico real/);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@gmal.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/correo electrónico real/);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@gmail.com',telefono:'+56 9 ',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/número de teléfono real y válido/);
+  assert.match(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@gmail.com',telefono:'+56 9 0000 0000',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),/número de teléfono real y válido/);
+  assert.equal(validateSignUpFields({nombre:'Jorge Castro',rut:'12.345.678-5',email:'jorge@gmail.com',telefono:'+56 9 48743041',signupPassword:'Construccion2026!',signupConfirmPassword:'Construccion2026!',acceptTerms:true}),null);
   assert.match(mapContactDatabaseError({code:'23505',message:'duplicate key value violates unique constraint "usuarios_rut_key"'}),/RUT ya está registrado/);
 });
 test('sanitiza correos vigentes y distingue correo no autorizado por SMTP de correo mal formado',async()=>{
@@ -96,9 +100,11 @@ test('sanitiza correos vigentes y distingue correo no autorizado por SMTP de cor
   assert.match(dup.error,/ya está registrado/);
 });
 
-test('el alta nueva rechaza claves menores a ocho caracteres y acepta desde 8',()=>{assert.match(validateSignUpFields({nombre:'QA Admin',rut:'',email:'qa@example.test',telefono:'+56912345678',signupPassword:'1234567',signupConfirmPassword:'1234567',acceptTerms:true}),/8 caracteres/);assert.equal(validateSignUpFields({nombre:'QA Admin',rut:'',email:'qa@example.test',telefono:'+56912345678',signupPassword:'12345678',signupConfirmPassword:'12345678',acceptTerms:true}),null);});
+test('el alta nueva rechaza claves menores a ocho caracteres y acepta desde 8',()=>{assert.match(validateSignUpFields({nombre:'QA Admin',rut:'12.345.678-5',email:'qa@gmail.com',telefono:'+56912345678',signupPassword:'1234567',signupConfirmPassword:'1234567',acceptTerms:true}),/8 caracteres/);assert.equal(validateSignUpFields({nombre:'QA Admin',rut:'12.345.678-5',email:'qa@gmail.com',telefono:'+56912345678',signupPassword:'12345678',signupConfirmPassword:'12345678',acceptTerms:true}),null);});
 
 test('mapSupabaseAuthError muestra la longitud y requisitos reales de contraseña devueltos por Supabase',()=>{
   assert.equal(mapSupabaseAuthError('Password should be at least 12 characters.'),'La contraseña debe tener al menos 12 caracteres.');
   assert.match(mapSupabaseAuthError('Password should be at least 8 characters. Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789.','weak_password'),/8 caracteres e incluir minúsculas, mayúsculas y números/);
+  assert.match(mapSupabaseAuthError('Error sending confirmation email'),/SMTP/);
+  assert.match(mapSupabaseAuthError('Error sending recovery email'),/SMTP/);
 });

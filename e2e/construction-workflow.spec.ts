@@ -231,7 +231,7 @@ test("Documentos oculta actas de recepción anteriores y conserva los demás arc
   expect(db.documentos_obra).toHaveLength(2);
 });
 
-test("registro de persona natural permite omitir RUT y nombre comercial", async ({
+test("registro de cuenta exige RUT personal, correo real y teléfono, y permite omitir nombre comercial", async ({
   page,
 }) => {
   let signup: any;
@@ -241,7 +241,7 @@ test("registro de persona natural permite omitir RUT y nombre comercial", async 
       json: {
         user: {
           id: ownerId,
-          email: "constructor@example.test",
+          email: "constructor@gmail.com",
           identities: [{ id: "test" }],
         },
         session: null,
@@ -251,8 +251,9 @@ test("registro de persona natural permite omitir RUT y nombre comercial", async 
   await page.goto("/login");
   await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
   await page.locator("#signup-nombre").fill("Constructor Independiente");
-  await expect(page.locator("#signup-rut")).not.toHaveAttribute("required", "");
-  await page.locator("#signup-email").fill("constructor@example.test");
+  await expect(page.locator("#signup-rut")).toHaveAttribute("required", "");
+  await page.locator("#signup-rut").fill("12.345.678-5");
+  await page.locator("#signup-email").fill("constructor@gmail.com");
   await page.locator("#signup-telefono").fill("+56987654321");
   await page.locator("#signup-password").fill("PruebaSegura2026!");
   await page.locator("#signup-confirm-password").fill("PruebaSegura2026!");
@@ -264,7 +265,7 @@ test("registro de persona natural permite omitir RUT y nombre comercial", async 
   await expect
     .poll(() => signup?.data?.empresa_nombre)
     .toBe("Constructor Independiente");
-  expect(signup.data.rut || "").toBe("");
+  expect(signup.data.rut).toBe("12.345.678-5");
 });
 
 test("asistencia muestra acceso rápido a planilla por obra en lista sin desborde a 320px", async ({

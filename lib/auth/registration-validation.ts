@@ -15,7 +15,69 @@ export interface SignUpValidationInput {
   requirePassword?: boolean;
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_REGEX =
+  /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,24}$/;
+
+const DISPOSABLE_OR_FAKE_EMAIL_DOMAINS = new Set([
+  'mailinator.com',
+  'yopmail.com',
+  'yopmail.fr',
+  'yopmail.net',
+  'guerrillamail.com',
+  'guerrillamail.net',
+  'guerrillamail.org',
+  'sharklasers.com',
+  'tempmail.com',
+  'temp-mail.org',
+  'temp-mail.io',
+  '10minutemail.com',
+  '10minutemail.net',
+  'throwawaymail.com',
+  'trashmail.com',
+  'getnada.com',
+  'dispostable.com',
+  'maildrop.cc',
+  'fakeinbox.com',
+  'mintemail.com',
+  'moakt.com',
+  'burnermail.io',
+  'mailnesia.com',
+  'mohmal.com',
+  'emailondeck.com',
+  'example.com',
+  'example.org',
+  'example.net',
+  'test.com',
+  'test.cl',
+  'fake.com',
+  'fake.cl',
+  'prueba.cl',
+  'prueba.com',
+  'correo.cl',
+  'ejemplo.cl',
+  'nada.cl',
+  'gmal.com',
+  'gmial.com',
+  'gamil.com',
+  'gnail.com',
+  'gmail.cl',
+  'gmail.co',
+  'hotmal.com',
+  'hotmial.com',
+  'outlok.com',
+  'yaho.com',
+]);
+
+const INVALID_EMAIL_TLDS = new Set([
+  'test',
+  'invalid',
+  'localhost',
+  'local',
+  'internal',
+  'lan',
+  'arpa',
+  'fake',
+]);
 
 export function sanitizeEmail(email: string | null | undefined): string {
   return (email || '')
@@ -25,7 +87,37 @@ export function sanitizeEmail(email: string | null | undefined): string {
 
 export function isValidEmail(email: string | null | undefined): boolean {
   const clean = sanitizeEmail(email);
-  return clean.length > 0 && clean.length <= 254 && EMAIL_REGEX.test(clean);
+  if (!clean || clean.length > 254 || clean.includes('..')) return false;
+  return EMAIL_REGEX.test(clean);
+}
+
+export function isRealSignUpEmail(email: string | null | undefined): boolean {
+  const clean = sanitizeEmail(email).toLowerCase();
+  if (!isValidEmail(clean)) return false;
+  const atIndex = clean.lastIndexOf('@');
+  if (atIndex <= 0) return false;
+  const domain = clean.slice(atIndex + 1);
+  if (DISPOSABLE_OR_FAKE_EMAIL_DOMAINS.has(domain)) return false;
+  const tld = domain.split('.').pop() || '';
+  if (INVALID_EMAIL_TLDS.has(tld)) return false;
+  return true;
+}
+
+export function isRealisticChileanRut(rut: string | null | undefined): boolean {
+  if (!rut || !validarRutChileno(rut)) return false;
+  const clean = rut.replace(/[^0-9kK]/g, '').toUpperCase();
+  const body = clean.slice(0, -1);
+  if (/^(\d)\1+$/.test(body)) return false;
+  const num = Number.parseInt(body, 10);
+  return Number.isFinite(num) && num >= 1_000_000;
+}
+
+export function isRealisticPhone(phone: string | null | undefined): boolean {
+  const digits = canonicalPhone(phone || '');
+  if (!digits) return false;
+  if (/^569(\d)\1{7}$/.test(digits)) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+  return true;
 }
 
 export function normalizeRutKey(rut: string | null | undefined): string {
@@ -41,8 +133,11 @@ export function validateSignUpFields(args: SignUpValidationInput): string | null
     return 'Ingresa tu nombre completo.';
   }
   const cleanRut = args.rut.trim();
-  if (cleanRut && !validarRutChileno(cleanRut)) {
-    return 'El RUT ingresado no es válido. Revisa el dígito verificador (ej: 12.345.678-5).';
+  if (!cleanRut) {
+    return 'Ingresa tu RUT personal (obligatorio).';
+  }
+  if (!isRealisticChileanRut(cleanRut)) {
+    return 'El RUT ingresado no es válido o real. Revisa el dígito verificador (ej: 12.345.678-5).';
   }
   const cleanEmail = sanitizeEmail(args.email);
   if (!cleanEmail) {
@@ -51,8 +146,11 @@ export function validateSignUpFields(args: SignUpValidationInput): string | null
   if (!isValidEmail(cleanEmail)) {
     return 'Ingresa un correo electrónico válido (ej: nombre@dominio.cl).';
   }
-  if (!canonicalPhone(args.telefono)) {
-    return 'Ingresa un número de teléfono válido (ej: +56 9 1234 5678).';
+  if (!isRealSignUpEmail(cleanEmail)) {
+    return 'Ingresa un correo electrónico real (no se permiten correos temporales ni dominios ficticios o mal escritos).';
+  }
+  if (!isRealisticPhone(args.telefono)) {
+    return 'Ingresa un número de teléfono real y válido (ej: +56 9 1234 5678).';
   }
   const empresa = (args.empresaNombre || '').trim();
   if (empresa && empresa.length < 3) {

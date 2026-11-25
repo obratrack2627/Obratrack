@@ -189,6 +189,29 @@ BEGIN
      OR EXISTS (SELECT 1 FROM public.security_audit_logs WHERE empresa_id='qa-sec-emp') THEN
     RAISE EXCEPTION 'COMPANY_CASCADE_DELETE_FAILED: %', res;
   END IF;
+
+  -- Un registro huérfano en auth.users sin perfil en public.usuarios se reporta en orphan_auth_ids sin bloquear como email activo
+  res := public.prevalidar_registro_constructor(repeat('c',64),'admin-acceso@qa.test','56999999999',NULL);
+  IF (res->'conflicts' ? 'email') OR NOT (res->'orphan_auth_ids' ? '00000000-0000-0000-0000-000000000101') THEN
+    RAISE EXCEPTION 'ORPHAN_AUTH_DETECTION_FAILED: %', res;
+  END IF;
 END $$;
 RESET ROLE;
+
+-- 6. Borrar directamente desde auth.users (rol propietario de Auth) limpia también el perfil y empresa huérfanos en public
+INSERT INTO public.empresas(id,nombre,plan_id,creado_por_auth)
+VALUES('qa-auth-del-emp','Empresa Borrado Auth','gratis','00000000-0000-0000-0000-000000000199');
+INSERT INTO auth.users(id,email,raw_app_meta_data,raw_user_meta_data,email_confirmed_at)
+VALUES('00000000-0000-0000-0000-000000000199','borrado-directo@qa.test','{"provider":"email"}','{}',now());
+INSERT INTO public.usuarios(id,auth_user_id,empresa_id,nombre,email,email_acceso,telefono_whatsapp,rol)
+VALUES('00000000-0000-0000-0000-000000000199','00000000-0000-0000-0000-000000000199','qa-auth-del-emp','Admin Borrado Auth','borrado-directo@qa.test','borrado-directo@qa.test','+56944445555','admin');
+DELETE FROM auth.users WHERE id='00000000-0000-0000-0000-000000000199';
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.usuarios WHERE id='00000000-0000-0000-0000-000000000199')
+     OR EXISTS (SELECT 1 FROM public.empresas WHERE id='qa-auth-del-emp') THEN
+    RAISE EXCEPTION 'AUTH_DELETE_TRIGGER_DID_NOT_CLEAN_PUBLIC';
+  END IF;
+END $$;
+
 ROLLBACK;

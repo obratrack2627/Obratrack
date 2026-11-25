@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { resolveMx } from 'node:dns/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
@@ -11,6 +12,32 @@ import {
 } from '@/lib/auth/registration-validation';
 
 export const dynamic = 'force-dynamic';
+
+async function verifyEmailDomainHasMx(email: string): Promise<'valid' | 'invalid' | 'unknown'> {
+  const domain = email.split('@')[1]?.trim().toLowerCase();
+  if (!domain) return 'invalid';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const records = await Promise.race([
+      resolveMx(domain),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(Object.assign(new Error('DNS_TIMEOUT'), { code: 'ETIMEOUT' })),
+          3000,
+        );
+      }),
+    ]);
+    return Array.isArray(records) && records.some((r) => Boolean(r?.exchange)) ? 'valid' : 'invalid';
+  } catch (err: unknown) {
+    const code = String((err as { code?: string })?.code || '').toUpperCase();
+    if (code === 'ENOTFOUND' || code === 'ENODATA' || code === 'NXDOMAIN') {
+      return 'invalid';
+    }
+    return 'unknown';
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 interface ValidarRegistroBody {
   nombre?: string;
@@ -67,6 +94,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, checked: false, conflicts: [] });
     }
 
+    const mxStatus = await verifyEmailDomainHasMx(email);
+    if (mxStatus === 'invalid') {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'El dominio del correo electrónico no existe o no puede recibir correos. Ingresa un correo real.',
+        },
+        { status: 400 },
+      );
+    }
+
     const address = request.headers.get('x-vercel-forwarded-for')?.split(',').at(-1)?.trim() || 'shared';
     const clientKey = createHmac('sha256', process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'local-only').update(address).digest('hex');
     const {data,error}=await admin.rpc('prevalidar_registro_constructor',{
@@ -75,6 +114,25 @@ export async function POST(request: NextRequest) {
     if(error?.message?.includes('REGISTRATION_RATE_LIMIT'))return NextResponse.json({ok:false,error:'Demasiados intentos de registro. Espera un momento antes de volver a intentar.'},{status:429,headers:{'Retry-After':'3600'}});
     if(error || !Array.isArray(data?.conflicts))return NextResponse.json({ok:true,checked:false,conflicts:[]});
     const conflicts=data.conflicts.filter((field:unknown)=>['rut','telefono','email'].includes(String(field))) as RegistrationConflictField[];
+
+    const orphanAuthIds = Array.isArray(data?.orphan_auth_ids)
+      ? data.orphan_auth_ids.filter(
+          (id: unknown): id is string => typeof id === 'string' && id.trim().length > 0,
+        )
+      : [];
+
+    if (orphanAuthIds.length > 0) {
+      if (typeof admin.auth?.admin?.deleteUser === 'function') {
+        for (const orphanId of orphanAuthIds) {
+          const { error: delErr } = await admin.auth.admin.deleteUser(orphanId, false);
+          if (delErr && !/not found/i.test(delErr.message || '') && !conflicts.includes('email')) {
+            conflicts.push('email');
+          }
+        }
+      } else if (!conflicts.includes('email')) {
+        conflicts.push('email');
+      }
+    }
 
     if (conflicts.length > 0) {
       return NextResponse.json(

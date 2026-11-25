@@ -97,6 +97,18 @@ export function mapSupabaseAuthError(message: string, code?: string): string {
     return 'No se pudo enviar el correo de confirmación porque Supabase sigue usando el correo por defecto (requiere SMTP personalizado o autorizar el correo en el equipo de Supabase).';
   }
   if (
+    lower.includes('error sending confirmation email') ||
+    lower.includes('unable to send confirmation email')
+  ) {
+    return 'Supabase no pudo enviar el correo de confirmación (fallo del servidor SMTP). Revisa en Supabase → Authentication → SMTP Settings que el dominio remitente esté verificado (ej. Resend sin dominio propio solo envía al correo titular de la cuenta) o desactiva temporalmente "Confirm email" en Authentication → Providers → Email.';
+  }
+  if (
+    lower.includes('error sending recovery email') ||
+    lower.includes('unable to send recovery email')
+  ) {
+    return 'Supabase no pudo enviar el correo de recuperación (fallo del servidor SMTP). Revisa en Supabase → Authentication → SMTP Settings las credenciales y que el dominio remitente esté verificado para enviar a terceros.';
+  }
+  if (
     normalizedCode === 'email_address_invalid' ||
     lower.includes('email_address_invalid') ||
     lower.includes('unable to validate email address') ||

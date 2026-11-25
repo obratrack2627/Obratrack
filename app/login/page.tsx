@@ -7,8 +7,10 @@ import { Eye, EyeOff, AlertCircle, CheckCircle2, Loader2, ArrowLeft } from 'luci
 import BlueprintBrandPanel from '@/components/BlueprintBrandPanel';
 import LegalTermsModal from '@/components/LegalTermsModal';
 import { formatRUT, validarRutChileno } from '@/lib/utils';
-import { canonicalPhone } from '@/lib/phone';
 import {
+  isRealSignUpEmail,
+  isRealisticChileanRut,
+  isRealisticPhone,
   isValidEmail,
   sanitizeEmail,
   validateSignUpFields,
@@ -352,13 +354,13 @@ interface SignUpViewProps {
 }
 
 function SignUpView(props: SignUpViewProps) {
-  const isRutValid = props.rut ? validarRutChileno(props.rut) : true;
+  const isRutValid = props.rut ? isRealisticChileanRut(props.rut) : true;
   const rutStateClass = isRutValid ? '' : 'border-red-400 focus:border-red-500';
   const hasTypedEmail = sanitizeEmail(props.signupEmail).length > 0;
-  const isEmailValid = !hasTypedEmail || isValidEmail(props.signupEmail);
+  const isEmailValid = !hasTypedEmail || isRealSignUpEmail(props.signupEmail);
   const emailStateClass = isEmailValid ? '' : 'border-red-400 focus:border-red-500';
   const hasTypedPhone = props.telefono.replace(/\D/g, '').length > 3;
-  const isPhoneValid = !hasTypedPhone || Boolean(canonicalPhone(props.telefono));
+  const isPhoneValid = !hasTypedPhone || isRealisticPhone(props.telefono);
   const phoneStateClass = isPhoneValid ? '' : 'border-red-400 focus:border-red-500';
 
   return (
@@ -411,7 +413,7 @@ function SignUpView(props: SignUpViewProps) {
                 htmlFor="signup-rut"
                 className="text-[13px] font-medium text-[#3A3835] dark:text-gray-300"
               >
-                RUT personal (opcional)
+                RUT personal
               </label>
               {props.rut && !isRutValid && (
                 <span className="text-[11px] text-red-600 dark:text-red-400">Inválido</span>
@@ -421,6 +423,7 @@ function SignUpView(props: SignUpViewProps) {
               id="signup-rut"
               name="rut"
               type="text"
+              required
               maxLength={12}
               placeholder="12.345.678-5"
               value={props.rut}
