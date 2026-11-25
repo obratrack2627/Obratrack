@@ -4,6 +4,7 @@ import { AIError } from '@/lib/ai/errors';
 import { commercialLines } from '@/lib/quotes/commercial';
 import { generateAI } from '@/lib/ai/provider';
 import { validateFileContent } from '@/lib/supabase/file-validation';
+import { classifyQuoteLineKind } from '@/lib/quotes/classify';
 import { excelMime } from './quote-files';
 
 const inputError = (message: string) => new AIError('OBRABOT_QUOTE_INPUT', message, 422);
@@ -45,9 +46,16 @@ function parseRows(rows: (string | number)[][]) {
     const fixed = typeof unitPrice === 'string' && /^total\s+/i.test(unitPrice);
     const value = price(fixed ? unitPrice.replace(/^total\s+/i, '') : unitPrice ?? '');
     if (row.length !== 4 || typeof nombre !== 'string' || !nombre.trim() || typeof unidad !== 'string' || !unidad.trim() || !Number.isFinite(cantidad) || cantidad <= 0 || !Number.isSafeInteger(value) || value < 0) {
-      throw inputError(`Revisa la partida ${index + 1}. Indica material, unidad, cantidad y precio unitario con IVA.`);
+      throw inputError(`Revisa la partida ${index + 1}. Indica partida o material, unidad, cantidad y precio unitario con IVA.`);
     }
-    return { nombre, unidad, cantidad, precio_unitario: fixed ? 0 : value, precio_partida: fixed ? value : undefined };
+    return {
+      nombre,
+      unidad,
+      cantidad,
+      precio_unitario: fixed ? 0 : value,
+      precio_partida: fixed ? value : undefined,
+      tipo: classifyQuoteLineKind(nombre, unidad),
+    };
   }));
 }
 
@@ -106,9 +114,13 @@ export async function readExcelQuote(bytes: Buffer) {
   const sheet = workbook.worksheets[0];
   if (!sheet || sheet.rowCount > 301) throw inputError('Usa una hoja de hasta 300 partidas.');
   const normalize = (label: string) => label.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLowerCase();
-  const headers = ['material', 'unidad', 'cantidad', 'precio unitario'];
-  if (!headers.every((header, index) => normalize(sheet.getRow(1).getCell(index + 1).text).startsWith(header))) {
-    throw inputError('La primera fila debe tener estas columnas en orden: material, unidad, cantidad, precio unitario.');
+  const firstHeader = normalize(sheet.getRow(1).getCell(1).text);
+  const validFirstHeader = ['material', 'partida', 'descripcion', 'trabajo', 'item', 'concepto', 'detalle'].some(
+    (prefix) => firstHeader.startsWith(prefix),
+  );
+  const tailHeaders = ['unidad', 'cantidad', 'precio unitario'];
+  if (!validFirstHeader || !tailHeaders.every((header, index) => normalize(sheet.getRow(1).getCell(index + 2).text).startsWith(header))) {
+    throw inputError('La primera fila debe tener estas columnas en orden: partida o material, unidad, cantidad, precio unitario.');
   }
   const rows: (string | number)[][] = [];
   for (let index = 2; index <= sheet.rowCount; index++) {

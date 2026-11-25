@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
 async function submitQuote(request: NextRequest) {
   try {
-    const { actor, db, plan } = await authorizeQuoteWeb(request);
+    const { actor, db, plan } = await authorizeQuoteWeb(request, { allowSupervisor: true });
     if (Number(request.headers.get('content-length')) > 3200000) throw new AIError('OBRABOT_QUOTE_INPUT', 'El archivo de cotización supera los 3 MB.', 413);
     const form = await request.formData().catch(() => null);
     const message = form?.get('mensaje');

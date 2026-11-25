@@ -81,10 +81,18 @@ function quoteSummary(q: CotizacionEstimacion) {
   const tax = q.tratamiento_iva === 'incluido' ? 'IVA incluido' : 'valores netos';
   const location = [q.comuna_region, q.metros_cuadrados ? `${q.metros_cuadrados.toLocaleString('es-CL')} m²` : '',
     q.duracion_dias_estimada ? count(q.duracion_dias_estimada, 'día', 'días') : ''].filter(Boolean).join(' · ');
+  const sale = agreed ? saleLines(q) : [];
+  const saleWork = sale.filter((l) => l.tipo !== 'material');
+  const saleMat = sale.filter((l) => l.tipo === 'material');
+  const splitAgreedSections = agreed && saleWork.length > 0 && saleMat.length > 0;
   return [
     location,
-    agreed ? previewSection(`Partidas acordadas · ${tax}`, saleLines(q)) : '',
-    previewSection(agreed ? 'Materiales incluidos · referencia neta' : 'Materiales · valores netos', materialLines(q)),
+    splitAgreedSections ? previewSection(`Partidas / Trabajos · ${tax}`, saleWork) : '',
+    splitAgreedSections ? previewSection(`Materiales · ${tax}`, saleMat) : '',
+    agreed && !splitAgreedSections ? previewSection(`Partidas acordadas · ${tax}`, sale) : '',
+    !splitAgreedSections
+      ? previewSection(agreed ? 'Materiales incluidos · referencia neta' : 'Materiales · valores netos', materialLines(q))
+      : '',
     !agreed && f.costo_mano_obra_total ? `Mano de obra · ${formatCLP(f.costo_mano_obra_total)}` : '',
     !agreed && otherCosts ? `Gastos, imprevistos y utilidad · ${formatCLP(otherCosts)}` : '',
     `Neto ${formatCLP(f.precio_sugerido_neto)} · IVA (19%) ${formatCLP(f.iva_19)}\n*TOTAL: ${formatCLP(f.precio_total_con_iva)}* (IVA incluido)`,

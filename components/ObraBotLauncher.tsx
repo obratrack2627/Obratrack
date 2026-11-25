@@ -14,7 +14,8 @@ import {
   ObraBotMessageBubble,
   ObraBotStreamingBubble,
   fileToChatImage,
-  submitQuoteAttachmentWeb,
+  handleWebQuoteAttachment,
+  isQuoteAttachmentIntent,
 } from './ObraBotChatShared';
 
 export default function ObraBotLauncher() {
@@ -177,35 +178,28 @@ export default function ObraBotLauncher() {
     const startedAt = Date.now();
 
     try {
-      const isDocQuote = fileToUse && (!fileToUse.type.startsWith('image/') || /\bcotiz|presupuest/i.test(rawText));
-      if (fileToUse && isDocQuote && !scope) {
+      if (fileToUse && isQuoteAttachmentIntent(rawText, fileToUse)) {
         setStreamStage('Leyendo archivo de presupuesto…');
-        const quoteRes = await submitQuoteAttachmentWeb(rawText, fileToUse);
+        const actorRole = dataService.getActiveUser()?.rol || 'admin';
+        const importedReply = await handleWebQuoteAttachment(rawText, fileToUse, scope || undefined, actorRole);
         if (`${dataService.getActiveUser()?.id}:${dataService.getActiveUser()?.empresa_id}` !== session) return;
         append({
           id: crypto.randomUUID(),
           remitente: 'agente',
-          texto: quoteRes.respuesta,
-          sugerencias: quoteRes.solicitud && quoteRes.revision ? ['Aprobar cotización', 'Cotizaciones pendientes'] : [],
-          accion_ejecutada: quoteRes.solicitud && quoteRes.revision
-            ? {
-                tipo: 'agendar_evento' as any,
-                titulo: 'Cotización lista para revisión',
-                resultado_texto: 'Puedes aprobarla aquí o abrir la bandeja del Cotizador.',
-                detalles: { solicitud_cotizacion: quoteRes.solicitud, revision_cotizacion: quoteRes.revision },
-                link_destino: '/cotizador#cotizaciones-obrabot',
-                link_texto: 'Abrir bandeja',
-              }
-            : undefined,
+          ...importedReply,
           latencia_ms: Date.now() - startedAt,
-          obra_contexto_id: undefined,
+          obra_contexto_id: scope || undefined,
           timestamp: timestamp(),
         });
         return;
       }
 
       const imagen = fileToUse && fileToUse.type.startsWith('image/') ? await fileToChatImage(fileToUse) : undefined;
-      const effectiveMessage = rawText || 'Analiza esta foto de obra e indícame qué observas o cómo registrarla.';
+      const effectiveMessage =
+        rawText ||
+        (imagen
+          ? 'Analiza esta foto de obra e indícame qué observas o cómo registrarla.'
+          : `Guarda este documento «${fileToUse?.name || 'adjunto'}» en la obra.`);
 
       const result = await requestAIStream(
         scope ? `/api/proyectos/${scope}/chat` : '/api/cotizador/chat',
@@ -223,7 +217,10 @@ export default function ObraBotLauncher() {
       );
       const user = dataService.getActiveUser();
       if (`${user?.id}:${user?.empresa_id}` !== session) return;
-      const processed = await applyAIResponse(result, scope || undefined, { confirmCritical: true });
+      const processed = await applyAIResponse(result, scope || undefined, {
+        confirmCritical: true,
+        attachedEvidence: fileToUse && scope ? { file: fileToUse, rawText: effectiveMessage } : undefined,
+      });
       append({
         id: crypto.randomUUID(),
         remitente: 'agente',

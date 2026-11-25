@@ -54,6 +54,16 @@ import {
   sanitizeSttNoiseTranscript,
   type WhatsAppBurstConfig,
 } from './burst';
+import { normalizeTurnAction } from '@/lib/ai/normalize-turn-action';
+import { loadRecentCrossChannelTurns } from '@/lib/ai/cross-channel-context';
+import {
+  buildWhatsAppUndoInverse,
+  describePermanentDelete,
+  isWhatsAppUndoRequest,
+  resolvePendingCriticalDecision,
+  type PendingCriticalWhatsApp,
+  type WhatsAppUndoSnapshot,
+} from './critical-and-undo';
 
 const checked = (result: any) => {
   if (result.error)
@@ -478,6 +488,127 @@ export async function processPersonalMessage(
     nextDraft = null;
   }
   const activeProject = activeWhatsAppProject(tables.proyectos, text, staleHistory ? [] : history);
+  if (!attachment && !staleHistory && history[0]?.acciones?.accion_critica_pendiente) {
+    const pendingCrit = history[0].acciones.accion_critica_pendiente as PendingCriticalWhatsApp;
+    const decision = resolvePendingCriticalDecision(text);
+    if (decision === 'cancel') {
+      const cancelText = whatsappCard('Eliminación cancelada', 'No se realizaron cambios.');
+      const { data: canceledData, error: cancelErr } = await sb.rpc('aplicar_lote_copiloto', {
+        p_id: message.id,
+        p_empresa: user.empresa_id,
+        p_actor: user.id,
+        p_phone: senderPhone,
+        p_texto: text,
+        p_respuesta: cancelText,
+        p_cotizacion: null,
+        p_acciones: { rol_actor: user.rol, proyecto_contexto_id: activeProject || null },
+        p_changed: {},
+        p_deleted: {},
+        p_adjunto: null,
+        p_borrador: pendingProject || null,
+        p_aviso: null,
+      });
+      if (cancelErr || !canceledData?.message_id) {
+        throw new AIError('WHATSAPP_DATABASE_SAVE', 'No se confirmó la cancelación.', 503);
+      }
+      await finalizeBatch(true, canceledData.message_id);
+      return { ...canceledData, persistido: true };
+    }
+    if (decision === 'confirm') {
+      const permitted = checkActionPermissions(user, pendingCrit.actions, pendingCrit.permissionMessage || 'Confirmo eliminar');
+      const critPlan = planWhatsAppActions(service, permitted);
+      const critVersioned = withSnapshotVersions(critPlan, tables);
+      const undoAfterCrit = buildWhatsAppUndoInverse(tables, critPlan);
+      const confirmReply = whatsappCard(
+        'Eliminación confirmada',
+        critPlan.result ? actionReply(critPlan.result) : `Se completó: ${pendingCrit.resumen}.`,
+      );
+      const { data: critData, error: critErr } = await sb.rpc('aplicar_lote_copiloto', {
+        p_id: message.id,
+        p_empresa: user.empresa_id,
+        p_actor: user.id,
+        p_phone: senderPhone,
+        p_texto: text,
+        p_respuesta: confirmReply,
+        p_cotizacion: null,
+        p_acciones: {
+          ...(critPlan.result || {}),
+          ...(undoAfterCrit ? { deshacer_disponible: undoAfterCrit } : {}),
+          rol_actor: user.rol,
+          proyecto_contexto_id: activeProject || null,
+        },
+        p_changed: critVersioned.changed,
+        p_deleted: critVersioned.deleted,
+        p_adjunto: null,
+        p_borrador: pendingProject || null,
+        p_aviso: null,
+      });
+      if (critErr || !critData?.message_id) {
+        throw new AIError('WHATSAPP_DATABASE_SAVE', 'No se pudo aplicar la eliminación confirmada.', 503);
+      }
+      await finalizeBatch(true, critData.message_id);
+      return { ...critData, persistido: true };
+    }
+  }
+
+  if (!attachment && isWhatsAppUndoRequest(text)) {
+    const undoSnap = !staleHistory
+      ? (history[0]?.acciones?.deshacer_disponible as WhatsAppUndoSnapshot | undefined)
+      : undefined;
+    if (!undoSnap || typeof undoSnap.expira_ms !== 'number' || Date.now() > undoSnap.expira_ms) {
+      const noUndoText = whatsappCard(
+        'Deshacer no disponible',
+        'No hay un cambio reciente reversible en esta conversación (disponible durante 10 minutos tras guardar).',
+      );
+      const { data: noUndoData, error: noUndoErr } = await sb.rpc('aplicar_lote_copiloto', {
+        p_id: message.id,
+        p_empresa: user.empresa_id,
+        p_actor: user.id,
+        p_phone: senderPhone,
+        p_texto: text,
+        p_respuesta: noUndoText,
+        p_cotizacion: null,
+        p_acciones: { rol_actor: user.rol, proyecto_contexto_id: activeProject || null },
+        p_changed: {},
+        p_deleted: {},
+        p_adjunto: null,
+        p_borrador: pendingProject || null,
+        p_aviso: null,
+      });
+      if (noUndoErr || !noUndoData?.message_id) {
+        throw new AIError('WHATSAPP_DATABASE_SAVE', 'No se pudo registrar la respuesta.', 503);
+      }
+      await finalizeBatch(true, noUndoData.message_id);
+      return { ...noUndoData, persistido: true };
+    }
+
+    const versionedUndo = withSnapshotVersions({ changed: undoSnap.changed || {}, deleted: undoSnap.deleted || {} }, tables);
+    const undoText = whatsappCard(
+      'Cambio revertido',
+      `Revertí «${undoSnap.resumen || 'el último cambio'}» y restauré los datos previos.`,
+    );
+    const { data: undoneData, error: undoneErr } = await sb.rpc('aplicar_lote_copiloto', {
+      p_id: message.id,
+      p_empresa: user.empresa_id,
+      p_actor: user.id,
+      p_phone: senderPhone,
+      p_texto: text,
+      p_respuesta: undoText,
+      p_cotizacion: null,
+      p_acciones: { rol_actor: user.rol, proyecto_contexto_id: activeProject || null },
+      p_changed: versionedUndo.changed,
+      p_deleted: versionedUndo.deleted,
+      p_adjunto: null,
+      p_borrador: pendingProject || null,
+      p_aviso: null,
+    });
+    if (undoneErr || !undoneData?.message_id) {
+      throw new AIError('WHATSAPP_DATABASE_SAVE', 'No se pudo revertir el cambio.', 503);
+    }
+    await finalizeBatch(true, undoneData.message_id);
+    return { ...undoneData, persistido: true };
+  }
+
   const localRegistration = !attachment && user.rol !== 'terreno' ? personIntake([], null, pendingPerson, text, service.getProyectos(), activeProject || undefined, tables.usuarios) : null;
   const personTurn = !!(localRegistration?.question || localRegistration?.actions.length);
   if (user.rol === 'terreno' && activeProject) {
@@ -710,7 +841,11 @@ export async function processPersonalMessage(
     const directWhatsAppReply = applyQuoteToExisting ? { respuesta: applyQuoteToExisting.summary, accion: { tipo: 'lote_acciones', acciones: applyQuoteToExisting.actions }, cotizacion: null, sugerencias: [] } : menuDirect ? { respuesta: menuDirect.respuesta, accion: null, cotizacion: null, sugerencias: [] } : projectListing || projectRefusal || (introPause ? { respuesta: introPause.reply, accion: null, cotizacion: null, sugerencias: [] } : isExplicitMenuCommand ? { respuesta: "¡Hola! Elige qué deseas hacer hoy en ObraTrack o escríbeme tu solicitud:", accion: null, cotizacion: null, sugerencias: [] } : acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || apuReply);
     let semanticReferences: any[] = [];
     let savedBudgetsContext: any[] = [];
+    let recentWebTurns: any[] = [];
     if (!directWhatsAppReply) {
+      if (['admin', 'supervisor'].includes(user.rol)) {
+        recentWebTurns = await loadRecentCrossChannelTurns(sb, user, 'whatsapp');
+      }
       if (user.rol === 'admin' && ragEligible(text, user.rol)) {
         scheduleKnowledgeIndex(user.empresa_id);
         semanticReferences = await (deps.retrieveReferences || retrieveReferences)(sb, text, user.rol, { companyId: user.empresa_id });
@@ -746,6 +881,7 @@ export async function processPersonalMessage(
       text,
       {
         referencias_semanticas: semanticReferences,
+        ...(recentWebTurns.length ? { actividad_reciente_web: recentWebTurns } : {}),
         ...(savedBudgetsContext.length ? { presupuestos_guardados: savedBudgetsContext } : {}),
         preferencias_conversacion: preferences.state.valores,
         operacion_obra: operationsContext(tables, undefined, user.rol, text),
@@ -823,53 +959,16 @@ export async function processPersonalMessage(
   let plan;
   let actionWarning = '';
   let readOnlyEvidence = false;
+  let pendingCriticalToConfirm: PendingCriticalWhatsApp | null = null;
   let campaign: ReturnType<typeof prepareCampaign> | undefined;
   let response = result.respuesta;
   try {
     if (result.accion && typeof result.accion === 'object') {
-      const normalizeTurnAction = (act: any): any => {
-        if (!act || typeof act !== 'object') return act;
-        if (act.tipo === 'lote_acciones' && Array.isArray(act.acciones)) {
-          return { ...act, acciones: act.acciones.map(normalizeTurnAction) };
-        }
-        if (
-          act.tipo === 'registrar_imprevisto' &&
-          !act.asistencia_id &&
-          !act.categoria_gasto &&
-          (user.rol === 'terreno' || act.monto === 0) &&
-          !(typeof act.monto === 'number' && act.monto > 0)
-        ) {
-          const detail = String(act.descripcion || act.nota || act.observacion || text || '').trim();
-          return {
-            tipo: 'crear_bitacora',
-            ...(act.proyecto_id ? { proyecto_id: act.proyecto_id } : {}),
-            ...(act.proyecto_nombre ? { proyecto_nombre: act.proyecto_nombre } : {}),
-            titulo: act.titulo || detail.slice(0, 70) || 'Inconveniente en obra',
-            nota: detail || 'Incidencia reportada desde terreno.',
-            tipo_bitacora: 'incidente',
-            ...(act.fecha ? { fecha: act.fecha } : {}),
-          };
-        }
-        if (
-          activeProject &&
-          act.tipo === 'enviar_mensaje_equipo' &&
-          !act.proyecto_id &&
-          !act.proyecto_nombre &&
-          !act.roles_destino?.length &&
-          !act.trabajadores_nombres?.length &&
-          !act.trabajador_nombre
-        ) {
-          return {
-            ...act,
-            proyecto_id: activeProject,
-            roles_destino: ['terreno', 'supervisor'],
-          };
-        }
-        return act;
-      };
-      result.accion = Array.isArray(result.accion)
-        ? result.accion.map(normalizeTurnAction)
-        : normalizeTurnAction(result.accion);
+      result.accion = normalizeTurnAction(result.accion, {
+        userRole: user.rol,
+        rawText: text,
+        activeProjectId: activeProject,
+      });
     }
     const permissionMessage = applyQuoteToExisting
       ? 'Aplica el presupuesto de la cotización a la obra'
@@ -963,10 +1062,28 @@ export async function processPersonalMessage(
       attachment = evidence.attachment;
     }
     checkActionPermissions(user, actions, permissionMessage);
-    plan = planWhatsAppActions(
-      service,
-      actions.filter((a) => a.tipo !== "enviar_mensaje_equipo"),
-    );
+    const permanentDeleteSummary = !attachment ? describePermanentDelete(actions) : null;
+    if (permanentDeleteSummary) {
+      // Validamos que las referencias sean válidas sobre una copia antes de pedir confirmación.
+      planWhatsAppActions(
+        isolatedState(user, structuredClone(tables), company?.plan_id || 'gratis'),
+        actions.filter((a) => a.tipo !== 'enviar_mensaje_equipo'),
+      );
+      pendingCriticalToConfirm = {
+        resumen: permanentDeleteSummary,
+        actions: actions.filter((a) => a.tipo !== 'enviar_mensaje_equipo'),
+        permissionMessage,
+        creado_ms: Date.now(),
+      };
+      plan = { changed: {}, deleted: {}, result: null };
+      campaign = undefined;
+      response = `Por seguridad, confirma si deseas *${permanentDeleteSummary}*. Toca *Confirmar* o responde «Confirmar» para proceder, o «Cancelar» para mantener todo igual.`;
+    } else {
+      plan = planWhatsAppActions(
+        service,
+        actions.filter((a) => a.tipo !== "enviar_mensaje_equipo"),
+      );
+    }
     if (attachment && !intake?.question) {
       const created = (plan.changed.proyectos || []).filter(project => !tables.proyectos.some(previous => previous.id === project.id));
       if (created.length === 1) {
@@ -1069,7 +1186,8 @@ export async function processPersonalMessage(
   if (analysisFailed)
     response +=
       "\n\nEl análisis de la imagen no estuvo disponible. La foto quedó conservada; puedes reenviarla para volver a analizarla.";
-  const title = menuChoice === 2 ? "Modificar cotización" : menuChoice === 3 ? "Comparar materiales"
+  const title = pendingCriticalToConfirm ? "Confirmación requerida"
+    : menuChoice === 2 ? "Modificar cotización" : menuChoice === 3 ? "Comparar materiales"
     : response.startsWith("No se guardaron cambios.") ? "Solicitud pendiente"
     : plan.result?.tipo === "solicitar_datos_obra" ? "Datos para crear la obra"
     : plan.result?.tipo === 'solicitar_datos_persona' ? 'Datos para el registro'
@@ -1103,6 +1221,7 @@ export async function processPersonalMessage(
     progress = progressAfter(history[0]?.acciones?.seguimiento, 'Ejecutar solicitud', { obra: contextProjectId }, actionWarning, true);
   }
   if (progress?.pausa_humana) response = pausedReply;
+  const undoSnapshot = !pendingCriticalToConfirm ? buildWhatsAppUndoInverse(tables, plan) : null;
   const params = {
     p_id: message.id,
     p_empresa: user.empresa_id,
@@ -1111,7 +1230,17 @@ export async function processPersonalMessage(
     p_texto: text,
     p_respuesta: response,
     p_cotizacion: result.cotizacion,
-    p_acciones: { ...(plan.result || {}), ...progress, preferencias_conversacion:preferences.state, borrador_registro: nextPerson, edicion_nombre_pendiente:nameCommand?.pending || null, rol_actor: user.rol, proyecto_contexto_id: contextProjectId },
+    p_acciones: {
+      ...(plan.result || {}),
+      ...progress,
+      ...(pendingCriticalToConfirm ? { accion_critica_pendiente: pendingCriticalToConfirm } : {}),
+      ...(undoSnapshot ? { deshacer_disponible: undoSnapshot } : {}),
+      preferencias_conversacion: preferences.state,
+      borrador_registro: nextPerson,
+      edicion_nombre_pendiente: nameCommand?.pending || null,
+      rol_actor: user.rol,
+      proyecto_contexto_id: contextProjectId,
+    },
     p_changed: versioned.changed,
     p_deleted: versioned.deleted,
     p_adjunto: attachment,

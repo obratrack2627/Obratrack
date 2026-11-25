@@ -11,7 +11,8 @@ export function commercialLines(raw: any): NonNullable<CotizacionEstimacion['par
     if (fixed != null && (!Number.isSafeInteger(fixed) || fixed < 0)) fail('Revisa el importe de la partida en CLP.');
     const subtotal = fixed ?? Number((BigInt(Math.round(line.cantidad * 1e6)) * BigInt(line.precio_unitario) + BigInt(500000)) / BigInt(1000000));
     if (!Number.isSafeInteger(subtotal)) fail('El precio supera el rango admitido.');
-    return { nombre: line.nombre.trim(), unidad: line.unidad.trim(), cantidad: line.cantidad, precio_unitario: line.precio_unitario, ...(fixed != null ? { precio_partida: fixed } : {}), subtotal };
+    const tipo = line.tipo === 'partida' || line.tipo === 'material' ? line.tipo : undefined;
+    return { nombre: line.nombre.trim(), unidad: line.unidad.trim(), cantidad: line.cantidad, precio_unitario: line.precio_unitario, ...(fixed != null ? { precio_partida: fixed } : {}), ...(tipo ? { tipo } : {}), subtotal };
   });
 }
 export function agreedTotals(lines: NonNullable<CotizacionEstimacion['partidas_venta']>, iva: unknown) {

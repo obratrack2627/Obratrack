@@ -1,9 +1,11 @@
 import { AIError } from '@/lib/ai/errors';
 import { commercialLines } from '@/lib/quotes/commercial';
+import { classifyQuoteLineKind, type QuoteLineKind } from '@/lib/quotes/classify';
 import { formatCLP } from '@/lib/utils';
 
 const clp = String.raw`(?:\d{1,3}(?:[.\u00a0 ]\d{3})+|\d+)`;
 const ivaSuffix = String.raw`(?:\s*(?:\+?\s*m[aá]s\s+iva|\+\s*iva|sin\s+iva|iva\s+incluido|con\s+iva|netos?))?`;
+const bareTotalLine = new RegExp(String.raw`^\$\s*(${clp})${ivaSuffix}\.?$`, 'i');
 const moneyAtEnd = new RegExp(String.raw`^(.+?)\s*\$\s*(${clp})\s*(?:(c\/u|cada uno|unitario|en total))?${ivaSuffix}\.?$`, 'i');
 const projectTotal = /^total(?:\s+(?:del? proyecto|general|con iva|neto))?\s*:?$/i;
 const laborLabel = /^(?:mano de obra|obra de mano)$/i;
@@ -14,7 +16,7 @@ const includedIvaPattern = /\b(?:iva\s+incluido|con\s+iva(?:\s+incluido)?|incluy
 const ivaDeclarationLine = /^(?:(?:todos\s+los\s+)?(?:precios?|valores?|montos?)\s+)?(?:son\s+)?(?:(?:netos?\s*)?(?:m[aá]s|\+)\s*iva|sin\s+iva|no\s+incluye(?:n)?\s+iva|(?:precios?|valores?)\s+netos?|iva\s+incluido|con\s+iva(?:\s+incluido)?|incluye(?:n)?\s+iva)\.?$/i;
 const quantityPrefix = /^(\d+(?:[,.]\d+)?)\s+(\S.*)$/;
 const leadingUnit = /^(m[³3]|m[²2]|(?:mt|mts|metros?)\.?\s+c[uú]bicos?|(?:mt|mts|metros?)\.?\s+cuadrados?|kg|litros?|unidades?|sacos?|cajas?)\s+(?:de\s+)?(\S.*)$/i;
-const requestLine = /^(?:[¿¡]\s*)?(?:puedes |podemos |podr[ií]as |necesito (?:que )?|quiero )?(?:hacer|hace[rs]?|realiz[ae]r?|arm[ae]r?|prepar[ae]r?|gener[ae]r?|cotiza[rs]?|haz(?:me)?)\b.{0,35}\bcotizaci[oó]n\b/i;
+const requestLine = /^(?:[¿¡]\s*)?(?:me\s+)?(?:puedes |podemos |podr[ií]as |necesito (?:que )?|quiero )?(?:me\s+)?(?:hacer|hace[rs]?|har[ií]as?|realiz[ae]r?|arm[ae]r?|prepar[ae]r?|gener[ae]r?|cotiza[rs]?|haz(?:me)?)\b.{0,35}\bcotizaci[oó]n\b/i;
 const quoteTitle = /^(?:presupuesto|cotizaci[oó]n) (?:de |para |por )/i;
 const chargeLine = /^(?:(?:para (?:dar )?inicio|para iniciar|anticipo|condiciones de pago|forma de pago|(?:el )?saldo)\b|(?:se solicita|solicitamos)\b.*%)/i;
 const duration = /\b(\d{1,4})\s+d[ií]as\s+(h[aá]biles|corridos)\b/i;
@@ -23,7 +25,7 @@ const fold = (text: string) => text.normalize('NFD').replace(/\p{Diacritic}/gu, 
 const amount = (value: string) => Number(value.replace(/[.\u00a0 ]/g, ''));
 const number = (value: string) => Number(value.replace(',', '.'));
 
-type Line = { nombre: string; unidad: string; cantidad: number; precio_unitario: number; precio_partida?: number };
+type Line = { nombre: string; unidad: string; cantidad: number; precio_unitario: number; precio_partida?: number; tipo?: QuoteLineKind };
 
 function quoteLines(text: string) {
   return text.split(/\r?\n/).map(line => line.trim().replace(/^(?:[•*▪–]\s*|-\s+)/, ''));
@@ -36,21 +38,28 @@ export function isNaturalQuoteRequest(text: string) {
 export function isPastedQuote(text: string) {
   if (text.length > 16000) return false;
   const [first, ...body] = quoteLines(text.trim());
-  if (isNaturalQuoteRequest(first)) return body.some(line => moneyAtEnd.test(line) || priceByArea.test(line));
+  if (isNaturalQuoteRequest(first)) return body.some(line => moneyAtEnd.test(line) || priceByArea.test(line) || bareTotalLine.test(line));
   const labels = body.flatMap(line => line.match(moneyAtEnd)?.[1].trim() || []);
   return labels.some(label => projectTotal.test(label)) &&
     labels.some(label => materialsTotal.test(label)) && labels.some(label => laborLabel.test(label));
 }
 
-function pricedLine(label: string, value: number, unitPrice: boolean): Line {
+function pricedLine(label: string, value: number, unitPrice: boolean, sectionHint?: QuoteLineKind | null): Line {
   const detail = label.match(quantityPrefix);
   const unit = detail?.[2].match(leadingUnit);
+  const rawNombre = (unit?.[2] ?? detail?.[2] ?? label).trim();
+  const nombre = rawNombre ? rawNombre[0].toUpperCase() + rawNombre.slice(1) : rawNombre;
+  const unidad = unit?.[1] ?? (detail ? 'un' : 'gl');
+  const tipo: QuoteLineKind = laborLabel.test(label)
+    ? 'partida'
+    : (sectionHint ?? classifyQuoteLineKind(nombre, unidad));
   return {
-    nombre: (unit?.[2] ?? detail?.[2] ?? label).trim(),
-    unidad: unit?.[1] ?? (detail ? 'un' : 'gl'),
+    nombre,
+    unidad,
     cantidad: detail ? number(detail[1]) : 1,
     precio_unitario: unitPrice ? value : 0,
     precio_partida: unitPrice ? undefined : value,
+    tipo,
   };
 }
 
@@ -83,6 +92,33 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
   if (text.length > 16000) invalid('Divide el presupuesto en un listado más breve para conservar el detalle en esta cotización.');
   const rawLines = quoteLines(text.trim());
   if (!providedTitle && requestLine.test(rawLines[0])) rawLines.shift();
+  const isPairableLabel = (line: string) => {
+    if (!line || line.includes('$') || bareTotalLine.test(line)) return false;
+    if (ivaDeclarationLine.test(line) || chargeLine.test(line)) return false;
+    if (/^(?:materiales|partidas|trabajos|mano de obra|obra de mano|servicios)\s*:?$/i.test(line)) return false;
+    if (/^(?:descripci[oó]n (?:del trabajo|de la obra)|alcance|datos del trabajo)\s*:?$/i.test(line)) return false;
+    const k = fold(line);
+    if (projectTotal.test(k) || materialsTotal.test(k)) return false;
+    return true;
+  };
+  const mergedLines: string[] = [];
+  let scopeStarted = false;
+  for (let i = 0; i < rawLines.length; i++) {
+    const row = rawLines[i];
+    if (/^(?:descripci[oó]n (?:del trabajo|de la obra)|alcance|datos del trabajo)\s*:?$/i.test(row)) {
+      scopeStarted = true;
+    }
+    if (!scopeStarted && isPairableLabel(row)) {
+      let nextIdx = i + 1;
+      while (nextIdx < rawLines.length && !rawLines[nextIdx]) nextIdx++;
+      if (nextIdx < rawLines.length && bareTotalLine.test(rawLines[nextIdx])) {
+        mergedLines.push(`${row} ${rawLines[nextIdx]}`);
+        i = nextIdx;
+        continue;
+      }
+    }
+    mergedLines.push(row);
+  }
   const lines: Line[] = [];
   const scope: string[] = [];
   const payment: string[] = [];
@@ -93,8 +129,8 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
   let statedAreaPrice: number | undefined;
   let days: RegExpMatchArray | null = null;
   let inScope = false;
-  const bareTotalLine = new RegExp(String.raw`^\$\s*(${clp})${ivaSuffix}\.?$`, 'i');
-  for (const line of rawLines) {
+  let currentSection: QuoteLineKind | null = null;
+  for (const line of mergedLines) {
     if (!line) {
       if (scope.length && scope.at(-1) !== '') scope.push('');
       continue;
@@ -103,6 +139,10 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
     const key = fold(line);
     const money = line.match(moneyAtEnd);
     const bareTotal = line.match(bareTotalLine);
+    if (!inScope && !money && !bareTotal && /^(?:materiales|partidas|trabajos|mano de obra|obra de mano|servicios)\s*:?$/i.test(line)) {
+      currentSection = /^materiales/i.test(line) ? 'material' : 'partida';
+      continue;
+    }
     if (chargeLine.test(line)) {
       payment.push(line);
     } else if (key.startsWith('valor por metro cuadrado') && money) {
@@ -111,7 +151,7 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
       const area = line.match(priceByArea)!;
       const unitPrice = amount(area[1]);
       checkTotal('precio por metro cuadrado', statedAreaPrice, unitPrice);
-      lines.push({ nombre: title || 'Instalación por metro cuadrado', unidad: 'm²', cantidad: number(area[2]), precio_unitario: unitPrice });
+      lines.push({ nombre: title || 'Instalación por metro cuadrado', unidad: 'm²', cantidad: number(area[2]), precio_unitario: unitPrice, tipo: 'partida' });
       statedAreaPrice = undefined;
     } else if (!money && !/\d/.test(key) && (projectTotal.test(key.split('$')[0]) || materialsTotal.test(key.split('$')[0]))) {
       continue;
@@ -128,7 +168,7 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
       const label = money[1].trim().replace(/:$/, '').trim();
       if (/^(?:descuento|recargo|iva|neto|subtotal)\b/i.test(label)) invalid('Confirma los importes finales de las partidas con los descuentos ya aplicados.');
       if (laborLabel.test(label)) laborRows.push(lines.length);
-      lines.push(pricedLine(label, amount(money[2]), money[3] != null && money[3].toLowerCase() !== 'en total'));
+      lines.push(pricedLine(label, amount(money[2]), money[3] != null && money[3].toLowerCase() !== 'en total', currentSection));
     } else if (line.includes('$') && !inScope) {
       invalid(`No pude leer el importe de «${line.slice(0, 160)}». Escribe la partida y su valor final en CLP.`);
     } else if (!title && !lines.length && !inScope) {

@@ -437,7 +437,7 @@ export interface RecomendacionCobroCliente {
 export interface CotizacionEstimacion {
   modo_presupuesto?: 'estimado' | 'precio_acordado';
   tratamiento_iva?: 'neto' | 'incluido';
-  partidas_venta?: { nombre: string; unidad: string; cantidad: number; precio_unitario: number; precio_partida?: number; subtotal: number }[];
+  partidas_venta?: { nombre: string; unidad: string; cantidad: number; precio_unitario: number; precio_partida?: number; subtotal: number; tipo?: 'partida' | 'material' }[];
   nombre_alternativa?: string;
   alternativas?: CotizacionEstimacion[];
   grupo_presupuesto_id?: string;
@@ -546,6 +546,8 @@ export type TipoAccionIA =
   | 'generar_mensaje_whatsapp'
   | 'enviar_mensaje_equipo'
   | 'solicitar_datos_obra'
+  | 'obrabot_cotizacion'
+  | 'obrabot_destino_cotizacion'
   | 'lote_acciones';
 
 export interface AccionAsistenteIA {
@@ -570,6 +572,7 @@ export interface MensajeChatCotizador {
   accion_ejecutada?: AccionAsistenteIA;
   cotizacion_generada?: CotizacionEstimacion;
   comparacion_materiales?: import('@/lib/materials/types').ComparacionMateriales;
+  comparaciones_materiales?: import('@/lib/materials/types').ComparacionMateriales[];
   pendiente_sincronizacion?: string;
   job_id?: string;
   latencia_ms?: number;
@@ -588,6 +591,7 @@ export interface MensajeChatProyecto {
   sugerencias?: string[];
   cotizacion_generada?: CotizacionEstimacion;
   comparacion_materiales?: import('@/lib/materials/types').ComparacionMateriales;
+  comparaciones_materiales?: import('@/lib/materials/types').ComparacionMateriales[];
   pendiente_sincronizacion?: string;
   accion_ejecutada?: AccionAsistenteIA;
   job_id?: string;

@@ -1,6 +1,7 @@
 import type { CotizacionEstimacion, EmpresaConfiguracion } from '@/types/database';
 
 import { formatCLP } from '@/lib/utils';
+import { resolveSaleLineKind, type QuoteLineKind } from './classify';
 
 export interface QuoteDocumentEmisorInput {
   nombre?: string;
@@ -29,6 +30,7 @@ export interface QuoteLine {
   cantidad: number;
   precioUnit: number | null;
   total: number;
+  tipo?: QuoteLineKind;
 }
 
 export const quoteMoney = (value: number) => `$ ${value.toLocaleString('es-CL')}`;
@@ -55,6 +57,7 @@ export function materialLines(quote: CotizacionEstimacion): QuoteLine[] {
   return quote.materiales.map(m => ({
     nombre: m.nombre, descripcion: m.alternativa_economica || '', unidad: m.unidad || 'un',
     cantidad: m.cantidad, precioUnit: m.precio_unitario_estimado ?? m.precio_mas_barato, total: m.subtotal,
+    tipo: 'material',
   }));
 }
 
@@ -62,6 +65,7 @@ export function saleLines(quote: CotizacionEstimacion): QuoteLine[] {
   return (quote.partidas_venta || []).map(p => ({
     nombre: p.nombre, descripcion: '', unidad: p.unidad, cantidad: p.cantidad,
     precioUnit: p.precio_partida == null ? p.precio_unitario : null, total: p.subtotal,
+    tipo: resolveSaleLineKind(p),
   }));
 }
 
@@ -69,23 +73,30 @@ export function saleLines(quote: CotizacionEstimacion): QuoteLine[] {
 export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDocumentOptions = {}) {
   const f = quote.estructura_financiera;
   const cfg: EmpresaConfiguracion = options.emisor?.empresa_configuracion || {};
+  const isAgreed = quote.modo_presupuesto === 'precio_acordado';
   const materials = materialLines(quote);
-  const items: QuoteLine[] = quote.modo_presupuesto === 'precio_acordado' ? saleLines(quote) : [
-    ...materials,
-    ...quote.mano_de_obra.map((m) => ({
-      nombre: `Mano de obra: ${m.rol}`,
-      descripcion: `${m.cantidad_personas} persona(s) · ${m.dias_estimados} día(s)`,
-      unidad: 'gl', cantidad: 1, precioUnit: m.subtotal, total: m.subtotal,
-    })),
-  ];
+  const laborItems: QuoteLine[] = quote.mano_de_obra.map((m) => ({
+    nombre: `Mano de obra: ${m.rol}`,
+    descripcion: `${m.cantidad_personas} persona(s) · ${m.dias_estimados} día(s)`,
+    unidad: 'gl', cantidad: 1, precioUnit: m.subtotal, total: m.subtotal, tipo: 'partida',
+  }));
   const indirects: [string, number][] = [
     ['Gastos generales', f.gastos_generales_monto],
     ['Provisión de imprevistos', f.imprevistos_monto],
     [f.tipo_utilidad === 'margen_venta' ? 'Margen sobre venta' : 'Utilidad', f.margen_utilidad_monto],
   ];
-  for (const [nombre, total] of quote.modo_presupuesto === 'precio_acordado' ? [] : indirects) {
-    if (total) items.push({ nombre, descripcion: '', unidad: 'gl', cantidad: 1, precioUnit: total, total });
-  }
+  const indirectItems: QuoteLine[] = isAgreed ? [] : indirects
+    .filter(([, total]) => Boolean(total))
+    .map(([nombre, total]) => ({ nombre, descripcion: '', unidad: 'gl', cantidad: 1, precioUnit: total, total, tipo: 'partida' as const }));
+  const items: QuoteLine[] = isAgreed ? saleLines(quote) : [...materials, ...laborItems, ...indirectItems];
+
+  const billedMaterials = isAgreed ? items.filter((l) => l.tipo === 'material') : [];
+  const partidasSeccion = isAgreed ? items.filter((l) => l.tipo !== 'material') : [...laborItems, ...indirectItems];
+  const materialesSeccion = isAgreed ? (billedMaterials.length > 0 ? billedMaterials : materials) : materials;
+  const materialesEsReferencia = isAgreed && billedMaterials.length === 0 && materials.length > 0;
+  const materialesIncluidos = isAgreed && billedMaterials.length === 0 ? materials : [];
+  const trabajosIncluidos = (quote.actividades_gantt || []).map((a) => ({ nombre: a.nombre, dias: a.dias }));
+
   const folio = quote.id.replace(/\D/g, '').slice(-6).padStart(6, '0');
   const rawConditions = [
     ...(quote.hitos_pago || []).map((h) => `${h.nombre} (${h.porcentaje}%): ${quoteMoney(h.monto)}`),
@@ -97,9 +108,14 @@ export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDo
     ? [baseConditions, `Datos transferencia: ${bankDetails}`].filter(Boolean).join('\n')
     : baseConditions || 'Por acordar con el cliente.';
 
+  const companyName = options.emisor?.empresa_nombre?.trim();
+  const defaultPrefix = companyName && companyName !== 'Emitido con ObraTrack'
+    ? `Cotizacion_${companyName}`
+    : 'ObraTrack_Cotizacion';
+
   return {
     folio,
-    filename: (quote.nombre_archivo?.trim() ? quote.nombre_archivo.replace(/\.pdf$/i, '') : `ObraTrack_Cotizacion_${folio}_${quote.titulo_proyecto}${quote.nombre_alternativa ? '_' + quote.nombre_alternativa : ''}`).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 120) + '.pdf',
+    filename: (quote.nombre_archivo?.trim() ? quote.nombre_archivo.replace(/\.pdf$/i, '') : `${defaultPrefix}_${folio}_${quote.titulo_proyecto}${quote.nombre_alternativa ? '_' + quote.nombre_alternativa : ''}`).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 120) + '.pdf',
     fecha: quote.mostrar_fecha === false ? '' : dateLabel(quote.fecha_creacion),
     validez: quote.fecha_validez ? dateLabel(quote.fecha_validez) : 'Por acordar',
     cliente: {
@@ -110,8 +126,12 @@ export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDo
     },
     proyecto: { nombre: quote.titulo_proyecto, ubicacion: quote.comuna_region || 'Por definir', descripcion: [quote.nombre_alternativa ? `Alternativa: ${quote.nombre_alternativa}` : '', quote.resumen_ejecutivo || 'Según detalle de partidas.'].filter(Boolean).join('\n') },
     items,
-    materialesIncluidos: quote.modo_presupuesto === 'precio_acordado' ? materials : [],
-    ivaIncluidoEnPartidas: quote.modo_presupuesto === 'precio_acordado' && quote.tratamiento_iva === 'incluido',
+    partidasSeccion,
+    materialesSeccion,
+    materialesEsReferencia,
+    trabajosIncluidos,
+    materialesIncluidos,
+    ivaIncluidoEnPartidas: isAgreed && quote.tratamiento_iva === 'incluido',
     subtotal: f.precio_sugerido_neto,
     iva: f.iva_19,
     total: f.precio_total_con_iva,

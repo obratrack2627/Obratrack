@@ -41,6 +41,7 @@ export interface SharedChatMessage {
   accion_ejecutada?: AccionAsistenteIA;
   cotizacion_generada?: CotizacionEstimacion;
   comparacion_materiales?: import('@/lib/materials/types').ComparacionMateriales;
+  comparaciones_materiales?: import('@/lib/materials/types').ComparacionMateriales[];
   pendiente_sincronizacion?: string;
   job_id?: string;
   latencia_ms?: number;
@@ -85,6 +86,100 @@ export async function submitQuoteAttachmentWeb(message: string, file: File) {
   return data as { respuesta: string; solicitud?: string; revision?: number; archivo?: { id: string; formato: 'pdf' | 'excel' } };
 }
 
+export function isQuoteAttachmentIntent(rawText: string, file: File): boolean {
+  if (/\.(xlsx|csv)$/i.test(file.name)) return true;
+  if (/\bcotiz|presupuest|partida|materiales\s+y\s+montos|extrae|traspas/i.test(rawText)) return true;
+  if (!file.type.startsWith('image/') && !/\b(?:guarda|archiva|contrato|plano|acta|permiso|boleta|factura)\b/i.test(rawText)) {
+    return true;
+  }
+  return false;
+}
+
+export async function handleWebQuoteAttachment(
+  rawText: string,
+  file: File,
+  projectId?: string,
+  userRole = 'admin',
+): Promise<{
+  texto: string;
+  sugerencias: string[];
+  cotizacion_generada?: CotizacionEstimacion;
+  accion_ejecutada?: AccionAsistenteIA;
+}> {
+  if (projectId) {
+    const headers = await aiHeaders();
+    const form = new FormData();
+    form.set('archivo', file);
+    form.set('proyecto_id', projectId);
+    const importRes = await fetch('/api/presupuestos/importar', {
+      method: 'POST',
+      headers: { Authorization: headers.Authorization },
+      body: form,
+    });
+    const imported = await importRes.json().catch(() => ({}));
+    if (!importRes.ok || !imported.cotizacion) {
+      throw new Error(imported.error || 'No se pudieron extraer los datos del presupuesto.');
+    }
+    const saveRes = await fetch('/api/presupuestos', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        cotizacion: imported.cotizacion,
+        proyecto_id: projectId,
+        tipo: 'principal',
+        nombre_alternativa: imported.cotizacion.nombre_alternativa || 'Presupuesto importado',
+      }),
+    });
+    const saved = await saveRes.json().catch(() => ({}));
+    if (!saveRes.ok || !saved.presupuesto) {
+      throw new Error(saved.error || 'Se extrajeron los datos, pero no se pudo guardar el presupuesto en la obra.');
+    }
+    const quote = saved.presupuesto.cotizacion as CotizacionEstimacion;
+    const partidasCount = imported.resumen?.partidas ?? quote.partidas_venta?.length ?? 0;
+    const matCount = imported.resumen?.materiales ?? quote.materiales?.length ?? 0;
+    return {
+      texto: `Extraje **${partidasCount} ${partidasCount === 1 ? 'partida' : 'partidas'}**${matCount ? ` y **${matCount} materiales**` : ''} desde «${file.name}» y guardé el borrador en esta obra al formato de ObraTrack.`,
+      sugerencias: ['Envíame la cotización en PDF', 'Envíame la cotización en Excel'],
+      cotizacion_generada: quote,
+      accion_ejecutada: {
+        tipo: 'obrabot_cotizacion',
+        titulo: 'Presupuesto importado en la obra',
+        resultado_texto: 'Puedes revisarlo, editarlo o aplicarlo desde la pestaña Presupuestos.',
+        detalles: { presupuesto_cotizacion_id: saved.presupuesto.id },
+        link_destino: `/proyectos/${encodeURIComponent(projectId)}/presupuestos`,
+        link_texto: 'Ver en Presupuestos',
+      },
+    };
+  }
+
+  const quoteRes = await submitQuoteAttachmentWeb(rawText, file);
+  const canApprove = userRole === 'admin';
+  return {
+    texto: quoteRes.respuesta,
+    sugerencias:
+      quoteRes.solicitud && quoteRes.revision && canApprove
+        ? ['Aprobar cotización', 'Cotizaciones pendientes']
+        : [],
+    accion_ejecutada:
+      quoteRes.solicitud && quoteRes.revision
+        ? {
+            tipo: 'obrabot_cotizacion',
+            titulo: canApprove ? 'Cotización lista para revisión' : 'Cotización enviada al administrador',
+            resultado_texto: canApprove
+              ? 'Puedes aprobarla aquí con un clic o revisarla en la bandeja.'
+              : 'Quedó registrada en la bandeja del administrador para su revisión.',
+            detalles: { solicitud_cotizacion: quoteRes.solicitud, revision_cotizacion: quoteRes.revision },
+            ...(canApprove
+              ? {
+                  link_destino: '/cotizador#cotizaciones-obrabot',
+                  link_texto: 'Abrir bandeja de revisión',
+                }
+              : {}),
+          }
+        : undefined,
+  };
+}
+
 export function ObraBotMessageBubble({
   message,
   compact = false,
@@ -109,7 +204,10 @@ export function ObraBotMessageBubble({
   const [undone, setUndone] = useState(false);
 
   const isUser = message.remitente === 'usuario';
-  const content = message.comparacion_materiales?.resumen || quoteIntroText(message.texto, message.cotizacion_generada);
+  const content =
+    message.comparaciones_materiales?.[0]?.resumen && !message.texto
+      ? message.comparaciones_materiales[0].resumen
+      : message.comparacion_materiales?.resumen || quoteIntroText(message.texto, message.cotizacion_generada);
   const timeLabel =
     message.timestamp ||
     (message.created_at ? new Date(message.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '');

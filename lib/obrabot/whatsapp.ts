@@ -16,14 +16,14 @@ const pdfRequestWords = new Set(
 );
 const excelRequestWords = new Set([...pdfRequestWords, 'excel', 'xlsx', 'planilla', 'hoja', 'calculo']);
 
-function isQuotePdfRequest(text: string) {
+export function isQuotePdfRequest(text: string) {
   const words = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/[¿?¡!.,]/g, ' ').trim().split(/\s+/);
   if (!words.includes('pdf') || !words.every(word => pdfRequestWords.has(word))) return false;
   return !words.some((word, index) => ['un', 'una'].includes(word) && ['cotizacion', 'presupuesto'].includes(words[index + 1]));
 }
 
-function isQuoteExcelRequest(text: string) {
+export function isQuoteExcelRequest(text: string) {
   const words = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/[¿?¡!.,]/g, ' ').trim().split(/\s+/);
   if (!words.some(word => word === 'excel' || word === 'xlsx') || !words.every(word => excelRequestWords.has(word))) return false;
@@ -153,7 +153,11 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     ? [quoteReference(freshRows.find(r => r.message_id === replyContextId))?.review].filter((v): v is string => Boolean(v))
     : freshRows.map(r => quoteReference(r)?.review).filter((v): v is string => Boolean(v));
   const immediateQuoteContext = Boolean(last?.acciones?.tipo === 'obrabot_cotizacion' && !last?.acciones?.proyecto_contexto_id && !last?.borrador_obra);
-  const maybeNaturalEdit = noAttachment && !quoteInput && !destination && !contextualFileFormat && !pendingReview && actor.rol === 'admin' && recentReviewIds.length > 0 && looksLikeNaturalQuoteEdit(text);
+  const hasSavedQuoteEditHint =
+    recentReviewIds.length > 0 ||
+    (/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text) &&
+      !/\b(?:de\s+la\s+obra|del\s+proyecto)\b/i.test(text));
+  const maybeNaturalEdit = noAttachment && !quoteInput && !destination && !contextualFileFormat && !pendingReview && actor.rol === 'admin' && hasSavedQuoteEditHint && looksLikeNaturalQuoteEdit(text);
   if (!contextualFileFormat && !quoteInput && !destination && !pendingReview && !maybeNaturalEdit && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
   const draft = last?.acciones?.rol_actor === actor.rol && last.borrador_obra &&
     !(Date.now() - Date.parse(last.created_at) > quoteSessionMs) ? last.borrador_obra : null;

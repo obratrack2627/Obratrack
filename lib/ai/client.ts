@@ -177,10 +177,89 @@ export function describeCriticalAction(accion: any): string | null {
   return null;
 }
 
+async function uploadProjectEvidence(file: File, projectId: string, bucket: 'bitacora-fotos' | 'documentos-obra') {
+  const headers = await aiHeaders();
+  const form = new FormData();
+  form.set('file', file);
+  form.set('proyectoId', projectId);
+  form.set('bucket', bucket);
+  const res = await fetch('/api/supabase/upload', {
+    method: 'POST',
+    headers: { Authorization: headers.Authorization },
+    body: form,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.publicUrl) return null;
+  return data as { publicUrl: string; fileName: string; fileSize: number; mimeType: string };
+}
+
+function actionSupportsEvidence(accion: any): boolean {
+  if (!accion) return false;
+  const list = accion.tipo === 'lote_acciones' && Array.isArray(accion.acciones) ? accion.acciones : [accion];
+  return list.some((a: any) =>
+    ['crear_bitacora', 'actualizar_avance', 'registrar_imprevisto', 'registrar_documento'].includes(a?.tipo),
+  );
+}
+
+function attachUploadedFileToAction(
+  accion: any,
+  uploaded: { publicUrl: string; fileName: string; fileSize: number; mimeType: string },
+  projectId: string,
+  rawText: string,
+): any {
+  const isImage = uploaded.mimeType.startsWith('image/');
+  const injectOne = (item: any) => {
+    if (!item || typeof item !== 'object') return item;
+    if (isImage && ['crear_bitacora', 'actualizar_avance', 'registrar_imprevisto'].includes(item.tipo)) {
+      return { ...item, foto_url: uploaded.publicUrl };
+    }
+    if (item.tipo === 'registrar_documento') {
+      return {
+        ...item,
+        archivo_url: uploaded.publicUrl,
+        archivo_nombre: item.archivo_nombre || uploaded.fileName,
+        archivo_tamano: uploaded.fileSize,
+        mime_type: uploaded.mimeType,
+      };
+    }
+    return item;
+  };
+
+  if (!accion) {
+    const cleanNote = rawText.trim().slice(0, 300);
+    if (isImage && /\b(?:bit[aá]cora|avance|incidente|terreno)\b/i.test(rawText)) {
+      return {
+        tipo: 'crear_bitacora',
+        proyecto_id: projectId,
+        titulo: cleanNote.slice(0, 70) || `Registro fotográfico: ${uploaded.fileName}`,
+        nota: cleanNote || 'Evidencia fotográfica subida desde ObraBot Web.',
+        tipo_bitacora: /\b(?:incidente|falla|problema)\b/i.test(rawText) ? 'incidente' : 'avance',
+        foto_url: uploaded.publicUrl,
+      };
+    }
+    return {
+      tipo: 'registrar_documento',
+      proyecto_id: projectId,
+      nombre: uploaded.fileName,
+      categoria: /\b(?:boleta|factura|comprobante|pago)\b/i.test(rawText) ? 'boleta_factura' : 'otro',
+      archivo_url: uploaded.publicUrl,
+      archivo_nombre: uploaded.fileName,
+      archivo_tamano: uploaded.fileSize,
+      mime_type: uploaded.mimeType,
+      notas: cleanNote || 'Archivo respaldado desde ObraBot Web.',
+    };
+  }
+
+  if (accion.tipo === 'lote_acciones' && Array.isArray(accion.acciones)) {
+    return { ...accion, acciones: accion.acciones.map(injectOne) };
+  }
+  return injectOne(accion);
+}
+
 export async function applyAIResponse(
   data: any,
   projectId?: string,
-  options?: { confirmCritical?: boolean },
+  options?: { confirmCritical?: boolean; attachedEvidence?: { file: File; rawText: string } },
 ) {
   const criticalSummary = options?.confirmCritical ? describeCriticalAction(data.accion) : null;
   if (criticalSummary) {
@@ -193,8 +272,38 @@ export async function applyAIResponse(
       sugerencias: data.sugerencias,
     };
   }
+
+  let effectiveAction = data.accion;
+  const ev = options?.attachedEvidence;
+  const explicitSaveRequest =
+    ev &&
+    /\b(?:guarda|guardar|sube|subir|registra|registrar|archiva|archivar|respalda|deja\s+en|agrega\s+a\s+bit[aá]cora|como\s+(?:avance|evidencia|boleta|factura|documento|incidente))\b/i.test(
+      ev.rawText,
+    );
+  const readOnlyInspection =
+    ev && !effectiveAction && /\b(?:solo\s+(?:mira|analiza|revisa)|qu[eé]\s+(?:ves|observas)|explica)\b/i.test(ev.rawText) && !explicitSaveRequest;
+
+  if (
+    ev &&
+    projectId &&
+    dataService.getActivePlan() === 'pro_ia' &&
+    (actionSupportsEvidence(effectiveAction) || (explicitSaveRequest && !readOnlyInspection))
+  ) {
+    const wantsBitacoraBucket =
+      ev.file.type.startsWith('image/') &&
+      (effectiveAction?.tipo === 'crear_bitacora' || (!effectiveAction && /\b(?:bit[aá]cora|avance|incidente)\b/i.test(ev.rawText)));
+    const uploaded = await uploadProjectEvidence(
+      ev.file,
+      projectId,
+      wantsBitacoraBucket ? 'bitacora-fotos' : 'documentos-obra',
+    ).catch(() => null);
+    if (uploaded) {
+      effectiveAction = attachUploadedFileToAction(effectiveAction, uploaded, projectId, ev.rawText);
+    }
+  }
+
   // Una obra recién creada desde WhatsApp puede no existir todavía en la caché de esta pestaña.
-  if (data.accion) {
+  if (effectiveAction) {
     const current = await dataService.pullFromCloudServer();
     if (!current.success)
       throw new Error(
@@ -203,8 +312,8 @@ export async function applyAIResponse(
   }
   const savedDestination = data.accion_ejecutada?.tipo === 'obrabot_destino_cotizacion';
   const refreshed = savedDestination ? await dataService.pullFromCloudServer().catch(() => null) : null;
-  const action = data.accion
-    ? await executeAI(data.accion, projectId)
+  const action = effectiveAction
+    ? await executeAI(effectiveAction, projectId)
     : undefined;
   const cotizacion: CotizacionEstimacion | undefined =
     data.cotizacion || undefined;
@@ -235,6 +344,9 @@ export async function applyAIResponse(
     cotizacion_generada: cotizacion,
     comparacion_materiales: isMaterialComparison(data.comparacion_materiales)
       ? data.comparacion_materiales
+      : undefined,
+    comparaciones_materiales: Array.isArray(data.comparaciones_materiales)
+      ? data.comparaciones_materiales.filter(isMaterialComparison)
       : undefined,
     pendiente_sincronizacion: action?.pendingId,
     job_id: action?.jobId,

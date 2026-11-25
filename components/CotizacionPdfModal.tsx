@@ -220,14 +220,38 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
             <section><h2 className="quote-section-title"><Briefcase />PROYECTO</h2><dl>{fields([['Proyecto:', document.proyecto.nombre], ['Ubicación:', document.proyecto.ubicacion], ['Descripción:', document.proyecto.descripcion]])}</dl></section>
           </div>
           {[
-            { title: 'Detalle de materiales y partidas', items: document.items, amountLabel: document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL' },
-            { title: 'Materiales incluidos · valores netos de referencia', items: document.materialesIncluidos, amountLabel: 'Importe ref.' },
-          ].filter(group => group.items.length).map(({ title, items, amountLabel }) => (
-            <table key={title} className="quote-table" aria-label={title}>
-            <colgroup><col style={{ width: '6.5%' }} /><col style={{ width: '42.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '8%' }} /><col style={{ width: '17%' }} /><col style={{ width: '18.5%' }} /></colgroup>
-            <thead><tr>{['ÍTEM', title, 'UNIDAD', 'CANT.', 'PRECIO UNIT.', amountLabel].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
-            <tbody>{items.map((item, index) => <tr key={index}><td>{String(index + 1).padStart(2, '0')}</td><td><strong>{item.nombre}</strong>{item.descripcion && <small>{item.descripcion}</small>}</td><td>{item.precioUnit === null && item.unidad === 'gl' ? '' : item.unidad}</td><td>{item.precioUnit === null && item.unidad === 'gl' ? '' : item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })}</td><td>{item.precioUnit === null ? '—' : quoteMoney(item.precioUnit)}</td><td><strong>{quoteMoney(item.total)}</strong></td></tr>)}</tbody>
-          </table>
+            {
+              key: 'partidas',
+              sectionHeading: `${document.materialesSeccion.length ? '1. ' : ''}Partidas / Trabajos`,
+              colTitle: 'Partida / Trabajo',
+              items: document.partidasSeccion,
+              amountLabel: document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL',
+              worksNote: !document.ivaIncluidoEnPartidas &&
+                document.trabajosIncluidos.length > 0 &&
+                document.partidasSeccion.every((item) =>
+                  /^(?:Mano de obra:|Gastos generales$|Provisi[oó]n de imprevistos$|Margen sobre venta$|Utilidad$)/.test(item.nombre),
+                )
+                ? document.trabajosIncluidos.map((t) => `${t.nombre} (${t.dias} d)`).join(' · ')
+                : '',
+            },
+            {
+              key: 'materiales',
+              sectionHeading: `${document.partidasSeccion.length ? '2. ' : ''}Materiales${document.materialesEsReferencia ? ' incluidos · referencia neta' : ''}`,
+              colTitle: document.materialesEsReferencia ? 'Materiales incluidos · referencia neta' : 'Material',
+              items: document.materialesSeccion,
+              amountLabel: document.materialesEsReferencia ? 'Importe ref.' : document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL',
+              worksNote: '',
+            },
+          ].filter(group => group.items.length).map(({ key, sectionHeading, colTitle, items, amountLabel, worksNote }) => (
+            <div key={key} className="mt-3.5">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-[#FF6A00] mb-1">{sectionHeading}</p>
+              {worksNote && <p className="text-[9px] text-gray-600 mb-1.5">Trabajos / fases: {worksNote}</p>}
+              <table className="quote-table !mt-0" aria-label={sectionHeading}>
+                <colgroup><col style={{ width: '6.5%' }} /><col style={{ width: '42.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '8%' }} /><col style={{ width: '17%' }} /><col style={{ width: '18.5%' }} /></colgroup>
+                <thead><tr>{['ÍTEM', colTitle, 'UNIDAD', 'CANT.', 'PRECIO UNIT.', amountLabel].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+                <tbody>{items.map((item, index) => <tr key={index}><td>{String(index + 1).padStart(2, '0')}</td><td><strong>{item.nombre}</strong>{item.descripcion && <small>{item.descripcion}</small>}</td><td>{item.precioUnit === null && item.unidad === 'gl' ? '' : item.unidad}</td><td>{item.precioUnit === null && item.unidad === 'gl' ? '' : item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })}</td><td>{item.precioUnit === null ? '—' : quoteMoney(item.precioUnit)}</td><td><strong>{quoteMoney(item.total)}</strong></td></tr>)}</tbody>
+              </table>
+            </div>
           ))}
           <div className="quote-closing">
             <div><section className="quote-notes"><h2 className="quote-section-title"><FileText />OBSERVACIONES</h2><ul>{document.observaciones.map((note) => <li key={note}>{note}</li>)}</ul></section><section><h2 className="quote-section-title"><DollarSign />CONDICIONES DE PAGO</h2><p className="quote-payment">{document.condiciones}</p></section></div>

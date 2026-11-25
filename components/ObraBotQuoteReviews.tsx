@@ -136,10 +136,10 @@ export function ObraBotQuoteReviews() {
           </div>
           <div className="min-w-0">
             <h2 className="font-heading font-bold text-sm sm:text-base text-navy-900 dark:text-white truncate">
-              Cotizaciones pactadas y bandeja ObraBot
+              Pasar presupuesto a PDF / Excel (bandeja ObraBot)
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-              Pega tus precios, sube Excel/PDF/foto o aprueba cotizaciones listas
+              ¿Ya tienes tus montos? Pega tu lista o sube Excel/PDF/foto para emitir la cotización sin cambiar precios
             </p>
           </div>
         </div>
@@ -207,7 +207,7 @@ export function ObraBotQuoteReviews() {
               Partidas y precios
             </span>
             <span className="ml-2 text-[11px] font-normal text-gray-500 dark:text-gray-400">
-              Pega tu lista con $ o usa Material | Unidad | Cantidad | Precio
+              Pega tu lista con $ o usa Partida | Unidad | Cantidad | Precio
             </span>
             <textarea
               rows={4}

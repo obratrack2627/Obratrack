@@ -4,6 +4,7 @@ import { normalizeQuote } from '@/lib/ai/protocol';
 import { generateAI } from '@/lib/ai/provider';
 import { validateFileContent } from '@/lib/supabase/file-validation';
 import { excelMime } from '@/lib/obrabot/quote-files';
+import { classifyQuoteLineKind } from './classify';
 import type { CotizacionEstimacion } from '@/types/database';
 
 export type ImportIvaPreference = 'auto' | 'incluido' | 'neto';
@@ -227,9 +228,7 @@ function parseTabularMatrix(rows: string[][]): { items: RawExtractedItem[]; ivaH
       cantidad,
       precio_unitario: unitPrice,
       subtotal,
-      tipo: /\b(?:mano de obra|instalaci[oó]n|maestro|jornal|servicio|retiro|demolici[oó]n|transporte|flete)\b/i.test(nombre)
-        ? 'partida'
-        : 'material',
+      tipo: classifyQuoteLineKind(nombre, unidad),
     });
   }
 
@@ -339,6 +338,13 @@ function buildObraTrackQuote(
         ? 'neto'
         : 'incluido';
 
+  const resolveItemKind = (item: RawExtractedItem): 'material' | 'mano_obra' | 'partida' => {
+    if (item.tipo === 'material' || item.tipo === 'mano_obra' || item.tipo === 'partida') {
+      return item.tipo;
+    }
+    return classifyQuoteLineKind(item.nombre, item.unidad);
+  };
+
   const partidas_venta = rawItems
     .map((item) => {
       const nombre = item.nombre.trim().slice(0, 500);
@@ -346,6 +352,7 @@ function buildObraTrackQuote(
       const unidad = (item.unidad || 'un').trim().slice(0, 30) || 'un';
       const unitVal = toSafeInt(item.precio_unitario);
       const subVal = toSafeInt(item.subtotal);
+      const tipo: 'partida' | 'material' = resolveItemKind(item) === 'material' ? 'material' : 'partida';
 
       if (unitVal === 0 && subVal === 0) return null;
 
@@ -359,6 +366,7 @@ function buildObraTrackQuote(
           precio_unitario: 0,
           precio_partida: subVal,
           subtotal: subVal,
+          tipo,
         };
       }
 
@@ -369,6 +377,7 @@ function buildObraTrackQuote(
         cantidad,
         precio_unitario: finalUnit,
         subtotal: Math.round(cantidad * finalUnit),
+        tipo,
       };
     })
     .filter((line): line is NonNullable<typeof line> => Boolean(line));
@@ -377,8 +386,8 @@ function buildObraTrackQuote(
     throw inputError('No se encontraron montos válidos en el archivo para traspasar a la cotización.');
   }
 
-  // Traspasamos los materiales detectados (o todos los ítems físicos) en precio neto CLP para que queden disponibles en la obra
-  const materialCandidates = rawItems.filter((item) => item.tipo !== 'mano_obra');
+  // Solo los insumos físicos entran en materiales; las partidas de trabajo van a actividades_gantt.
+  const materialCandidates = rawItems.filter((item) => resolveItemKind(item) === 'material');
   const materiales = materialCandidates
     .map((item) => {
       const nombre = item.nombre.trim().slice(0, 500);
@@ -393,7 +402,7 @@ function buildObraTrackQuote(
         cantidad,
         precio_unitario_estimado: netoUnit,
         subtotal: Math.round(cantidad * netoUnit),
-        categoria: item.tipo === 'partida' ? 'Partida importada' : 'Material importado',
+        categoria: 'Material importado',
         mejor_tienda: 'Presupuesto importado',
         precio_mas_barato: netoUnit,
         ahorro_estimado: 0,
@@ -426,6 +435,11 @@ function buildObraTrackQuote(
     'Presupuesto importado';
 
   const duracion = toSafePositive(extracted.duracion_dias_estimada, 1);
+  const workItems = rawItems.filter((item) => resolveItemKind(item) === 'partida');
+  const actividades_gantt = workItems.slice(0, 30).map((item) => ({
+    nombre: item.nombre.trim().slice(0, 150),
+    dias: Math.max(1, Math.round(duracion / Math.max(1, Math.min(workItems.length, 30)))),
+  }));
 
   const cotizacion = normalizeQuote({
     titulo_proyecto,
@@ -443,6 +457,7 @@ function buildObraTrackQuote(
     partidas_venta,
     materiales,
     mano_de_obra,
+    actividades_gantt,
     estructura_financiera: {
       gastos_generales_porcentaje: 0,
       imprevistos_porcentaje: 0,

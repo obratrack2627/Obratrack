@@ -162,3 +162,32 @@ test('la cotización pactada conserva el total comercial y detalla los insumos i
   assert.equal(table.body[11].cells[1].raw, 'Insumo 12');
   assert.deepEqual(table.body[11].raw.slice(2), ['m³', '0,5', '$ 2.000', '$ 1.000']);
 });
+
+test('separa Sección 1 Partidas y Sección 2 Materiales en documento y PDF sin duplicarlos', () => {
+  const q = normalizeQuote({
+    titulo_proyecto: 'Remodelación baño',
+    modo_presupuesto: 'precio_acordado',
+    tratamiento_iva: 'incluido',
+    partidas_venta: [
+      { nombre: 'Instalación cerámica piso', unidad: 'm2', cantidad: 10, precio_unitario: 15000, tipo: 'partida' },
+      { nombre: 'Porcelanato 60x60', unidad: 'm2', cantidad: 11, precio_unitario: 12000, tipo: 'material' },
+    ],
+    materiales: [
+      { nombre: 'Porcelanato 60x60', unidad: 'm2', cantidad: 11, precio_unitario_estimado: 10084 },
+    ],
+    mano_de_obra: [],
+  });
+
+  const doc = buildQuoteDocument(q);
+  assert.deepEqual(doc.partidasSeccion.map((l) => l.nombre), ['Instalación cerámica piso']);
+  assert.deepEqual(doc.materialesSeccion.map((l) => l.nombre), ['Porcelanato 60x60']);
+  assert.equal(doc.materialesEsReferencia, false);
+  assert.equal(doc.materialesIncluidos.length, 0);
+  assert.equal(doc.total, 282000);
+
+  const pdf = createQuotePdf(doc);
+  const bytes = Buffer.from(pdf.output('arraybuffer'));
+  assert.equal(bytes.subarray(0, 5).toString(), '%PDF-');
+  const docConEmpresa = buildQuoteDocument(q, { emisor: { empresa_nombre: 'HBM Construcciones' } });
+  assert.match(docConEmpresa.filename, /^Cotizacion_HBM_Construcciones_.*Remodelacion_bano\.pdf$/);
+});

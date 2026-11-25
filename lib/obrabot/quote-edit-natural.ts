@@ -1,5 +1,6 @@
 import { AIError } from '@/lib/ai/errors';
 import { commercialLines } from '@/lib/quotes/commercial';
+import { classifyQuoteLineKind } from '@/lib/quotes/classify';
 import type { CotizacionEstimacion } from '@/types/database';
 
 const fold = (value: string) =>
@@ -10,6 +11,7 @@ const fold = (value: string) =>
     .trim();
 
 const clp = String.raw`(?:\d{1,3}(?:[.\u00a0 ]\d{3})+|\d+)`;
+const thousandsClp = String.raw`\d{1,3}(?:[.\u00a0 ]\d{3})+`;
 const parseClp = (raw: string) => Number(raw.replace(/[.\u00a0 ]/g, ''));
 const parseNum = (raw: string) => Number(raw.replace(',', '.'));
 
@@ -17,7 +19,10 @@ const editVerb = /\b(?:modifica(?:r|lo|la)?|cambia(?:r|lo|la|le)?|ajusta(?:r|lo|
 
 export function looksLikeNaturalQuoteEdit(text: string): boolean {
   const clean = text.trim();
-  if (!clean || clean.length > 600 || clean.includes('\n')) return false;
+  if (!clean || clean.length > 600) return false;
+  const lines = clean.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length > 5) return false;
+  if (lines.length > 1 && (clean.match(/\$/g) || []).length >= 2) return false;
   if (/^(?:aprueba|revisa|devuelve|corrige|nueva cotizaci[oó]n|crea(?:r)? (?:la |una )?obra|vincula)/i.test(clean)) {
     return false;
   }
@@ -76,9 +81,19 @@ export type QuoteEditPatch = {
   plazo_texto?: string;
 };
 
+function extractLatestTargetClause(rawHint: string): string {
+  const matches = Array.from(
+    rawHint.matchAll(/\b(?:al?\s+|el\s+)?(?:valor|precio|monto)\s+(?:de(?:l| la| los| las)?\s+)?/gi),
+  );
+  if (!matches.length) return rawHint;
+  const last = matches[matches.length - 1];
+  const after = rawHint.slice((last.index ?? 0) + last[0].length).trim();
+  return after || rawHint;
+}
+
 export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: string): QuoteEditPatch | null {
   if (!looksLikeNaturalQuoteEdit(rawText)) return null;
-  const text = rawText.trim();
+  const text = rawText.replace(/\s+/g, ' ').trim();
   const baseLines = (quote.partidas_venta || []).map((l) => ({ ...l }));
   if (!baseLines.length) return null;
 
@@ -123,6 +138,7 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
       cantidad,
       precio_unitario: isUnit ? val : 0,
       ...(isUnit ? {} : { precio_partida: val }),
+      tipo: classifyQuoteLineKind(nombre, unidad),
       subtotal: isUnit ? Math.round(cantidad * val) : val,
     });
     mutated = true;
@@ -138,15 +154,29 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
     mutated = true;
   }
 
-  // 5. Cambiar precio en $ de una partida o del valor por m²
-  const priceChangeMatch = !addMatch && !removeMatch
+  // 5. Cambiar precio en $ (o con miles CLP sin $) de una partida o del valor por m²
+  const explicitDollarPrice = !addMatch && !removeMatch
     ? new RegExp(
-        String.raw`(?:modifica\w*|cambia\w*|ajusta\w*|actualiza\w*|sube\w*|baja\w*|deja\w*|pon\w*)\s+(.+?)\s+(?:a|en)\s*\$\s*(${clp})\b`,
+        String.raw`(?:modifica\w*|cambia\w*|ajusta\w*|actualiza\w*|sube\w*|baja\w*|deja\w*|pon\w*)\s+(.+?)\s+(?:a|en)\s*\$\s*(${clp})(?:\s*(?:pesos|clp))?\b`,
         'i',
       ).exec(text)
     : null;
+  const bareThousandsPrice = !addMatch && !removeMatch && !explicitDollarPrice
+    ? new RegExp(
+        String.raw`(?:modifica\w*|cambia\w*|ajusta\w*|actualiza\w*|sube\w*|baja\w*|deja\w*|pon\w*)\s+(.+?)\s+(?:a|en)\s+(${thousandsClp})(?:\s*(?:pesos|clp))?(?!\s*(?:m[2²]|m[3³]|mts?|metros?|d[ií]as|%))\b`,
+        'i',
+      ).exec(text)
+    : null;
+  const explicitValueWordPrice = !addMatch && !removeMatch && !explicitDollarPrice && !bareThousandsPrice
+    ? new RegExp(
+        String.raw`(?:valor|precio|monto)\s+(?:de(?:l| la| los| las)?\s+)?(.+?)\s+(?:a|en)\s+(\d{3,10})(?:\s*(?:pesos|clp))?(?!\s*(?:m[2²]|m[3³]|mts?|metros?|d[ií]as|%|un|unidades?|sacos?|cajas?))\b`,
+        'i',
+      ).exec(text)
+    : null;
+  const priceChangeMatch = explicitDollarPrice || bareThousandsPrice || explicitValueWordPrice;
   if (priceChangeMatch) {
-    const targetHint = priceChangeMatch[1];
+    const rawTargetHint = priceChangeMatch[1];
+    const targetHint = explicitValueWordPrice ? rawTargetHint : extractLatestTargetClause(rawTargetHint);
     const newPrice = parseClp(priceChangeMatch[2]);
     const isAreaPrice = /\b(?:m[2²]|metro\s+cuadrado|mts?\s+cuadrados?)\b/i.test(targetHint);
     const idx = matchLineIndex(baseLines, targetHint, isAreaPrice);
@@ -204,6 +234,7 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
       cantidad: l.cantidad,
       precio_unitario: l.precio_unitario,
       ...(l.precio_partida != null ? { precio_partida: l.precio_partida } : {}),
+      ...(l.tipo ? { tipo: l.tipo } : {}),
     })),
   );
 

@@ -127,6 +127,12 @@ export function parseWhatsAppInteractiveReply(item: any): string | null {
         return "Sí, confirmar y crear la obra";
       case "ot:draft:cancel":
         return "Cancelar borrador";
+      case "ot:crit:confirm":
+        return "Confirmar eliminación";
+      case "ot:crit:cancel":
+        return "Cancelar eliminación";
+      case "ot:undo:last":
+        return "Deshacer último cambio";
       case "ot:team:assign":
         return "Sí";
       case "ot:team:skip":
@@ -214,12 +220,12 @@ export function directInteractiveMenuReply(batchItems: any[]): { respuesta: stri
     case "ot:menu:quote":
       return {
         respuesta:
-          "Perfecto, hagamos una cotización. Cuéntame qué trabajo quieres cotizar, medidas aproximadas (m² o unidades) y la comuna, y te preparo el presupuesto con materiales, mano de obra y PDF.",
+          "Perfecto, te ayudo a armar la cotización desde cero. Cuéntame qué trabajo quieres realizar, medidas aproximadas (m² o unidades) y la comuna, y preparo partidas, materiales, mano de obra y PDF.",
       };
     case "ot:menu:agreed_quote":
       return {
         respuesta:
-          "Perfecto, preparemos tu cotización pactada. Puedes pegar tu lista de partidas con precios en $ (IVA incluido o más IVA), enviar una foto, PDF o Excel del presupuesto, o indicarme el trabajo y el monto acordado.",
+          "Perfecto, pasemos tu presupuesto ya hecho a formato de cotización pactada (PDF y Excel) sin alterar tus precios. Pega tu lista de partidas y materiales con $, o envía una foto, PDF o Excel.",
       };
     case "ot:menu:prices":
       return {
@@ -272,8 +278,8 @@ export function buildWhatsAppInteractivePayload(
         buttonText: "📋 ¿Qué hacer?",
         sectionTitle: "Opciones principales",
         rows: [
-          { id: "ot:menu:quote", title: "📐 Hacer cotización", description: "Estimar materiales, mano de obra y PDF" },
-          { id: "ot:menu:agreed_quote", title: "🤝 Cotización pactada", description: "Emitir cotización con precio ya acordado" },
+          { id: "ot:menu:quote", title: "📐 Ayuda para cotizar", description: "Estimar partidas, materiales, mano de obra y PDF" },
+          { id: "ot:menu:agreed_quote", title: "📄 Presupuesto a PDF", description: "Ya tengo precios: pasarlo a cotización PDF/Excel" },
           { id: "ot:menu:create_project", title: "🏗️ Crear obra", description: "Registrar una obra nueva paso a paso" },
           { id: "ot:menu:list_projects", title: "📂 Ver obras", description: "Listar y elegir una de tus obras" },
           { id: "ot:menu:prices", title: "🛒 Buscar precios", description: "Comparar materiales en tiendas chilenas" },
@@ -340,6 +346,18 @@ export function buildWhatsAppInteractivePayload(
             { id: "ot:draft:cancel", title: "✖️ Cancelar" },
           ]
         : [{ id: "ot:draft:cancel", title: "✖️ Cancelar" }],
+    };
+  }
+
+  if (actions?.accion_critica_pendiente) {
+    return {
+      kind: "buttons",
+      body: `Confirma si deseas ${actions.accion_critica_pendiente.resumen || "ejecutar esta acción"}:`,
+      footer: "ObraBot · Confirmación de seguridad",
+      buttons: [
+        { id: "ot:crit:confirm", title: "✅ Confirmar" },
+        { id: "ot:crit:cancel", title: "✖️ Cancelar" },
+      ],
     };
   }
 

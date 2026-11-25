@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { buildQuoteDocument } from '@/lib/quotes/document';
+import { resolveSaleLineKind } from '@/lib/quotes/classify';
 import type { CotizacionEstimacion } from '@/types/database';
 
 export type QuoteFormat = 'pdf' | 'excel';
@@ -26,11 +27,12 @@ export async function quoteFile(db: any, empresaId: string, quote: CotizacionEst
   });
   const ivaIncluded = quote.modo_presupuesto === 'precio_acordado' && quote.tratamiento_iva !== 'neto';
   sheet.columns = [
-    { header: 'Material', width: 44 },
+    { header: 'Partida / Descripción', width: 44 },
     { header: 'Unidad', width: 12 },
     { header: 'Cantidad', width: 14 },
     { header: ivaIncluded ? 'Precio unitario con IVA' : 'Precio unitario neto', width: 24 },
     { header: ivaIncluded ? 'Subtotal con IVA' : 'Subtotal neto', width: 22 },
+    { header: 'Sección', width: 20 },
   ];
 
   const headerRow = sheet.getRow(1);
@@ -40,7 +42,7 @@ export async function quoteFile(db: any, empresaId: string, quote: CotizacionEst
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF141A23' } };
     cell.alignment = {
       vertical: 'middle',
-      horizontal: colNum === 1 ? 'left' : colNum === 2 ? 'center' : 'right',
+      horizontal: colNum === 1 ? 'left' : colNum === 2 || colNum === 6 ? 'center' : 'right',
     };
     cell.border = {
       top: { style: 'thin', color: { argb: 'FF141A23' } },
@@ -59,13 +61,13 @@ export async function quoteFile(db: any, empresaId: string, quote: CotizacionEst
   const styleItemRow = (row: ExcelJS.Row, idx: number) => {
     row.height = 22;
     const bg = idx % 2 === 1 ? 'FFFAF8F5' : 'FFFFFFFF';
-    for (let c = 1; c <= 5; c++) {
+    for (let c = 1; c <= 6; c++) {
       const cell = row.getCell(c);
       cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF0F172A' } };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bg } };
       cell.alignment = {
         vertical: 'middle',
-        horizontal: c === 1 ? 'left' : c === 2 ? 'center' : 'right',
+        horizontal: c === 1 ? 'left' : c === 2 || c === 6 ? 'center' : 'right',
         wrapText: c === 1,
       };
       cell.border = thinBorder;
@@ -77,7 +79,8 @@ export async function quoteFile(db: any, empresaId: string, quote: CotizacionEst
     for (const line of quote.partidas_venta) {
       const fixed = line.precio_partida;
       const lumpSum = fixed != null && line.unidad === 'gl';
-      const row = sheet.addRow([line.nombre, lumpSum ? null : line.unidad, lumpSum ? null : line.cantidad, fixed == null ? line.precio_unitario : null]);
+      const sectionLabel = resolveSaleLineKind(line) === 'material' ? 'Material' : 'Partida / Trabajo';
+      const row = sheet.addRow([line.nombre, lumpSum ? null : line.unidad, lumpSum ? null : line.cantidad, fixed == null ? line.precio_unitario : null, null, sectionLabel]);
       row.getCell(5).value = fixed ?? { formula: `ROUND(C${row.number}*D${row.number},0)`, result: line.subtotal };
       styleItemRow(row, rowCount);
       rowCount++;
@@ -85,7 +88,8 @@ export async function quoteFile(db: any, empresaId: string, quote: CotizacionEst
   } else {
     for (const item of buildQuoteDocument(quote).items) {
       const lumpSum = item.precioUnit == null || (item.unidad === 'gl' && item.cantidad === 1);
-      const row = sheet.addRow([item.nombre, lumpSum ? null : item.unidad, lumpSum ? null : item.cantidad, lumpSum ? null : item.precioUnit]);
+      const sectionLabel = item.tipo === 'material' ? 'Material' : item.nombre.startsWith('Mano de obra:') ? 'Mano de obra' : 'Indirectos';
+      const row = sheet.addRow([item.nombre, lumpSum ? null : item.unidad, lumpSum ? null : item.cantidad, lumpSum ? null : item.precioUnit, null, sectionLabel]);
       row.getCell(5).value = lumpSum ? item.total : { formula: `ROUND(C${row.number}*D${row.number},0)`, result: item.total };
       styleItemRow(row, rowCount);
       rowCount++;
@@ -141,7 +145,7 @@ export async function quoteFile(db: any, empresaId: string, quote: CotizacionEst
   sheet.getColumn(4).numFmt = '"$"#,##0';
   sheet.getColumn(5).numFmt = '"$"#,##0';
   sheet.views = [{ state: 'frozen', ySplit: 1, showGridLines: true }];
-  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 5 } };
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 6 } };
   const bytes = Uint8Array.from(new Uint8Array(await workbook.xlsx.writeBuffer())).buffer;
   return {
     bytes,

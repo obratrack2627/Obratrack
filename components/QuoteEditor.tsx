@@ -18,6 +18,7 @@ import {
 import type { CotizacionEstimacion } from '@/types/database';
 import type { Presupuesto } from '@/lib/presupuestos';
 import { aiHeaders } from '@/lib/ai/client';
+import { resolveSaleLineKind } from '@/lib/quotes/classify';
 import { reviseQuote } from '@/lib/quotes/revise';
 import { formatCLP, formatThousands, parseThousands } from '@/lib/utils';
 
@@ -571,7 +572,7 @@ export default function QuoteEditor({
                         Partidas y precio acordado
                       </h3>
                       <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                        Escribe cada trabajo o material y su valor en CLP.
+                        Separa tus partidas de trabajo de los materiales para mostrar dos secciones claras en la cotización y el PDF.
                       </p>
                     </div>
                   </div>
@@ -654,23 +655,45 @@ export default function QuoteEditor({
                           </div>
                         </div>
 
-                        <div className="space-y-1">
-                          <span className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-                            Descripción del trabajo o partida
-                          </span>
-                          <input
-                            aria-label={`Partida de venta ${index + 1}`}
-                            value={p.nombre}
-                            onChange={(e) =>
-                              update({
-                                partidas_venta: draft.partidas_venta!.map((r, i) =>
-                                  i === index ? { ...r, nombre: e.target.value } : r,
-                                ),
-                              })
-                            }
-                            placeholder="Ej.: Radier 20 m², terminaciones o alcance completo"
-                            className={`${inputClass} w-full`}
-                          />
+                        <div className="grid sm:grid-cols-3 gap-2.5">
+                          <div className="sm:col-span-2 space-y-1">
+                            <span className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                              Descripción del trabajo o material
+                            </span>
+                            <input
+                              aria-label={`Partida de venta ${index + 1}`}
+                              value={p.nombre}
+                              onChange={(e) =>
+                                update({
+                                  partidas_venta: draft.partidas_venta!.map((r, i) =>
+                                    i === index ? { ...r, nombre: e.target.value } : r,
+                                  ),
+                                })
+                              }
+                              placeholder="Ej.: Radier 20 m², terminaciones o Cemento Polpaico"
+                              className={`${inputClass} w-full`}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="block text-[11px] font-semibold text-gray-500 dark:text-gray-400">
+                              Sección en PDF
+                            </span>
+                            <select
+                              aria-label={`Tipo de línea ${index + 1}`}
+                              value={resolveSaleLineKind(p)}
+                              onChange={(e) =>
+                                update({
+                                  partidas_venta: draft.partidas_venta!.map((r, i) =>
+                                    i === index ? { ...r, tipo: e.target.value as 'partida' | 'material' } : r,
+                                  ),
+                                })
+                              }
+                              className={`${inputClass} w-full`}
+                            >
+                              <option value="partida">Partida / Trabajo</option>
+                              <option value="material">Material</option>
+                            </select>
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -744,7 +767,7 @@ export default function QuoteEditor({
                     update({
                       partidas_venta: [
                         ...(draft.partidas_venta || []),
-                        { nombre: '', cantidad: 1, unidad: 'gl', precio_unitario: 0, subtotal: 0 },
+                        { nombre: '', cantidad: 1, unidad: 'gl', precio_unitario: 0, subtotal: 0, tipo: 'partida' },
                       ],
                     })
                   }
@@ -765,7 +788,7 @@ export default function QuoteEditor({
                 <summary className="list-none [&::-webkit-details-marker]:hidden cursor-pointer flex flex-wrap items-center justify-between gap-2 text-sm font-heading font-bold text-navy-900 dark:text-white">
                   <span className="inline-flex items-center gap-2">
                     <Package size={16} className="text-obra-orange" />
-                    <span>Desglose de materiales y mano de obra (opcional)</span>
+                    <span>Detalle interno para compras de obra (opcional)</span>
                   </span>
                   <span className="inline-flex items-center gap-2 text-xs font-normal text-gray-500 dark:text-gray-400">
                     {hasCostDetails ? (

@@ -133,3 +133,37 @@ test('rechaza formatos no permitidos o archivos vacíos', async () => {
     (err) => err.status === 422,
   );
 });
+
+test('separa partidas de trabajo de materiales físicos al importar un presupuesto mixto', async () => {
+  const wb = new ExcelJS.Workbook();
+  const sheet = wb.addWorksheet('Presupuesto');
+  sheet.addRow(['Partida / Descripción', 'Unidad', 'Cantidad', 'Precio unitario con IVA', 'Subtotal']);
+  sheet.addRow(['Demolición de tabique existente', 'gl', 1, 180000, 180000]);
+  sheet.addRow(['Instalación de porcelanato piso', 'm2', 20, 18000, 360000]);
+  sheet.addRow(['Porcelanato 60x60 beige', 'm2', 22, 14990, 329780]);
+  sheet.addRow(['Adhesivo Bekron AC', 'saco', 8, 5950, 47600]);
+  sheet.addRow(['Total con IVA', '', '', '', 917380]);
+  const bytes = Buffer.from(await wb.xlsx.writeBuffer());
+
+  const result = await importBudgetFile({
+    bytes,
+    filename: 'remodelacion_mixta.xlsx',
+    mime: excelMime,
+  });
+
+  assert.equal(result.resumen.metodo, 'planilla');
+  assert.deepEqual(
+    result.cotizacion.partidas_venta.map((p) => p.tipo),
+    ['partida', 'partida', 'material', 'material'],
+  );
+  // Solo los materiales físicos pasan a cotizacion.materiales (sin duplicar partidas de trabajo).
+  assert.deepEqual(
+    result.cotizacion.materiales.map((m) => m.nombre),
+    ['Porcelanato 60x60 beige', 'Adhesivo Bekron AC'],
+  );
+  assert.deepEqual(
+    result.cotizacion.actividades_gantt.map((a) => a.nombre),
+    ['Demolición de tabique existente', 'Instalación de porcelanato piso'],
+  );
+  assert.equal(result.cotizacion.estructura_financiera.precio_total_con_iva, 917380);
+});

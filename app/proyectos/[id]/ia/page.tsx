@@ -37,6 +37,8 @@ import {
   ObraBotMessageBubble,
   ObraBotStreamingBubble,
   fileToChatImage,
+  handleWebQuoteAttachment,
+  isQuoteAttachmentIntent,
 } from '@/components/ObraBotChatShared';
 
 export default function ProyectoIAPage() {
@@ -194,8 +196,30 @@ export default function ProyectoIAPage() {
     const startedAt = Date.now();
 
     try {
-      const imagen = fileToUse ? await fileToChatImage(fileToUse) : undefined;
-      const query = rawText || 'Analiza esta foto de la obra e indícame cómo registrarla.';
+      if (fileToUse && isQuoteAttachmentIntent(rawText, fileToUse)) {
+        setStreamStage('Leyendo archivo de presupuesto…');
+        const actorRole = dataService.getActiveUser()?.rol || 'admin';
+        const importedReply = await handleWebQuoteAttachment(rawText, fileToUse, projectId, actorRole);
+        const agenteMsg: MensajeChatProyecto = {
+          id: 'agt-p-' + Date.now(),
+          proyecto_id: projectId,
+          empresa_id: proyecto.empresa_id,
+          remitente: 'agente',
+          ...importedReply,
+          latencia_ms: Date.now() - startedAt,
+          created_at: new Date().toISOString(),
+        };
+        dataService.saveProyectoMensajeChat(agenteMsg);
+        setMensajes((prev) => [...prev, agenteMsg]);
+        return;
+      }
+
+      const imagen = fileToUse && fileToUse.type.startsWith('image/') ? await fileToChatImage(fileToUse) : undefined;
+      const query =
+        rawText ||
+        (imagen
+          ? 'Analiza esta foto de la obra e indícame cómo registrarla.'
+          : `Guarda este documento «${fileToUse?.name || 'adjunto'}» en la obra.`);
       const totalPagado = pagos.reduce((sum, p) => sum + Number(p.monto || 0), 0);
       const totalImprevistos = imprevistos.reduce((sum, i) => sum + Number(i.monto || 0), 0);
       const totalMateriales = materiales.reduce(
@@ -269,7 +293,10 @@ export default function ProyectoIAPage() {
         },
         controller.signal,
       );
-      const processed = await applyAIResponse(data, projectId, { confirmCritical: true });
+      const processed = await applyAIResponse(data, projectId, {
+        confirmCritical: true,
+        attachedEvidence: fileToUse ? { file: fileToUse, rawText: query } : undefined,
+      });
       loadData();
       if (processed.accion_ejecutada && processed.accion_ejecutada.tipo !== 'solicitar_datos_persona') {
         showToast(processed.accion_ejecutada.titulo);

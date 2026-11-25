@@ -6,7 +6,8 @@ import type { CotizacionEstimacion } from '@/types/database';
 import { isNaturalQuoteRequest, isPastedQuote, readPastedQuote } from './quote-message';
 import { applyNaturalQuoteEdit, looksLikeNaturalQuoteEdit, matchesQuoteTitleHint } from './quote-edit-natural';
 import { readQuoteSource, readTextQuote, transcribeQuoteImage, type QuoteSource } from './quote-input';
-import type { QuoteFormat } from './quote-files';
+import { excelMime, type QuoteFormat } from './quote-files';
+import { importBudgetFile } from '@/lib/quotes/import-file';
 import { handleDestinationTurn, rememberQuoteDestination, type QuoteDestination } from './quote-destination';
 
 export type Actor = { id: string; empresa_id: string; rol: string };
@@ -22,8 +23,8 @@ export type QuoteReview = {
 export type QuoteReply = { pasoPendiente?: { id: string; datos: Record<string, unknown> }; respuesta: string; archivo?: { id: string; formato: QuoteFormat; origen?: 'presupuesto' }; solicitud?: string; revision?: number; obra?: string; cotizacionAprobadaId?: string };
 const uuid = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
 const starter = /^(?:nueva cotizaci[oó]n|cotizaci[oó]n con precios|(?:prepara|genera|hazme) (?:una |la )?cotizaci[oó]n con (?:estos )?precios)\b[ \t]*:?[ \t]*([^\n]*)/i;
-const startHelp = /^(?:quiero hacer una )?cotizaci[oó]n pactada[.!]?$/i;
-const starterHelp = 'Perfecto, preparemos tu cotización pactada. Puedes:\n• Pegar tu lista de partidas con precios en $ (IVA incluido o más IVA)\n• Enviar una foto, PDF o planilla Excel del presupuesto\n• O escribir «Nueva cotización: Nombre» seguido de líneas Material | Unidad | Cantidad | Precio';
+const startHelp = /^(?:(?:quiero|necesito)\s+)?(?:(?:hacer|pasar|convertir)\s+(?:(?:una?|mi|el)\s+)?cotizaci[oó]n pactada|cotizaci[oó]n pactada|(?:(?:pasar|convertir|llevar)\s+)?(?:(?:una?|mi|el)\s+)?(?:presupuesto|cotizaci[oó]n) a (?:pdf|excel)|formatear (?:(?:una?|mi|el)\s+)?presupuesto|ya tengo (?:un |mi )?presupuesto)[.!]?$/i;
+const starterHelp = 'Perfecto, pasemos tu presupuesto ya listo al formato oficial de cotización (PDF y Excel) respetando tus montos exactos.\n• Pega tu lista de partidas y materiales con precios en $ (IVA incluido o más IVA)\n• O adjunta una foto, PDF o planilla Excel\n• O escribe «Nueva cotización: Nombre» seguido de líneas Partida | Unidad | Cantidad | Precio\n\nSi en cambio necesitas ayuda para calcular precios desde cero, dime el trabajo y las medidas.';
 
 export function isQuoteWorkflow(text: string, hasImage = false) {
   if (hasImage && isNaturalQuoteRequest(text) && !starter.test(text)) return true;
@@ -49,11 +50,29 @@ function formatCLP(amount: number) {
 function preview(row: QuoteReview, channel: Channel = 'plataforma') {
   const quote = row.borrador;
   const totals = quote.estructura_financiera;
-  const lines = saleLines(quote).map(quoteLinePreview);
-  const detail = [...lines.slice(0, 8), ...(lines.length > 8 ? [`Vista resumida de ${lines.length} partidas. Revisa el detalle completo en la bandeja web antes de aprobar.`] : [])];
+  const rawLines = saleLines(quote);
+  const workLines = rawLines.filter((l) => l.tipo !== 'material').map(quoteLinePreview);
+  const matLines = rawLines.filter((l) => l.tipo === 'material').map(quoteLinePreview);
+  let detail: string[];
+  if (workLines.length && matLines.length) {
+    const wSlice = workLines.slice(0, 5);
+    const mSlice = matLines.slice(0, Math.max(1, 8 - wSlice.length));
+    detail = [
+      'Partidas / Trabajos:',
+      ...wSlice,
+      'Materiales:',
+      ...mSlice,
+      ...(rawLines.length > wSlice.length + mSlice.length
+        ? [`Vista resumida de ${rawLines.length} ítems. Revisa el detalle completo en la bandeja web antes de aprobar.`]
+        : []),
+    ];
+  } else {
+    const lines = rawLines.map(quoteLinePreview);
+    detail = [...lines.slice(0, 8), ...(lines.length > 8 ? [`Vista resumida de ${lines.length} partidas. Revisa el detalle completo en la bandeja web antes de aprobar.`] : [])];
+  }
   const ivaLabel = quote.tratamiento_iva === 'neto'
-    ? 'Materiales y partidas · Valores netos (+19% IVA)'
-    : 'Materiales y partidas · IVA incluido';
+    ? 'Cotización pactada · Valores netos (+19% IVA)'
+    : 'Cotización pactada · IVA incluido';
   const nextStep = row.estado === 'pendiente'
     ? channel === 'whatsapp'
       ? 'Toca «Aprobar y PDF» o responde «Aprobar» para confirmar esta versión y recibir el PDF.'
@@ -63,11 +82,12 @@ function preview(row: QuoteReview, channel: Channel = 'plataforma') {
         ? 'Responde «Crear obra», «Vincular a obra» o «Excel» para continuar.'
         : `Para usarla en una obra, escribe «Usa cotización ${row.id}».`
       : `Estado ${row.estado}.`;
+  const milestones = (quote.hitos_pago || []).map(h => `${h.nombre} (${h.porcentaje}%) · ${formatCLP(h.monto)}`);
   return [
     `${quote.titulo_proyecto} · revisión ${row.revision}`,
     ivaLabel,
     ...detail,
-    ...(quote.hitos_pago || []).map(h => `${h.nombre} (${h.porcentaje}%) · ${formatCLP(h.monto)}`),
+    ...(milestones.length ? ['Forma de pago:', ...milestones] : []),
     `Neto ${formatCLP(totals.precio_sugerido_neto)} · IVA ${formatCLP(totals.iva_19)} · Total ${formatCLP(totals.precio_total_con_iva)}`,
     nextStep,
   ].join('\n');
@@ -117,7 +137,15 @@ function makeDraft(input: DraftInput, id: string) {
   const title = input.titulo_proyecto.trim();
   if (!title || title.length > 150) throw new AIError('OBRABOT_QUOTE_INPUT', 'Indica un nombre de hasta 150 caracteres para la cotización.', 422);
   const tratamiento_iva = input.tratamiento_iva === 'neto' ? 'neto' : 'incluido';
-  const draft = normalizeQuote({ ...input, titulo_proyecto: title, modo_presupuesto: 'precio_acordado', tratamiento_iva, materiales: [], mano_de_obra: [] });
+  const draft = normalizeQuote({
+    ...input,
+    titulo_proyecto: title,
+    modo_presupuesto: 'precio_acordado',
+    tratamiento_iva,
+    materiales: input.materiales ?? [],
+    mano_de_obra: input.mano_de_obra ?? [],
+    actividades_gantt: input.actividades_gantt ?? [],
+  });
   return { ...draft, id: `cot-${id}`, consejos_experto_pyme: [] };
 }
 
@@ -142,6 +170,54 @@ export async function reviewQuote(db: any, actor: Actor, id: string, revision: n
   return data as QuoteReview;
 }
 
+async function loadCompanyQuoteReviews(
+  db: any,
+  actor: Actor,
+  states: Array<'pendiente' | 'aprobada'>,
+): Promise<QuoteReview[]> {
+  try {
+    let query = db
+      ?.from?.('obrabot_cotizaciones')
+      ?.select?.('id,estado,revision,borrador,presupuesto_id')
+      ?.eq?.('empresa_id', actor.empresa_id);
+    if (!query || typeof query.order !== 'function') return [];
+    if (states.length === 1 && typeof query.eq === 'function') {
+      query = query.eq('estado', states[0]);
+    } else if (typeof query.in === 'function') {
+      query = query.in('estado', states);
+    }
+    const ordered = query.order('actualizado_at', { ascending: false });
+    const limited = typeof ordered?.limit === 'function' ? ordered.limit(20) : ordered;
+    const res = await limited;
+    if (res?.error || !Array.isArray(res?.data)) return [];
+    return res.data as QuoteReview[];
+  } catch {
+    return [];
+  }
+}
+
+async function findReusableTechnicalScope(db: any, actor: Actor, title: string): Promise<string | undefined> {
+  if (!title.trim()) return undefined;
+  const approved = await loadCompanyQuoteReviews(db, actor, ['aprobada']);
+  if (!approved.length) return undefined;
+  const foldedTitle = title.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+  let bestScope: string | undefined;
+  let bestScore = 0;
+  for (const row of approved) {
+    const scope = row?.borrador?.resumen_ejecutivo?.trim();
+    if (!scope || scope.length < 15) continue;
+    const rowTitle = row?.borrador?.titulo_proyecto || '';
+    const foldedRow = rowTitle.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+    const exactBoost = foldedRow && (foldedRow.includes(foldedTitle) || foldedTitle.includes(foldedRow)) ? 10 : 0;
+    const score = exactBoost + matchesQuoteTitleHint(rowTitle, title);
+    if (score > bestScore) {
+      bestScore = score;
+      bestScope = scope;
+    }
+  }
+  return bestScore >= 1 ? bestScope : undefined;
+}
+
 export async function tryNaturalQuoteEdit(
   db: any,
   actor: Actor,
@@ -151,8 +227,8 @@ export async function tryNaturalQuoteEdit(
   immediateQuoteContext: boolean,
   requestId?: string,
 ): Promise<QuoteReply | null> {
-  if (actor.rol !== 'admin' || !candidateIds.length || !looksLikeNaturalQuoteEdit(text)) return null;
-  if (/\b(?:carta\s+gantt|asistencia|bit[aá]cora|trabajador|cuadrilla|incidente)\b/i.test(text)) return null;
+  if (actor.rol !== 'admin' || !looksLikeNaturalQuoteEdit(text)) return null;
+  if (/\b(?:carta\s+gantt|asistencia|bit[aá]cora|trabajador|cuadrilla|incidente|de\s+la\s+obra|del\s+proyecto)\b/i.test(text)) return null;
   const uniqueIds = Array.from(new Set(candidateIds.filter(Boolean))).slice(0, 5);
   const reviews: QuoteReview[] = [];
   for (const id of uniqueIds) {
@@ -162,7 +238,6 @@ export async function tryNaturalQuoteEdit(
       // Ignorar cotizaciones eliminadas o no accesibles.
     }
   }
-  if (!reviews.length) return null;
   let target: QuoteReview | null = null;
   let bestScore = 0;
   for (const rev of reviews) {
@@ -172,8 +247,20 @@ export async function tryNaturalQuoteEdit(
       target = rev;
     }
   }
+  if (!target && /\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text)) {
+    const seen = new Set(reviews.map((r) => r.id));
+    const stored = (await loadCompanyQuoteReviews(db, actor, ['pendiente', 'aprobada']))
+      .filter((r) => r && !seen.has(r.id) && r.borrador?.titulo_proyecto);
+    for (const rev of stored) {
+      const score = matchesQuoteTitleHint(rev.borrador.titulo_proyecto, text);
+      if (score >= 1 && score > bestScore) {
+        bestScore = score;
+        target = rev;
+      }
+    }
+  }
   if (!target) {
-    if (!immediateQuoteContext && !/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text)) return null;
+    if (!reviews.length || (!immediateQuoteContext && !/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text))) return null;
     target = reviews[0];
   }
   const patch = applyNaturalQuoteEdit(target.borrador, text);
@@ -225,8 +312,32 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
     let input: DraftInput;
     if (pasted || (start && rows.includes('$') && !rows.split('\n')[0].includes('|'))) input = readPastedQuote(rows, start?.[1], defaultIva);
     else if (source && photoQuote) input = readPastedQuote(await transcribeQuoteImage(source), undefined, defaultIva);
-    else if (source) input = { titulo_proyecto: start?.[1] || 'Cotización de obra', partidas_venta: await readQuoteSource(source), tratamiento_iva: defaultIva };
+    else if (source) {
+      try {
+        input = { titulo_proyecto: start?.[1] || 'Cotización de obra', partidas_venta: await readQuoteSource(source), tratamiento_iva: defaultIva };
+      } catch (err) {
+        if (!(err instanceof AIError) || err.code !== 'OBRABOT_QUOTE_INPUT') throw err;
+        const ext = source.mime === excelMime ? 'xlsx' : source.mime === 'application/pdf' ? 'pdf' : source.mime === 'text/csv' ? 'csv' : 'png';
+        const imported = await importBudgetFile({
+          bytes: source.bytes,
+          filename: `${start?.[1]?.trim() || 'presupuesto'}.${ext}`,
+          mime: source.mime,
+          ivaPreference: defaultIva ?? 'auto',
+          fallbackTitle: start?.[1] || 'Cotización de obra',
+        });
+        const q = imported.cotizacion;
+        input = {
+          ...q,
+          partidas_venta: q.partidas_venta || [],
+          hitos_pago: q.hitos_pago?.map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
+        };
+      }
+    }
     else input = { titulo_proyecto: start?.[1] || '', partidas_venta: readTextQuote(rows), tratamiento_iva: defaultIva };
+    if (!input.resumen_ejecutivo?.trim()) {
+      const reusable = await findReusableTechnicalScope(db, actor, input.titulo_proyecto);
+      if (reusable) input = { ...input, resumen_ejecutivo: reusable };
+    }
     if ((input.resumen_ejecutivo?.length || 0) > 6000 || (input.condiciones_pago?.length || 0) > 6000) {
       throw new AIError('OBRABOT_QUOTE_INPUT', 'El detalle o las condiciones superan los 6.000 caracteres. Acorta el texto para conservarlo completo en el PDF.', 422);
     }

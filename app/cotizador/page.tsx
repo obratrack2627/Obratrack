@@ -22,19 +22,20 @@ import {
   ObraBotQualityBadge,
   ObraBotStreamingBubble,
   fileToChatImage,
-  submitQuoteAttachmentWeb,
+  handleWebQuoteAttachment,
+  isQuoteAttachmentIntent,
 } from '@/components/ObraBotChatShared';
 
 const INITIAL_CHAT_MESSAGE: MensajeChatCotizador = {
   id: 'm-init',
   remitente: 'agente',
   texto:
-    'Hola, soy ObraBot. Puedo preparar presupuestos, editar cotizaciones y ayudarte a gestionar obras, agenda, materiales, pagos y cuadrillas. ¿Qué necesitas?',
+    'Hola, soy ObraBot. Puedo ayudarte a crear una cotización desde cero, pasar un presupuesto que ya tienes listo a PDF/Excel con formato oficial, o gestionar tus obras, agenda, materiales, pagos y cuadrillas. ¿Qué necesitas?',
   timestamp: '',
   sugerencias: [
-    'Quiero cotizar un trabajo',
+    'Pasar mi presupuesto a PDF',
+    'Ayúdame a cotizar una obra',
     'Quiero buscar el precio de un material',
-    'Ayúdame a planificar mi obra',
   ],
 };
 
@@ -304,38 +305,37 @@ export default function CopilotoObreroPage() {
 
     let executingAction = false;
     try {
-      const isDocQuote = fileToUse && (!fileToUse.type.startsWith('image/') || /\bcotiz|presupuest/i.test(rawText));
-      if (fileToUse && isDocQuote && !obraSeleccionada) {
+      if (fileToUse && isQuoteAttachmentIntent(rawText, fileToUse)) {
         setStreamStage('Leyendo archivo de presupuesto…');
-        const quoteRes = await submitQuoteAttachmentWeb(rawText, fileToUse);
+        const actorRole = dataService.getActiveUser()?.rol || 'admin';
+        const importedReply = await handleWebQuoteAttachment(
+          rawText,
+          fileToUse,
+          obraSeleccionada || undefined,
+          actorRole,
+        );
         const agentMsg: MensajeChatCotizador = {
           id: 'm-a-' + crypto.randomUUID(),
           created_at: new Date().toISOString(),
           remitente: 'agente',
-          texto: quoteRes.respuesta,
-          sugerencias: quoteRes.solicitud && quoteRes.revision ? ['Aprobar cotización', 'Cotizaciones pendientes'] : [],
-          accion_ejecutada:
-            quoteRes.solicitud && quoteRes.revision
-              ? {
-                  tipo: 'agendar_evento' as any,
-                  titulo: 'Cotización lista para revisión',
-                  resultado_texto: 'Puedes aprobarla aquí con un clic o revisarla en la bandeja.',
-                  detalles: { solicitud_cotizacion: quoteRes.solicitud, revision_cotizacion: quoteRes.revision },
-                  link_destino: '/cotizador#cotizaciones-obrabot',
-                  link_texto: 'Abrir bandeja de revisión',
-                }
-              : undefined,
+          ...importedReply,
+          obra_contexto_id: obraSeleccionada || undefined,
           latencia_ms: Date.now() - startedAt,
           timestamp: new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }),
         };
         const updated = [...nextHistory, agentMsg];
         setMensajesChat(updated);
         persistHistory(updated);
+        syncProjectTurnToCloud(agentMsg);
         return;
       }
 
       const imagen = fileToUse && fileToUse.type.startsWith('image/') ? await fileToChatImage(fileToUse) : undefined;
-      const effectiveMsg = rawText || 'Analiza esta foto de obra e indícame qué observas o cómo registrarla.';
+      const effectiveMsg =
+        rawText ||
+        (imagen
+          ? 'Analiza esta foto de obra e indícame qué observas o cómo registrarla.'
+          : `Guarda este documento «${fileToUse?.name || 'adjunto'}» en la obra.`);
       const ultimaCotizacion = [...mensajesChat]
         .reverse()
         .find((m) => m.cotizacion_generada && (m.obra_contexto_id || '') === obraSeleccionada)?.cotizacion_generada;
@@ -359,7 +359,10 @@ export default function CopilotoObreroPage() {
         controller.signal,
       );
       executingAction = !!data.accion;
-      const processed = await applyAIResponse(data, obraSeleccionada || undefined, { confirmCritical: true });
+      const processed = await applyAIResponse(data, obraSeleccionada || undefined, {
+        confirmCritical: true,
+        attachedEvidence: fileToUse && obraSeleccionada ? { file: fileToUse, rawText: effectiveMsg } : undefined,
+      });
       if (processed.pendiente_sincronizacion) feedback('execution_failure');
       executingAction = false;
       reloadData();

@@ -40,6 +40,9 @@ import { looksLikeNaturalQuoteEdit } from '@/lib/obrabot/quote-edit-natural';
 import { getSupabaseAdmin, requireSupabaseAdmin } from '@/lib/supabase/admin';
 import { validateFileContent } from '@/lib/supabase/file-validation';
 import { isDestinationCommand, isDestinationContinuation } from '@/lib/obrabot/quote-destination';
+import { isQuoteExcelRequest, isQuotePdfRequest } from '@/lib/obrabot/whatsapp';
+import { normalizeTurnAction } from './normalize-turn-action';
+import { loadRecentCrossChannelTurns } from './cross-channel-context';
 
 export async function authorizeAI(request: NextRequest, options?: { adminOnly?: boolean }) {
   const authorization = (request.headers.get('authorization') || '').trim().split(/\s+/);
@@ -181,10 +184,72 @@ export function createChatHandler(
       const recentWebQuoteIds = recentWebQuoteDetails
         .map((d: any) => d.solicitud_cotizacion || d.cotizacion_aprobada_id)
         .filter((v: unknown): v is string => typeof v === 'string' && v.length > 0);
+      const webFileFormat: 'pdf' | 'excel' | null = !body.imagen
+        ? isQuotePdfRequest(body.mensaje)
+          ? 'pdf'
+          : isQuoteExcelRequest(body.mensaje)
+            ? 'excel'
+            : null
+        : null;
+      if (webFileFormat) {
+        const formatLabel = webFileFormat === 'excel' ? 'Excel' : 'PDF';
+        const approvedReviewId = recentWebQuoteDetails
+          .map((d: any) => d.cotizacion_aprobada_id)
+          .find((v: unknown): v is string => typeof v === 'string' && v.length > 0);
+        const pendingReviewId = recentWebQuoteDetails
+          .map((d: any) => d.solicitud_cotizacion)
+          .find((v: unknown): v is string => typeof v === 'string' && v.length > 0);
+        const contextBudgetId = typeof body.contexto_cotizacion?.id === 'string' ? body.contexto_cotizacion.id : null;
+
+        if (approvedReviewId) {
+          if (actor.rol !== 'admin') throw new AIError('OBRABOT_ADMIN', `El ${formatLabel} de la cotización está disponible para el administrador.`, 403);
+          return NextResponse.json({
+            respuesta: `Aquí tienes el ${formatLabel} de la cotización aprobada.`,
+            accion: null,
+            cotizacion: null,
+            sugerencias: [],
+            accion_ejecutada: {
+              tipo: 'obrabot_cotizacion',
+              titulo: `Cotización en ${formatLabel}`,
+              resultado_texto: 'Haz clic en el botón para descargar el archivo.',
+              detalles: { cotizacion_aprobada_id: approvedReviewId },
+              link_destino: `/api/obrabot/cotizaciones/${encodeURIComponent(approvedReviewId)}?formato=${webFileFormat}`,
+              link_texto: `Descargar ${formatLabel}`,
+            },
+          }, { headers: { 'Cache-Control': 'private, no-store' } });
+        }
+        if (pendingReviewId && !contextBudgetId) {
+          return NextResponse.json({
+            respuesta: `Esta cotización necesita aprobación antes de descargarse en ${formatLabel}. Puedes aprobarla aquí o en la bandeja.`,
+            accion: null,
+            cotizacion: null,
+            sugerencias: ['Aprobar cotización', 'Cotizaciones pendientes'],
+          }, { headers: { 'Cache-Control': 'private, no-store' } });
+        }
+        if (contextBudgetId) {
+          return NextResponse.json({
+            respuesta: `Aquí tienes el ${formatLabel} de la cotización.`,
+            accion: null,
+            cotizacion: null,
+            sugerencias: [],
+            accion_ejecutada: {
+              tipo: 'obrabot_cotizacion',
+              titulo: `Cotización en ${formatLabel}`,
+              resultado_texto: 'Haz clic en el botón para descargar el archivo.',
+              detalles: { presupuesto_cotizacion_id: contextBudgetId },
+              link_destino: `/api/obrabot/cotizaciones/${encodeURIComponent(contextBudgetId)}?formato=${webFileFormat}&origen=presupuesto`,
+              link_texto: `Descargar ${formatLabel}`,
+            },
+          }, { headers: { 'Cache-Control': 'private, no-store' } });
+        }
+      }
+      const hasSavedQuoteEditHint =
+        recentWebQuoteIds.length > 0 ||
+        (/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(body.mensaje) &&
+          !/\b(?:de\s+la\s+obra|del\s+proyecto)\b/i.test(body.mensaje));
       const webNaturalQuoteEdit =
         actor.rol === 'admin' &&
-        !projectId &&
-        recentWebQuoteIds.length > 0 &&
+        hasSavedQuoteEditHint &&
         looksLikeNaturalQuoteEdit(body.mensaje) &&
         Boolean(getSupabaseAdmin());
       const quoteWorkflow = isQuoteWorkflow(body.mensaje) || shortWebApprove;
@@ -262,8 +327,16 @@ export function createChatHandler(
       const validateResult = (result: any) => {
         // Prevalidación pura sobre copias: jamás guardar ni encolar en un reintento.
         const candidate = structuredClone(result);
+        const activeCtxId = conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId);
+        if (candidate.accion) {
+          candidate.accion = normalizeTurnAction(candidate.accion, {
+            userRole: user.rol,
+            rawText: body.mensaje,
+            activeProjectId: activeCtxId,
+          });
+        }
         const registration = personIntake(flattenActions(candidate.accion), candidate.registro_propuesto, registrationDraft, body.mensaje, tables.proyectos, registrationProjectId, tables.usuarios);
-        const scoped = scopeProjectActions(registration.actions, conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId), tables.proyectos, projectId);
+        const scoped = scopeProjectActions(registration.actions, activeCtxId, tables.proyectos, projectId);
         const actions = checkActionPermissions(user, scoped, body.mensaje);
         if ((actions.length || registration.prepared || registration.question && registration.draft) && company.plan_id !== 'pro_ia')
           throw new AIError('PLAN_REQUIRED', 'Los cambios por ObraBot requieren Pro IA.', 403);
@@ -276,6 +349,14 @@ export function createChatHandler(
       };
       const preferences = conversationPreferences(body.historial_original, user, projectId, body.mensaje);
       const finish = async (result: any, currentId?: string, prepared?: ReturnType<typeof personIntake>) => {
+        const activeCtxId = conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId);
+        if (result.accion) {
+          result.accion = normalizeTurnAction(result.accion, {
+            userRole: user.rol,
+            rawText: body.mensaje,
+            activeProjectId: activeCtxId,
+          });
+        }
         const registration = prepared || personIntake(flattenActions(result.accion), result.registro_propuesto, registrationDraft, body.mensaje, tables.proyectos, registrationProjectId, tables.usuarios);
         if ((registration.prepared || (registration.question && registration.draft)) && company.plan_id !== 'pro_ia') throw new AIError('PLAN_REQUIRED', 'Los registros y cambios por ObraBot requieren Pro IA.', 403);
         if ((registration.prepared || (registration.question && registration.draft)) && user.rol === 'terreno') throw new AIError('ACTION_FORBIDDEN', 'Solo administradores y supervisores pueden registrar personas.', 403);
@@ -431,9 +512,18 @@ export function createChatHandler(
         return data?.cotizacion || null;
       };
       if(ragEligible(body.mensaje,user.rol)){onStage?.('Consultando referencias y precios…');scheduleKnowledgeIndex(user.empresa_id);}
-      const semanticReferences = await retrieveReferences(client,body.mensaje,user.rol);
+      const [semanticReferences, crossChannelTurns] = await Promise.all([
+        retrieveReferences(client, body.mensaje, user.rol),
+        loadRecentCrossChannelTurns(getSupabaseAdmin() || client, actor, 'web'),
+      ]);
       onStage?.('Generando propuesta con ObraBot…');
-      const capability = { referencias_semanticas:semanticReferences, preferencias_conversacion: preferences.state.valores, registro_persona: registrationDraft, acciones_habilitadas: company.plan_id === "pro_ia" };
+      const capability = {
+        referencias_semanticas: semanticReferences,
+        ...(crossChannelTurns.length ? { actividad_reciente_whatsapp: crossChannelTurns } : {}),
+        preferencias_conversacion: preferences.state.valores,
+        registro_persona: registrationDraft,
+        acciones_habilitadas: company.plan_id === "pro_ia",
+      };
         const genOptions = body.imagen ? { validateResult, onQualityEvent, image: body.imagen } : { validateResult, onQualityEvent };
         if (projectId) {
           if (!/^[a-zA-Z0-9_-]+$/.test(projectId))

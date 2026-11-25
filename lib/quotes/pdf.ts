@@ -98,18 +98,17 @@ export function createQuotePdf(document: QuoteDocument) {
   section(pdf, 'PROYECTO', 111, 42);
   detailRows(clientRows, 16, 47, true);
   detailRows(compactProjectRows, 111, 47, true);
-  pdf.setFont('helvetica', 'normal').setFontSize(7.4).setTextColor(GRAY);
-  section(pdf, document.ivaIncluidoEnPartidas ? 'PARTIDAS · IVA INCLUIDO' : 'DETALLE · VALORES NETOS', MARGIN, bottom + 6);
 
-  function drawItems(items: QuoteLine[], startY: number, reference = false) {
+  function drawItems(items: QuoteLine[], startY: number, opts: { itemColTitle: string; reference?: boolean }) {
     const firstPage = pdf.getCurrentPageInfo().pageNumber;
+    const reference = Boolean(opts.reference);
     const billedTotalLabel = document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL';
     const body = items.map((item, i) => [String(i + 1).padStart(2, '0'), `${item.nombre}${item.descripcion ? '\n' + item.descripcion : ''}`, item.unidad === 'gl' && item.precioUnit === null ? '' : item.unidad, item.unidad === 'gl' && item.precioUnit === null ? '' : item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 }), item.precioUnit === null ? '—' : quoteMoney(item.precioUnit), quoteMoney(item.total)]);
     autoTable(pdf, {
       startY,
       margin: { left: MARGIN, right: MARGIN, top: 27, bottom: 23 },
       tableWidth: WIDTH,
-      head: [['ÍTEM', reference ? 'MATERIALES INCLUIDOS · VALORES NETOS DE REFERENCIA' : 'DESCRIPCIÓN', 'UNIDAD', 'CANT.', 'PRECIO UNIT.', reference ? 'IMPORTE REF.' : billedTotalLabel]],
+      head: [['ÍTEM', opts.itemColTitle, 'UNIDAD', 'CANT.', 'PRECIO UNIT.', reference ? 'IMPORTE REF.' : billedTotalLabel]],
       body,
       theme: 'grid',
       styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2.2, lineColor: '#E8E8E8', lineWidth: 0.15, textColor: INK, overflow: 'linebreak', valign: 'middle' },
@@ -126,9 +125,47 @@ export function createQuotePdf(document: QuoteDocument) {
     });
     return (pdf as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   }
-  let tableEnd = drawItems(document.items, bottom + 10);
-  if (document.materialesIncluidos.length) {
-    tableEnd = drawItems(document.materialesIncluidos, tableEnd + 5, true);
+
+  const hasPartidas = document.partidasSeccion.length > 0;
+  const hasMateriales = document.materialesSeccion.length > 0;
+  const ivaSuffix = document.ivaIncluidoEnPartidas ? ' · IVA INCLUIDO' : ' · VALORES NETOS';
+  let tableEnd = bottom + 6;
+  let nextY = bottom + 5.5;
+
+  if (hasPartidas) {
+    const titlePartidas = `${hasMateriales ? '1. ' : ''}PARTIDAS / TRABAJOS${ivaSuffix}`;
+    section(pdf, titlePartidas, MARGIN, nextY);
+    nextY += 3.5;
+    const isInternalPartidas = !document.ivaIncluidoEnPartidas && document.partidasSeccion.every((item) =>
+      /^(?:Mano de obra:|Gastos generales$|Provisi[oó]n de imprevistos$|Margen sobre venta$|Utilidad$)/.test(item.nombre),
+    );
+    if (isInternalPartidas && document.trabajosIncluidos.length > 0) {
+      const worksLine = `Trabajos / fases: ${document.trabajosIncluidos.map((t) => `${t.nombre} (${t.dias} d)`).join(' · ')}`;
+      pdf.setFont('helvetica', 'normal').setFontSize(6.8).setTextColor(GRAY);
+      const wrapped = (pdf.splitTextToSize(worksLine, WIDTH) as string[]).slice(0, 2);
+      pdf.text(wrapped, MARGIN, nextY);
+      nextY += wrapped.length * 3 + 1;
+    }
+    tableEnd = drawItems(document.partidasSeccion, nextY, { itemColTitle: 'PARTIDA / TRABAJO' });
+    nextY = tableEnd + 5.5;
+  }
+
+  if (hasMateriales) {
+    if (hasPartidas && nextY > 248) {
+      pdf.addPage();
+      drawBrand(pdf, document, MARGIN, 8, true);
+      nextY = 27;
+    }
+    const prefix = hasPartidas ? '2. ' : '';
+    const titleMateriales = document.materialesEsReferencia
+      ? `${prefix}MATERIALES INCLUIDOS · REFERENCIA NETA`
+      : `${prefix}MATERIALES${ivaSuffix}`;
+    section(pdf, titleMateriales, MARGIN, nextY);
+    nextY += 3.5;
+    tableEnd = drawItems(document.materialesSeccion, nextY, {
+      itemColTitle: document.materialesEsReferencia ? 'MATERIALES INCLUIDOS · VALORES NETOS DE REFERENCIA' : 'MATERIAL',
+      reference: document.materialesEsReferencia,
+    });
   }
   let y = tableEnd + 8;
   pdf.setFont('helvetica', 'normal').setFontSize(7.6);

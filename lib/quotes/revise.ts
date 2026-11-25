@@ -50,6 +50,13 @@ export function reviseQuote(original: CotizacionEstimacion, changes: any): Cotiz
   const f = changes.estructura_financiera;
   if (!f || !['recargo_costos', 'margen_venta'].includes(f.tipo_utilidad)) fail('Selecciona cómo calcular la utilidad.');
   for (const field of ['gastos_generales_porcentaje', 'imprevistos_porcentaje', 'margen_utilidad_porcentaje']) if (typeof f[field] !== 'number' || !Number.isFinite(f[field]) || f[field] < 0 || f[field] > 1000) fail('Revisa los porcentajes: deben estar entre 0 y 1000.');
-  const calculated = normalizeQuote({ ...updated, materiales: changes.materiales, mano_de_obra: changes.mano_de_obra, duracion_dias_estimada: changes.duracion_dias_estimada, estructura_financiera: f });
-  return { ...calculated, ...updated, partidas_venta: calculated.partidas_venta, hitos_pago: calculated.hitos_pago, materiales: calculated.materiales, mano_de_obra: calculated.mano_de_obra, estructura_financiera: calculated.estructura_financiera, duracion_dias_estimada: calculated.duracion_dias_estimada, id: original.id, fecha_creacion: original.fecha_creacion };
+  const calculated = normalizeQuote({
+    ...updated,
+    materiales: changes.materiales,
+    mano_de_obra: changes.mano_de_obra,
+    actividades_gantt: changes.actividades_gantt ?? updated.actividades_gantt,
+    duracion_dias_estimada: changes.duracion_dias_estimada,
+    estructura_financiera: f,
+  });
+  return { ...calculated, ...updated, partidas_venta: calculated.partidas_venta, hitos_pago: calculated.hitos_pago, materiales: calculated.materiales, mano_de_obra: calculated.mano_de_obra, actividades_gantt: calculated.actividades_gantt, estructura_financiera: calculated.estructura_financiera, duracion_dias_estimada: calculated.duracion_dias_estimada, id: original.id, fecha_creacion: original.fecha_creacion };
 }

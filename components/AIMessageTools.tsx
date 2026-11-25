@@ -7,6 +7,7 @@ import CotizacionPdfModal from "./CotizacionPdfModal";
 import MaterialPriceComparison from "./MaterialPriceComparison";
 import { formatCLP } from "@/lib/utils";
 import { profitLabel } from "@/lib/ai/quote-format";
+import { resolveSaleLineKind } from "@/lib/quotes/classify";
 import { aiHeaders } from "@/lib/ai/client";
 import { dataService } from "@/lib/data-service";
 import Link from 'next/link';
@@ -19,6 +20,7 @@ export default function AIMessageTools({
   message: {
     cotizacion_generada?: CotizacionEstimacion;
     comparacion_materiales?: import("@/lib/materials/types").ComparacionMateriales;
+    comparaciones_materiales?: import("@/lib/materials/types").ComparacionMateriales[];
     pendiente_sincronizacion?: string;
   };
 }) {
@@ -55,8 +57,14 @@ export default function AIMessageTools({
   const options = quote?.alternativas?.length ? [quote, ...quote.alternativas] : [];
   return (
     <>
-      {message.comparacion_materiales && (
-        <MaterialPriceComparison data={message.comparacion_materiales} />
+      {message.comparaciones_materiales && message.comparaciones_materiales.length > 0 ? (
+        <div className="space-y-2.5">
+          {message.comparaciones_materiales.map((comp, idx) => (
+            <MaterialPriceComparison key={idx} data={comp} />
+          ))}
+        </div>
+      ) : (
+        message.comparacion_materiales && <MaterialPriceComparison data={message.comparacion_materiales} />
       )}
       {quote && (!compact || options.length > 0) && (
         <section
@@ -211,24 +219,84 @@ export default function AIMessageTools({
                     <span>Desglose financiero</span>
                     <ChevronDown className="w-3.5 h-3.5 text-gray-400 transition-transform group-open:rotate-180" />
                   </summary>
-                  <dl className="mt-2 pt-2 border-t border-kraft-100 dark:border-[#263040] space-y-1">
-                    {(quote.modo_presupuesto === 'precio_acordado'
-                      ? (quote.partidas_venta || []).map((p) => [p.nombre, p.subtotal])
-                      : [
-                          ["Materiales", quote.estructura_financiera.costo_materiales_total],
-                          ["Mano de obra", quote.estructura_financiera.costo_mano_obra_total],
-                          ["Gastos generales", quote.estructura_financiera.gastos_generales_monto],
-                          ["Imprevistos", quote.estructura_financiera.imprevistos_monto],
-                          [profitLabel(quote), quote.estructura_financiera.margen_utilidad_monto],
-                        ]
-                    ).map(([label, value]) => (
-                      <div key={String(label)} className="flex justify-between gap-3 text-gray-700 dark:text-gray-300">
-                        <dt className="truncate">{label}</dt>
-                        <dd className="font-mono font-semibold shrink-0">{formatCLP(Number(value))}</dd>
-                      </div>
-                    ))}
-                  </dl>
+                  {(() => {
+                    if (quote.modo_presupuesto === 'precio_acordado') {
+                      const sale = quote.partidas_venta || [];
+                      const partRows = sale.filter((p) => resolveSaleLineKind(p) !== 'material');
+                      const matRows = sale.filter((p) => resolveSaleLineKind(p) === 'material');
+                      if (partRows.length > 0 && matRows.length > 0) {
+                        return (
+                          <div className="mt-2 pt-2 border-t border-kraft-100 dark:border-[#263040] space-y-2">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-[#FF6A00] mb-1">1. Partidas / Trabajos</p>
+                              <dl className="space-y-1">
+                                {partRows.map((p, i) => (
+                                  <div key={`p-${i}-${p.nombre}`} className="flex justify-between gap-3 text-gray-700 dark:text-gray-300">
+                                    <dt className="truncate">{p.nombre}</dt>
+                                    <dd className="font-mono font-semibold shrink-0">{formatCLP(p.subtotal)}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-[#FF6A00] mb-1">2. Materiales</p>
+                              <dl className="space-y-1">
+                                {matRows.map((p, i) => (
+                                  <div key={`m-${i}-${p.nombre}`} className="flex justify-between gap-3 text-gray-700 dark:text-gray-300">
+                                    <dt className="truncate">{p.nombre}</dt>
+                                    <dd className="font-mono font-semibold shrink-0">{formatCLP(p.subtotal)}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            </div>
+                          </div>
+                        );
+                      }
+                    }
+                    const flatRows =
+                      quote.modo_presupuesto === 'precio_acordado'
+                        ? (quote.partidas_venta || []).map((p) => [p.nombre, p.subtotal])
+                        : [
+                            ["Materiales", quote.estructura_financiera.costo_materiales_total],
+                            ["Mano de obra", quote.estructura_financiera.costo_mano_obra_total],
+                            ["Gastos generales", quote.estructura_financiera.gastos_generales_monto],
+                            ["Imprevistos", quote.estructura_financiera.imprevistos_monto],
+                            [profitLabel(quote), quote.estructura_financiera.margen_utilidad_monto],
+                          ];
+                    return (
+                      <dl className="mt-2 pt-2 border-t border-kraft-100 dark:border-[#263040] space-y-1">
+                        {flatRows.map(([label, value], i) => (
+                          <div key={`${i}-${String(label)}`} className="flex justify-between gap-3 text-gray-700 dark:text-gray-300">
+                            <dt className="truncate">{label}</dt>
+                            <dd className="font-mono font-semibold shrink-0">{formatCLP(Number(value))}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    );
+                  })()}
                 </details>
+
+                {quote.modo_presupuesto !== 'precio_acordado' && quote.actividades_gantt.length > 0 && (
+                  <details className="group rounded-xl border border-kraft-200/80 dark:border-[#263040] bg-white dark:bg-[#141A23] px-3 py-2 text-[11px]">
+                    <summary className="cursor-pointer font-semibold text-navy-900 dark:text-gray-100 flex items-center justify-between list-none">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#FF6A00]" />
+                        Partidas / Trabajos incluidos ({quote.actividades_gantt.length})
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400 transition-transform group-open:rotate-180" />
+                    </summary>
+                    <ul className="mt-2 pt-2 border-t border-kraft-100 dark:border-[#263040] space-y-1.5">
+                      {quote.actividades_gantt.map((a, i) => (
+                        <li key={`${a.nombre}-${i}`} className="flex items-center justify-between gap-2 text-gray-700 dark:text-gray-300">
+                          <span className="font-medium text-navy-900 dark:text-gray-100">{a.nombre}</span>
+                          <span className="font-mono text-[10px] text-gray-500 dark:text-gray-400 shrink-0">
+                            {a.dias} día{a.dias === 1 ? '' : 's'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
 
                 {quote.materiales.length > 0 && (
                   <details className="group rounded-xl border border-kraft-200/80 dark:border-[#263040] bg-white dark:bg-[#141A23] px-3 py-2 text-[11px]">
