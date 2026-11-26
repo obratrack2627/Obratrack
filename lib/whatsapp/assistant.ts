@@ -31,6 +31,7 @@ import { scheduleKnowledgeIndex } from '@/lib/ai/rag-index';
 import { learnApuCommand } from '@/lib/ai/apu-learning';
 import { notifyPushOnWhatsAppChanges } from '@/lib/push/events';
 import { AIError } from "@/lib/ai/errors";
+import { classifyTurnIntent, type SemanticIntentResult } from '@/lib/ai/intent-router';
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateAI } from "@/lib/ai/provider";
 import { canonicalPhone, downloadMetaMedia } from "./meta";
@@ -644,14 +645,34 @@ export async function processPersonalMessage(
     !/\b(?:no|sin)\s+(?:usar?\s+|utilizar?\s+)?(?:(?:el|la|ese|esa)\s+)?(?:cotizacion|presupuesto)\b|\botra\s+obra\b/i.test(
       text.normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
     );
+  let semanticIntent: SemanticIntentResult | null = null;
+  if (
+    !explicitQuoteCreation &&
+    !implicitQuoteCreation &&
+    !pendingProject &&
+    !attachment &&
+    user.rol !== 'terreno' &&
+    (Boolean(conversationRows.find((m: any) => m.cotizacion)) || Boolean(conversationRows.map(quoteReference).find(Boolean)))
+  ) {
+    semanticIntent = await classifyTurnIntent(text, {
+      channel: 'whatsapp',
+      rol: user.rol,
+      hasActiveQuote: true,
+      activeProjectName: activeProject ? service.getProyectoById(activeProject)?.nombre || null : null,
+    });
+  }
+  const semanticApplyToExisting =
+    semanticIntent?.intent === 'aplicar_cotizacion_a_obra' && semanticIntent.confidence !== 'baja';
+  const semanticCreateFromQuote =
+    semanticIntent?.intent === 'crear_obra_desde_cotizacion' && semanticIntent.confidence !== 'baja';
   const replied = replyContextId ? conversationRows.find(row => row.message_id === replyContextId) : null;
   const legacyQuoteMessage = pendingProject && !pendingProject.presupuesto_cotizacion_id ? legacyQuotedProjectMessage(conversationRows) : null;
-  let lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : (explicitQuoteCreation || implicitQuoteCreation) && replied ? null : conversationRows.find((m: any) => m.cotizacion));
-  const recentRef = !replyContextId && !pendingProject && (explicitQuoteCreation || implicitQuoteCreation)
+  let lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : (explicitQuoteCreation || implicitQuoteCreation || semanticApplyToExisting || semanticCreateFromQuote) && replied ? null : conversationRows.find((m: any) => m.cotizacion));
+  const recentRef = !replyContextId && !pendingProject && (explicitQuoteCreation || implicitQuoteCreation || semanticApplyToExisting || semanticCreateFromQuote)
     ? conversationRows.map(quoteReference).find(Boolean)
     : undefined;
   const recentBudget = recentRef?.budget;
-  if ((explicitQuoteCreation || implicitQuoteCreation) && (replyContextId || recentRef?.review || (recentBudget && recentBudget !== lastQuoteMessage?.cotizacion?.id))) {
+  if ((explicitQuoteCreation || implicitQuoteCreation || semanticApplyToExisting || semanticCreateFromQuote) && (replyContextId || recentRef?.review || (recentBudget && recentBudget !== lastQuoteMessage?.cotizacion?.id))) {
     lastQuoteMessage = null;
     const ref = replyContextId ? quoteReference(replied) : recentRef;
     let resolvedBudgetId = ref?.budget;
@@ -744,7 +765,7 @@ export async function processPersonalMessage(
     confirmationResponse = '¿Qué deseas modificar de la cotización? Indica el material, cantidad, precio o margen que quieres cambiar. No se creará una obra con esta opción.';
   if (menuChoice === 3)
     confirmationResponse = '¿Qué material quieres comparar? Indica presentación y cantidad si las conoces.\n\nPor ejemplo: «Busca el mejor precio de 20 sacos de cemento de 25 kg en Maipú», o responde *«búscalos»* para consultar en tiendas los materiales de esta cotización.';
-  if (!pendingProject && (chosenBudget || (lastQuoteMessage?.cotizacion && !confirmationResponse && ((history[0]?.cotizacion && (menuChoice === 1 || acceptsQuotedProject(text, Boolean(history[0]?.cotizacion)))) || explicitQuoteCreation || implicitQuoteCreation)))) {
+  if (!pendingProject && (chosenBudget || (lastQuoteMessage?.cotizacion && !confirmationResponse && ((history[0]?.cotizacion && (menuChoice === 1 || acceptsQuotedProject(text, Boolean(history[0]?.cotizacion)))) || explicitQuoteCreation || implicitQuoteCreation || semanticApplyToExisting || semanticCreateFromQuote)))) {
     const budget = chosenBudget || nativeBudget || await findBudget(sb, user.empresa_id, lastQuoteMessage.cotizacion.id);
     if (!budget) confirmationResponse = 'No se pudo recuperar el presupuesto guardado. Ábrelo en ObraTrack para revisarlo.';
     else if (['rechazada', 'anulada'].includes(budget.estado)) confirmationResponse = 'El presupuesto está rechazado o anulado. Revisa su estado en ObraTrack antes de crear la obra.';
@@ -757,14 +778,24 @@ export async function processPersonalMessage(
     }
     else if (budget.proyecto_id) { alreadyConverted = true; confirmationResponse = 'Esta cotización ya tiene una obra creada. Puedes abrir su Carta Gantt en ObraTrack.'; }
     else {
+      const semanticProjectHint = semanticIntent?.destino_obra?.obra_nombre?.trim()
+        ? projectMentions(authorizedProjects, semanticIntent.destino_obra.obra_nombre)
+        : [];
       const explicitMention = projectMentions(authorizedProjects, text);
+      const resolvedMention = explicitMention.length === 1
+        ? explicitMention[0].id
+        : semanticProjectHint.length === 1
+          ? semanticProjectHint[0].id
+          : null;
       const existingTargetId =
         (budget.cotizacion as any)?.proyecto_objetivo_id ||
-        (appliesQuoteToExistingProject(text)
-          ? (explicitMention.length === 1 ? explicitMention[0].id : activeProject || null)
+        (appliesQuoteToExistingProject(text) || semanticApplyToExisting
+          ? (resolvedMention || activeProject || null)
           : null);
       const existingTarget = existingTargetId ? service.getProyectoById(existingTargetId) : null;
-      if (existingTarget) {
+      if (semanticApplyToExisting && !existingTarget) {
+        confirmationResponse = 'Indica a qué obra existente quieres aplicar esta cotización.';
+      } else if (existingTarget) {
         const q = budget.cotizacion;
         const montoTotal = q.estructura_financiera?.precio_total_con_iva ?? 0;
         const existingActs = service.getActividades(existingTarget.id);
@@ -817,6 +848,17 @@ export async function processPersonalMessage(
       } else {
         acceptCreation = true;
         pendingProject = quotedProjectDraft(budget.cotizacion);
+        if (semanticCreateFromQuote && semanticIntent?.destino_obra) {
+          if (semanticIntent.destino_obra.cliente_nombre?.trim()) {
+            pendingProject.cliente_nombre = semanticIntent.destino_obra.cliente_nombre.trim();
+          }
+          if (semanticIntent.destino_obra.obra_nombre?.trim()) {
+            pendingProject.nombre = semanticIntent.destino_obra.obra_nombre.trim();
+          }
+          if (semanticIntent.destino_obra.comuna?.trim()) {
+            pendingProject.comuna = semanticIntent.destino_obra.comuna.trim();
+          }
+        }
         nextDraft = pendingProject;
       }
     }

@@ -6,7 +6,8 @@ import { normalizeQuote } from '@/lib/ai/protocol';
 import type { CotizacionEstimacion } from '@/types/database';
 import { isNaturalQuoteRequest, isPastedQuote, readPastedQuote } from './quote-message';
 import { parseNaturalQuoteWithAI } from './quote-ai-parser';
-import { applyNaturalQuoteEdit, looksLikeNaturalQuoteEdit, matchesQuoteTitleHint } from './quote-edit-natural';
+import { applyNaturalQuoteEdit, applyStructuredQuoteEdit, looksLikeNaturalQuoteEdit, matchesQuoteTitleHint } from './quote-edit-natural';
+import type { SemanticIntentResult } from '@/lib/ai/intent-router';
 import { readQuoteSource, readTextQuote, transcribeQuoteImage, type QuoteSource } from './quote-input';
 import { excelMime, type QuoteFormat } from './quote-files';
 import { importBudgetFile } from '@/lib/quotes/import-file';
@@ -354,8 +355,14 @@ export async function tryNaturalQuoteEdit(
   candidateIds: string[],
   immediateQuoteContext: boolean,
   requestId?: string,
+  semanticIntent?: SemanticIntentResult | null,
 ): Promise<QuoteReply | null> {
-  if (actor.rol !== 'admin' || !looksLikeNaturalQuoteEdit(text)) return null;
+  const hasSemanticEdit = Boolean(
+    semanticIntent?.intent === 'editar_cotizacion' &&
+    semanticIntent.confidence !== 'baja' &&
+    semanticIntent.edicion_cotizacion,
+  );
+  if (actor.rol !== 'admin' || (!looksLikeNaturalQuoteEdit(text) && !hasSemanticEdit)) return null;
   if (/\b(?:carta\s+gantt|asistencia|bit[aá]cora|trabajador|cuadrilla|incidente|de\s+la\s+obra|del\s+proyecto)\b/i.test(text)) return null;
   const uniqueIds = Array.from(new Set(candidateIds.filter(Boolean))).slice(0, 5);
   const reviews: QuoteReview[] = [];
@@ -366,21 +373,22 @@ export async function tryNaturalQuoteEdit(
       // Ignorar cotizaciones eliminadas o no accesibles.
     }
   }
+  const hintSource = semanticIntent?.cotizacion_hint ? `${text} ${semanticIntent.cotizacion_hint}` : text;
   let target: QuoteReview | null = null;
   let bestScore = 0;
   for (const rev of reviews) {
-    const score = matchesQuoteTitleHint(rev.borrador.titulo_proyecto, text);
+    const score = matchesQuoteTitleHint(rev.borrador.titulo_proyecto, hintSource);
     if (score > bestScore) {
       bestScore = score;
       target = rev;
     }
   }
-  if (!target && /\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text)) {
+  if (!target && (hasSemanticEdit || /\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text))) {
     const seen = new Set(reviews.map((r) => r.id));
     const stored = (await loadCompanyQuoteReviews(db, actor, ['pendiente', 'aprobada']))
       .filter((r) => r && !seen.has(r.id) && r.borrador?.titulo_proyecto);
     for (const rev of stored) {
-      const score = matchesQuoteTitleHint(rev.borrador.titulo_proyecto, text);
+      const score = matchesQuoteTitleHint(rev.borrador.titulo_proyecto, hintSource);
       if (score >= 1 && score > bestScore) {
         bestScore = score;
         target = rev;
@@ -388,10 +396,14 @@ export async function tryNaturalQuoteEdit(
     }
   }
   if (!target) {
-    if (!reviews.length || (!immediateQuoteContext && !/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text))) return null;
+    if (!reviews.length || (!immediateQuoteContext && !hasSemanticEdit && !/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text))) return null;
     target = reviews[0];
   }
-  const patch = applyNaturalQuoteEdit(target.borrador, text);
+  const patch =
+    applyNaturalQuoteEdit(target.borrador, text) ||
+    (hasSemanticEdit && semanticIntent?.edicion_cotizacion
+      ? applyStructuredQuoteEdit(target.borrador, semanticIntent.edicion_cotizacion)
+      : null);
   if (!patch) return null;
   if (target.estado === 'pendiente') {
     const draft = makeDraft(patch, target.id);

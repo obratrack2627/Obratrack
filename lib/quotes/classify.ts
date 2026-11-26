@@ -51,7 +51,7 @@ const MATERIAL_RE =
 export function classifyQuoteLineKind(name: string, unidad?: string): QuoteLineKind {
   const foldedName = foldText(name);
   if (!foldedName) return 'partida';
-  if (PARTIDA_RE.test(foldedName) || /^pintura\s+(?:de|y\s+terminaci)/.test(foldedName)) {
+  if (PARTIDA_RE.test(foldedName) || /^pintura\s+(?:de|y\s+terminaci|cielo|muro|muros|fachada|interior|exterior|puerta|reja)\b/.test(foldedName)) {
     return 'partida';
   }
   const foldedUnit = foldText(unidad || '').replace(/\./g, '');

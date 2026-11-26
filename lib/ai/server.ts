@@ -35,7 +35,8 @@ import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
 import { randomUUID } from "node:crypto";
 import { AsyncResource } from "node:async_hooks";
 import { canAccessWeb, WEB_ACCESS_ERROR, isSessionJWT } from '@/lib/auth/access';
-import { handleQuoteTurn, isQuoteWorkflow, tryNaturalQuoteEdit } from '@/lib/obrabot/quotes';
+import { handleQuoteTurn, isQuoteWorkflow, tryNaturalQuoteEdit, type QuoteReply } from '@/lib/obrabot/quotes';
+import { classifyTurnIntent, shouldUseSemanticIntentRouter } from './intent-router';
 import { looksLikeNaturalQuoteEdit } from '@/lib/obrabot/quote-edit-natural';
 import { getSupabaseAdmin, requireSupabaseAdmin } from '@/lib/supabase/admin';
 import { validateFileContent } from '@/lib/supabase/file-validation';
@@ -257,23 +258,12 @@ export function createChatHandler(
       const explicitDestinationUuid = /[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}/i.test(body.mensaje);
       const quoteCommand = quoteWorkflow || (quoteDestinationCmd && (actor.rol === 'admin' || explicitDestinationUuid));
       const destinationContinuation = actor.rol === 'admin' && isDestinationContinuation(body.mensaje) && getSupabaseAdmin();
-      if (quoteCommand || destinationContinuation || webNaturalQuoteEdit) {
-        if (actor.rol !== 'admin') throw new AIError('OBRABOT_ADMIN', 'Esta acción está reservada al administrador.', 403);
-        const plan = await client.from('empresas').select('plan_id').eq('id', actor.empresa_id).maybeSingle();
-        if (plan.error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude verificar el plan de la empresa.', 503);
-        if (!['pro', 'pro_ia'].includes(plan.data?.plan_id)) throw new AIError('PLAN_REQUIRED', 'ObraBot requiere el plan Pro o Pro IA.', 403);
-        const requestId = typeof body.request_id === 'string' && body.request_id.length <= 100 ? body.request_id : undefined;
-        const effectiveMsg = shortWebApprove && pendingWebQuote
-          ? `aprueba cotización ${pendingWebQuote.id} ${pendingWebQuote.revision}`
-          : body.mensaje;
-        const reply = webNaturalQuoteEdit && !quoteCommand
-          ? await tryNaturalQuoteEdit(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, recentWebQuoteIds, webImmediateQuote, requestId)
-          : await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', effectiveMsg, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
-        const file = reply?.archivo;
-        if (reply) return NextResponse.json({
+      const buildWebQuoteResponse = (reply: QuoteReply, planId?: string) => {
+        const file = reply.archivo;
+        return NextResponse.json({
           respuesta: reply.respuesta, accion: null, cotizacion: null,
           sugerencias: file
-            ? (plan.data?.plan_id === 'pro_ia' ? ['Crear obra', 'Vincular a obra'] : [])
+            ? (planId === 'pro_ia' ? ['Crear obra', 'Vincular a obra'] : [])
             : reply.solicitud && reply.revision
               ? ['Aprobar cotización', 'Cotizaciones pendientes']
               : [],
@@ -291,6 +281,61 @@ export function createChatHandler(
             link_destino: `/proyectos/${encodeURIComponent(reply.obra)}/presupuestos`, link_texto: 'Ver obra',
           } } : {}),
         }, { headers: { 'Cache-Control': 'private, no-store' } });
+      };
+      if (quoteCommand || destinationContinuation || webNaturalQuoteEdit) {
+        if (actor.rol !== 'admin') throw new AIError('OBRABOT_ADMIN', 'Esta acción está reservada al administrador.', 403);
+        const plan = await client.from('empresas').select('plan_id').eq('id', actor.empresa_id).maybeSingle();
+        if (plan.error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude verificar el plan de la empresa.', 503);
+        if (!['pro', 'pro_ia'].includes(plan.data?.plan_id)) throw new AIError('PLAN_REQUIRED', 'ObraBot requiere el plan Pro o Pro IA.', 403);
+        const requestId = typeof body.request_id === 'string' && body.request_id.length <= 100 ? body.request_id : undefined;
+        const effectiveMsg = shortWebApprove && pendingWebQuote
+          ? `aprueba cotización ${pendingWebQuote.id} ${pendingWebQuote.revision}`
+          : body.mensaje;
+        const reply = webNaturalQuoteEdit && !quoteCommand
+          ? await tryNaturalQuoteEdit(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, recentWebQuoteIds, webImmediateQuote, requestId)
+          : await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', effectiveMsg, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
+        if (reply) return buildWebQuoteResponse(reply, plan.data?.plan_id);
+      }
+      if (
+        !quoteCommand &&
+        !destinationContinuation &&
+        !webNaturalQuoteEdit &&
+        actor.rol === 'admin' &&
+        Boolean(getSupabaseAdmin()) &&
+        shouldUseSemanticIntentRouter(body.mensaje, {
+          channel: 'web',
+          rol: actor.rol,
+          hasPendingQuoteReview: Boolean(pendingWebQuote),
+          hasActiveQuote: recentWebQuoteIds.length > 0,
+        })
+      ) {
+        const semantic = await classifyTurnIntent(body.mensaje, {
+          channel: 'web',
+          rol: actor.rol,
+          hasPendingQuoteReview: Boolean(pendingWebQuote),
+          hasActiveQuote: recentWebQuoteIds.length > 0,
+        });
+        const supportedWebSemantic = semantic && semantic.confidence !== 'baja' && (
+          semantic.intent === 'editar_cotizacion' ||
+          (semantic.intent === 'aprobar_cotizacion' && Boolean(pendingWebQuote)) ||
+          (semantic.intent === 'descargar_archivo_cotizacion' && Boolean(recentWebQuoteIds[0]))
+        );
+        if (semantic && supportedWebSemantic) {
+          const plan = await client.from('empresas').select('plan_id').eq('id', actor.empresa_id).maybeSingle();
+          if (plan.error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude verificar el plan de la empresa.', 503);
+          if (!['pro', 'pro_ia'].includes(plan.data?.plan_id)) throw new AIError('PLAN_REQUIRED', 'ObraBot requiere el plan Pro o Pro IA.', 403);
+          const requestId = typeof body.request_id === 'string' && body.request_id.length <= 100 ? body.request_id : undefined;
+          let semanticReply: QuoteReply | null = null;
+          if (semantic.intent === 'editar_cotizacion') {
+            semanticReply = await tryNaturalQuoteEdit(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, recentWebQuoteIds, webImmediateQuote, requestId, semantic);
+          } else if (semantic.intent === 'aprobar_cotizacion' && pendingWebQuote) {
+            semanticReply = await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', `aprueba cotización ${pendingWebQuote.id} ${pendingWebQuote.revision}`, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
+          } else if (semantic.intent === 'descargar_archivo_cotizacion' && recentWebQuoteIds[0]) {
+            const fmt = semantic.formato_archivo === 'excel' ? 'excel' : 'pdf';
+            semanticReply = await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', `${fmt} cotización ${recentWebQuoteIds[0]}`, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
+          }
+          if (semanticReply) return buildWebQuoteResponse(semanticReply, plan.data?.plan_id);
+        }
       }
       const deadlineOnly =
         isProjectDeadlineQuestion(body.mensaje) &&

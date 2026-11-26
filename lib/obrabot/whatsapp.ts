@@ -1,6 +1,7 @@
 import { quoteSessionMs } from '@/lib/whatsapp/quote-context';
 import { progressAfter, pausedReply } from '@/lib/whatsapp/conversation-progress';
 import { AIError } from '@/lib/ai/errors';
+import { classifyTurnIntent, shouldUseSemanticIntentRouter, type SemanticIntentResult } from '@/lib/ai/intent-router';
 import { canonicalPhone } from '@/lib/phone';
 import { findBudget } from '@/lib/presupuestos';
 import { getApprovedQuote, getQuoteReview, handleQuoteTurn, isQuoteWorkflow, tryNaturalQuoteEdit, type Actor, type QuoteReply } from './quotes';
@@ -158,9 +159,41 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     (/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text) &&
       !/\b(?:de\s+la\s+obra|del\s+proyecto)\b/i.test(text));
   const maybeNaturalEdit = noAttachment && !quoteInput && !destination && !contextualFileFormat && !pendingReview && actor.rol === 'admin' && hasSavedQuoteEditHint && looksLikeNaturalQuoteEdit(text);
-  if (!contextualFileFormat && !quoteInput && !destination && !pendingReview && !maybeNaturalEdit && (actor.rol !== 'admin' || !isDestinationContinuation(text))) return null;
   const draft = last?.acciones?.rol_actor === actor.rol && last.borrador_obra &&
     !(Date.now() - Date.parse(last.created_at) > quoteSessionMs) ? last.borrador_obra : null;
+
+  let semanticIntent: SemanticIntentResult | null = null;
+  if (
+    !contextualFileFormat &&
+    !quoteInput &&
+    !destination &&
+    !pendingReview &&
+    !maybeNaturalEdit &&
+    (actor.rol !== 'admin' || !isDestinationContinuation(text))
+  ) {
+    const canRoute =
+      noAttachment &&
+      actor.rol === 'admin' &&
+      !draft &&
+      shouldUseSemanticIntentRouter(text, {
+        channel: 'whatsapp',
+        rol: actor.rol,
+        hasPendingQuoteReview: Boolean(findPendingQuoteReview(conversationRows, replyContextId, 'aprobar')),
+        hasActiveQuote: recentReviewIds.length > 0,
+      });
+    if (!canRoute) return null;
+    semanticIntent = await classifyTurnIntent(text, {
+      channel: 'whatsapp',
+      rol: actor.rol,
+      hasPendingQuoteReview: Boolean(findPendingQuoteReview(conversationRows, replyContextId, 'aprobar')),
+      hasActiveQuote: recentReviewIds.length > 0,
+    });
+    const handledInQuoteTurn =
+      semanticIntent &&
+      semanticIntent.confidence !== 'baja' &&
+      ['editar_cotizacion', 'aprobar_cotizacion', 'descargar_archivo_cotizacion'].includes(semanticIntent.intent);
+    if (!handledInQuoteTurn) return null;
+  }
   if (draft && !contextualFileFormat && !quoteInput && !destination) return null;
   let keepDraft = Boolean(contextualFileFormat);
   let reply: WhatsAppQuoteReply | null;
@@ -193,6 +226,20 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
         ? (items.map(item => quoteButtonSource(item, 'pdf')).find(Boolean) || sourceId)
         : sourceId;
       reply = await requestedQuoteFile(db, actor, conversationRows, contextualFileFormat, pdfSource);
+    } else if (semanticIntent) {
+      if (semanticIntent.intent === 'editar_cotizacion') {
+        reply = await tryNaturalQuoteEdit(db, actor, 'whatsapp', text, recentReviewIds, immediateQuoteContext, inbound.id, semanticIntent);
+      } else if (semanticIntent.intent === 'aprobar_cotizacion') {
+        const rev = findPendingQuoteReview(conversationRows, replyContextId, 'aprobar');
+        reply = rev
+          ? await handleQuoteTurn(db, actor, 'whatsapp', `aprueba cotización ${rev.id} ${rev.revision}`, inbound.id, undefined, { quotedId })
+          : null;
+      } else if (semanticIntent.intent === 'descargar_archivo_cotizacion') {
+        reply = await requestedQuoteFile(db, actor, conversationRows, semanticIntent.formato_archivo || 'pdf', sourceId);
+      } else {
+        reply = null;
+      }
+      if (!reply) return null;
     } else if (maybeNaturalEdit) {
       reply = await tryNaturalQuoteEdit(db, actor, 'whatsapp', text, recentReviewIds, immediateQuoteContext, inbound.id);
       if (!reply && !isDestinationContinuation(text)) return null;

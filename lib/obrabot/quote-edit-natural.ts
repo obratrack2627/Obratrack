@@ -1,4 +1,5 @@
 import { AIError } from '@/lib/ai/errors';
+import type { SemanticQuoteEdit } from '@/lib/ai/intent-router';
 import { commercialLines } from '@/lib/quotes/commercial';
 import { classifyQuoteLineKind } from '@/lib/quotes/classify';
 import type { CotizacionEstimacion } from '@/types/database';
@@ -239,6 +240,23 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
 
   if (!mutated) return null;
 
+  return buildQuoteEditPatch(quote, baseLines, {
+    tratamiento_iva,
+    duracion_dias_estimada,
+    plazo_texto,
+  });
+}
+
+function buildQuoteEditPatch(
+  quote: CotizacionEstimacion,
+  baseLines: NonNullable<CotizacionEstimacion['partidas_venta']>,
+  overrides: {
+    tratamiento_iva: 'incluido' | 'neto';
+    duracion_dias_estimada?: number;
+    plazo_texto?: string;
+    mostrar_fecha?: boolean;
+  },
+): QuoteEditPatch {
   const validatedLines = commercialLines(
     baseLines.map((l) => ({
       nombre: l.nombre,
@@ -249,11 +267,11 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
       ...(l.tipo ? { tipo: l.tipo } : {}),
     })),
   );
-
+  const mostrarFecha = overrides.mostrar_fecha ?? (quote.mostrar_fecha === false ? false : undefined);
   return {
     titulo_proyecto: quote.titulo_proyecto,
     partidas_venta: validatedLines,
-    tratamiento_iva,
+    tratamiento_iva: overrides.tratamiento_iva,
     resumen_ejecutivo: quote.resumen_ejecutivo,
     condiciones_pago: quote.condiciones_pago,
     hitos_pago: quote.hitos_pago?.map((h) => ({ nombre: h.nombre, porcentaje: h.porcentaje })),
@@ -261,16 +279,115 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
     ...(quote.materiales?.length ? { materiales: quote.materiales } : {}),
     ...(quote.mano_de_obra?.length ? { mano_de_obra: quote.mano_de_obra } : {}),
     ...(quote.actividades_gantt?.length ? { actividades_gantt: quote.actividades_gantt } : {}),
-    ...(quote.mostrar_fecha === false ? { mostrar_fecha: false } : {}),
+    ...(mostrarFecha !== undefined ? { mostrar_fecha: mostrarFecha } : {}),
     ...(quote.fecha_validez ? { fecha_validez: quote.fecha_validez } : {}),
     ...(quote.cliente_id ? { cliente_id: quote.cliente_id } : {}),
     ...(quote.cliente_nombre ? { cliente_nombre: quote.cliente_nombre } : {}),
     ...(quote.cliente_email ? { cliente_email: quote.cliente_email } : {}),
     ...(quote.cliente_telefono ? { cliente_telefono: quote.cliente_telefono } : {}),
     ...(quote.comuna_region ? { comuna_region: quote.comuna_region } : {}),
+    duracion_dias_estimada: overrides.duracion_dias_estimada,
+    plazo_texto: overrides.plazo_texto,
+  };
+}
+
+export function applyStructuredQuoteEdit(
+  quote: CotizacionEstimacion,
+  edit: SemanticQuoteEdit,
+): QuoteEditPatch | null {
+  const baseLines = (quote.partidas_venta || []).map((l) => ({ ...l }));
+  if (!baseLines.length) return null;
+
+  let tratamiento_iva: 'incluido' | 'neto' = quote.tratamiento_iva === 'neto' ? 'neto' : 'incluido';
+  let duracion_dias_estimada = quote.duracion_dias_estimada;
+  let plazo_texto = quote.plazo_texto;
+  let mostrar_fecha: boolean | undefined;
+  let mutated = false;
+
+  if (edit.tratamiento_iva === 'neto' || edit.tratamiento_iva === 'incluido') {
+    tratamiento_iva = edit.tratamiento_iva;
+    mutated = true;
+  }
+  if (typeof edit.mostrar_fecha === 'boolean') {
+    mostrar_fecha = edit.mostrar_fecha;
+    mutated = true;
+  }
+  if (typeof edit.plazo_dias === 'number' && Number.isFinite(edit.plazo_dias) && edit.plazo_dias > 0) {
+    duracion_dias_estimada = edit.plazo_dias;
+    plazo_texto = edit.plazo_texto?.trim() || `${Math.round(edit.plazo_dias)} días`;
+    mutated = true;
+  } else if (edit.plazo_texto?.trim()) {
+    plazo_texto = edit.plazo_texto.trim();
+    mutated = true;
+  }
+
+  const rawMoney =
+    typeof edit.nuevo_monto_clp === 'number' && Number.isFinite(edit.nuevo_monto_clp)
+      ? Math.round(edit.nuevo_monto_clp)
+      : undefined;
+  const rawQty =
+    typeof edit.nueva_cantidad === 'number' && Number.isFinite(edit.nueva_cantidad) && edit.nueva_cantidad > 0
+      ? edit.nueva_cantidad
+      : undefined;
+
+  if (edit.operacion === 'cambiar_total' && rawMoney && rawMoney > 0 && Number.isSafeInteger(rawMoney)) {
+    const idx = baseLines.length === 1 ? 0 : matchLineIndex(baseLines, edit.partida_objetivo || '', false);
+    if (idx < 0) return null;
+    baseLines[idx] = { ...baseLines[idx], precio_partida: rawMoney, precio_unitario: 0, subtotal: rawMoney };
+    mutated = true;
+  } else if (edit.operacion === 'cambiar_partida') {
+    const idx = matchLineIndex(baseLines, edit.partida_objetivo || '', false);
+    if (idx < 0) throw new AIError('OBRABOT_QUOTE_INPUT', 'Indica a qué partida corresponde el cambio.', 422);
+    const target = baseLines[idx];
+    const nextQty = rawQty ?? target.cantidad;
+    if (rawMoney != null && rawMoney >= 0 && Number.isSafeInteger(rawMoney)) {
+      const asUnit = edit.es_precio_unitario === true || (edit.es_precio_unitario !== false && target.precio_partida == null);
+      if (asUnit) {
+        baseLines[idx] = {
+          ...target,
+          cantidad: nextQty,
+          precio_unitario: rawMoney,
+          precio_partida: undefined,
+          subtotal: Math.round(nextQty * rawMoney),
+        };
+      } else {
+        baseLines[idx] = { ...target, cantidad: nextQty, precio_partida: rawMoney, precio_unitario: 0, subtotal: rawMoney };
+      }
+      mutated = true;
+    } else if (rawQty != null && target.precio_partida == null && target.precio_unitario > 0) {
+      baseLines[idx] = { ...target, cantidad: nextQty, subtotal: Math.round(nextQty * target.precio_unitario) };
+      mutated = true;
+    }
+  } else if (edit.operacion === 'agregar_partida' && edit.partida_objetivo?.trim() && rawMoney != null && rawMoney >= 0 && Number.isSafeInteger(rawMoney)) {
+    const nombre = edit.partida_objetivo.trim().slice(0, 500);
+    const qty = rawQty ?? 1;
+    const unidad = (edit.unidad?.trim() || (rawQty != null ? 'un' : 'gl')).slice(0, 30);
+    const asUnit = edit.es_precio_unitario === true;
+    baseLines.push({
+      nombre,
+      unidad,
+      cantidad: qty,
+      precio_unitario: asUnit ? rawMoney : 0,
+      ...(asUnit ? {} : { precio_partida: rawMoney }),
+      tipo: classifyQuoteLineKind(nombre, unidad),
+      subtotal: asUnit ? Math.round(qty * rawMoney) : rawMoney,
+    });
+    mutated = true;
+  } else if (edit.operacion === 'eliminar_partida' && edit.partida_objetivo?.trim()) {
+    const idx = matchLineIndex(baseLines, edit.partida_objetivo, false);
+    if (idx < 0) throw new AIError('OBRABOT_QUOTE_INPUT', `No encontré la partida «${edit.partida_objetivo.trim()}» en esta cotización.`, 422);
+    if (baseLines.length <= 1) throw new AIError('OBRABOT_QUOTE_INPUT', 'La cotización debe conservar al menos una partida.', 422);
+    baseLines.splice(idx, 1);
+    mutated = true;
+  }
+
+  if (!mutated) return null;
+  return buildQuoteEditPatch(quote, baseLines, {
+    tratamiento_iva,
     duracion_dias_estimada,
     plazo_texto,
-  };
+    mostrar_fecha,
+  });
 }
 
 export function matchesQuoteTitleHint(title: string, text: string): number {
