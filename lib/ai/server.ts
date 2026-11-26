@@ -1,7 +1,6 @@
 import { setAIUsageActor } from './usage';
 import { scheduleKnowledgeIndex } from './rag-index';
 import { retrieveReferences,ragEligible } from './rag';
-import { learnApuCommand } from './apu-learning';
 import { scheduleQualityEvent } from './quality-server';
 import { turnQualityEvent } from './quality';
 import { conversationPreferences, withPreferences } from './preferences';
@@ -10,9 +9,8 @@ import { personIntake } from '@/lib/whatsapp/person-intake';
 import { pendingPerson, withPersonContext } from './person-context';
 import { flattenActions } from './protocol';
 import { scopeProjectActions, prepareActionPlan } from './actions';
-import { projectStatusCommand } from './project-status-command';
 import { conversationProjectId } from './project-reference';
-import { isProjectDeadlineQuestion, projectDeadlineAnswer } from './project-deadlines';
+import { isProjectDeadlineQuestion } from './project-deadlines';
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseUrl, supabaseAnonKey } from "@/lib/supabase/client";
@@ -28,7 +26,6 @@ import {
   isQuoteRequest,
   isQuoteRevision,
   hasOtherWorkBeyondDeadline,
-  hasOtherWorkBeyondStatus,
 } from './prompt';
 import { checkActionPermissions } from "./permissions";
 import { prepareCampaign, enqueueCampaign } from "@/lib/whatsapp/campaigns";
@@ -36,8 +33,11 @@ import { randomUUID } from "node:crypto";
 import { AsyncResource } from "node:async_hooks";
 import { canAccessWeb, WEB_ACCESS_ERROR, isSessionJWT } from '@/lib/auth/access';
 import { handleQuoteTurn, isQuoteWorkflow, tryNaturalQuoteEdit, type QuoteReply } from '@/lib/obrabot/quotes';
-import { extractWebQuoteRefs } from '@/lib/quotes/unified';
+import { extractWebQuoteRefs, resolveUnifiedQuote } from '@/lib/quotes/unified';
 import { classifyTurnIntent, shouldUseSemanticIntentRouter } from './intent-router';
+import { buildApplyQuoteToProjectPlan, resolveSharedDeterministicTurn, resolveWebSemanticQuoteAction } from './turn-core';
+import { TEAM_FOLLOW_UP } from './team-assignment';
+import { appliesQuoteToExistingProject } from '@/lib/whatsapp/quote-intake';
 import { looksLikeNaturalQuoteEdit } from '@/lib/obrabot/quote-edit-natural';
 import { getSupabaseAdmin, requireSupabaseAdmin } from '@/lib/supabase/admin';
 import { validateFileContent } from '@/lib/supabase/file-validation';
@@ -269,7 +269,12 @@ export function createChatHandler(
             : reply.solicitud && reply.revision
               ? ['Aprobar cotización', 'Cotizaciones pendientes']
               : [],
-          ...(file ? { accion_ejecutada: {
+          ...(file ? { accion_ejecutada: file.origen === 'presupuesto' ? {
+            tipo: 'obrabot_cotizacion', titulo: `Cotización en ${file.formato === 'excel' ? 'Excel' : 'PDF'}`, resultado_texto: 'Haz clic en el botón para descargar el archivo.',
+            detalles: { presupuesto_cotizacion_id: file.id },
+            link_destino: `/api/obrabot/cotizaciones/${encodeURIComponent(file.id)}?formato=${file.formato}&origen=presupuesto`,
+            link_texto: file.formato === 'excel' ? 'Descargar Excel' : 'Descargar PDF',
+          } : {
             tipo: 'obrabot_cotizacion', titulo: 'Cotización aprobada', resultado_texto: 'Archivo listo para descargar.',
             detalles: { cotizacion_aprobada_id: file.id },
             link_destino: `/api/obrabot/cotizaciones/${file.id}?formato=${file.formato}`,
@@ -325,22 +330,25 @@ export function createChatHandler(
         const supportedWebSemantic = semantic && semantic.confidence !== 'baja' && (
           semantic.intent === 'editar_cotizacion' ||
           (semantic.intent === 'aprobar_cotizacion' && Boolean(pendingWebQuote)) ||
-          (semantic.intent === 'descargar_archivo_cotizacion' && Boolean(recentWebQuoteIds[0]))
+          (semantic.intent === 'descargar_archivo_cotizacion' && recentWebQuoteRefs.length > 0)
         );
         if (semantic && supportedWebSemantic) {
           const plan = await client.from('empresas').select('plan_id').eq('id', actor.empresa_id).maybeSingle();
           if (plan.error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude verificar el plan de la empresa.', 503);
           if (!['pro', 'pro_ia'].includes(plan.data?.plan_id)) throw new AIError('PLAN_REQUIRED', 'ObraBot requiere el plan Pro o Pro IA.', 403);
           const requestId = typeof body.request_id === 'string' && body.request_id.length <= 100 ? body.request_id : undefined;
-          let semanticReply: QuoteReply | null = null;
-          if (semantic.intent === 'editar_cotizacion') {
-            semanticReply = await tryNaturalQuoteEdit(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, recentWebQuoteIds, webImmediateQuote, requestId, semantic, recentWebQuoteRefs);
-          } else if (semantic.intent === 'aprobar_cotizacion' && pendingWebQuote) {
-            semanticReply = await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', `aprueba cotización ${pendingWebQuote.id} ${pendingWebQuote.revision}`, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
-          } else if (semantic.intent === 'descargar_archivo_cotizacion' && recentWebQuoteIds[0]) {
-            const fmt = semantic.formato_archivo === 'excel' ? 'excel' : 'pdf';
-            semanticReply = await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', `${fmt} cotización ${recentWebQuoteIds[0]}`, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
-          }
+          const semanticReply = await resolveWebSemanticQuoteAction({
+            db: requireSupabaseAdmin(),
+            actor,
+            message: body.mensaje,
+            requestId,
+            permiteVincular: plan.data?.plan_id === 'pro_ia',
+            semantic,
+            recentWebQuoteIds,
+            recentWebQuoteRefs,
+            webImmediateQuote,
+            pendingWebQuote,
+          });
           if (semanticReply) return buildWebQuoteResponse(semanticReply, plan.data?.plan_id);
         }
       }
@@ -521,8 +529,19 @@ export function createChatHandler(
         );
       if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
       if (preferences.respuesta) return NextResponse.json(withPreferences(withNameEditContext(withPersonContext({respuesta:preferences.respuesta,accion:null,cotizacion:null,sugerencias:[]},registrationDraft),pendingNameEdit),preferences.state));
-      const apuLesson = await learnApuCommand(client, user, body.mensaje, 'web');
-      if (apuLesson.handled) return NextResponse.json(withPreferences(withNameEditContext(withPersonContext({respuesta:apuLesson.respuesta || 'Rendimiento guardado.',accion:null,cotizacion:null,sugerencias:[]},registrationDraft),pendingNameEdit),preferences.state));
+      const { apuReply } = await resolveSharedDeterministicTurn({
+        db: client,
+        user,
+        channel: 'web',
+        text: body.mensaje,
+        projects: tables.proyectos,
+        activeProjectId: projectId || null,
+        history: body.historial,
+        allowDeadline: false,
+        allowStatus: false,
+        allowApu: true,
+      });
+      if (apuReply) return NextResponse.json(withPreferences(withNameEditContext(withPersonContext(apuReply, registrationDraft), pendingNameEdit), preferences.state));
       if(nameCommand?.handled) {
         const result={respuesta:nameCommand.question || 'Voy a corregir el nombre de la ficha.',accion:nameCommand.action || null,cotizacion:null,sugerencias:[]};
         await finish(result,projectId);
@@ -536,18 +555,63 @@ export function createChatHandler(
       }
       if (deadlineOnly) {
         if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
-        const verified = projectDeadlineAnswer(body.mensaje, tables.proyectos, projectId);
+        const { deadlineReply: verified } = await resolveSharedDeterministicTurn({
+          db: client,
+          user,
+          channel: 'web',
+          text: body.mensaje,
+          projects: tables.proyectos,
+          activeProjectId: projectId || null,
+          history: body.historial,
+          allowDeadline: true,
+          allowStatus: false,
+          allowApu: false,
+        });
         if (verified) return NextResponse.json(withPreferences(withNameEditContext(withPersonContext(verified, registrationDraft), pendingNameEdit), preferences.state));
       }
       if (projectId && !service.getProyectoById(projectId)) throw new AIError('PROJECT_FORBIDDEN', 'La obra no está disponible para tu cuenta.', 403);
       const referencedId = conversationProjectId(tables.proyectos, body.mensaje, body.historial, projectId);
-      const statusCommand = !hasOtherWorkBeyondStatus(body.mensaje)
-        ? projectStatusCommand(body.mensaje, tables.proyectos, referencedId, body.historial)
-        : null;
+      const { statusReply: statusCommand } = await resolveSharedDeterministicTurn({
+        db: client,
+        user,
+        channel: 'web',
+        text: body.mensaje,
+        projects: tables.proyectos,
+        activeProjectId: referencedId || null,
+        history: body.historial,
+        allowDeadline: false,
+        allowStatus: true,
+        allowApu: false,
+      });
       if (statusCommand) {
         if (projectId && statusCommand.accion && statusCommand.accion.proyecto_id !== projectId) throw new AIError('PROJECT_CONTEXT', 'Estás en el chat de otra obra. Abre la obra indicada o usa la consulta general para cambiar su estado.', 422);
         await finish(statusCommand, projectId);
         return NextResponse.json(statusCommand);
+      }
+      if (appliesQuoteToExistingProject(body.mensaje) && user.rol !== 'terreno' && recentWebQuoteRefs.length > 0) {
+        const targetProjectId = projectId || referencedId;
+        const targetProject = targetProjectId ? service.getProyectoById(targetProjectId) : null;
+        const adminOrClient = getSupabaseAdmin() || client;
+        const resolvedQuote = targetProject
+          ? await resolveUnifiedQuote(adminOrClient, actor, recentWebQuoteRefs)
+          : null;
+        if (targetProject && resolvedQuote && resolvedQuote.stage !== 'pendiente_revision') {
+          const applyPlan = buildApplyQuoteToProjectPlan({
+            quote: resolvedQuote.cotizacion,
+            project: targetProject,
+            existingActivities: service.getActividades(targetProject.id),
+            existingMaterials: (tables as any).materiales_proyecto || [],
+            teamFollowUp: TEAM_FOLLOW_UP,
+          });
+          const result: any = {
+            respuesta: applyPlan.summary,
+            accion: { tipo: 'lote_acciones', acciones: applyPlan.actions },
+            cotizacion: null,
+            sugerencias: [],
+          };
+          await finish(result, targetProject.id);
+          return NextResponse.json(result);
+        }
       }
       let canonicalBudget: Presupuesto | null = null;
       const budgetContext = async (scope?: string) => {

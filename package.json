@@ -9,6 +9,7 @@
     "lint": "eslint app components lib middleware.ts next.config.mjs",
     "sonar": "sonarqube-scanner",
     "test": "node --test tests/*.test.cjs",
+    "evals": "node scripts/run-contractor-evals.cjs",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit"
   },

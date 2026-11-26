@@ -16,23 +16,20 @@ import { isAttendanceManagementRequest, ATTENDANCE_MANAGEMENT_MESSAGE } from '@/
 import { conversationPreferences } from '@/lib/ai/preferences';
 import { contactNameCommand, type ContactTurn } from '@/lib/ai/contact-name-command';
 import { scopeProjectActions } from '@/lib/ai/actions';
-import { projectStatusCommand } from '@/lib/ai/project-status-command';
 import { actionReply } from '@/lib/ai/action-reply';
-import { projectDeadlineAnswer } from '@/lib/ai/project-deadlines';
 import { operationsContext } from '@/lib/ai/operations-context';
 import { acceptsQuotedProject, requestsQuotedProject, selectsRecentQuotedProject, appliesQuoteToExistingProject, cancelsProjectDraft, resumesProjectDraft, startsProjectDraft, legacyQuotedProjectMessage, quotedProjectDraft } from "./quote-intake";
 import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib/presupuestos";
 import { budgetApplication } from '@/lib/quotes/application';
-import { extractQuoteGanttTasks, extractQuoteMaterials } from '@/lib/quotes/project-bridge';
 import { chooseBudgetOption } from './budget-options';
-import { hasOtherWorkBeyondStatus, isAlternativeRequest, isQuoteRequest, isQuoteRevision } from '@/lib/ai/prompt';
+import { isAlternativeRequest, isQuoteRequest, isQuoteRevision } from '@/lib/ai/prompt';
 import { isComplexAITask } from '@/lib/ai/model-router';
 import { ragEligible, retrieveReferences } from '@/lib/ai/rag';
 import { scheduleKnowledgeIndex } from '@/lib/ai/rag-index';
-import { learnApuCommand } from '@/lib/ai/apu-learning';
 import { notifyPushOnWhatsAppChanges } from '@/lib/push/events';
 import { AIError } from "@/lib/ai/errors";
 import { classifyTurnIntent, type SemanticIntentResult } from '@/lib/ai/intent-router';
+import { buildApplyQuoteToProjectPlan, resolveSharedDeterministicTurn } from '@/lib/ai/turn-core';
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateAI } from "@/lib/ai/provider";
 import { canonicalPhone, downloadMetaMedia } from "./meta";
@@ -791,54 +788,18 @@ export async function processPersonalMessage(
       if (semanticApplyToExisting && !existingTarget) {
         confirmationResponse = 'Indica a qué obra existente quieres aplicar esta cotización.';
       } else if (existingTarget) {
-        const q = budget.cotizacion;
-        const montoTotal = q.estructura_financiera?.precio_total_con_iva ?? 0;
-        const existingActs = service.getActividades(existingTarget.id);
-        const applyActions: any[] = [
-          {
-            tipo: 'actualizar_proyecto',
-            proyecto_id: existingTarget.id,
-            monto_cotizado: montoTotal,
-          },
-        ];
-        let addedPartidas = 0;
-        const ganttTasks = extractQuoteGanttTasks(q);
-        if (existingActs.length === 0 && ganttTasks.length > 0) {
-          applyActions.push({
-            tipo: 'crear_actividad',
-            proyecto_id: existingTarget.id,
-            partidas: ganttTasks,
-          });
-          addedPartidas = ganttTasks.length;
-        }
-        let addedMaterials = 0;
-        const existingMatNames = new Set(
-          ((tables as any).materiales_proyecto || [])
-            .filter((m: any) => m.proyecto_id === existingTarget.id)
-            .map((m: any) => String(m.nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()),
-        );
-        const quoteMaterials = extractQuoteMaterials(q).filter(
-          (m) => !existingMatNames.has(m.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()),
-        );
-        if (quoteMaterials.length > 0) {
-          applyActions.push({
-            tipo: 'agregar_materiales',
-            proyecto_id: existingTarget.id,
-            materiales: quoteMaterials,
-          });
-          addedMaterials = quoteMaterials.length;
-        }
-        const partsSummary = [
-          `el presupuesto quedó en $${montoTotal.toLocaleString('es-CL')}`,
-          addedPartidas ? `cargué ${addedPartidas} partidas en la Carta Gantt` : '',
-          addedMaterials ? `agregué ${addedMaterials} materiales` : '',
-        ].filter(Boolean).join(', ');
-        const needsTeam = !(existingTarget.trabajadores_ids && existingTarget.trabajadores_ids.length > 0);
+        const applied = buildApplyQuoteToProjectPlan({
+          quote: budget.cotizacion,
+          project: existingTarget,
+          existingActivities: service.getActividades(existingTarget.id),
+          existingMaterials: (tables as any).materiales_proyecto || [],
+          teamFollowUp: TEAM_FOLLOW_UP,
+        });
         applyQuoteToExisting = {
           budget,
           project: existingTarget,
-          actions: applyActions,
-          summary: `Apliqué la cotización a «${existingTarget.nombre}»: ${partsSummary}.${needsTeam ? `\n\n${TEAM_FOLLOW_UP}` : ''}`,
+          actions: applied.actions,
+          summary: applied.summary,
         };
       } else {
         acceptCreation = true;
@@ -879,10 +840,21 @@ export async function processPersonalMessage(
   let registrationReply: any = null;
   let introPause: ReturnType<typeof isIntroductoryPauseOnly> = null;
   try {
-    const verifiedDeadlines = !attachment ? projectDeadlineAnswer(text, deadlineProjects, activeProject || undefined) : null;
-    const statusCommand = !attachment && !cancelCreation && !hasOtherWorkBeyondStatus(text)
-      ? projectStatusCommand(text, tables.proyectos, activeProject, conversationRows.slice().reverse().flatMap((row: any) => [{ rol: 'user' as const, texto: row.texto || '' }, { rol: 'model' as const, texto: row.respuesta || '' }]))
-      : null;
+    const sharedDeterministic = await resolveSharedDeterministicTurn({
+      db: sb,
+      user,
+      channel: 'whatsapp',
+      text,
+      projects: tables.proyectos,
+      deadlineProjects,
+      activeProjectId: activeProject,
+      history: conversationRows.slice().reverse().map((row: any) => ({ rol: 'user' as const, texto: row.texto || '', respuesta: row.respuesta || '' })).flatMap((r: any) => [{ rol: 'user' as const, texto: r.texto }, { rol: 'model' as const, texto: r.respuesta }]),
+      allowDeadline: !attachment,
+      allowStatus: !attachment && !cancelCreation,
+      allowApu: !attachment,
+    });
+    const verifiedDeadlines = sharedDeterministic.deadlineReply;
+    const statusCommand = sharedDeterministic.statusReply;
     introPause =
       !pendingProject &&
       !pendingPerson &&
@@ -900,8 +872,7 @@ export async function processPersonalMessage(
         ? isIntroductoryPauseOnly(text, Boolean(attachment), authorizedProjects)
         : null;
     registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
-    const apuLesson = !attachment ? await learnApuCommand(sb, user, text, 'whatsapp') : { handled: false };
-    const apuReply = apuLesson.handled ? { respuesta: apuLesson.respuesta || 'Rendimiento guardado.', accion: null, cotizacion: null, sugerencias: [] } : null;
+    const apuReply = sharedDeterministic.apuReply;
     const menuDirect = !attachment ? directInteractiveMenuReply(batchItems) : null;
     const isExplicitMenuCommand =
       !attachment &&
