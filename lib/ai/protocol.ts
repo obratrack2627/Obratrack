@@ -676,6 +676,32 @@ export function normalizeQuote(raw: any): CotizacionEstimacion {
       typeof raw.fecha_validez === "string" ? raw.fecha_validez : undefined,
     observaciones:
       typeof raw.observaciones === "string" ? raw.observaciones : undefined,
+    ...(Array.isArray(raw.materiales_considerados)
+      ? (() => {
+          const parsedConsidered = raw.materiales_considerados
+            .slice(0, 300)
+            .filter((item: any) => item && text(item.nombre))
+            .map((item: any) => {
+              const rawQty = item.cantidad;
+              const cantidad =
+                typeof rawQty === "number" && Number.isFinite(rawQty) && rawQty > 0
+                  ? rawQty
+                  : typeof rawQty === "string" && rawQty.trim()
+                    ? rawQty.trim().slice(0, 40)
+                    : null;
+              const unidad =
+                typeof item.unidad === "string" && item.unidad.trim()
+                  ? item.unidad.trim().slice(0, 30)
+                  : undefined;
+              return {
+                nombre: item.nombre.trim().slice(0, 500),
+                cantidad,
+                ...(unidad ? { unidad } : {}),
+              };
+            });
+          return parsedConsidered.length ? { materiales_considerados: parsedConsidered } : {};
+        })()
+      : {}),
     condiciones_pago:
       typeof raw.condiciones_pago === "string"
         ? raw.condiciones_pago

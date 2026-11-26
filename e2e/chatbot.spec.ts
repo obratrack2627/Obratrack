@@ -562,7 +562,7 @@ test("editar un presupuesto conserva el registro, recalcula montos y descarga la
   await editor.getByLabel("Condiciones de pago", { exact: true }).fill("Pago del 50% al iniciar la obra.");
   await editor.getByRole("button", { name: "Guardar cambios", exact: true }).click();
   await expect(editor).toHaveCount(0);
-  await expect(dialog.getByRole("table")).toContainText("6.000");
+  await expect(dialog.getByRole("table", { name: /Materiales/ })).toContainText("6.000");
   await expect(dialog).toContainText("cliente@example.test");
   const closeBounds = await dialog.getByRole("button", { name: "Cerrar cotización", exact: true }).boundingBox();
   expect(closeBounds && closeBounds.x + closeBounds.width).toBeLessThanOrEqual(375);
@@ -581,7 +581,7 @@ test("editar un presupuesto conserva el registro, recalcula montos y descarga la
   await page.reload();
   await page.getByRole("tab", { name: "Presupuestos", exact: true }).click();
   await page.getByRole("button", { name: "Ver / PDF", exact: true }).click();
-  await expect(dialog.getByRole("table")).toContainText("6.000");
+  await expect(dialog.getByRole("table", { name: /Materiales/ })).toContainText("6.000");
   await expect(dialog).toContainText("Pago del 50% al iniciar la obra.");
   expect(budget.cotizacion.materiales[0].cantidad).toBe(3);
 });
@@ -596,7 +596,7 @@ test("el chat abre la versión editada del presupuesto aunque el mensaje conserv
   await expect(page.getByRole("region", { name: "Resumen del presupuesto" })).toContainText(revised.estructura_financiera.precio_total_con_iva.toLocaleString("es-CL"));
   await page.getByRole("button", { name: "Ver cotización / PDF", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Cotización generada" });
-  await expect(dialog.getByRole("table")).toContainText("9.000");
+  await expect(dialog.getByRole("table", { name: /Materiales/ })).toContainText("9.000");
   await expect(dialog).toContainText("Condiciones actualizadas");
 });
 

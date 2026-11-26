@@ -191,3 +191,54 @@ test('separa Sección 1 Partidas y Sección 2 Materiales en documento y PDF sin 
   const docConEmpresa = buildQuoteDocument(q, { emisor: { empresa_nombre: 'HBM Construcciones' } });
   assert.match(docConEmpresa.filename, /^Cotizacion_HBM_Construcciones_.*Remodelacion_bano\.pdf$/);
 });
+
+test('materiales considerados sin precio unitario y resumen económico agrupado generan 1 página sin duplicar observaciones', () => {
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const q = normalizeQuote({
+    titulo_proyecto: 'Portón peatonal WPC',
+    modo_presupuesto: 'precio_acordado',
+    tratamiento_iva: 'incluido',
+    partidas_venta: [
+      { nombre: 'Materiales', unidad: 'gl', cantidad: 1, precio_unitario: 0, precio_partida: 335000, tipo: 'material' },
+      { nombre: 'Mano de obra', unidad: 'gl', cantidad: 1, precio_unitario: 0, precio_partida: 280000, tipo: 'partida' },
+    ],
+    materiales: [],
+    materiales_considerados: [
+      { nombre: 'Deck WPC de 25 mm', cantidad: 13 },
+      { nombre: 'Perfil tubular 70 x 30 x 2 mm', cantidad: 2 },
+      { nombre: 'Perfil tubular 50 x 50 x 2 mm', cantidad: 1 },
+      { nombre: 'Canal 25 x 25 x 2 mm', cantidad: 3 },
+      { nombre: 'Cerradura', cantidad: 1 },
+      { nombre: 'Anticorrosivo', cantidad: null },
+      { nombre: 'Brocha y rodillo', cantidad: null },
+      { nombre: 'Soldadura', cantidad: 2, unidad: 'kg' },
+      { nombre: 'Discos de corte', cantidad: 10 },
+      { nombre: 'Discos prelaminados', cantidad: 2 },
+    ],
+    mano_de_obra: [],
+    observaciones: 'Incluye:\nAnticorrosivo\nSoldadura\nEntrega coordinada con cliente.',
+  });
+
+  const doc = buildQuoteDocument(q);
+  assert.equal(doc.isGroupedSummaryOnly, true);
+  assert.equal(doc.partidasSeccion.length, 0);
+  assert.equal(doc.materialesSeccion.length, 0);
+  assert.equal(doc.materialesConsiderados.length, 10);
+  assert.deepEqual(
+    doc.materialesConsiderados.map((m) => m.cantidadTexto),
+    ['13', '2', '1', '3', '1', '—', '—', '2 kg', '10', '2'],
+  );
+  assert.deepEqual(doc.resumenEconomico, [
+    { label: 'MATERIALES', amount: 335000 },
+    { label: 'MANO DE OBRA', amount: 280000 },
+  ]);
+  assert.equal(doc.total, 615000);
+  assert.ok(doc.observaciones.every((obs) => !/Anticorrosivo|Soldadura/.test(obs)));
+  assert.ok(doc.observaciones.some((obs) => /Entrega coordinada con cliente/.test(obs)));
+
+  const pdf = createQuotePdf(doc);
+  assert.equal(pdf.getNumberOfPages(), 1);
+  assert.equal(pdf.lastAutoTable.body.length, 10);
+  assert.deepEqual(Object.values(pdf.lastAutoTable.body[5].cells).map((c) => c.raw), ['6', '—', 'Anticorrosivo']);
+  assert.deepEqual(Object.values(pdf.lastAutoTable.body[7].cells).map((c) => c.raw), ['8', '2 kg', 'Soldadura']);
+});

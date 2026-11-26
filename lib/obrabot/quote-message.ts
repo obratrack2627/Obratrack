@@ -2,6 +2,7 @@ import { AIError } from '@/lib/ai/errors';
 import { commercialLines } from '@/lib/quotes/commercial';
 import { classifyQuoteLineKind, type QuoteLineKind } from '@/lib/quotes/classify';
 import { formatCLP } from '@/lib/utils';
+import type { MaterialConsiderado } from '@/types/database';
 
 const clp = String.raw`(?:\d{1,3}(?:[.\u00a0 ]\d{3})+|\d+)`;
 const ivaSuffix = String.raw`(?:\s*(?:\+?\s*m[aá]s\s+iva|\+\s*iva|sin\s+iva|iva\s+incluido|con\s+iva|netos?))?`;
@@ -63,6 +64,29 @@ function pricedLine(label: string, value: number, unitPrice: boolean, sectionHin
   };
 }
 
+function parseConsideredMaterial(rawLine: string): MaterialConsiderado {
+  const clean = rawLine.trim();
+  const detail = clean.match(quantityPrefix);
+  if (!detail) {
+    return { nombre: clean ? clean[0].toUpperCase() + clean.slice(1) : clean, cantidad: null };
+  }
+  const unitMatch = detail[2].match(leadingUnit);
+  const rawName = (unitMatch?.[2] ?? detail[2]).trim();
+  const nombre = rawName ? rawName[0].toUpperCase() + rawName.slice(1) : rawName;
+  const unidad = unitMatch?.[1]?.trim();
+  return {
+    nombre,
+    cantidad: number(detail[1]),
+    ...(unidad ? { unidad } : {}),
+  };
+}
+
+function isConsideredMaterialCandidate(line: string, sectionHint: QuoteLineKind | null): boolean {
+  if (sectionHint === 'material') return true;
+  if (quantityPrefix.test(line)) return true;
+  return classifyQuoteLineKind(line) === 'material';
+}
+
 function checkTotal(name: string, declared: number | undefined, actual: number) {
   if (declared != null && declared !== actual) {
     invalid(`El ${name} informado es ${formatCLP(declared)} y el detalle suma ${formatCLP(actual)}. Confirma qué importe debo corregir.`);
@@ -121,10 +145,12 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
   }
   const lines: Line[] = [];
   const scope: string[] = [];
+  const unpricedMaterialIndices: number[] = [];
   const payment: string[] = [];
   let title = providedTitle;
   let declaredTotal: number | undefined;
   let declaredMaterials: number | undefined;
+  let declaredMaterialsInsertAt: number | undefined;
   const laborRows: number[] = [];
   let statedAreaPrice: number | undefined;
   let days: RegExpMatchArray | null = null;
@@ -139,8 +165,8 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
     const key = fold(line);
     const money = line.match(moneyAtEnd);
     const bareTotal = line.match(bareTotalLine);
-    if (!inScope && !money && !bareTotal && /^(?:materiales|partidas|trabajos|mano de obra|obra de mano|servicios)\s*:?$/i.test(line)) {
-      currentSection = /^materiales/i.test(line) ? 'material' : 'partida';
+    if (!inScope && !money && !bareTotal && /^(?:materiales(?:\s+considerados)?|insumos(?:\s+considerados)?|partidas|trabajos|mano de obra|obra de mano|servicios)\s*:?$/i.test(line)) {
+      currentSection = /^(?:materiales|insumos)/i.test(line) ? 'material' : 'partida';
       continue;
     }
     if (chargeLine.test(line)) {
@@ -159,6 +185,7 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
       declaredTotal = amount(money[2]);
     } else if (money && materialsTotal.test(money[1].trim())) {
       declaredMaterials = amount(money[2]);
+      declaredMaterialsInsertAt = lines.length;
     } else if (bareTotal) {
       declaredTotal = amount(bareTotal[1]);
     } else if (/^(?:descripci[oó]n (?:del trabajo|de la obra)|alcance|datos del trabajo)\s*:?$/i.test(line)) {
@@ -171,11 +198,39 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
       lines.push(pricedLine(label, amount(money[2]), money[3] != null && money[3].toLowerCase() !== 'en total', currentSection));
     } else if (line.includes('$') && !inScope) {
       invalid(`No pude leer el importe de «${line.slice(0, 160)}». Escribe la partida y su valor final en CLP.`);
-    } else if (!title && !lines.length && !inScope) {
+    } else if (!title && !lines.length && !inScope && !quantityPrefix.test(line)) {
       title = line;
     } else {
       days ??= line.match(duration);
+      const scopeIdx = scope.length;
       scope.push(line);
+      if (!inScope && isConsideredMaterialCandidate(line, currentSection)) {
+        unpricedMaterialIndices.push(scopeIdx);
+      }
+    }
+  }
+  let materiales_considerados: MaterialConsiderado[] | undefined;
+  if (declaredMaterials != null && lines.length === laborRows.length) {
+    const matLine: Line = {
+      nombre: 'Materiales',
+      unidad: 'gl',
+      cantidad: 1,
+      precio_unitario: 0,
+      precio_partida: declaredMaterials,
+      tipo: 'material',
+    };
+    const insertAt = declaredMaterialsInsertAt ?? lines.length;
+    lines.splice(insertAt, 0, matLine);
+    for (let i = 0; i < laborRows.length; i++) {
+      if (laborRows[i] >= insertAt) laborRows[i] += 1;
+    }
+    declaredMaterials = undefined;
+    if (unpricedMaterialIndices.length) {
+      const removeSet = new Set(unpricedMaterialIndices);
+      materiales_considerados = unpricedMaterialIndices.map((idx) => parseConsideredMaterial(scope[idx]));
+      const filteredScope = scope.filter((_, idx) => !removeSet.has(idx));
+      scope.length = 0;
+      scope.push(...filteredScope);
     }
   }
   if (!lines.length) invalid('Incluye al menos una partida con su valor final en CLP.');
@@ -189,6 +244,7 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
   return {
     titulo_proyecto: title || partidas.slice(0, 3).map(line => line.nombre).join(', '),
     partidas_venta: partidas,
+    ...(materiales_considerados?.length ? { materiales_considerados } : {}),
     tratamiento_iva,
     resumen_ejecutivo: scope.join('\n').trim(),
     condiciones_pago: conditions || undefined,

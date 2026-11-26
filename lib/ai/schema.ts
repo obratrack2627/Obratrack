@@ -195,8 +195,19 @@ export const CHAT_RESPONSE_SCHEMA = object(
                 unidad: string,
                 cantidad: number,
                 precio_unitario: number,
+                tipo: { type: "string", enum: ["partida", "material"] },
               },
               ["nombre", "unidad", "cantidad", "precio_unitario"],
+            ),
+          ),
+          materiales_considerados: array(
+            object(
+              {
+                nombre: string,
+                cantidad: { type: ["number", "string", "null"] },
+                unidad: string,
+              },
+              ["nombre"],
             ),
           ),
           hitos_pago: array(

@@ -33,7 +33,52 @@ export interface QuoteLine {
   tipo?: QuoteLineKind;
 }
 
+export interface QuoteConsideredMaterial {
+  nombre: string;
+  cantidadTexto: string;
+}
+
+export interface QuoteEconomicRow {
+  label: string;
+  amount: number;
+}
+
 export const quoteMoney = (value: number) => `$ ${value.toLocaleString('es-CL')}`;
+
+const foldLine = (value: string) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+function formatConsideredQty(item: { cantidad?: number | string | null; unidad?: string }): string {
+  if (item.cantidad == null || item.cantidad === '') return '—';
+  const qtyText =
+    typeof item.cantidad === 'number'
+      ? item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })
+      : String(item.cantidad).trim();
+  const unit = item.unidad?.trim();
+  if (!unit || /^(?:un|unidad|unidades|gl)$/i.test(unit)) return qtyText;
+  return `${qtyText} ${unit}`;
+}
+
+function stripDuplicateMaterialsNote(rawNote: string | undefined, knownNames: string[]): string | undefined {
+  if (!rawNote?.trim()) return undefined;
+  if (!knownNames.length) return rawNote.trim();
+  const knownFolded = knownNames.map(foldLine).filter((n) => n.length >= 3);
+  const filtered = rawNote
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line) return false;
+      if (/^(?:materiales(?:\s+considerados)?|insumos(?:\s+considerados)?)\s*:?$/i.test(line)) return false;
+      const clean = foldLine(line.replace(/^(?:[•*▪–-]\s*|\d+[.)]\s*)/, ''));
+      return !knownFolded.some((mat) => clean === mat || clean.endsWith(` ${mat}`) || clean.includes(mat));
+    });
+  const text = filtered.join('\n').trim();
+  return text || undefined;
+}
 
 const dateLabel = (value: string) => {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value.split('-').reverse().join('-');
@@ -90,12 +135,77 @@ export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDo
     .map(([nombre, total]) => ({ nombre, descripcion: '', unidad: 'gl', cantidad: 1, precioUnit: total, total, tipo: 'partida' as const }));
   const items: QuoteLine[] = isAgreed ? saleLines(quote) : [...materials, ...laborItems, ...indirectItems];
 
+  const hasZeroPricedMaterials =
+    isAgreed &&
+    quote.materiales.length > 0 &&
+    quote.materiales.every((m) => (m.precio_unitario_estimado ?? 0) === 0 && m.subtotal === 0);
+  const materialesConsiderados: QuoteConsideredMaterial[] = quote.materiales_considerados?.length
+    ? quote.materiales_considerados.map((m) => ({ nombre: m.nombre, cantidadTexto: formatConsideredQty(m) }))
+    : hasZeroPricedMaterials
+      ? quote.materiales.map((m) => ({ nombre: m.nombre, cantidadTexto: formatConsideredQty({ cantidad: m.cantidad, unidad: m.unidad }) }))
+      : [];
+  const SUMMARY_LINE_RE = /^(?:materiales|total\s+materiales|mano\s+de\s+obra|obra\s+de\s+mano|gastos\s+generales|imprevistos|utilidad|margen)$/i;
+  const isGroupedSummaryOnly =
+    isAgreed &&
+    materialesConsiderados.length > 0 &&
+    items.length > 0 &&
+    items.every((l) => SUMMARY_LINE_RE.test(l.nombre.trim()));
+
   const billedMaterials = isAgreed ? items.filter((l) => l.tipo === 'material') : [];
-  const partidasSeccion = isAgreed ? items.filter((l) => l.tipo !== 'material') : [...laborItems, ...indirectItems];
-  const materialesSeccion = isAgreed ? (billedMaterials.length > 0 ? billedMaterials : materials) : materials;
-  const materialesEsReferencia = isAgreed && billedMaterials.length === 0 && materials.length > 0;
-  const materialesIncluidos = isAgreed && billedMaterials.length === 0 ? materials : [];
+  const partidasSeccion = isGroupedSummaryOnly
+    ? []
+    : isAgreed
+      ? items.filter((l) => l.tipo !== 'material')
+      : [...laborItems, ...indirectItems];
+  const materialesSeccion = isGroupedSummaryOnly
+    ? []
+    : isAgreed
+      ? (billedMaterials.length > 0 ? billedMaterials : hasZeroPricedMaterials ? [] : materials)
+      : materials;
+  const materialesEsReferencia = !isGroupedSummaryOnly && isAgreed && billedMaterials.length === 0 && !hasZeroPricedMaterials && materials.length > 0;
+  const materialesIncluidos = !isGroupedSummaryOnly && isAgreed && billedMaterials.length === 0 && !hasZeroPricedMaterials ? materials : [];
   const trabajosIncluidos = (quote.actividades_gantt || []).map((a) => ({ nombre: a.nombre, dias: a.dias }));
+
+  const ivaIncluded = isAgreed && quote.tratamiento_iva === 'incluido';
+  const indirectTotal = f.gastos_generales_monto + f.imprevistos_monto + f.margen_utilidad_monto;
+  const resumenEconomico: QuoteEconomicRow[] = isGroupedSummaryOnly
+    ? [
+        ...items.map((l) => ({ label: l.nombre.toUpperCase(), amount: l.total })),
+        ...(!ivaIncluded && f.iva_19 > 0 && f.precio_total_con_iva !== f.precio_sugerido_neto
+          ? [{ label: 'IVA (19%)', amount: f.iva_19 }]
+          : []),
+      ]
+    : isAgreed
+      ? [
+          ...(partidasSeccion.length && materialesSeccion.length && !materialesEsReferencia
+            ? [
+                { label: 'PARTIDAS / TRABAJOS', amount: partidasSeccion.reduce((s, r) => s + r.total, 0) },
+                { label: 'MATERIALES', amount: materialesSeccion.reduce((s, r) => s + r.total, 0) },
+              ]
+            : []),
+          ...(ivaIncluded
+            ? [
+                { label: 'NETO (DESGLOSE)', amount: f.precio_sugerido_neto },
+                { label: 'IVA INCLUIDO (19%)', amount: f.iva_19 },
+              ]
+            : [
+                { label: 'SUBTOTAL NETO', amount: f.precio_sugerido_neto },
+                { label: 'IVA (19%)', amount: f.iva_19 },
+              ]),
+        ]
+      : [
+          ...(f.costo_materiales_total ? [{ label: 'MATERIALES', amount: f.costo_materiales_total }] : []),
+          ...(f.costo_mano_obra_total ? [{ label: 'MANO DE OBRA', amount: f.costo_mano_obra_total }] : []),
+          ...(indirectTotal > 0 ? [{ label: 'GASTOS GENERALES, IMPREVISTOS Y UTILIDAD', amount: indirectTotal }] : []),
+          { label: 'SUBTOTAL NETO', amount: f.precio_sugerido_neto },
+          { label: 'IVA (19%)', amount: f.iva_19 },
+        ];
+
+  const knownMaterialNames = [
+    ...materialesConsiderados.map((m) => m.nombre),
+    ...quote.materiales.map((m) => m.nombre),
+  ];
+  const cleanedObservation = stripDuplicateMaterialsNote(quote.observaciones, knownMaterialNames);
 
   const folio = quote.id.replace(/\D/g, '').slice(-6).padStart(6, '0');
   const rawConditions = [
@@ -129,9 +239,12 @@ export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDo
     partidasSeccion,
     materialesSeccion,
     materialesEsReferencia,
+    materialesConsiderados,
+    isGroupedSummaryOnly,
+    resumenEconomico,
     trabajosIncluidos,
     materialesIncluidos,
-    ivaIncluidoEnPartidas: isAgreed && quote.tratamiento_iva === 'incluido',
+    ivaIncluidoEnPartidas: ivaIncluded,
     subtotal: f.precio_sugerido_neto,
     iva: f.iva_19,
     total: f.precio_total_con_iva,
@@ -139,7 +252,7 @@ export function buildQuoteDocument(quote: CotizacionEstimacion, options: QuoteDo
       quote.modo_presupuesto === 'precio_acordado' ? (quote.tratamiento_iva === 'incluido' ? 'Precios acordados en CLP, IVA incluido en las partidas.' : 'Precios acordados netos en CLP. IVA del 19% desglosado al final.') : 'Valores netos en CLP. IVA del 19% desglosado al final.',
       ...(quote.modo_presupuesto === 'precio_acordado' ? [] : ['Precios estimados sujetos a confirmación de cantidades, disponibilidad y despacho.']),
       quote.plazo_texto ? `Plazo estimado: ${quote.plazo_texto}.` : quote.duracion_dias_estimada ? `Plazo estimado: ${quote.duracion_dias_estimada} día(s). Cronograma a acordar.` : 'Plazo de ejecución por acordar.',
-      ...(quote.observaciones ? [quote.observaciones] : []),
+      ...(cleanedObservation ? [cleanedObservation] : []),
     ],
     condiciones,
     emisor: {

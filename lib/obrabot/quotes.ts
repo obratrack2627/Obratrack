@@ -144,6 +144,7 @@ function makeDraft(input: DraftInput, id: string) {
     tratamiento_iva,
     materiales: input.materiales ?? [],
     mano_de_obra: input.mano_de_obra ?? [],
+    ...(input.materiales_considerados?.length ? { materiales_considerados: input.materiales_considerados } : {}),
     actividades_gantt: input.actividades_gantt ?? [],
   });
   return { ...draft, id: `cot-${id}`, consejos_experto_pyme: [] };

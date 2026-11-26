@@ -347,3 +347,55 @@ test('rescata edición multilínea sin $, búsqueda de cotización guardada, pag
   assert.equal(createdRow.borrador.partidas_venta[0].subtotal, 1242500);
   assert.match(createdRow.borrador.resumen_ejecutivo, /sellador UV/);
 });
+
+test('readPastedQuote extrae materiales considerados sin precio desde un presupuesto agrupado sin dejarlos en resumen_ejecutivo', () => {
+  const { readPastedQuote } = require('../lib/obrabot/quote-message.ts');
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const { buildQuoteDocument } = require('../lib/quotes/document.ts');
+  const { createQuotePdf } = require('../lib/quotes/pdf.ts');
+
+  const parsed = readPastedQuote([
+    'Cotización Portón peatonal WPC',
+    'Materiales considerados:',
+    '13 Deck WPC de 25 mm',
+    '2 Perfil tubular 70 × 30 × 2 mm',
+    '1 Perfil tubular 50 × 50 × 2 mm',
+    '3 Canal 25 × 25 × 2 mm',
+    '1 Cerradura',
+    'Anticorrosivo',
+    'Brocha y rodillo',
+    '2 kg Soldadura',
+    '10 Discos de corte',
+    '2 Discos prelaminados',
+    'Materiales $ 335.000',
+    'Mano de obra $ 280.000',
+    'Total $ 615.000',
+  ].join('\n'));
+
+  assert.equal(parsed.materiales_considerados?.length, 10);
+  assert.equal(parsed.resumen_ejecutivo, '');
+
+  const normalized = normalizeQuote({
+    ...parsed,
+    modo_presupuesto: 'precio_acordado',
+    materiales: [],
+    mano_de_obra: [],
+    actividades_gantt: [],
+  });
+  const doc = buildQuoteDocument(normalized);
+  assert.equal(doc.isGroupedSummaryOnly, true);
+  assert.equal(doc.materialesConsiderados.length, 10);
+  assert.equal(doc.materialesConsiderados[0].cantidadTexto, '13');
+  assert.equal(doc.materialesConsiderados[1].cantidadTexto, '2');
+  assert.equal(doc.materialesConsiderados[5].cantidadTexto, '—');
+  assert.equal(doc.materialesConsiderados[7].cantidadTexto, '2 kg');
+  assert.deepEqual(doc.resumenEconomico, [
+    { label: 'MATERIALES', amount: 335000 },
+    { label: 'MANO DE OBRA', amount: 280000 },
+  ]);
+  assert.equal(doc.total, 615000);
+
+  const pdf = createQuotePdf(doc);
+  assert.equal(pdf.getNumberOfPages(), 1);
+  assert.equal(pdf.lastAutoTable.body.length, 10);
+});

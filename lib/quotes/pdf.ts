@@ -1,11 +1,14 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { drawObraTrackWordmarkPdf } from '@/lib/brand-pdf';
-import { quoteMoney, type QuoteDocument, type QuoteLine } from './document';
+import { quoteMoney, type QuoteConsideredMaterial, type QuoteDocument, type QuoteLine } from './document';
 
-const ORANGE = '#FF6A00';
+const ORANGE = '#EA4C00';
+const HEADER_DARK = '#141414';
 const INK = '#1E1E1E';
 const GRAY = '#666666';
+const BORDER = '#DCDCDC';
+const ROW_ALT = '#F7F7F7';
 const MARGIN = 12;
 const WIDTH = 186;
 const LOGO_DATA_URL_RE = /^data:image\/(png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=]+$/i;
@@ -61,6 +64,21 @@ function section(pdf: jsPDF, title: string, x: number, y: number) {
   pdf.setFont('helvetica', 'bold').setFontSize(8).setTextColor(ORANGE).text(title, x, y);
 }
 
+function drawSectionBanner(pdf: jsPDF, title: string, y: number) {
+  const cy = y - 1.1;
+  const cx = MARGIN + 2.3;
+  pdf.setFillColor(ORANGE).circle(cx, cy, 2.3, 'F');
+  pdf.setDrawColor('#FFFFFF').setLineWidth(0.45);
+  pdf.line(cx - 1.0, cy - 0.55, cx + 1.0, cy - 0.55);
+  pdf.line(cx - 1.0, cy + 0.55, cx + 1.0, cy + 0.55);
+  pdf.setFont('helvetica', 'bold').setFontSize(8.8).setTextColor(HEADER_DARK).text(title, MARGIN + 6.8, y);
+  const titleWidth = pdf.getTextWidth(title);
+  const lineStart = MARGIN + 6.8 + titleWidth + 3.2;
+  if (lineStart < MARGIN + WIDTH) {
+    pdf.setDrawColor(ORANGE).setLineWidth(0.45).line(lineStart, cy, MARGIN + WIDTH, cy);
+  }
+}
+
 export function createQuotePdf(document: QuoteDocument) {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
   pdf.setProperties({ title: `Cotización ${document.folio} · ${document.proyecto.nombre}`, author: document.emisor.empresa, creator: 'ObraTrack' });
@@ -103,18 +121,54 @@ export function createQuotePdf(document: QuoteDocument) {
     const firstPage = pdf.getCurrentPageInfo().pageNumber;
     const reference = Boolean(opts.reference);
     const billedTotalLabel = document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL';
-    const body = items.map((item, i) => [String(i + 1).padStart(2, '0'), `${item.nombre}${item.descripcion ? '\n' + item.descripcion : ''}`, item.unidad === 'gl' && item.precioUnit === null ? '' : item.unidad, item.unidad === 'gl' && item.precioUnit === null ? '' : item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 }), item.precioUnit === null ? '—' : quoteMoney(item.precioUnit), quoteMoney(item.total)]);
+    const body = items.map((item, i) => [String(i + 1), `${item.nombre}${item.descripcion ? '\n' + item.descripcion : ''}`, item.unidad === 'gl' && item.precioUnit === null ? '' : item.unidad, item.unidad === 'gl' && item.precioUnit === null ? '' : item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 }), item.precioUnit === null ? '—' : quoteMoney(item.precioUnit), quoteMoney(item.total)]);
     autoTable(pdf, {
       startY,
       margin: { left: MARGIN, right: MARGIN, top: 27, bottom: 23 },
       tableWidth: WIDTH,
-      head: [['ÍTEM', opts.itemColTitle, 'UNIDAD', 'CANT.', 'PRECIO UNIT.', reference ? 'IMPORTE REF.' : billedTotalLabel]],
+      head: [['N°', opts.itemColTitle, 'UNIDAD', 'CANT.', 'PRECIO UNIT.', reference ? 'IMPORTE REF.' : billedTotalLabel]],
       body,
       theme: 'grid',
-      styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2.2, lineColor: '#E8E8E8', lineWidth: 0.15, textColor: INK, overflow: 'linebreak', valign: 'middle' },
-      headStyles: { fillColor: INK, textColor: '#FFFFFF', fontStyle: 'bold', fontSize: 7 },
-      alternateRowStyles: { fillColor: '#FAFAFA' },
-      columnStyles: { 0: { cellWidth: 12, halign: 'center', textColor: ORANGE }, 1: { cellWidth: 79 }, 2: { cellWidth: 14, halign: 'center' }, 3: { cellWidth: 15, halign: 'right' }, 4: { cellWidth: 32, halign: 'right' }, 5: { cellWidth: 34, halign: 'right' } },
+      styles: { font: 'helvetica', fontSize: 7.4, cellPadding: 1.85, lineColor: BORDER, lineWidth: 0.15, textColor: INK, overflow: 'linebreak', valign: 'middle' },
+      headStyles: { fillColor: HEADER_DARK, textColor: '#FFFFFF', fontStyle: 'bold', fontSize: 7 },
+      alternateRowStyles: { fillColor: ROW_ALT },
+      columnStyles: {
+        0: { cellWidth: 11, halign: 'center', fillColor: ORANGE, textColor: '#FFFFFF', fontStyle: 'bold' },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 14, halign: 'center' },
+        3: { cellWidth: 15, halign: 'right' },
+        4: { cellWidth: 32, halign: 'right' },
+        5: { cellWidth: 34, halign: 'right' },
+      },
+      rowPageBreak: 'avoid',
+      willDrawPage: () => {
+        if (pdf.getCurrentPageInfo().pageNumber > firstPage) {
+          drawBrand(pdf, document, MARGIN, 8, true);
+          pdf.setFont('helvetica', 'bold').setFontSize(8).setTextColor(INK).text(`COTIZACIÓN N.° ${document.folio}`, 198, 15, { align: 'right' });
+        }
+      },
+    });
+    return (pdf as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  }
+
+  function drawConsideredMaterials(rows: QuoteConsideredMaterial[], startY: number) {
+    const firstPage = pdf.getCurrentPageInfo().pageNumber;
+    const body = rows.map((row, i) => [String(i + 1), row.cantidadTexto, row.nombre]);
+    autoTable(pdf, {
+      startY,
+      margin: { left: MARGIN, right: MARGIN, top: 27, bottom: 23 },
+      tableWidth: WIDTH,
+      head: [['N°', 'CANT.', 'MATERIAL / INSUMO']],
+      body,
+      theme: 'grid',
+      styles: { font: 'helvetica', fontSize: 7.6, cellPadding: 1.9, lineColor: BORDER, lineWidth: 0.15, textColor: INK, overflow: 'linebreak', valign: 'middle' },
+      headStyles: { fillColor: HEADER_DARK, textColor: '#FFFFFF', fontStyle: 'bold', fontSize: 7 },
+      alternateRowStyles: { fillColor: ROW_ALT },
+      columnStyles: {
+        0: { cellWidth: 13, halign: 'center', fillColor: ORANGE, textColor: '#FFFFFF', fontStyle: 'bold' },
+        1: { cellWidth: 24, halign: 'center' },
+        2: { cellWidth: 149, halign: 'left' },
+      },
       rowPageBreak: 'avoid',
       willDrawPage: () => {
         if (pdf.getCurrentPageInfo().pageNumber > firstPage) {
@@ -128,13 +182,14 @@ export function createQuotePdf(document: QuoteDocument) {
 
   const hasPartidas = document.partidasSeccion.length > 0;
   const hasMateriales = document.materialesSeccion.length > 0;
+  const hasConsidered = document.materialesConsiderados.length > 0;
   const ivaSuffix = document.ivaIncluidoEnPartidas ? ' · IVA INCLUIDO' : ' · VALORES NETOS';
-  let tableEnd = bottom + 6;
-  let nextY = bottom + 5.5;
+  let tableEnd = bottom + 4;
+  let nextY = bottom + 7;
 
   if (hasPartidas) {
-    const titlePartidas = `${hasMateriales ? '1. ' : ''}PARTIDAS / TRABAJOS${ivaSuffix}`;
-    section(pdf, titlePartidas, MARGIN, nextY);
+    const titlePartidas = `${hasMateriales || hasConsidered ? '1. ' : ''}PARTIDAS / TRABAJOS${ivaSuffix}`;
+    drawSectionBanner(pdf, titlePartidas, nextY);
     nextY += 3.5;
     const isInternalPartidas = !document.ivaIncluidoEnPartidas && document.partidasSeccion.every((item) =>
       /^(?:Mano de obra:|Gastos generales$|Provisi[oó]n de imprevistos$|Margen sobre venta$|Utilidad$)/.test(item.nombre),
@@ -144,14 +199,14 @@ export function createQuotePdf(document: QuoteDocument) {
       pdf.setFont('helvetica', 'normal').setFontSize(6.8).setTextColor(GRAY);
       const wrapped = (pdf.splitTextToSize(worksLine, WIDTH) as string[]).slice(0, 2);
       pdf.text(wrapped, MARGIN, nextY);
-      nextY += wrapped.length * 3 + 1;
+      nextY += wrapped.length * 2.9 + 0.8;
     }
     tableEnd = drawItems(document.partidasSeccion, nextY, { itemColTitle: 'PARTIDA / TRABAJO' });
-    nextY = tableEnd + 5.5;
+    nextY = tableEnd + 6.5;
   }
 
   if (hasMateriales) {
-    if (hasPartidas && nextY > 248) {
+    if (hasPartidas && nextY > 246) {
       pdf.addPage();
       drawBrand(pdf, document, MARGIN, 8, true);
       nextY = 27;
@@ -160,55 +215,90 @@ export function createQuotePdf(document: QuoteDocument) {
     const titleMateriales = document.materialesEsReferencia
       ? `${prefix}MATERIALES INCLUIDOS · REFERENCIA NETA`
       : `${prefix}MATERIALES${ivaSuffix}`;
-    section(pdf, titleMateriales, MARGIN, nextY);
+    drawSectionBanner(pdf, titleMateriales, nextY);
     nextY += 3.5;
     tableEnd = drawItems(document.materialesSeccion, nextY, {
       itemColTitle: document.materialesEsReferencia ? 'MATERIALES INCLUIDOS · VALORES NETOS DE REFERENCIA' : 'MATERIAL',
       reference: document.materialesEsReferencia,
     });
+    nextY = tableEnd + 6.5;
   }
-  let y = tableEnd + 8;
-  pdf.setFont('helvetica', 'normal').setFontSize(7.6);
-  const observations = document.observaciones.flatMap((value) => pdf.splitTextToSize(value, 83) as string[]);
-  const conditions = pdf.splitTextToSize(document.condiciones, 83) as string[];
-  const closingHeight = Math.max(65, 19 + observations.length * 3.1 + conditions.length * 3.1);
+
+  if (hasConsidered) {
+    if ((hasPartidas || hasMateriales) && nextY > 246) {
+      pdf.addPage();
+      drawBrand(pdf, document, MARGIN, 8, true);
+      nextY = 27;
+    }
+    drawSectionBanner(pdf, 'MATERIALES CONSIDERADOS', nextY);
+    nextY += 3.5;
+    tableEnd = drawConsideredMaterials(document.materialesConsiderados, nextY);
+    nextY = tableEnd + 6.5;
+  }
+
+  // Bloque RESUMEN ECONÓMICO (ancho completo con barra naranja destacada).
+  const econRows = document.resumenEconomico;
+  const econRowH = 6.2;
+  const econBarH = 9.5;
+  const econTotalH = 5 + econRows.length * econRowH + econBarH + 6;
+  let econY = Math.max(tableEnd + 6.5, nextY);
+  if (econY + econTotalH > 273) {
+    pdf.addPage();
+    drawBrand(pdf, document, MARGIN, 8, true);
+    econY = 28;
+  }
+  drawSectionBanner(pdf, 'RESUMEN ECONÓMICO', econY);
+  let ry = econY + 3.5;
+  for (let i = 0; i < econRows.length; i++) {
+    const row = econRows[i];
+    pdf.setFillColor(i % 2 === 0 ? '#F2F2F2' : '#FFFFFF');
+    pdf.setDrawColor(BORDER).setLineWidth(0.18).rect(MARGIN, ry, WIDTH, econRowH, 'FD');
+    pdf.setFont('helvetica', 'bold').setFontSize(7.8).setTextColor(INK).text(row.label, MARGIN + 3.5, ry + 4.1);
+    pdf.setFont('helvetica', 'bold').setFontSize(8.2).setTextColor(INK).text(quoteMoney(row.amount), MARGIN + WIDTH - 3.5, ry + 4.1, { align: 'right' });
+    ry += econRowH;
+  }
+  ry += 1.5;
+  pdf.setFillColor(ORANGE).rect(MARGIN, ry, WIDTH, econBarH, 'F');
+  pdf.setFont('helvetica', 'bold').setFontSize(9.5).setTextColor('#FFFFFF').text('TOTAL GENERAL DEL PROYECTO', MARGIN + 3.5, ry + 6.1);
+  pdf.setFont('helvetica', 'bold').setFontSize(12).setTextColor('#FFFFFF').text(quoteMoney(document.total), MARGIN + WIDTH - 3.5, ry + 6.3, { align: 'right' });
+  ry += econBarH + 4;
+  pdf.setFont('helvetica', 'normal').setFontSize(6.8).setTextColor(GRAY).text(
+    document.ivaIncluidoEnPartidas
+      ? 'Valores expresados en pesos chilenos (CLP) · IVA incluido.'
+      : 'Valores expresados en pesos chilenos (CLP).',
+    MARGIN,
+    ry,
+  );
+
+  let y = ry + 6;
+  pdf.setFont('helvetica', 'normal').setFontSize(7.4);
+  const observations = document.observaciones.flatMap((value) => pdf.splitTextToSize(value, 110) as string[]);
+  const conditions = pdf.splitTextToSize(document.condiciones, 110) as string[];
+  const closingHeight = Math.max(40, 14 + observations.length * 3.0 + conditions.length * 3.0);
   if (y + Math.min(closingHeight, 230) > 273) { pdf.addPage(); y = 30; drawBrand(pdf, document, MARGIN, 8, true); }
   const summaryY = y;
-  // Totales y firma ocupan la derecha; el texto puede continuar en otra página.
-  const tx = 111;
-  pdf.setFillColor('#F7F7F6').rect(tx, y, 87, 16, 'F');
-  const breakdownRows: [string, number, number][] = document.ivaIncluidoEnPartidas
-    ? [['NETO (DESGLOSE)', document.subtotal, 6], ['IVA INCLUIDO (19%)', document.iva, 12]]
-    : [['SUBTOTAL', document.subtotal, 6], ['IVA (19%)', document.iva, 12]];
-  for (const [label, value, dy] of breakdownRows) {
-    pdf.setFont('helvetica', 'normal').setFontSize(8).setTextColor(INK).text(label, tx + 4, y + dy);
-    pdf.text(quoteMoney(value), 194, y + dy, { align: 'right' });
-  }
-  pdf.setFillColor(ORANGE).rect(tx, y + 16, 87, 10, 'F');
-  pdf.setFont('helvetica', 'bold').setFontSize(10).setTextColor('#FFFFFF').text('TOTAL', tx + 4, y + 22.5);
-  pdf.text(quoteMoney(document.total), 194, y + 22.5, { align: 'right' });
-  pdf.setDrawColor('#BBBBBB').setLineWidth(0.2).line(128, y + 49, 181, y + 49);
-  pdf.setFont('helvetica', 'normal').setFontSize(7).setTextColor(GRAY).text('Firma y sello', 154.5, y + 53, { align: 'center' });
+  pdf.setDrawColor('#BBBBBB').setLineWidth(0.2).line(134, y + 26, 189, y + 26);
+  pdf.setFont('helvetica', 'normal').setFontSize(7).setTextColor(GRAY).text('Firma y sello', 161.5, y + 30, { align: 'center' });
   const firmaLabel = pdf.splitTextToSize(document.emisor.firma || 'ObraTrack', 54)[0] || 'ObraTrack';
-  pdf.setFont('helvetica', 'bold').setTextColor(ORANGE).text(firmaLabel, 154.5, y + 57, { align: 'center' });
+  pdf.setFont('helvetica', 'bold').setTextColor(ORANGE).text(firmaLabel, 161.5, y + 34, { align: 'center' });
 
   const paragraph = (value: string) => {
-    pdf.setFont('helvetica', 'normal').setFontSize(7.6).setTextColor(INK);
-    const lines: string[] = pdf.splitTextToSize(value, 83);
+    pdf.setFont('helvetica', 'normal').setFontSize(7.4).setTextColor(INK);
+    const lines: string[] = pdf.splitTextToSize(value, 110);
     for (const line of lines) {
-      if (y + 4 > 273) { pdf.addPage(); drawBrand(pdf, document, MARGIN, 8, true); y = 32; section(pdf, 'OBSERVACIONES Y CONDICIONES (CONTINUACIÓN)', MARGIN, 27); pdf.setFont('helvetica', 'normal').setFontSize(7.6).setTextColor(INK); }
+      if (y + 4 > 273) { pdf.addPage(); drawBrand(pdf, document, MARGIN, 8, true); y = 32; section(pdf, 'OBSERVACIONES Y CONDICIONES (CONTINUACIÓN)', MARGIN, 27); pdf.setFont('helvetica', 'normal').setFontSize(7.4).setTextColor(INK); }
       pdf.text(line, MARGIN, y);
-      y += 3.3;
+      y += 3.1;
     }
-    y += 2;
+    y += 1.5;
   };
   section(pdf, 'OBSERVACIONES', MARGIN, summaryY + 3);
-  y += 8;
+  y += 7;
   for (const value of document.observaciones) paragraph(value);
-  y += 3;
-  if (y + 12 > 273) { pdf.addPage(); drawBrand(pdf, document, MARGIN, 8, true); y = 32; }
+  y += 2;
+  if (y + 10 > 273) { pdf.addPage(); drawBrand(pdf, document, MARGIN, 8, true); y = 32; }
   section(pdf, 'CONDICIONES DE PAGO', MARGIN, y);
-  y += 5;
+  y += 4.5;
   paragraph(document.condiciones);
 
   if (infoBottom > 112) {

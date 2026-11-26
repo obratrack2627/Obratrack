@@ -434,10 +434,17 @@ export interface RecomendacionCobroCliente {
   justificacion_precio: string;
 }
 
+export interface MaterialConsiderado {
+  nombre: string;
+  cantidad?: number | string | null;
+  unidad?: string;
+}
+
 export interface CotizacionEstimacion {
   modo_presupuesto?: 'estimado' | 'precio_acordado';
   tratamiento_iva?: 'neto' | 'incluido';
   partidas_venta?: { nombre: string; unidad: string; cantidad: number; precio_unitario: number; precio_partida?: number; subtotal: number; tipo?: 'partida' | 'material' }[];
+  materiales_considerados?: MaterialConsiderado[];
   nombre_alternativa?: string;
   alternativas?: CotizacionEstimacion[];
   grupo_presupuesto_id?: string;

@@ -235,6 +235,9 @@ test("registro de cuenta exige RUT personal, correo real y teléfono, y permite 
   page,
 }) => {
   let signup: any;
+  await page.route("**/api/auth/validar-registro", (route) =>
+    route.fulfill({ json: { ok: true, checked: false, conflicts: [] } }),
+  );
   await page.route("**/auth/v1/signup*", async (route) => {
     signup = route.request().postDataJSON();
     await route.fulfill({

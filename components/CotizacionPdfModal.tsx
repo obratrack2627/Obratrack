@@ -136,27 +136,39 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
         .quote-field { display: grid; grid-template-columns: 68px 1fr; gap: 5px; margin-top: 4px; font-size: 10px; }
         .quote-field dt { font-weight: 700; }
         .quote-field dd { margin: 0; overflow-wrap: anywhere; }
+        .quote-section-banner { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; }
+        .quote-section-badge { width: 18px; height: 18px; border-radius: 9999px; background: #ea4c00; color: #fff; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; flex-shrink: 0; }
+        .quote-section-badge > span { width: 7px; height: 1.8px; border-radius: 1px; background: #fff; display: block; }
+        .quote-section-heading { font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #141414; white-space: nowrap; }
+        .quote-section-line { flex: 1; height: 1.5px; background: #ea4c00; }
         .quote-info + .quote-table, .quote-table + .quote-table { margin-top: 14px; }
         .quote-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; }
-        .quote-table th { background: #1e1e1e; color: white; padding: 9px 6px; text-transform: uppercase; font-size: 8px; font-weight: 700; }
-        .quote-table td { padding: 8px 6px; border: 1px solid #ededed; vertical-align: top; overflow-wrap: anywhere; }
+        .quote-table th { background: #141414; color: white; padding: 8px 6px; text-transform: uppercase; font-size: 8px; font-weight: 700; text-align: left; }
+        .quote-table th:first-child { text-align: center; }
+        .quote-table td { padding: 8px 6px; border: 1px solid #e5e5e5; vertical-align: top; overflow-wrap: anywhere; }
         .quote-table tbody tr:nth-child(even) { background: #fafafa; }
-        .quote-table td:first-child { color: #ff6a00; text-align: center; }
-        .quote-table td:nth-child(3) { text-align: center; }
-        .quote-table td:nth-child(n+4), .quote-table th:nth-child(n+4) { text-align: right; }
+        .quote-table td:first-child { background: #ea4c00; color: #ffffff; font-weight: 700; text-align: center; border-color: #e5e5e5; }
+        .quote-table:not(.quote-table-considered) th:nth-child(3), .quote-table:not(.quote-table-considered) td:nth-child(3) { text-align: center; }
+        .quote-table:not(.quote-table-considered) td:nth-child(n+4), .quote-table:not(.quote-table-considered) th:nth-child(n+4) { text-align: right; }
+        .quote-table-considered th:nth-child(2), .quote-table-considered td:nth-child(2) { text-align: center; }
+        .quote-table-considered th:nth-child(3), .quote-table-considered td:nth-child(3) { text-align: left; }
         .quote-table small { display: block; color: #666; font-size: 9px; margin-top: 2px; }
-        .quote-closing { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 18px; }
+        .quote-economic { border: 1px solid #d4d4d4; margin-bottom: 6px; }
+        .quote-economic-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; font-size: 10px; font-weight: 700; color: #141414; background: #ffffff; }
+        .quote-economic-row:nth-child(odd) { background: #f2f2f2; }
+        .quote-economic-row + .quote-economic-row { border-top: 1px solid #e4e4e4; }
+        .quote-economic-total { background: #ea4c00; color: #ffffff; padding: 11px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12.5px; font-weight: 800; }
+        .quote-economic-total > strong { font-size: 17px; font-weight: 800; }
+        .quote-economic-footnote { font-size: 8.5px; color: #666; margin-top: 5px; }
+        .quote-closing { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 16px; }
         .quote-notes { padding: 12px; border-radius: 5px; background: #f7f7f6; margin-bottom: 14px; }
         .quote-notes ul { list-style: disc; padding-left: 14px; font-size: 9px; color: #555; }
         .quote-notes li + li { margin-top: 5px; }
         .quote-payment { font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
-        .quote-totals { background: #f7f7f6; border-radius: 5px; overflow: hidden; }
-        .quote-totals > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #e4e4e4; }
-        .quote-totals > .quote-total { background: #ff6a00; color: white; font-size: 15px; font-weight: 700; border: 0; }
-        .quote-signature { text-align: center; padding-top: 45px; font-size: 10px; }
+        .quote-signature { text-align: center; padding-top: 42px; font-size: 10px; }
         .quote-signature > div { width: 55mm; border-top: 1px solid #bbb; padding-top: 5px; margin: auto; }
-        .quote-signature strong { display: block; color: #ff6a00; }
-        .quote-footer { border-top: 1px solid #ff6a00; margin-top: 24px; padding-top: 10px; display: flex; justify-content: space-between; gap: 20px; color: #666; font-size: 8px; overflow-wrap: anywhere; }
+        .quote-signature strong { display: block; color: #ea4c00; }
+        .quote-footer { border-top: 1px solid #ea4c00; margin-top: 24px; padding-top: 10px; display: flex; justify-content: space-between; gap: 20px; color: #666; font-size: 8px; overflow-wrap: anywhere; }
         .quote-footer strong { color: #1e1e1e; }
         @media print {
           body > *:not(#obratrack-quote-overlay) { display: none !important; }
@@ -219,43 +231,106 @@ export default function CotizacionPdfModal({ isOpen, onClose, cotizacion, onSave
             <section><h2 className="quote-section-title"><User />CLIENTE</h2><dl>{fields([['Nombre:', document.cliente.nombre], ['Contacto:', document.cliente.contacto], ['Email:', document.cliente.email], ['Teléfono:', document.cliente.telefono]])}</dl></section>
             <section><h2 className="quote-section-title"><Briefcase />PROYECTO</h2><dl>{fields([['Proyecto:', document.proyecto.nombre], ['Ubicación:', document.proyecto.ubicacion], ['Descripción:', document.proyecto.descripcion]])}</dl></section>
           </div>
-          {[
-            {
-              key: 'partidas',
-              sectionHeading: `${document.materialesSeccion.length ? '1. ' : ''}Partidas / Trabajos`,
-              colTitle: 'Partida / Trabajo',
-              items: document.partidasSeccion,
-              amountLabel: document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL',
-              worksNote: !document.ivaIncluidoEnPartidas &&
-                document.trabajosIncluidos.length > 0 &&
-                document.partidasSeccion.every((item) =>
-                  /^(?:Mano de obra:|Gastos generales$|Provisi[oó]n de imprevistos$|Margen sobre venta$|Utilidad$)/.test(item.nombre),
-                )
-                ? document.trabajosIncluidos.map((t) => `${t.nombre} (${t.dias} d)`).join(' · ')
-                : '',
-            },
-            {
-              key: 'materiales',
-              sectionHeading: `${document.partidasSeccion.length ? '2. ' : ''}Materiales${document.materialesEsReferencia ? ' incluidos · referencia neta' : ''}`,
-              colTitle: document.materialesEsReferencia ? 'Materiales incluidos · referencia neta' : 'Material',
-              items: document.materialesSeccion,
-              amountLabel: document.materialesEsReferencia ? 'Importe ref.' : document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL',
-              worksNote: '',
-            },
-          ].filter(group => group.items.length).map(({ key, sectionHeading, colTitle, items, amountLabel, worksNote }) => (
-            <div key={key} className="mt-3.5">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-[#FF6A00] mb-1">{sectionHeading}</p>
-              {worksNote && <p className="text-[9px] text-gray-600 mb-1.5">Trabajos / fases: {worksNote}</p>}
-              <table className="quote-table !mt-0" aria-label={sectionHeading}>
-                <colgroup><col style={{ width: '6.5%' }} /><col style={{ width: '42.5%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '8%' }} /><col style={{ width: '17%' }} /><col style={{ width: '18.5%' }} /></colgroup>
-                <thead><tr>{['ÍTEM', colTitle, 'UNIDAD', 'CANT.', 'PRECIO UNIT.', amountLabel].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
-                <tbody>{items.map((item, index) => <tr key={index}><td>{String(index + 1).padStart(2, '0')}</td><td><strong>{item.nombre}</strong>{item.descripcion && <small>{item.descripcion}</small>}</td><td>{item.precioUnit === null && item.unidad === 'gl' ? '' : item.unidad}</td><td>{item.precioUnit === null && item.unidad === 'gl' ? '' : item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })}</td><td>{item.precioUnit === null ? '—' : quoteMoney(item.precioUnit)}</td><td><strong>{quoteMoney(item.total)}</strong></td></tr>)}</tbody>
-              </table>
-            </div>
-          ))}
+          {(() => {
+            const hasPartidas = document.partidasSeccion.length > 0;
+            const hasMateriales = document.materialesSeccion.length > 0;
+            const hasConsidered = document.materialesConsiderados.length > 0;
+            const ivaSuffix = document.ivaIncluidoEnPartidas ? ' · IVA incluido' : ' · Valores netos';
+            const renderBanner = (title: string) => (
+              <div className="quote-section-banner">
+                <span className="quote-section-badge" aria-hidden="true"><span /><span /></span>
+                <span className="quote-section-heading">{title}</span>
+                <span className="quote-section-line" aria-hidden="true" />
+              </div>
+            );
+            const pricedSections = [
+              {
+                key: 'partidas',
+                ariaLabel: `${hasMateriales || hasConsidered ? '1. ' : ''}Partidas / Trabajos`,
+                bannerTitle: `${hasMateriales || hasConsidered ? '1. ' : ''}Partidas / Trabajos${ivaSuffix}`,
+                colTitle: 'Partida / Trabajo',
+                items: document.partidasSeccion,
+                amountLabel: document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL',
+                worksNote: !document.ivaIncluidoEnPartidas &&
+                  document.trabajosIncluidos.length > 0 &&
+                  document.partidasSeccion.every((item) =>
+                    /^(?:Mano de obra:|Gastos generales$|Provisi[oó]n de imprevistos$|Margen sobre venta$|Utilidad$)/.test(item.nombre),
+                  )
+                  ? document.trabajosIncluidos.map((t) => `${t.nombre} (${t.dias} d)`).join(' · ')
+                  : '',
+              },
+              {
+                key: 'materiales',
+                ariaLabel: `${hasPartidas ? '2. ' : ''}Materiales${document.materialesEsReferencia ? ' incluidos · referencia neta' : ''}`,
+                bannerTitle: document.materialesEsReferencia
+                  ? `${hasPartidas ? '2. ' : ''}Materiales incluidos · referencia neta`
+                  : `${hasPartidas ? '2. ' : ''}Materiales${ivaSuffix}`,
+                colTitle: document.materialesEsReferencia ? 'Materiales incluidos · referencia neta' : 'Material',
+                items: document.materialesSeccion,
+                amountLabel: document.materialesEsReferencia ? 'Importe ref.' : document.ivaIncluidoEnPartidas ? 'TOTAL (IVA INCL.)' : 'TOTAL',
+                worksNote: '',
+              },
+            ].filter((group) => group.items.length > 0);
+
+            return (
+              <>
+                {pricedSections.map(({ key, ariaLabel, bannerTitle, colTitle, items, amountLabel, worksNote }) => (
+                  <div key={key}>
+                    {renderBanner(bannerTitle)}
+                    {worksNote && <p className="text-[9px] text-gray-600 mb-1.5">Trabajos / fases: {worksNote}</p>}
+                    <table className="quote-table !mt-0" aria-label={ariaLabel}>
+                      <colgroup><col style={{ width: '6%' }} /><col style={{ width: '43%' }} /><col style={{ width: '7.5%' }} /><col style={{ width: '8%' }} /><col style={{ width: '17%' }} /><col style={{ width: '18.5%' }} /></colgroup>
+                      <thead><tr>{['N°', colTitle, 'UNIDAD', 'CANT.', 'PRECIO UNIT.', amountLabel].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+                      <tbody>{items.map((item, index) => <tr key={index}><td>{index + 1}</td><td><strong>{item.nombre}</strong>{item.descripcion && <small>{item.descripcion}</small>}</td><td>{item.precioUnit === null && item.unidad === 'gl' ? '' : item.unidad}</td><td>{item.precioUnit === null && item.unidad === 'gl' ? '' : item.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 })}</td><td>{item.precioUnit === null ? '—' : quoteMoney(item.precioUnit)}</td><td><strong>{quoteMoney(item.total)}</strong></td></tr>)}</tbody>
+                    </table>
+                  </div>
+                ))}
+                {hasConsidered && (
+                  <div>
+                    {renderBanner('Materiales considerados')}
+                    <table className="quote-table quote-table-considered !mt-0" aria-label="Materiales considerados">
+                      <colgroup><col style={{ width: '7%' }} /><col style={{ width: '15%' }} /><col style={{ width: '78%' }} /></colgroup>
+                      <thead><tr><th scope="col">N°</th><th scope="col">CANT.</th><th scope="col">MATERIAL / INSUMO</th></tr></thead>
+                      <tbody>
+                        {document.materialesConsiderados.map((mat, index) => (
+                          <tr key={`${mat.nombre}-${index}`}>
+                            <td>{index + 1}</td>
+                            <td>{mat.cantidadTexto}</td>
+                            <td>{mat.nombre}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div>
+                  {renderBanner('Resumen económico')}
+                  {document.resumenEconomico.length > 0 && (
+                    <div className="quote-economic">
+                      {document.resumenEconomico.map((row) => (
+                        <div key={row.label} className="quote-economic-row">
+                          <span>{row.label}</span>
+                          <span>{quoteMoney(row.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="quote-economic-total">
+                    <span>TOTAL GENERAL DEL PROYECTO</span>
+                    <strong>{quoteMoney(document.total)}</strong>
+                  </div>
+                  <p className="quote-economic-footnote">
+                    {document.ivaIncluidoEnPartidas
+                      ? 'Valores expresados en pesos chilenos (CLP) · IVA incluido.'
+                      : 'Valores expresados en pesos chilenos (CLP).'}
+                  </p>
+                </div>
+              </>
+            );
+          })()}
           <div className="quote-closing">
             <div><section className="quote-notes"><h2 className="quote-section-title"><FileText />OBSERVACIONES</h2><ul>{document.observaciones.map((note) => <li key={note}>{note}</li>)}</ul></section><section><h2 className="quote-section-title"><DollarSign />CONDICIONES DE PAGO</h2><p className="quote-payment">{document.condiciones}</p></section></div>
-            <div><div className="quote-totals"><div><span>{document.ivaIncluidoEnPartidas ? 'NETO (DESGLOSE)' : 'SUBTOTAL'}</span><strong>{quoteMoney(document.subtotal)}</strong></div><div><span>{document.ivaIncluidoEnPartidas ? 'IVA INCLUIDO (19%)' : 'IVA (19%)'}</span><strong>{quoteMoney(document.iva)}</strong></div><div className="quote-total"><span>TOTAL</span><strong>{quoteMoney(document.total)}</strong></div></div><div className="quote-signature"><div>Firma y sello<strong>{document.emisor.firma || 'ObraTrack'}</strong></div></div></div>
+            <div><div className="quote-signature"><div>Firma y sello<strong>{document.emisor.firma || 'ObraTrack'}</strong></div></div></div>
           </div>
           <footer className="quote-footer">
             <div>

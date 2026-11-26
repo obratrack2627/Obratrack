@@ -54,9 +54,10 @@ export function reviseQuote(original: CotizacionEstimacion, changes: any): Cotiz
     ...updated,
     materiales: changes.materiales,
     mano_de_obra: changes.mano_de_obra,
+    materiales_considerados: changes.materiales_considerados ?? updated.materiales_considerados,
     actividades_gantt: changes.actividades_gantt ?? updated.actividades_gantt,
     duracion_dias_estimada: changes.duracion_dias_estimada,
     estructura_financiera: f,
   });
-  return { ...calculated, ...updated, partidas_venta: calculated.partidas_venta, hitos_pago: calculated.hitos_pago, materiales: calculated.materiales, mano_de_obra: calculated.mano_de_obra, actividades_gantt: calculated.actividades_gantt, estructura_financiera: calculated.estructura_financiera, duracion_dias_estimada: calculated.duracion_dias_estimada, id: original.id, fecha_creacion: original.fecha_creacion };
+  return { ...calculated, ...updated, partidas_venta: calculated.partidas_venta, hitos_pago: calculated.hitos_pago, materiales: calculated.materiales, ...(calculated.materiales_considerados ? { materiales_considerados: calculated.materiales_considerados } : {}), mano_de_obra: calculated.mano_de_obra, actividades_gantt: calculated.actividades_gantt, estructura_financiera: calculated.estructura_financiera, duracion_dias_estimada: calculated.duracion_dias_estimada, id: original.id, fecha_creacion: original.fecha_creacion };
 }
