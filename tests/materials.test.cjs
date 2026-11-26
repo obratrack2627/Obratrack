@@ -369,3 +369,203 @@ test('buscar látex blanco descarta globos/guantes y compareQuoteMaterials consu
   assert.match(waText, /Cinta Enmascarar 24mm/);
   assert.match(waText, /La Florida/);
 });
+
+test('omite Construmart e Imperial por defecto, pero permite consultarlos explícitamente', async () => {
+  const calledHosts = [];
+  const defaultRes = await compareMaterialPrices(
+    { producto: 'cemento' },
+    async (url) => {
+      calledHosts.push(new URL(url).hostname);
+      return new Response('[]');
+    },
+  );
+  assert.equal(defaultRes.proveedores.length, 3);
+  assert.deepEqual(
+    defaultRes.proveedores.map((p) => p.nombre),
+    ['Easy', 'Dimaco', 'Sodimac'],
+  );
+  assert.ok(!calledHosts.some((h) => h.includes('construmart') || h.includes('imperial')));
+
+  const explicitRes = await compareMaterialPrices(
+    { producto: 'cemento', tiendas: ['Imperial'] },
+    async (url) => {
+      calledHosts.push(new URL(url).hostname);
+      return new Response('[]');
+    },
+  );
+  assert.equal(explicitRes.proveedores[0].nombre, 'Imperial');
+  assert.ok(calledHosts.some((h) => h.includes('imperial')));
+});
+
+test('normaliza jerga ferretera chilena, sinónimos y unidades contables como planchas y galones', async () => {
+  const { completePurchaseQuantity } = require('../lib/materials/catalog.ts');
+  assert.equal(
+    completePurchaseQuantity({ producto: 'volcanita 10 mm', cantidad: 12 }, 'Cotiza 12 planchas de volcanita 10 mm').unidad_cantidad,
+    'planchas',
+  );
+  assert.equal(
+    completePurchaseQuantity({ producto: 'latex blanco', cantidad: 3 }, 'Necesito 3 galones de latex blanco').unidad_cantidad,
+    'galones',
+  );
+
+  const fetchedTerms = [];
+  const res = await compareMaterialPrices(
+    { producto: 'plancha volcanita 10 mm', cantidad: 12, unidad_cantidad: 'planchas', tiendas: ['Easy', 'Dimaco'] },
+    async (url) => {
+      const ft = new URL(url).searchParams.get('ft') || '';
+      fetchedTerms.push(ft);
+      const isEasy = url.includes('easycl.');
+      if (isEasy && !ft.includes('yeso carton')) {
+        return new Response('[]');
+      }
+      const p = isEasy ? catalogProviders[0] : catalogProviders[1];
+      const title = isEasy ? 'Yeso Cartón ST 10 mm 1.2x2.4 m' : 'Volcanita ST 10 mm';
+      return new Response(
+        JSON.stringify([
+          ...(isEasy
+            ? []
+            : [
+                product(p, {
+                  price: 660,
+                  product: { productName: 'Tarugo volcanita 10mm bolsa 5 unidades', brand: 'Imporper' },
+                  item: { itemId: 'tarugo-bad', nameComplete: 'Tarugo volcanita 10mm bolsa 5 unidades' },
+                }),
+              ]),
+          product(p, {
+            price: isEasy ? 6990 : 7290,
+            product: { productName: title, brand: 'Volcan' },
+            item: { itemId: isEasy ? 'e1' : 'd1', nameComplete: title },
+          }),
+        ]),
+      );
+    },
+  );
+  assert.ok(fetchedTerms.some((t) => t === 'volcanita 10 mm'));
+  assert.ok(fetchedTerms.some((t) => t === 'yeso carton 10 mm'));
+  assert.equal(res.ofertas.length, 2);
+  assert.equal(res.ofertas[0].total_solicitado, 83880);
+  assert.equal(res.ofertas[1].total_solicitado, 87480);
+
+  const adhesivoOffers = parseCatalogProducts(
+    [
+      product(catalogProviders[0], {
+        price: 5990,
+        product: { productName: 'Adhesivo Cerámico Polvo 25 kg' },
+        item: { itemId: 'adh1', nameComplete: 'Adhesivo Cerámico Polvo 25 kg' },
+      }),
+    ],
+    catalogProviders[0],
+    { producto: 'pegamento ceramico 25 kg', cantidad: 4, unidad_cantidad: 'sacos' },
+  );
+  assert.equal(adhesivoOffers.length, 1);
+  assert.equal(adhesivoOffers[0].total_solicitado, 23960);
+});
+
+test('calcula cajas necesarias y precio por m2 cuando se solicita en metros cuadrados', async () => {
+  const { formatMaterialComparison } = require('../lib/materials/format.ts');
+  const pEasy = catalogProviders[0];
+  const pDimaco = catalogProviders[1];
+  const res = await compareMaterialPrices(
+    { producto: 'porcelanato 60x60', cantidad: 16, unidad_cantidad: 'm2', tiendas: ['Easy', 'Dimaco'] },
+    async (url) => {
+      const isEasy = url.includes('easycl.');
+      const p = isEasy ? pEasy : pDimaco;
+      const title = isEasy
+        ? 'Porcelanato 60x60 cm Beige Caja 1,44 m2'
+        : 'Gres Porcelanato 60x60 Urbanity Gris Mate 1.44m² Klipen';
+      return new Response(
+        JSON.stringify([
+          product(p, {
+            price: isEasy ? 14400 : 17280,
+            product: { productName: title },
+            item: { itemId: isEasy ? 'por-e' : 'por-d', nameComplete: title },
+          }),
+        ]),
+      );
+    },
+  );
+  assert.equal(res.ofertas.length, 2);
+  assert.equal(res.ofertas[0].rendimiento_m2, 1.44);
+  assert.equal(res.ofertas[0].cajas_necesarias, 12);
+  assert.equal(res.ofertas[0].precio_m2, 10000);
+  assert.equal(res.ofertas[0].total_solicitado, 172800);
+  assert.ok(isMaterialComparison(res));
+
+  const formatted = formatMaterialComparison(res);
+  assert.match(formatted, /Comparativa por tienda:/);
+  assert.match(formatted, /Ahorro estimado de \$34\.560 CLP/);
+  assert.match(formatted, /12 cajas de 1,44 m²/);
+});
+
+test('deduplica variantes idénticas, balancea tiendas en top 12 y soporta hasta 10 materiales con resumen de carro', async () => {
+  const { compareQuoteMaterials } = require('../lib/materials/catalog.ts');
+  const { formatBatchMaterialComparison } = require('../lib/materials/format.ts');
+  const { materialBatchComparisonWhatsApp } = require('../lib/whatsapp/format.ts');
+
+  const pEasy = catalogProviders[0];
+  const pDimaco = catalogProviders[1];
+  const easyItems = Array.from({ length: 10 }, (_, idx) =>
+    product(pEasy, {
+      price: 5000 + (idx < 2 ? 0 : idx * 100),
+      product: { productName: idx < 2 ? 'Cemento Especial 25 kg' : `Cemento Obra ${idx} 25 kg` },
+      item: { itemId: `e-${idx}`, nameComplete: idx < 2 ? 'Cemento Especial 25 kg' : `Cemento Obra ${idx} 25 kg` },
+    }),
+  );
+  const dimacoItems = [
+    product(pDimaco, {
+      price: 5800,
+      product: { productName: 'Cemento Polpaico 25 kg' },
+      item: { itemId: 'd-0', nameComplete: 'Cemento Polpaico 25 kg' },
+    }),
+    product(pDimaco, {
+      price: 5900,
+      product: { productName: 'Cemento Melón 25 kg' },
+      item: { itemId: 'd-1', nameComplete: 'Cemento Melón 25 kg' },
+    }),
+  ];
+  const balanced = await compareMaterialPrices(
+    { producto: 'cemento 25 kg', tiendas: ['Easy', 'Dimaco'] },
+    async (url) => new Response(JSON.stringify(url.includes('easycl.') ? easyItems : dimacoItems)),
+  );
+  assert.equal(balanced.ofertas.length, 11);
+  assert.ok(balanced.ofertas.some((o) => o.tienda === 'Dimaco'));
+  assert.ok(balanced.ofertas.some((o) => o.tienda === 'Easy'));
+
+  const batchInput = [
+    { nombre: 'Cemento 25 kg', cantidad: 10, unidad: 'sacos' },
+    { nombre: 'Volcanita 10 mm', cantidad: 8, unidad: 'planchas' },
+    { nombre: 'Tornillo drywall 6x1', cantidad: 2, unidad: 'cajas' },
+    { nombre: 'Pintura látex blanco', cantidad: 2, unidad: 'tineta' },
+    { nombre: 'Silicona neutra', cantidad: 4, unidad: 'un' },
+    { nombre: 'Cinta papel junta', cantidad: 3, unidad: 'rollos' },
+    { nombre: 'Pasta muro interior', cantidad: 2, unidad: 'galones' },
+    { nombre: 'Brocha 3 pulgadas', cantidad: 2, unidad: 'unidades' },
+  ];
+  const batch = await compareQuoteMaterials(
+    batchInput,
+    { ubicacion: 'Ñuñoa', tiendas: ['Easy', 'Dimaco'] },
+    async (url) => {
+      const isEasy = url.includes('easycl.');
+      const p = isEasy ? pEasy : pDimaco;
+      const ft = new URL(url).searchParams.get('ft') || 'Material';
+      const title = `${ft} estándar`;
+      return new Response(
+        JSON.stringify([
+          product(p, {
+            price: isEasy ? 5000 : 6000,
+            product: { productName: title },
+            item: { itemId: `${p.cuenta}-${ft}`, nameComplete: title },
+          }),
+        ]),
+      );
+    },
+  );
+  assert.equal(batch.length, 8);
+  const webBatch = formatBatchMaterialComparison(batch, 'Ñuñoa');
+  assert.match(webBatch, /Resumen de compra \(8 de 8 materiales con precio\):/);
+  assert.match(webBatch, /Compra mixta más barata:/);
+  assert.match(webBatch, /Todo en Easy:/);
+  const waBatch = materialBatchComparisonWhatsApp(batch, 'Ñuñoa');
+  assert.match(waBatch, /\*RESUMEN DE COMPRA\*/);
+  assert.match(waBatch, /Todo en Easy:/);
+});

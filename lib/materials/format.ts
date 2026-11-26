@@ -1,5 +1,82 @@
-import type { ComparacionMateriales } from "./types";
+import type { ComparacionMateriales, OfertaMaterial } from "./types";
 const clp = (v: number) => "$" + v.toLocaleString("es-CL") + " CLP";
+const effectiveOfferTotal = (o: OfertaMaterial) => o.total_solicitado ?? o.precio;
+
+function offerQuantityDetail(o: OfertaMaterial, data: ComparacionMateriales): string {
+  if (o.cajas_necesarias != null && o.rendimiento_m2 != null && o.total_solicitado != null) {
+    const m2Str = o.rendimiento_m2.toLocaleString("es-CL");
+    const pm2 = o.precio_m2 != null ? ` (${clp(o.precio_m2)}/m²)` : "";
+    return ` · ${o.cajas_necesarias} ${o.cajas_necesarias === 1 ? "caja" : "cajas"} de ${m2Str} m²${pm2}: ${clp(o.total_solicitado)}`;
+  }
+  if (o.total_solicitado != null) {
+    const unitLabel = data.consulta.unidad_cantidad?.trim() || "unidades";
+    return ` · ${data.consulta.cantidad} ${unitLabel}: ${clp(o.total_solicitado)}`;
+  }
+  return "";
+}
+
+function storeComparisonSummary(data: ComparacionMateriales): string | null {
+  const bestByStore = new Map<string, OfertaMaterial>();
+  for (const o of data.ofertas) {
+    const prev = bestByStore.get(o.tienda);
+    if (!prev || effectiveOfferTotal(o) < effectiveOfferTotal(prev)) {
+      bestByStore.set(o.tienda, o);
+    }
+  }
+  if (bestByStore.size < 2) return null;
+  const ranked = Array.from(bestByStore.entries()).sort(
+    (a, b) => effectiveOfferTotal(a[1]) - effectiveOfferTotal(b[1]),
+  );
+  const low = effectiveOfferTotal(ranked[0][1]);
+  const high = effectiveOfferTotal(ranked[ranked.length - 1][1]);
+  const savings = high - low;
+  const storeList = ranked
+    .map(([store, offer]) => `${store} desde ${clp(effectiveOfferTotal(offer))}`)
+    .join(" · ");
+  return savings > 0
+    ? `Comparativa por tienda: ${storeList}. Ahorro estimado de ${clp(savings)} eligiendo la opción más baja de ${ranked[0][0]}.`
+    : `Comparativa por tienda: ${storeList}.`;
+}
+
+function batchCartSummary(
+  items: Array<{ label: string; comparison: ComparacionMateriales }>,
+): string | null {
+  const pricedItems = items.filter((item) => item.comparison.ofertas.length > 0);
+  if (pricedItems.length < 2) return null;
+  let mixedTotal = 0;
+  const storeTotals = new Map<string, { sum: number; covered: number }>();
+  for (const { comparison } of pricedItems) {
+    const sorted = [...comparison.ofertas].sort(
+      (a, b) => effectiveOfferTotal(a) - effectiveOfferTotal(b),
+    );
+    mixedTotal += effectiveOfferTotal(sorted[0]);
+    const cheapestInStore = new Map<string, number>();
+    for (const o of sorted) {
+      const val = effectiveOfferTotal(o);
+      const prev = cheapestInStore.get(o.tienda);
+      if (prev == null || val < prev) cheapestInStore.set(o.tienda, val);
+    }
+    for (const [store, val] of cheapestInStore.entries()) {
+      const prev = storeTotals.get(store) || { sum: 0, covered: 0 };
+      storeTotals.set(store, { sum: prev.sum + val, covered: prev.covered + 1 });
+    }
+  }
+  const fullCoverageStores = Array.from(storeTotals.entries())
+    .filter(([, stats]) => stats.covered === pricedItems.length)
+    .sort((a, b) => a[1].sum - b[1].sum);
+  const lines = [
+    `Resumen de compra (${pricedItems.length} de ${items.length} materiales con precio):`,
+    `• Compra mixta más barata: ${clp(mixedTotal)}`,
+  ];
+  if (fullCoverageStores.length > 0) {
+    const [bestStore, bestStats] = fullCoverageStores[0];
+    const diff = bestStats.sum - mixedTotal;
+    lines.push(
+      `• Todo en ${bestStore}: ${clp(bestStats.sum)}${diff > 0 ? ` (+${clp(diff)} vs mixta, ahorra doble flete)` : " (mismo costo total)"}`,
+    );
+  }
+  return lines.join("\n");
+}
 export const MATERIAL_CATEGORY_LABELS: Record<string, string> = {
   obra_gruesa: "Obra gruesa",
   ferreteria: "Ferretería",
@@ -27,8 +104,9 @@ export function formatMaterialCategory(raw?: string | null): string {
 export function formatMaterialComparison(data: ComparacionMateriales) {
   const rows = data.ofertas.map(
     (o, i) =>
-      `${i + 1}. ${o.tienda}: ${o.nombre}\nPrecio publicado: ${clp(o.precio)}${o.total_solicitado != null ? ` · ${data.consulta.cantidad} unidades: ${clp(o.total_solicitado)}` : ""}${data.mejores_ids.includes(o.id) ? " · Menor precio entre productos equivalentes consultados" : ""}\n${o.url}`,
+      `${i + 1}. ${o.tienda}: ${o.nombre}\nPrecio publicado: ${clp(o.precio)}${offerQuantityDetail(o, data)}${data.mejores_ids.includes(o.id) ? " · Menor precio entre productos equivalentes consultados" : ""}\n${o.url}`,
   );
+  const storeSummary = storeComparisonSummary(data);
   const providers = data.proveedores
     .map(
       (p) =>
@@ -37,10 +115,13 @@ export function formatMaterialComparison(data: ComparacionMateriales) {
     .join("; ");
   return [
     data.resumen,
+    storeSummary,
     ...rows,
     `Consulta: ${new Intl.DateTimeFormat("es-CL", { timeZone: "America/Santiago", dateStyle: "medium", timeStyle: "short" }).format(new Date(data.consultado_en))} · ${providers}.`,
     `Precios publicados en CLP; confirma IVA, stock local, promociones y despacho${data.consulta.ubicacion ? " para " + data.consulta.ubicacion : ""} en la tienda antes de comprar.`,
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export function formatBatchMaterialComparison(
@@ -54,13 +135,17 @@ export function formatBatchMaterialComparison(
     }
     const lines = top.map(
       (o) =>
-        `• ${o.tienda}: ${o.nombre} — ${clp(o.precio)}${o.total_solicitado != null ? ` (${comparison.consulta.cantidad} u.: ${clp(o.total_solicitado)})` : ""}\n  ${o.url}`,
+        `• ${o.tienda}: ${o.nombre} — ${clp(o.precio)}${o.cajas_necesarias != null && o.total_solicitado != null ? ` (${o.cajas_necesarias} cajas: ${clp(o.total_solicitado)})` : o.total_solicitado != null ? ` (${comparison.consulta.cantidad} u.: ${clp(o.total_solicitado)})` : ""}\n  ${o.url}`,
     );
     return `${idx + 1}. ${label}\n${lines.join("\n")}`;
   });
+  const cartSummary = batchCartSummary(items);
   return [
     `Precios reales consultados en tiendas para ${items.length} ${items.length === 1 ? "material" : "materiales"}:`,
     ...blocks,
+    cartSummary,
     `Precios publicados en CLP; confirma formato, IVA, stock local y despacho${ubicacion && ubicacion !== "Por definir" ? " en " + ubicacion : ""} antes de comprar o ajustar la cotización.`,
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }

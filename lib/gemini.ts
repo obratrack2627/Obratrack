@@ -36,6 +36,7 @@ import {
 import { formatMaterialComparison, formatBatchMaterialComparison } from "@/lib/materials/format";
 import { isMaterialComparison } from "@/lib/materials/types";
 import { quoteSummaryText } from "@/lib/ai/quote-format";
+import { extractQuoteMaterials } from "@/lib/quotes/project-bridge";
 
 // Alias histórico para los imports existentes; el único motor es OpenAI.
 export const getGeminiApiKey = getServerOpenAIKey;
@@ -175,13 +176,14 @@ export async function chatAsesorObrasGemini(
   options: ChatGenerationOptions = {},
 ) {
   const quoteContext = contextoDB.cotizacion_actual;
+  const quoteMaterials = quoteContext ? extractQuoteMaterials(quoteContext) : [];
   const followUpQuoteSearch =
-    quoteContext?.materiales?.length &&
+    quoteMaterials.length > 0 &&
     !hasNonSearchTask(mensajeUsuario) &&
     !requestsPlatformAction(mensajeUsuario) &&
     isFollowUpMaterialSearch(mensajeUsuario, historial, true);
   if (followUpQuoteSearch) {
-    const items = await compareQuoteMaterials(quoteContext.materiales, {
+    const items = await compareQuoteMaterials(quoteMaterials, {
       ubicacion: quoteContext.comuna_region,
       tiendas: contextoDB.preferencias_conversacion?.tiendas,
     });

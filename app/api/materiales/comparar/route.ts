@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       presentacion: body?.presentacion,
       cantidad: body?.cantidad,
       unidad_cantidad: body?.unidad_cantidad,
+      ubicacion: body?.ubicacion,
       tiendas: body?.tiendas,
     });
 

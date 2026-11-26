@@ -123,12 +123,31 @@ export function quoteMenuChoice(text: string, previous: any): 1 | 2 | 3 | null {
 }
 
 export function materialComparisonWhatsApp(data: ComparacionMateriales) {
+  const effective = (o: ComparacionMateriales["ofertas"][number]) => o.total_solicitado ?? o.precio;
+  const bestByStore = new Map<string, number>();
+  for (const o of data.ofertas) {
+    const val = effective(o);
+    const prev = bestByStore.get(o.tienda);
+    if (prev == null || val < prev) bestByStore.set(o.tienda, val);
+  }
+  const rankedStores = Array.from(bestByStore.entries()).sort((a, b) => a[1] - b[1]);
+  const storeSummaryLine =
+    rankedStores.length >= 2
+      ? `*COMPARATIVA POR TIENDA*\n` +
+        rankedStores.map(([store, val]) => `• ${store}: desde *${formatCLP(val)}*`).join("\n") +
+        (rankedStores[rankedStores.length - 1][1] > rankedStores[0][1]
+          ? `\nAhorro estimado eligiendo ${rankedStores[0][0]}: *${formatCLP(rankedStores[rankedStores.length - 1][1] - rankedStores[0][1])}*`
+          : "")
+      : "";
   const sections = [data.resumen,
+    storeSummaryLine,
     ...data.ofertas.map((o, i) => [
       `*${i + 1}. ${line(o.tienda)} · ${line(o.nombre)}*`,
       `Precio publicado: *${formatCLP(o.precio)}*`,
-      `Unidad de venta: ${o.unidad}`,
-      o.total_solicitado != null ? `Total solicitado: *${formatCLP(o.total_solicitado)}*` : "",
+      o.cajas_necesarias != null && o.rendimiento_m2 != null && o.total_solicitado != null
+        ? `Rendimiento: ${o.rendimiento_m2.toLocaleString("es-CL")} m²/caja · *${o.cajas_necesarias} ${o.cajas_necesarias === 1 ? "caja" : "cajas"}* (${formatCLP(o.precio_m2 || Math.round(o.precio / o.rendimiento_m2))}/m²) · Total: *${formatCLP(o.total_solicitado)}*`
+        : `Unidad de venta: ${o.unidad}`,
+      o.cajas_necesarias == null && o.total_solicitado != null ? `Total solicitado: *${formatCLP(o.total_solicitado)}*` : "",
       data.mejores_ids.includes(o.id) ? "✓ Menor precio entre productos equivalentes consultados" : "",
       o.url,
     ].filter(Boolean).join("\n")),
@@ -144,6 +163,7 @@ export function materialBatchComparisonWhatsApp(
   items: Array<{ label: string; comparison: ComparacionMateriales }>,
   ubicacion?: string,
 ) {
+  const effective = (o: ComparacionMateriales["ofertas"][number]) => o.total_solicitado ?? o.precio;
   const blocks = items.map(({ label, comparison }, idx) => {
     const top = comparison.ofertas.slice(0, 3);
     if (!top.length) {
@@ -152,11 +172,45 @@ export function materialBatchComparisonWhatsApp(
     const offersText = top.map(
       (o) =>
         `• *${line(o.tienda)}* · ${line(o.nombre)}\n  Precio publicado: *${formatCLP(o.precio)}*` +
-        (o.total_solicitado != null ? ` (${comparison.consulta.cantidad} u.: *${formatCLP(o.total_solicitado)}*)` : "") +
+        (o.cajas_necesarias != null && o.total_solicitado != null
+          ? ` (${o.cajas_necesarias} cajas: *${formatCLP(o.total_solicitado)}*)`
+          : o.total_solicitado != null
+            ? ` (${comparison.consulta.cantidad} u.: *${formatCLP(o.total_solicitado)}*)`
+            : "") +
         `\n  ${o.url}`,
     );
     return `*${idx + 1}. ${line(label)}*\n${offersText.join("\n")}`;
   });
+  const priced = items.filter((item) => item.comparison.ofertas.length > 0);
+  let cartBlock = "";
+  if (priced.length >= 2) {
+    let mixedTotal = 0;
+    const storeTotals = new Map<string, { sum: number; covered: number }>();
+    for (const { comparison } of priced) {
+      const sorted = [...comparison.ofertas].sort((a, b) => effective(a) - effective(b));
+      mixedTotal += effective(sorted[0]);
+      const bestPerStore = new Map<string, number>();
+      for (const o of sorted) {
+        const val = effective(o);
+        const prev = bestPerStore.get(o.tienda);
+        if (prev == null || val < prev) bestPerStore.set(o.tienda, val);
+      }
+      for (const [store, val] of bestPerStore.entries()) {
+        const prev = storeTotals.get(store) || { sum: 0, covered: 0 };
+        storeTotals.set(store, { sum: prev.sum + val, covered: prev.covered + 1 });
+      }
+    }
+    const fullStores = Array.from(storeTotals.entries())
+      .filter(([, s]) => s.covered === priced.length)
+      .sort((a, b) => a[1].sum - b[1].sum);
+    const cartLines = [`*RESUMEN DE COMPRA* (${priced.length}/${items.length} con precio)`, `• Mixta más barata: *${formatCLP(mixedTotal)}*`];
+    if (fullStores.length > 0) {
+      const [bestStore, stats] = fullStores[0];
+      const diff = stats.sum - mixedTotal;
+      cartLines.push(`• Todo en ${bestStore}: *${formatCLP(stats.sum)}*${diff > 0 ? ` (+${formatCLP(diff)} vs mixta)` : ""}`);
+    }
+    cartBlock = cartLines.join("\n");
+  }
   const providerStates = new Map<string, "consultado" | "sin_resultados" | "no_disponible">();
   for (const item of items) {
     for (const p of item.comparison.proveedores) {
@@ -174,6 +228,7 @@ export function materialBatchComparisonWhatsApp(
     [
       `Consulté en tiendas reales ${items.length} ${items.length === 1 ? "material" : "materiales"} de la cotización:`,
       ...blocks,
+      cartBlock,
       providersList ? `*FERRETERÍAS CONSULTADAS*\n${providersList}` : "",
       `Precios publicados en CLP; confirma formato exacto, IVA, stock local y despacho${ubicacion && ubicacion !== "Por definir" ? " para " + ubicacion : ""} antes de comprar.`,
     ]

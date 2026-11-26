@@ -10,12 +10,18 @@ import type {
 } from "./types";
 
 // Cuentas públicas de catálogo identificadas en las propias tiendas. Sin claves ni sesiones de clientes.
-export const catalogProviders: Array<{ nombre: string; cuenta: string; url: string; tipo?: "sodimac" | "magento" | "imperial" }> = [
+export const catalogProviders: Array<{
+  nombre: string;
+  cuenta: string;
+  url: string;
+  tipo?: "sodimac" | "magento" | "imperial";
+  habilitado?: boolean;
+}> = [
   { nombre: "Easy", cuenta: "easycl", url: "https://www.easy.cl" },
   { nombre: "Dimaco", cuenta: "dimacocl", url: "https://www.dimaco.cl" },
   { nombre: "Sodimac", cuenta: "sodimac", url: "https://www.sodimac.cl", tipo: "sodimac" },
-  { nombre: "Construmart", cuenta: "construmart", url: "https://www.construmart.cl", tipo: "magento" },
-  { nombre: "Imperial", cuenta: "imperial", url: "https://www.imperial.cl", tipo: "imperial" },
+  { nombre: "Construmart", cuenta: "construmart", url: "https://www.construmart.cl", tipo: "magento", habilitado: false },
+  { nombre: "Imperial", cuenta: "imperial", url: "https://www.imperial.cl", tipo: "imperial", habilitado: false },
 ];
 const normalize = (s: string) =>
   s
@@ -93,7 +99,7 @@ export function completePurchaseQuantity(query: any, message: string) {
     return query;
   const matches = Array.from(
     message.matchAll(
-      /(?<![\d/])(\d+(?:[.,]\d+)*)\s*(unidades?|sacos?|cajas?|bolsas?|piezas?|paquetes?|baldes?|tarros?|latas?|bidones?|rollos?|sets?)\b/gi,
+      /(?<![\d/])(\d+(?:[.,]\d+)*)\s*(unidades?|sacos?|cajas?|bolsas?|piezas?|paquetes?|baldes?|tarros?|latas?|bidones?|rollos?|sets?|planchas?|galones?|tinetas?|tiras?|barras?|tubos?|palos?)\b/gi,
     ),
   );
   for (const match of matches) {
@@ -160,21 +166,179 @@ function matchesSpecification(value: string, full: string) {
   );
 }
 
+const QUERY_STOP_WORDS = new Set([
+  "de", "del", "para", "el", "la", "los", "las", "un", "una",
+]);
+
+const GENERIC_CONTAINER_TOKENS = new Set([
+  "plancha", "planchas", "palo", "palos", "barra", "barras",
+  "saco", "sacos", "bolsa", "bolsas", "caja", "cajas",
+  "tarro", "tarros", "balde", "baldes", "galon", "galones",
+  "tineta", "tinetas", "rollo", "rollos", "tira", "tiras",
+  "tubo", "tubos",
+]);
+
+const COUNTABLE_PURCHASE_UNITS = new Set([
+  "un", "unidad", "unidades",
+  "saco", "sacos", "bolsa", "bolsas", "caja", "cajas",
+  "pieza", "piezas", "paquete", "paquetes", "set", "sets",
+  "balde", "baldes", "tarro", "tarros", "lata", "latas",
+  "bidon", "bidones", "rollo", "rollos",
+  "plancha", "planchas", "galon", "galones", "tineta", "tinetas",
+  "tira", "tiras", "barra", "barras", "tubo", "tubos",
+  "palo", "palos",
+]);
+
+const BOX_M2_RE = /\b(\d+(?:[.,]\d+)?)[ \t]*m[2²](?![a-z0-9_])/i;
+
+function isAreaQuantityUnit(raw?: string): boolean {
+  if (!raw) return false;
+  const folded = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/²/g, "2")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  return ["m2", "metro cuadrado", "metros cuadrados", "mt2", "mts2"].includes(
+    folded,
+  );
+}
+
+function extractBoxCoverageM2(
+  name: string,
+  productName: string,
+  unit: string,
+  multiplier: number,
+): number | undefined {
+  for (const source of [name, productName]) {
+    const match = BOX_M2_RE.exec(source);
+    if (match) {
+      const value = Number(match[1].replace(",", "."));
+      if (Number.isFinite(value) && value > 0.1 && value <= 50) {
+        return Math.round(value * 1000) / 1000;
+      }
+    }
+  }
+  if (
+    ["m2", "m²"].includes(unit.trim().toLowerCase()) &&
+    Number.isFinite(multiplier) &&
+    multiplier > 0.1 &&
+    multiplier <= 50
+  ) {
+    return Math.round(multiplier * 1000) / 1000;
+  }
+  return undefined;
+}
+
+function extractSearchTokens(rawProduct: string): string[] {
+  const rawTokens = normalize(rawProduct)
+    .split(" ")
+    .filter((t) => t && !QUERY_STOP_WORDS.has(t));
+  const withoutGeneric = rawTokens.filter(
+    (t) => !GENERIC_CONTAINER_TOKENS.has(t),
+  );
+  return withoutGeneric.length > 0 ? withoutGeneric : rawTokens;
+}
+
+function wordMatchesSingleToken(word: string, token: string): boolean {
+  if (word === token) return true;
+  return (
+    token.length >= 4 &&
+    (word === `${token}s` ||
+      word === `${token}es` ||
+      token === `${word}s` ||
+      token === `${word}es`)
+  );
+}
+
+function tokenMatchesFullWords(
+  token: string,
+  fullWords: string[],
+  allTokens: string[],
+): boolean {
+  if (fullWords.some((w) => wordMatchesSingleToken(w, token))) return true;
+  if (token === "volcanita" || token === "vulcanita") {
+    return (
+      fullWords.some((w) => wordMatchesSingleToken(w, "volcanita")) ||
+      (fullWords.includes("yeso") && fullWords.includes("carton"))
+    );
+  }
+  if (
+    (token === "yeso" || token === "carton") &&
+    allTokens.includes("yeso") &&
+    allTokens.includes("carton") &&
+    fullWords.some((w) => wordMatchesSingleToken(w, "volcanita"))
+  ) {
+    return true;
+  }
+  if (token === "pegamento") {
+    return fullWords.some((w) => wordMatchesSingleToken(w, "adhesivo"));
+  }
+  if (token === "adhesivo") {
+    return fullWords.some((w) => wordMatchesSingleToken(w, "pegamento"));
+  }
+  if (token === "fierro") {
+    return fullWords.some((w) => wordMatchesSingleToken(w, "acero"));
+  }
+  return false;
+}
+
+function cleanSearchProductTerm(rawProduct: string): string {
+  const foldedWords = rawProduct
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  const needsCleaning = foldedWords.some(
+    (w) => GENERIC_CONTAINER_TOKENS.has(w) || w === "vulcanita",
+  );
+  if (!needsCleaning) return rawProduct.trim();
+  const kept = rawProduct
+    .trim()
+    .split(/\s+/)
+    .map((word) => {
+      const folded = word
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      if (folded === "vulcanita") return "volcanita";
+      return GENERIC_CONTAINER_TOKENS.has(folded) ? "" : word;
+    })
+    .filter(Boolean);
+  return kept.length > 0 ? kept.join(" ") : rawProduct.trim();
+}
+
+function synonymSearchTerms(searchProduct: string): string[] {
+  const folded = searchProduct
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const alternatives: string[] = [];
+  if (/\bvolcanita\b/.test(folded)) {
+    alternatives.push(folded.replace(/\bvolcanita\b/g, "yeso carton"));
+  } else if (/\byeso\s+carton\b/.test(folded)) {
+    alternatives.push(folded.replace(/\byeso\s+carton\b/g, "volcanita"));
+  }
+  if (/\bpegamento\b/.test(folded)) {
+    alternatives.push(folded.replace(/\bpegamento\b/g, "adhesivo"));
+  } else if (/\badhesivo\b/.test(folded)) {
+    alternatives.push(folded.replace(/\badhesivo\b/g, "pegamento"));
+  }
+  if (/\bfierro\b/.test(folded)) {
+    alternatives.push(folded.replace(/\bfierro\b/g, "barra acero"));
+  }
+  return alternatives;
+}
+
 export function parseCatalogProducts(
   products: any,
   provider: (typeof catalogProviders)[number],
   query: ConsultaMaterial,
 ): OfertaMaterial[] {
   if (!Array.isArray(products)) throw Error("Catálogo no disponible");
-  const tokens = normalize(query.producto)
-    .split(" ")
-    .filter(
-      (t) =>
-        t &&
-        !["de", "del", "para", "el", "la", "los", "las", "un", "una"].includes(
-          t,
-        ),
-    );
+  const tokens = extractSearchTokens(query.producto);
   const result: OfertaMaterial[] = [];
   for (const product of products.slice(0, 30))
     for (const item of (Array.isArray(product.items)
@@ -193,6 +357,7 @@ export function parseCatalogProducts(
       const full = normalize(
         `${product.productName} ${name} ${product.brand || ""}`,
       );
+      const fullWords = full.split(" ").filter(Boolean);
       const wantedLatex =
         tokens.includes("latex") &&
         !tokens.some((t) =>
@@ -205,6 +370,27 @@ export function parseCatalogProducts(
         )
       )
         continue;
+      const wantedDrywallBoard =
+        (tokens.includes("volcanita") ||
+          tokens.includes("vulcanita") ||
+          (tokens.includes("yeso") && tokens.includes("carton"))) &&
+        !tokens.some((t) =>
+          [
+            "tarugo", "tarugos", "tornillo", "tornillos", "clavo", "clavos",
+            "huincha", "cinta", "broca", "brocas", "perfil", "montante",
+            "canal", "esquinero", "fijacion", "fijaciones",
+          ].includes(t),
+        );
+      if (
+        wantedDrywallBoard &&
+        fullWords.some((w) =>
+          [
+            "tarugo", "tarugos", "tornillo", "tornillos", "huincha",
+            "broca", "brocas", "esquinero", "fijacion", "fijaciones",
+          ].includes(w),
+        )
+      )
+        continue;
       if (tokens.length === 1 && ['cemento','yeso','arena','grava','taladro','martillo','clavo','tornillo','pintura','mortero','ladrillo','bloque','sierra'].includes(tokens[0])) {
         const prefixes = new Set(['de','del','el','la','saco','sacos','bolsa','bolsas','caja','cajas','pack','paquete', ...normalize(product.brand || '').split(' ')]);
         const validLead = (rawTitle: string) => {
@@ -214,21 +400,7 @@ export function parseCatalogProducts(
         };
         if (!validLead(name) && !validLead(product.productName)) continue;
       }
-      if (
-        !tokens.every((t) =>
-          full
-            .split(" ")
-            .some(
-              (w) =>
-                w === t ||
-                (t.length >= 4 &&
-                  (w === t + "s" ||
-                    w === t + "es" ||
-                    t === w + "s" ||
-                    t === w + "es")),
-            ),
-        )
-      )
+      if (!tokens.every((t) => tokenMatchesFullWords(t, fullWords, tokens)))
         continue;
       if (
         [query.marca, query.modelo, query.presentacion].some(
@@ -273,6 +445,35 @@ export function parseCatalogProducts(
       const url = provider.url + source.pathname;
       const price = Math.round(offer.Price);
       const unit = String(item.measurementUnit || "un").slice(0, 20);
+      const unitNorm = normalize(query.unidad_cantidad || "");
+      const countablePurchase =
+        typeof query.cantidad === "number" &&
+        Number.isInteger(query.cantidad) &&
+        COUNTABLE_PURCHASE_UNITS.has(unitNorm) &&
+        unit === "un" &&
+        multiplier === 1;
+      const areaPurchase =
+        typeof query.cantidad === "number" &&
+        query.cantidad > 0 &&
+        isAreaQuantityUnit(query.unidad_cantidad);
+      const coverageM2 = areaPurchase
+        ? extractBoxCoverageM2(name, product.productName, unit, multiplier)
+        : undefined;
+      const boxesNeeded =
+        areaPurchase && coverageM2 && query.cantidad
+          ? Math.ceil(query.cantidad / coverageM2)
+          : undefined;
+      const quantityFields =
+        coverageM2 && boxesNeeded
+          ? {
+              rendimiento_m2: coverageM2,
+              precio_m2: Math.round(price / coverageM2),
+              cajas_necesarias: boxesNeeded,
+              total_solicitado: roundLine(boxesNeeded, price),
+            }
+          : countablePurchase && query.cantidad
+            ? { total_solicitado: roundLine(query.cantidad, price) }
+            : {};
       result.push({
         id: `${provider.cuenta}:${item.itemId}`,
         tienda: provider.nombre,
@@ -287,39 +488,7 @@ export function parseCatalogProducts(
         multiplicador: multiplier,
         ean: barcode(item.ean),
         url,
-        ...(query.cantidad &&
-        Number.isInteger(query.cantidad) &&
-        [
-          "un",
-          "unidad",
-          "unidades",
-          "saco",
-          "sacos",
-          "bolsa",
-          "bolsas",
-          "caja",
-          "cajas",
-          "pieza",
-          "piezas",
-          "paquete",
-          "paquetes",
-          "set",
-          "sets",
-          "balde",
-          "baldes",
-          "tarro",
-          "tarros",
-          "lata",
-          "latas",
-          "bidon",
-          "bidones",
-          "rollo",
-          "rollos",
-        ].includes(normalize(query.unidad_cantidad || "")) &&
-        unit === "un" &&
-        multiplier === 1
-          ? { total_solicitado: roundLine(query.cantidad, price) }
-          : {}),
+        ...quantityFields,
       });
     }
   return result;
@@ -385,12 +554,24 @@ async function readCatalog(
   fetcher: typeof fetch,
 ) {
   const cleanSpec = query.presentacion ? significantSpecTokens(query.presentacion).join(" ") : "";
-  const term = [query.producto, query.marca, query.modelo, cleanSpec].filter(Boolean).join(" ");
-  const offers = await fetchCatalogTerm(provider, query, term, fetcher);
-  if (offers.length > 0 || !cleanSpec) return offers;
-  const broadTerm = [query.producto, query.marca, query.modelo].filter(Boolean).join(" ");
-  if (!broadTerm || broadTerm === term) return offers;
-  return fetchCatalogTerm(provider, query, broadTerm, fetcher).catch(() => offers);
+  const searchProduct = cleanSearchProductTerm(query.producto);
+  const term = [searchProduct, query.marca, query.modelo, cleanSpec].filter(Boolean).join(" ");
+  let offers = await fetchCatalogTerm(provider, query, term, fetcher);
+  if (offers.length > 0) return offers;
+  if (cleanSpec) {
+    const broadTerm = [searchProduct, query.marca, query.modelo].filter(Boolean).join(" ");
+    if (broadTerm && broadTerm !== term) {
+      offers = await fetchCatalogTerm(provider, query, broadTerm, fetcher).catch(() => offers);
+      if (offers.length > 0) return offers;
+    }
+  }
+  for (const synonym of synonymSearchTerms(searchProduct).slice(0, 1)) {
+    const synTerm = [synonym, query.marca, query.modelo, cleanSpec].filter(Boolean).join(" ");
+    if (!synTerm || synTerm === term) continue;
+    offers = await fetchCatalogTerm(provider, query, synTerm, fetcher).catch(() => offers);
+    if (offers.length > 0) return offers;
+  }
+  return offers;
 }
 
 export async function compareMaterialPrices(
@@ -401,8 +582,8 @@ export async function compareMaterialPrices(
   const requested = query.tiendas?.length
     ? new Set(query.tiendas.map(normalize))
     : null;
-  const selected = catalogProviders.filter(
-    (p) => !requested || requested.has(normalize(p.nombre)),
+  const selected = catalogProviders.filter((p) =>
+    requested ? requested.has(normalize(p.nombre)) : p.habilitado !== false,
   );
   const responses = await Promise.allSettled(
     selected.map((p) => readCatalog(p, query, fetcher)),
@@ -426,9 +607,40 @@ export async function compareMaterialPrices(
   const all = responses.flatMap((r) =>
     r.status === "fulfilled" ? r.value : [],
   );
-  const offers = Array.from(new Map(all.map((o) => [o.id, o])).values())
-    .sort((a, b) => a.precio - b.precio)
-    .slice(0, 12);
+  const effectivePrice = (o: OfertaMaterial) => o.total_solicitado ?? o.precio;
+  const byId = Array.from(new Map(all.map((o) => [o.id, o])).values());
+  const deduped = new Map<string, OfertaMaterial>();
+  for (const o of byId) {
+    const variantKey = `${o.tienda}:${normalize(o.nombre)}:${o.precio}`;
+    if (!deduped.has(variantKey)) deduped.set(variantKey, o);
+  }
+  const sorted = Array.from(deduped.values()).sort(
+    (a, b) => effectivePrice(a) - effectivePrice(b) || a.precio - b.precio,
+  );
+  const byStore = new Map<string, OfertaMaterial[]>();
+  for (const o of sorted) {
+    byStore.set(o.tienda, [...(byStore.get(o.tienda) || []), o]);
+  }
+  const storeBuckets = Array.from(byStore.values()).sort(
+    (a, b) => effectivePrice(a[0]) - effectivePrice(b[0]),
+  );
+  const perStoreQuota = Math.min(
+    3,
+    Math.max(2, Math.floor(12 / Math.max(storeBuckets.length, 1))),
+  );
+  const chosen = new Map<string, OfertaMaterial>();
+  for (const bucket of storeBuckets) {
+    for (const o of bucket.slice(0, perStoreQuota)) {
+      if (chosen.size < 12) chosen.set(o.id, o);
+    }
+  }
+  for (const o of sorted) {
+    if (chosen.size >= 12) break;
+    if (!chosen.has(o.id)) chosen.set(o.id, o);
+  }
+  const offers = Array.from(chosen.values()).sort(
+    (a, b) => effectivePrice(a) - effectivePrice(b) || a.precio - b.precio,
+  );
   const groups = new Map<string, OfertaMaterial[]>();
   for (const o of offers)
     if (o.ean) {
@@ -442,10 +654,13 @@ export async function compareMaterialPrices(
         .filter((o) => o.precio === Math.min(...rows.map((v) => v.precio)))
         .map((o) => o.id),
     );
+  const activeNames = (selected.length ? selected : catalogProviders.filter((p) => p.habilitado !== false))
+    .map((p) => p.nombre)
+    .join(", ");
   const summary = offers.length
     ? `Encontré ${offers.length === 1 ? "una opción" : offers.length + " opciones"} con precio publicado. ${best.length ? "Marco el menor precio del mismo producto identificado en más de una tienda." : offers.length === 1 ? "Revisa marca, modelo y presentación antes de comprar." : "Son opciones que debes revisar por marca, modelo y presentación; no todas son equivalentes."}`
     : providers.every((p) => p.estado === "no_disponible")
-      ? `No pude consultar esos proveedores. La búsqueda integrada incluye ${catalogProviders.map((p) => p.nombre).join(", ")}. Puedes reintentar o revisar directamente la tienda solicitada.`
+      ? `No pude consultar esos proveedores. La búsqueda integrada incluye ${activeNames}. Puedes reintentar o revisar directamente la tienda solicitada.`
       : "No encontré opciones disponibles que coincidan con esa descripción en los catálogos consultados.";
   return {
     consulta: query,
@@ -462,6 +677,7 @@ const COUNTABLE_QUOTE_UNITS = new Set([
   "caja", "cajas", "tarro", "tarros", "lata", "latas", "balde", "baldes",
   "galon", "galones", "tineta", "tinetas", "rollo", "rollos",
   "plancha", "planchas", "paquete", "paquetes",
+  "tira", "tiras", "barra", "barras", "tubo", "tubos", "palo", "palos",
 ]);
 
 function splitMaterialCandidates(rawName: string): string[] {
@@ -491,14 +707,15 @@ export async function compareQuoteMaterials(
   const queries: Array<{ label: string; input: ConsultaMaterial }> = [];
   const seen = new Set<string>();
   for (const item of Array.isArray(materials) ? materials : []) {
-    if (queries.length >= 5) break;
+    if (queries.length >= 10) break;
     const rawName = String(item?.nombre || "").trim();
     if (!rawName) continue;
     const candidates = splitMaterialCandidates(rawName);
     const unitNorm = normalize(String(item?.unidad || ""));
-    const countable = COUNTABLE_QUOTE_UNITS.has(unitNorm);
+    const countable =
+      COUNTABLE_QUOTE_UNITS.has(unitNorm) || isAreaQuantityUnit(item?.unidad);
     for (const candidate of candidates) {
-      if (queries.length >= 5) break;
+      if (queries.length >= 10) break;
       const key = normalize(candidate);
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -529,7 +746,9 @@ export async function compareQuoteMaterials(
         consultado_en: new Date().toISOString(),
         resumen: "No pude consultar ese material en las tiendas en este momento.",
         ofertas: [],
-        proveedores: catalogProviders.map((p) => ({ nombre: p.nombre, url: p.url, estado: "no_disponible" as const })),
+        proveedores: catalogProviders
+          .filter((p) => p.habilitado !== false)
+          .map((p) => ({ nombre: p.nombre, url: p.url, estado: "no_disponible" as const })),
         mejores_ids: [],
       },
     };

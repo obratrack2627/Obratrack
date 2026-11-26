@@ -21,6 +21,9 @@ export interface OfertaMaterial {
   ean?: string;
   url: string;
   total_solicitado?: number;
+  rendimiento_m2?: number;
+  precio_m2?: number;
+  cajas_necesarias?: number;
 }
 
 export interface ComparacionMateriales {
@@ -75,7 +78,16 @@ export function isMaterialComparison(
           o.multiplicador > 0 &&
           (o.total_solicitado == null ||
             (Number.isSafeInteger(o.total_solicitado) &&
-              o.total_solicitado > 0)),
+              o.total_solicitado > 0)) &&
+          (o.rendimiento_m2 == null ||
+            (typeof o.rendimiento_m2 === "number" &&
+              Number.isFinite(o.rendimiento_m2) &&
+              o.rendimiento_m2 > 0)) &&
+          (o.precio_m2 == null ||
+            (Number.isSafeInteger(o.precio_m2) && o.precio_m2 > 0)) &&
+          (o.cajas_necesarias == null ||
+            (Number.isSafeInteger(o.cajas_necesarias) &&
+              o.cajas_necesarias > 0)),
       ) &&
       Array.isArray(value.proveedores) &&
       value.proveedores.length <= 7 &&
