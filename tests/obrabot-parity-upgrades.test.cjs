@@ -535,3 +535,111 @@ test('adapta presupuestos de suma alzada (caso cocina WhatsApp), detalle materia
     /2\.000\.000.*1\.800\.000/,
   );
 });
+
+test('emisión directa autoAprobar guarda metadatos, genera PDF en 1 paso e hidrata estado del cliente en bandeja', async () => {
+  const { handleQuoteTurn, listQuotes } = require('../lib/obrabot/quotes.ts');
+  const admin = { id: 'admin', empresa_id: 'emp-fast', rol: 'admin' };
+  const reviews = new Map();
+  const budgets = new Map();
+
+  const db = {
+    from(table) {
+      let filters = [];
+      let inFilter = null;
+      return {
+        async upsert() { return { error: null }; },
+        select() { return this; },
+        eq(k, v) { filters.push((r) => r[k] === v); return this; },
+        in(k, arr) { inFilter = (r) => arr.includes(r[k]); return this; },
+        order() { return this; },
+        limit() {
+          const pool = table === 'obrabot_cotizaciones'
+            ? [...reviews.values()]
+            : table === 'presupuestos'
+              ? [...budgets.values()]
+              : [];
+          return { data: pool.filter((r) => filters.every((f) => f(r))), error: null };
+        },
+        then(resolve, reject) {
+          const pool = table === 'obrabot_cotizaciones'
+            ? [...reviews.values()]
+            : table === 'presupuestos'
+              ? [...budgets.values()]
+              : [];
+          const data = pool.filter((r) => filters.every((f) => f(r)) && (!inFilter || inFilter(r)));
+          return Promise.resolve({ data, error: null }).then(resolve, reject);
+        },
+        async maybeSingle() {
+          const pool = table === 'obrabot_cotizaciones'
+            ? [...reviews.values()]
+            : table === 'presupuestos'
+              ? [...budgets.values()]
+              : [];
+          return { data: pool.find((r) => filters.every((f) => f(r))) || null, error: null };
+        },
+      };
+    },
+    async rpc(name, args) {
+      if (name === 'obrabot_registrar_cotizacion') {
+        if (!reviews.has(args.p_id)) {
+          reviews.set(args.p_id, {
+            id: args.p_id,
+            empresa_id: args.p_empresa,
+            estado: 'pendiente',
+            revision: 1,
+            borrador: args.p_borrador,
+            presupuesto_id: null,
+          });
+        }
+        return { error: null };
+      }
+      if (name === 'obrabot_revisar_cotizacion') {
+        const row = reviews.get(args.p_id);
+        row.estado = 'aprobada';
+        row.presupuesto_id = row.borrador.id;
+        budgets.set(row.presupuesto_id, {
+          id: row.presupuesto_id,
+          empresa_id: row.empresa_id,
+          estado: 'enviada',
+          updated_at: '2026-11-26T00:00:00Z',
+        });
+        return { data: row, error: null };
+      }
+      throw new Error(name);
+    },
+  };
+
+  const quickMsg = [
+    'Nueva cotización:',
+    'Presupuesto portón sur',
+    'Materiales considerados:',
+    '2 Perfil 50x50',
+    'Anticorrosivo',
+    'Materiales $ 120.000',
+    'Mano de obra $ 180.000',
+    'Total $ 300.000',
+  ].join('\n');
+
+  const res = await handleQuoteTurn(db, admin, 'plataforma', quickMsg, 'req-direct-1', undefined, {
+    clienteNombre: 'Constructora Sur',
+    comunaRegion: 'Padre Hurtado',
+    mostrarFecha: false,
+    fechaValidez: '2026-12-31',
+    autoAprobar: true,
+    permiteVincular: false,
+  });
+
+  assert.equal(res.archivo?.formato, 'pdf');
+  assert.ok(res.cotizacionAprobadaId);
+  assert.match(res.respuesta, /Sin fecha en PDF/);
+  assert.match(res.respuesta, /Cliente: Constructora Sur/);
+  assert.match(res.respuesta, /Ubicación: Padre Hurtado/);
+  assert.match(res.respuesta, /Materiales considerados \(2\): Perfil 50x50, Anticorrosivo/);
+
+  const approvedList = await listQuotes(db, admin, 'aprobada');
+  assert.equal(approvedList.length, 1);
+  assert.equal(approvedList[0].presupuesto_estado, 'enviada');
+  assert.equal(approvedList[0].presupuesto_updated_at, '2026-11-26T00:00:00Z');
+  assert.equal(approvedList[0].borrador.fecha_validez, '2026-12-31');
+  assert.equal(approvedList[0].borrador.mostrar_fecha, false);
+});

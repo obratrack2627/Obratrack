@@ -21,6 +21,8 @@ export type QuoteReview = {
   borrador: CotizacionEstimacion;
   presupuesto_id: string | null;
   destino?: QuoteDestination;
+  presupuesto_estado?: 'borrador' | 'enviada' | 'aprobada' | 'rechazada' | 'anulada' | 'no_elegida';
+  presupuesto_updated_at?: string;
 };
 export type QuoteReply = { pasoPendiente?: { id: string; datos: Record<string, unknown> }; respuesta: string; archivo?: { id: string; formato: QuoteFormat; origen?: 'presupuesto' }; solicitud?: string; revision?: number; obra?: string; cotizacionAprobadaId?: string };
 const uuid = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
@@ -72,9 +74,20 @@ function preview(row: QuoteReview, channel: Channel = 'plataforma') {
     const lines = rawLines.map(quoteLinePreview);
     detail = [...lines.slice(0, 8), ...(lines.length > 8 ? [`Vista resumida de ${lines.length} partidas. Revisa el detalle completo en la bandeja web antes de aprobar.`] : [])];
   }
-  const ivaLabel = quote.tratamiento_iva === 'neto'
-    ? 'Cotización pactada · Valores netos (+19% IVA)'
-    : 'Cotización pactada · IVA incluido';
+  const ivaLabel = [
+    quote.tratamiento_iva === 'neto'
+      ? 'Cotización pactada · Valores netos (+19% IVA)'
+      : 'Cotización pactada · IVA incluido',
+    ...(quote.mostrar_fecha === false ? ['Sin fecha en PDF'] : []),
+  ].join(' · ');
+  const meta = [
+    ...(quote.cliente_nombre ? [`Cliente: ${quote.cliente_nombre}`] : []),
+    ...(quote.comuna_region ? [`Ubicación: ${quote.comuna_region}`] : []),
+  ];
+  const mats = quote.materiales_considerados || [];
+  const consideredLine = mats.length
+    ? [`Materiales considerados (${mats.length}): ${mats.slice(0, 4).map(m => m.nombre).join(', ')}${mats.length > 4 ? '…' : ''}`]
+    : [];
   const nextStep = row.estado === 'pendiente'
     ? channel === 'whatsapp'
       ? 'Toca «Aprobar y PDF» o responde «Aprobar» para confirmar esta versión y recibir el PDF.'
@@ -88,7 +101,9 @@ function preview(row: QuoteReview, channel: Channel = 'plataforma') {
   return [
     `${quote.titulo_proyecto} · revisión ${row.revision}`,
     ivaLabel,
+    ...(meta.length ? [meta.join(' · ')] : []),
     ...detail,
+    ...consideredLine,
     ...(milestones.length ? ['Forma de pago:', ...milestones] : []),
     `Neto ${formatCLP(totals.precio_sugerido_neto)} · IVA ${formatCLP(totals.iva_19)} · Total ${formatCLP(totals.precio_total_con_iva)}`,
     nextStep,
@@ -120,7 +135,31 @@ export async function listQuotes(db: any, actor: Actor, state: 'pendiente' | 'ap
     .eq('empresa_id', actor.empresa_id).in('cotizacion_id', rows.map(row => row.id));
   if (destinations.error) dbError(destinations.error);
   const byId = new Map<string, QuoteDestination>((destinations.data || []).map((row: { cotizacion_id: string; resultado: QuoteDestination }) => [row.cotizacion_id, row.resultado]));
-  return rows.map(row => ({ ...row, destino: byId.get(row.id) }));
+
+  const budgetIds = rows.map(row => row.presupuesto_id).filter((v): v is string => typeof v === 'string' && v.length > 0);
+  const budgetById = new Map<string, { estado?: QuoteReview['presupuesto_estado']; updated_at?: string }>();
+  if (budgetIds.length && typeof db?.from === 'function') {
+    try {
+      const budgetsRes = await db.from('presupuestos').select('id,estado,updated_at').eq('empresa_id', actor.empresa_id).in('id', budgetIds);
+      if (!budgetsRes?.error && Array.isArray(budgetsRes?.data)) {
+        for (const b of budgetsRes.data) {
+          if (b?.id) budgetById.set(b.id, { estado: b.estado, updated_at: b.updated_at });
+        }
+      }
+    } catch {
+      // Tablas parciales en mocks de prueba no bloquean el listado.
+    }
+  }
+
+  return rows.map(row => {
+    const budget = row.presupuesto_id ? budgetById.get(row.presupuesto_id) : undefined;
+    return {
+      ...row,
+      destino: byId.get(row.id),
+      ...(budget?.estado ? { presupuesto_estado: budget.estado } : {}),
+      ...(budget?.updated_at ? { presupuesto_updated_at: budget.updated_at } : {}),
+    };
+  });
 }
 
 function draftId(actor: Actor, requestId?: string) {
@@ -322,7 +361,24 @@ export async function tryNaturalQuoteEdit(
   return { respuesta: preview(created, channel), solicitud: newId, revision: created.revision };
 }
 
-export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, text: string, requestId?: string, source?: QuoteSource, context?: { quotedId?: string | null; permiteVincular?: boolean; tratamientoIva?: 'incluido' | 'neto' }): Promise<QuoteReply | null> {
+export async function handleQuoteTurn(
+  db: any,
+  actor: Actor,
+  channel: Channel,
+  text: string,
+  requestId?: string,
+  source?: QuoteSource,
+  context?: {
+    quotedId?: string | null;
+    permiteVincular?: boolean;
+    tratamientoIva?: 'incluido' | 'neto';
+    clienteNombre?: string;
+    comunaRegion?: string;
+    mostrarFecha?: boolean;
+    fechaValidez?: string;
+    autoAprobar?: boolean;
+  },
+): Promise<QuoteReply | null> {
   const message = text.trim();
   const hasImage = source?.mime.startsWith('image/') ?? false;
   if (!isQuoteWorkflow(message, hasImage)) return handleDestinationTurn(db, actor, channel, message, context?.quotedId);
@@ -336,21 +392,22 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
     if ((!start && !pasted && !photoQuote) || (!rows && !source)) return { respuesta: starterHelp };
     const id = draftId(actor, requestId);
     const defaultIva = context?.tratamientoIva;
+    const explicitTitle = start?.[1]?.trim() || undefined;
     let input: DraftInput;
-    if (pasted || (start && rows.includes('$') && !rows.split('\n')[0].includes('|'))) input = await parseQuoteMessage(rows, start?.[1], defaultIva);
+    if (pasted || (start && rows.includes('$') && !rows.split('\n')[0].includes('|'))) input = await parseQuoteMessage(rows, explicitTitle, defaultIva);
     else if (source && photoQuote) input = await parseQuoteMessage(await transcribeQuoteImage(source), undefined, defaultIva);
     else if (source) {
       try {
-        input = { titulo_proyecto: start?.[1] || 'Cotización de obra', partidas_venta: await readQuoteSource(source), tratamiento_iva: defaultIva };
+        input = { titulo_proyecto: explicitTitle || 'Cotización de obra', partidas_venta: await readQuoteSource(source), tratamiento_iva: defaultIva };
       } catch (err) {
         if (!(err instanceof AIError) || err.code !== 'OBRABOT_QUOTE_INPUT') throw err;
         const ext = source.mime === excelMime ? 'xlsx' : source.mime === 'application/pdf' ? 'pdf' : source.mime === 'text/csv' ? 'csv' : 'png';
         const imported = await importBudgetFile({
           bytes: source.bytes,
-          filename: `${start?.[1]?.trim() || 'presupuesto'}.${ext}`,
+          filename: `${explicitTitle || 'presupuesto'}.${ext}`,
           mime: source.mime,
           ivaPreference: defaultIva ?? 'auto',
-          fallbackTitle: start?.[1] || 'Cotización de obra',
+          fallbackTitle: explicitTitle || 'Cotización de obra',
         });
         const q = imported.cotizacion;
         input = {
@@ -359,8 +416,18 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
           hitos_pago: q.hitos_pago?.map(({ nombre, porcentaje }) => ({ nombre, porcentaje })),
         };
       }
+    } else {
+      const pipeRows = readTextQuote(rows);
+      input = {
+        titulo_proyecto: explicitTitle || pipeRows.slice(0, 3).map((r) => r.nombre).join(', ') || 'Cotización de obra',
+        partidas_venta: pipeRows,
+        tratamiento_iva: defaultIva,
+      };
     }
-    else input = { titulo_proyecto: start?.[1] || '', partidas_venta: readTextQuote(rows), tratamiento_iva: defaultIva };
+    if (context?.clienteNombre?.trim()) input = { ...input, cliente_nombre: context.clienteNombre.trim().slice(0, 300) };
+    if (context?.comunaRegion?.trim()) input = { ...input, comuna_region: context.comunaRegion.trim().slice(0, 300) };
+    if (context?.mostrarFecha === false) input = { ...input, mostrar_fecha: false };
+    if (context?.fechaValidez && /^\d{4}-\d{2}-\d{2}$/.test(context.fechaValidez)) input = { ...input, fecha_validez: context.fechaValidez };
     if (!input.resumen_ejecutivo?.trim()) {
       const reusable = await findReusableTechnicalScope(db, actor, input.titulo_proyecto);
       if (reusable) input = { ...input, resumen_ejecutivo: reusable };
@@ -374,6 +441,23 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
     if (actor.rol === 'supervisor') return { respuesta: 'Guardé la solicitud pendiente de revisión por el administrador.' };
     const created = await getQuoteReview(db, actor, id);
     const notice = input.aviso_validacion?.trim();
+    if (context?.autoAprobar && actor.rol === 'admin') {
+      const approved = created.estado === 'pendiente'
+        ? await reviewQuote(db, actor, id, created.revision, 'aprobar')
+        : created;
+      if (approved.estado === 'aprobada') {
+        const canLink = context?.permiteVincular !== false;
+        if (canLink) await rememberQuoteDestination(db, actor, channel, id);
+        const bodyText = preview(approved, channel);
+        return {
+          respuesta: notice ? `${notice}\n\n${bodyText}` : bodyText,
+          solicitud: id,
+          revision: approved.revision,
+          cotizacionAprobadaId: approved.presupuesto_id || undefined,
+          archivo: { id, formato: 'pdf' },
+        };
+      }
+    }
     const bodyText = preview(created, channel);
     return {
       respuesta: notice ? `${notice}\n\n${bodyText}` : bodyText,
