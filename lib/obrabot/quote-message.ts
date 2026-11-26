@@ -5,10 +5,15 @@ import { formatCLP } from '@/lib/utils';
 import type { MaterialConsiderado } from '@/types/database';
 
 const clp = String.raw`(?:\d{1,3}(?:[.\u00a0 ]\d{3})+|\d+)`;
+const thousandsClp = String.raw`\d{1,3}(?:[.\u00a0 ]\d{3})+`;
 const ivaSuffix = String.raw`(?:\s*(?:\+?\s*m[aá]s\s+iva|\+\s*iva|sin\s+iva|iva\s+incluido|con\s+iva|netos?))?`;
 const bareTotalLine = new RegExp(String.raw`^\$\s*(${clp})${ivaSuffix}\.?$`, 'i');
 const moneyAtEnd = new RegExp(String.raw`^(.+?)\s*\$\s*(${clp})\s*(?:(c\/u|cada uno|unitario|en total))?${ivaSuffix}\.?$`, 'i');
 const projectTotal = /^total(?:\s+(?:del? proyecto|general|con iva|neto))?\s*:?$/i;
+const projectTotalNoDollar = new RegExp(
+  String.raw`^(?:valor\s+)?total(?:\s+(?:del?\s+proyecto|general|con\s+iva|neto))?\s*:?\s*(${thousandsClp})${ivaSuffix}\.?$`,
+  'i',
+);
 const laborLabel = /^(?:mano de obra|obra de mano)$/i;
 const materialsTotal = /^(?:total(?: de)? )?materiales\s*:?$/i;
 const priceByArea = new RegExp(String.raw`^\$\s*(${clp})\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(?:m[2²]|m(?:t|ts|etros?)?\.?\s+cuadrados?)${ivaSuffix}\.?$`, 'i');
@@ -18,6 +23,7 @@ const ivaDeclarationLine = /^(?:(?:todos\s+los\s+)?(?:precios?|valores?|montos?)
 const quantityPrefix = /^(\d+(?:[,.]\d+)?)\s+(\S.*)$/;
 const leadingUnit = /^(m[³3]|m[²2]|(?:mt|mts|metros?)\.?\s+c[uú]bicos?|(?:mt|mts|metros?)\.?\s+cuadrados?|kg|kilos?|litros?|lts?|unidades?|sacos?|cajas?|planchas?|tiras?|rollos?|bolsas?|galon(?:es)?|tinetas?|tarros?)\s+(?:de\s+)?(\S.*)$/i;
 const requestLine = /^(?:[¿¡]\s*)?(?:me\s+)?(?:puedes |podemos |podr[ií]as |necesito (?:que )?|quiero )?(?:me\s+)?(?:hacer|hace[rs]?|har[ií]as?|realiz[ae]r?|arm[ae]r?|prepar[ae]r?|gener[ae]r?|cotiza[rs]?|haz(?:me)?)\b.{0,35}\bcotizaci[oó]n\b/i;
+const pdfConversionOpener = /^(?:[¿¡]\s*)?(?:me\s+)?(?:puedes\s+|podr[ií]as\s+|necesito\s+(?:que\s+)?|quiero\s+)?(?:pas[ae]s?|p[aá]same|llev[ae]s?|ll[eé]vame|conviert[ae]s?|convertir)\s+(?:esto|este|esta|el\s+siguiente|la\s+siguiente)?\s*(?:presupuesto|cotizaci[oó]n)?\s*(?:a|en)\s+(?:pdf|excel)\b/i;
 const quoteTitle = /^(?:presupuesto|cotizaci[oó]n)\b/i;
 const chargeLine = /^(?:para (?:dar )?inicio|para iniciar|al inicio|al comenzar|al empezar|al finalizar|al t[eé]rmino|al terminar|al entregar|contra entrega|a la entrega|anticipo|abono|condiciones de pago|forma de pago|(?:el )?saldo|se solicita(?:r[aá])?|solicitamos|\d{1,3}(?:[.,]\d+)?\s*%)/i;
 const headingSuffix = /\s*(?:trabajos\s+a\s+realizar|detalle\s+de\s+trabajos|trabajos\s+incluidos|alcance)\s*:?$/i;
@@ -42,8 +48,10 @@ export function isNaturalQuoteRequest(text: string) {
 export function isPastedQuote(text: string) {
   if (text.length > 16000) return false;
   const [first, ...body] = quoteLines(text.trim());
-  const hasPriceSignal = body.some(line => moneyAtEnd.test(line) || priceByArea.test(line) || bareTotalLine.test(line));
-  if (isNaturalQuoteRequest(first)) return hasPriceSignal;
+  const hasPriceSignal = body.some(
+    line => moneyAtEnd.test(line) || priceByArea.test(line) || bareTotalLine.test(line) || projectTotalNoDollar.test(line),
+  );
+  if (isNaturalQuoteRequest(first) || (body.length >= 1 && pdfConversionOpener.test(first))) return hasPriceSignal;
   if (body.length >= 1 && !first.includes('?') && quoteTitle.test(first) && hasPriceSignal) return true;
   const labels = body.flatMap(line => line.match(moneyAtEnd)?.[1].trim() || []);
   return labels.some(label => projectTotal.test(label)) &&
@@ -213,7 +221,9 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
   const tratamiento_iva: 'incluido' | 'neto' = hasNetIva ? 'neto' : hasIncludedIva ? 'incluido' : (defaultIva ?? 'incluido');
   if (text.length > 16000) invalid('Divide el presupuesto en un listado más breve para conservar el detalle en esta cotización.');
   const rawLines = quoteLines(text.trim());
-  const firstRequestLine = !providedTitle && requestLine.test(rawLines[0]) ? rawLines.shift() : undefined;
+  const firstRequestLine = !providedTitle && (requestLine.test(rawLines[0]) || (rawLines.length > 1 && pdfConversionOpener.test(rawLines[0])))
+    ? rawLines.shift()
+    : undefined;
   const isPairableLabel = (line: string) => {
     if (!line || line.includes('$') || bareTotalLine.test(line)) return false;
     if (ivaDeclarationLine.test(line) || chargeLine.test(line)) return false;
@@ -286,6 +296,9 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
     } else if (money && materialsTotal.test(money[1].trim())) {
       declaredMaterials = amount(money[2]);
       declaredMaterialsInsertAt = lines.length;
+    } else if (!money && !inScope && projectTotalNoDollar.test(line)) {
+      const totalNoDollar = line.match(projectTotalNoDollar)!;
+      declaredTotal = amount(totalNoDollar[1]);
     } else if (bareTotal) {
       if (payment.length > 0 && declaredTotal != null) {
         payment[payment.length - 1] = `${payment[payment.length - 1]} ${line}`.trim();

@@ -10,7 +10,7 @@ const choices: [ProjectStatus, RegExp][] = [
   ['pendiente', /\bpendiente\b/],
   ['activo', /\b(activ[oa]|activa(?:la|lo|r)?|reactiva(?:la|lo|r)?|reabre(?:la|lo)?|reabrir|reanuda(?:la|lo|r)?)\b|\ben curso\b/],
 ];
-const mutation = /\b(pon(?:la|lo|me)?|poner(?:la|lo)?|pongas|coloca(?:la|lo|r)?|coloques|marca(?:la|lo|r)?|marques|cambia(?:la|lo|r)?|cambies|actualiza(?:la|lo|r)?|actualices|deja(?:la|lo|r)?|dejes|da(?:la|lo)?|dar|quede|quedar|termina(?:la|lo|r)?|finaliza(?:la|lo|r)?|cierra(?:la|lo)?|cerrar|pausa(?:la|lo|r)?|cancela(?:la|lo|r)?|activa(?:la|lo|r)?|suspende(?:la|lo|r)?|reactiva(?:la|lo|r)?|reabre(?:la|lo)?|reabrir|reanuda(?:la|lo|r)?)\b/;
+const mutation = /\b(pon(?:la|lo|me)?|poner(?:la|lo)?|pongas|coloca(?:la|lo|r)?|coloques|marca(?:la|lo|r)?|marques|cambia(?:la|lo|r)?|cambies|actualiza(?:la|lo|r)?|actualices|deja(?:la|lo|r)?|dejes|da(?:la|lo)?|dar|quede|quedar|pasa(?:la|lo|r)?|pases|termina(?:la|lo|r)?|finaliza(?:la|lo|r)?|cierra(?:la|lo)?|cerrar|pausa(?:la|lo)?|cancela(?:la|lo|r)?|activa(?:la|lo|r)?|suspende(?:la|lo|r)?|reactiva(?:la|lo|r)?|reabre(?:la|lo)?|reabrir|reanuda(?:la|lo|r)?)\b/;
 const otherTask = /\b(no|sin|antes|saber|ver|consulta|consultar|preguntar|cuando|explica|explicar|si|borrador|partidas?|actividad(?:es)?|tareas?|gant+|pagos?|presupuestos?|montos?|fechas?|clientes?|material(?:es)?|correos?|telefonos?|gastos?|documentos?|solicitud(?:es)?|jornada|cierre)\b/;
 const commandWords = new Set('por favor hola quiero necesito puedes podrias que la lo le me el a al esa ese esta este misma mismo obra proyecto estado como en de por quede quedar quedes y dar da'.split(' '));
 

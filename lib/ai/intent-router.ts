@@ -71,7 +71,7 @@ const EXPLICIT_COMMAND_RE =
   /^(?:ot:|nueva cotizaci[oó]n|aprueba cotizaci[oó]n|revisa cotizaci[oó]n|corrige cotizaci[oó]n|devuelve cotizaci[oó]n)/i;
 const UUID_RE = /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i;
 const TRIVIAL_REPLY_RE =
-  /^(?:hola|buenas|gracias|ok|okay|si|s[ií]|no|dale|listo|cancelar|deshacer|[1-4])[.!?]*$/i;
+  /^(?:(?:hola\s+)?(?:buen\s+d[ií]a|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches)|hola|buenas|(?:muchas|vale|ok|s[uú]per|perfecto)\s+gracias|gracias|todo\s+bien|ok|okay|si|s[ií]|no|dale|listo|cancelar|deshacer|[1-4])[.!?]*$/i;
 const DOMAIN_SIGNAL_RE =
   /\b(?:cotiz\w*|presupuest\w*|pdf|excel|gantt|obra|proyecto|fecha|iva|total|precio|monto|lucas?|palos?|mill[oó]n)\b/i;
 

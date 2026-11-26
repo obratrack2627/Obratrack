@@ -14,7 +14,7 @@ import { isDestinationCommand, isDestinationContinuation, validQuoteId } from '.
 import { parseWhatsAppInteractiveReply, quoteButtonSource } from '@/lib/whatsapp/interactive';
 
 const pdfRequestWords = new Set(
-  'pdf por favor el la un una de del en como formato archivo documento copia cotizacion presupuesto esta este esa ese lo eso me mi quiero quisiera necesito que podrias puedes puede das envias mandas enviar mandarme mandar enviarme mandame enviame enviamelo mandamelo damelo dame dalo pasame pasamelo pasa pasalo pasar pasarme entregar entregarme entregame entregamelo entrega adjuntar adjuntarme adjunta adjuntame adjuntalo adjuntamelo descarga descargar descargalo generar generarme genera generame generalo generamelo hazlo hazmelo haz hacer preparar preparame preparalo compartir comparteme compartelo porfa exporta exportar exportalo'.split(' '),
+  'pdf por favor el la un una de del en a como formato archivo documento copia cotizacion presupuesto esta este esa ese lo eso me mi quiero quisiera necesito que podrias puedes puede das envias mandas enviar mandarme mandar enviarme mandame enviame mandalo envialo enviamelo mandamelo damelo dame dalo pasame pasamelo pasa pasalo pasar pasarme entregar entregarme entregame entregamelo entrega adjuntar adjuntarme adjunta adjuntame adjuntalo adjuntamelo descarga descargar descargalo generar generarme genera generame generalo generamelo hazlo hazmelo haz hacer preparar preparame preparalo compartir comparteme compartelo porfa exporta exportar exportalo llevalo llevarlo llevamelo bajalo bajamelo bajar bajarlo tiralo tiramelo saca sacalo sacamelo'.split(' '),
 );
 const excelRequestWords = new Set([...pdfRequestWords, 'excel', 'xlsx', 'planilla', 'hoja', 'calculo']);
 

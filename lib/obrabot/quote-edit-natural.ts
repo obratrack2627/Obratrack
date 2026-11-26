@@ -16,7 +16,7 @@ const thousandsClp = String.raw`\d{1,3}(?:[.\u00a0 ]\d{3})+`;
 const parseClp = (raw: string) => Number(raw.replace(/[.\u00a0 ]/g, ''));
 const parseNum = (raw: string) => Number(raw.replace(',', '.'));
 
-const editVerb = /\b(?:modific\w+|modifiqu\w+|cambi\w+|ajust\w+|actualic\w+|actualiz\w+|sub(?:e|as|a|ir)\w*|baj(?:a|es|e|ar)\w*|dej(?:a|es|e|ar)\w*|pon(?:ga|gas|le|lo|la|er)?|arregl(?:a|es|e|ar)\w*|agreg(?:a|u)\w*|incluy\w+|sum(?:a|e)\w*|a[nñ]ad\w+|quit(?:a|e)\w*|elimin(?:a|e)\w*|sac(?:a|u)\w*|borr(?:a|e)\w*)\b/i;
+const editVerb = /\b(?:modif[ií]c\w+|modif[ií]qu\w+|c[aá]mbi\w+|aj[uú]st\w+|actual[ií]c\w+|actual[ií]z\w+|s[uú]b(?:e|as|a|ir|ele|elo|ela)\w*|b[aá]j(?:a|es|e|ar|ale|alo|ala)\w*|d[eé]j(?:a|es|e|ar|ale|alo|ala)\w*|p[oó]n(?:ga|gas|le|lo|la|er)?|arr[eé]gl(?:a|es|e|ar|ale|alo)?|agr[eé]g(?:a|ar|ale|alo|ala|u)\w*|incl[uú]y\w+|s[uú]m(?:a|e|ar|ale|alo)\w*|a[nñ][aá]d\w+|qu[ií]t(?:a|e|ar|ale|alo)\w*|elim[ií]n(?:a|e|ar|ale|alo)\w*|s[aá]c(?:a|ar|ale|alo|u)\w*|b[oó]rr(?:a|e|ar|ale|alo)\w*)\b/i;
 
 export function looksLikeNaturalQuoteEdit(text: string): boolean {
   const clean = text.trim();
@@ -24,16 +24,17 @@ export function looksLikeNaturalQuoteEdit(text: string): boolean {
   const lines = clean.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length > 5) return false;
   if (lines.length > 1 && (clean.match(/\$/g) || []).length >= 2) return false;
-  if (/^(?:aprueba|revisa|devuelve|corrige|nueva cotizaci[oó]n|crea(?:r)? (?:la |una )?obra|vincula)/i.test(clean)) {
+  if (/^(?:aprueba|revisa|devuelve|corrige|nueva cotizaci[oó]n|crea(?:r)? (?:la |una )?obra|vincula)/i.test(fold(clean))) {
     return false;
   }
-  return editVerb.test(clean);
+  return editVerb.test(fold(clean));
 }
 
 function matchLineIndex(
   lines: NonNullable<CotizacionEstimacion['partidas_venta']>,
   hint: string,
   preferArea = false,
+  allowSingleFallback = true,
 ): number {
   const cleanHint = fold(hint)
     .replace(/\b(?:el|la|los|las|de|del|al|en|por|valor|precio|monto|total|proyecto|general|cotizacion|presupuesto|partida|item|material|cantidad|metros?|mts?|mt|cuadrados?|m2)\b/g, ' ')
@@ -67,7 +68,7 @@ function matchLineIndex(
       .filter((idx) => idx >= 0);
     if (areaIndexes.length === 1) return areaIndexes[0];
   }
-  if (lines.length === 1) return 0;
+  if (allowSingleFallback && lines.length === 1) return 0;
   return -1;
 }
 
@@ -133,7 +134,7 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
 
   // 3. Agregar partida nueva con monto en $
   const addMatch = new RegExp(
-    String.raw`^(?:por\s+favor\s+)?(?:agrega(?:r|le)?|incluye|suma(?:r|le)?|a[nñ]ade)\s+(.+?)\s*\$\s*(${clp})\s*(c\/u|cada\s+uno|unitario|en\s+total)?\.?$`,
+    String.raw`^(?:por\s+favor\s+)?(?:agr[eé]g(?:a|ar|ale|alo|ala|ue|ues)?|incl[uú]y(?:e|ele|elo)?|s[uú]m(?:a|ar|ale|alo)?|a[nñ][aá]d(?:e|ele|elo|ir)?)\s+(.+?)\s*\$\s*(${clp})\s*(c\/u|cada\s+uno|unitario|en\s+total)?\.?$`,
     'i',
   ).exec(text);
   if (addMatch) {
@@ -157,9 +158,11 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
   }
 
   // 4. Eliminar partida por nombre
-  const removeMatch = /^(?:por\s+favor\s+)?(?:quita(?:r|le)?|elimina(?:r)?|saca(?:r)?|borra(?:r)?)\s+(?:la\s+partida\s+|el\s+[ií]tem\s+|el\s+|la\s+)?(.+?)\.?$/i.exec(text);
-  if (!addMatch && removeMatch) {
-    const idx = matchLineIndex(baseLines, removeMatch[1]);
+  const removeMatch = /^(?:por\s+favor\s+)?(?:qu[ií]t(?:a|ar|ale|alo|e|es)?|elim[ií]n(?:a|ar|ale|alo|e|es)?|s[aá]c(?:a|ar|ale|alo)?|b[oó]rr(?:a|ar|ale|alo|e|es)?)\s+(?:la\s+partida\s+|el\s+[ií]tem\s+|el\s+|la\s+)?(.+?)\.?$/i.exec(text);
+  const removeTarget = removeMatch ? fold(removeMatch[1]) : '';
+  const targetsDateOrMetadata = /^(?:la\s+)?fecha(?:\b|$)/.test(removeTarget);
+  if (!addMatch && removeMatch && !targetsDateOrMetadata) {
+    const idx = matchLineIndex(baseLines, removeMatch[1], false, false);
     if (idx < 0) throw new AIError('OBRABOT_QUOTE_INPUT', `No encontré la partida «${removeMatch[1].trim()}» en esta cotización.`, 422);
     if (baseLines.length <= 1) throw new AIError('OBRABOT_QUOTE_INPUT', 'La cotización debe conservar al menos una partida.', 422);
     baseLines.splice(idx, 1);
@@ -167,7 +170,7 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
   }
 
   // 5. Cambiar precio en $ (o con miles CLP sin $) de una partida o del valor por m²
-  const changeVerb = String.raw`(?:modific\w+|modifiqu\w+|cambi\w+|ajust\w+|actualic\w+|actualiz\w+|sub(?:e|as|a|ir)\w*|baj(?:a|es|e|ar)\w*|dej(?:a|es|e|ar)\w*|pon(?:ga|gas|le|lo|la|er)?|arregl(?:a|es|e|ar)\w*)`;
+  const changeVerb = String.raw`(?:modif[ií]c\w+|modif[ií]qu\w+|c[aá]mbi\w+|aj[uú]st\w+|actual[ií]c\w+|actual[ií]z\w+|s[uú]b(?:e|as|a|ir|ele|elo|ela)\w*|b[aá]j(?:a|es|e|ar|ale|alo|ala)\w*|d[eé]j(?:a|es|e|ar|ale|alo|ala)\w*|p[oó]n(?:ga|gas|le|lo|la|er)?|arr[eé]gl(?:a|es|e|ar|ale|alo)?)`;
   const explicitDollarPrice = !addMatch && !removeMatch
     ? new RegExp(
         String.raw`${changeVerb}\s+(.+?)\s+(?:a|en)\s*\$\s*(${clp})(?:\s*(?:pesos|clp))?\b`,

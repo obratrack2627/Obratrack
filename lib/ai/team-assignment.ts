@@ -84,10 +84,17 @@ function acceptsTeamReply(text: string, plain: string, projects: any[], users: a
   return /^[\p{L}\p{M}'’., -]+$/u.test(text) && !/\b(?:que|cual|cuanto|como|cuando|dime|muestra|lista|consulta|pago|saldo|avance|cotiza|busca|gracias|registra|registrar|crea|crear|nuevo|nueva|cambia|actualiza|termina|pausa|elimina|envia|marca|saber|revisa|ok|okay|oki|listo|perfecto|genial|super|excelente|entendido|bien|vale|dale|bueno|buena|buenos|buenas|hola|hey|dias|tardes|noches|dia)\b/.test(plain);
 }
 
-function needsRegistrationOrAgent(text: string, plain: string, starts: boolean) {
+function needsRegistrationOrAgent(text: string, plain: string, starts: boolean, hasPending = false) {
+  const bodyPlain = norm(assignmentPersonName(starts ? text.replace(command, '') : text));
+  const mentionsTeamRole = /\b(?:trabajador(?:es)?|maestr[oa]s?|supervisor(?:es|a|as)?|jef[ea]s?\s+de\s+obra|equipo|cuadrilla|obrero(?:s)?)\b/.test(plain);
+  const mentionsConstructionItem =
+    !hasPending &&
+    (/\b\d+\s*(?:sacos?|un|unidades?|m[23]?|mts?|metros?|kg|kilos?|planchas?|palos?|cajas?|litros?|gl|tinetas?|galones?|rollos?)\b/.test(bodyPlain) ||
+      /\b(?:cemento|escombros?|retiro|hormigon|radier|porcelanato|ceramica|pintura|flete|traslado|demolicion|instalacion|excavacion|griferia|extractor|vanitorio|techumbre|techo|pandereta|porton|ripio|arena|fierro|madera|zinc|yeso|estuco|gasto(?:s)?)\b/.test(bodyPlain));
   return (
     isCompoundTeamInstruction(text) ||
     /\b(?:partida(?:s)?|actividad(?:es)?|tarea(?:s)?|gant+|responsable(?:s)?\s+de|presupuesto(?:s)?|cotizacion(?:es)?|material(?:es)?|insumo(?:s)?|pago(?:s)?|abono(?:s)?|documento(?:s)?|boleta|factura|adicional(?:es)?|avance(?:s)?|nota(?:s)?|incidente(?:s)?|imprevisto(?:s)?|foto(?:s)?|pdf|excel)\b/.test(plain) ||
+    (!mentionsTeamRole && mentionsConstructionItem) ||
     (starts &&
       (/\b(?:nuevo|nueva)\s+(?:trabajador|maestro|supervisor|jefe|jefa)\b/.test(plain) ||
         /@|\b(?:rut|correo|telefono)\b/.test(plain)))
@@ -101,7 +108,7 @@ export function teamAssignmentIntake(
 ) {
   const text = message.trim(), plain = norm(text).replace(/[.!]+$/, '');
   const starts = command.test(text), correction = correctionReply.test(plain);
-  if (needsRegistrationOrAgent(text, plain, starts)) return null;
+  if (needsRegistrationOrAgent(text, plain, starts, Boolean(pending))) return null;
   if (!starts && !correction && !pending) return null;
   if (pending && /^(?:no|ahora no|por ahora no|no gracias|no por ahora|mas tarde|despues|cancelar?|olvida(?:r)?|sin equipo|sin trabajadores|ninguno|nadie|omitir|paso)(?: la asignacion| eso)?$/.test(plain))
     return { actions: [], draft: null, question: 'De acuerdo. No añadí personas a la obra.' };

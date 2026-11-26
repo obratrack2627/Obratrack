@@ -57,7 +57,7 @@ export function legacyQuotedProjectMessage(rows: any[]) {
 export function appliesQuoteToExistingProject(text: string) {
   const value = stripTrailingPunctuation(text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(), '.!?');
   if (!value || /\b(?:no|sin|cancela\w*)\b/.test(value)) return false;
-  return /^(?:por favor[, ]+)?(?:(?:quiero|necesito|puedes|podrias)(?: que)?\s+)?(?:apli(?:ca|qu)\w*|asoci\w+|carg(?:a|u)\w*|vincul\w+|incorpor\w+|us\w+|agreg(?:a|u)\w*|a[nñ]ad\w+)\s+(?:(?:tambien|ademas|ahora)\s+)?(?:(?:esta|esa|la|el|este|ese)\s+)?(?:cotizacion|presupuesto)\s+(?:a|en)\s+(?:(?:la|esta|esa|el|este|ese)\s+)?(?:obra|proyecto)\b/.test(
+  return /^(?:por favor[, ]+)?(?:(?:quiero|necesito|puedes|podrias)(?: que)?\s+)?(?:apli(?:ca|qu)\w*|asoci\w+|carg(?:a|u)\w*|vincul\w+|incorpor\w+|us\w+|agreg(?:a|u)\w*|a[nñ]ad\w+|sub(?:e|ele|ir|irlo|irla)\w*|pon(?:le|lo|la|er|ga|gas)?|met(?:e|ele|er|elo|ela)\w*|dej(?:a|ale|alo|ala|es|e)\w*)\s+(?:(?:tambien|ademas|ahora)\s+)?(?:(?:esta|esa|la|el|este|ese)\s+)?(?:cotizacion|presupuesto)\s+(?:a|en)\s+(?:(?:la|esta|esa|el|este|ese)\s+)?(?:obra|proyecto)\b/.test(
     value,
   ) || /^(?:aplical[ao]|asocial[ao]|cargal[ao]|agregal[ao])(?:\s+(?:tambien\s+)?a\s+(?:la|esta|esa)\s+(?:obra|proyecto))?$/.test(value);
 }
