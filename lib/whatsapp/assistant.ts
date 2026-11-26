@@ -29,7 +29,11 @@ import { scheduleKnowledgeIndex } from '@/lib/ai/rag-index';
 import { notifyPushOnWhatsAppChanges } from '@/lib/push/events';
 import { AIError } from "@/lib/ai/errors";
 import { classifyTurnIntent, type SemanticIntentResult } from '@/lib/ai/intent-router';
-import { buildApplyQuoteToProjectPlan, resolveSharedDeterministicTurn } from '@/lib/ai/turn-core';
+import {
+  buildApplyQuoteToProjectPlan,
+  resolveChileanFieldOpsTurn,
+  resolveSharedDeterministicTurn,
+} from '@/lib/ai/turn-core';
 import { chatAsesorObrasGemini } from "@/lib/gemini";
 import { generateAI } from "@/lib/ai/provider";
 import { canonicalPhone, downloadMetaMedia } from "./meta";
@@ -873,6 +877,16 @@ export async function processPersonalMessage(
         : null;
     registrationReply = localRegistration && (localRegistration.question || localRegistration.actions.length) ? {respuesta:localRegistration.question || 'Voy a registrar la ficha.',accion:localRegistration.actions.length ? {tipo:'lote_acciones',acciones:localRegistration.actions} : null,cotizacion:null,sugerencias:[],registro_propuesto:localRegistration.draft?.items[0] || localRegistration.prepared?.items[0]} : null;
     const apuReply = sharedDeterministic.apuReply;
+    const fieldOpsReply =
+      !attachment && !pendingProject && !pendingPerson && !cancelCreation && !applyQuoteToExisting
+        ? resolveChileanFieldOpsTurn({
+            text,
+            userRole: user.rol,
+            projects: tables.proyectos,
+            activeProjectId: activeProject,
+            users: tables.usuarios,
+          })
+        : null;
     const menuDirect = !attachment ? directInteractiveMenuReply(batchItems) : null;
     const isExplicitMenuCommand =
       !attachment &&
@@ -880,7 +894,7 @@ export async function processPersonalMessage(
       !pendingPerson &&
       (isGreetingOrMenuRequest(text) && (Boolean(lastQuoteMessage?.cotizacion) || Boolean(history[0]?.respuesta?.includes('?')) || !introPause));
     const simpleCreation = creationRequest && !attachment && !/[,;\n]|\b(?:y registra|y envia|y asigna)\b/i.test(text) && /(?:obra|proyecto)[.!?]*$/i.test(text.trim());
-    const directWhatsAppReply = applyQuoteToExisting ? { respuesta: applyQuoteToExisting.summary, accion: { tipo: 'lote_acciones', acciones: applyQuoteToExisting.actions }, cotizacion: null, sugerencias: [] } : menuDirect ? { respuesta: menuDirect.respuesta, accion: null, cotizacion: null, sugerencias: [] } : projectListing || projectRefusal || (introPause ? { respuesta: introPause.reply, accion: null, cotizacion: null, sugerencias: [] } : isExplicitMenuCommand ? { respuesta: "¡Hola! Elige qué deseas hacer hoy en ObraTrack o escríbeme tu solicitud:", accion: null, cotizacion: null, sugerencias: [] } : acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || apuReply);
+    const directWhatsAppReply = applyQuoteToExisting ? { respuesta: applyQuoteToExisting.summary, accion: { tipo: 'lote_acciones', acciones: applyQuoteToExisting.actions }, cotizacion: null, sugerencias: [] } : menuDirect ? { respuesta: menuDirect.respuesta, accion: null, cotizacion: null, sugerencias: [] } : projectListing || projectRefusal || (introPause ? { respuesta: introPause.reply, accion: null, cotizacion: null, sugerencias: [] } : isExplicitMenuCommand ? { respuesta: "¡Hola! Elige qué deseas hacer hoy en ObraTrack o escríbeme tu solicitud:", accion: null, cotizacion: null, sugerencias: [] } : acceptCreation || confirmationResponse || cancelCreation || continueCreation || simpleCreation ? { respuesta: confirmationResponse, accion: null, cotizacion: null, sugerencias: [], obra_propuesta: continueCreation ? {} : null } : attendanceRefusal || preferenceReply || statusCommand || verifiedDeadlines || nameReply || registrationReply || apuReply || fieldOpsReply);
     let semanticReferences: any[] = [];
     let savedBudgetsContext: any[] = [];
     let recentWebTurns: any[] = [];

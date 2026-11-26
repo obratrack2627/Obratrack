@@ -16,7 +16,7 @@ const thousandsClp = String.raw`\d{1,3}(?:[.\u00a0 ]\d{3})+`;
 const parseClp = (raw: string) => Number(raw.replace(/[.\u00a0 ]/g, ''));
 const parseNum = (raw: string) => Number(raw.replace(',', '.'));
 
-const editVerb = /\b(?:modif[ií]c\w+|modif[ií]qu\w+|c[aá]mbi\w+|aj[uú]st\w+|actual[ií]c\w+|actual[ií]z\w+|s[uú]b(?:e|as|a|ir|ele|elo|ela)\w*|b[aá]j(?:a|es|e|ar|ale|alo|ala)\w*|d[eé]j(?:a|es|e|ar|ale|alo|ala)\w*|p[oó]n(?:ga|gas|le|lo|la|er)?|arr[eé]gl(?:a|es|e|ar|ale|alo)?|agr[eé]g(?:a|ar|ale|alo|ala|u)\w*|incl[uú]y\w+|s[uú]m(?:a|e|ar|ale|alo)\w*|a[nñ][aá]d\w+|qu[ií]t(?:a|e|ar|ale|alo)\w*|elim[ií]n(?:a|e|ar|ale|alo)\w*|s[aá]c(?:a|ar|ale|alo|u)\w*|b[oó]rr(?:a|e|ar|ale|alo)\w*)\b/i;
+const editVerb = /\b(?:modif[ií]c\w+|modif[ií]qu\w+|c[aá]mbi\w+|aj[uú]st\w+|actual[ií]c\w+|actual[ií]z\w+|s[uú]b(?:e|as|a|ir|ele|elo|ela)\w*|b[aá]j(?:a|es|e|ar|ale|alo|ala)\w*|d[eé]j(?:a|es|e|ar|ale|alo|ala)\w*|p[oó]n(?:ga|gas|le|lo|la|er)?|arr[eé]gl(?:a|es|e|ar|ale|alo)?|agr[eé]g(?:a|ar|ale|alo|ala|u)\w*|incl[uú]y\w+|s[uú]m(?:a|e|ar|ale|alo)\w*|a[nñ][aá]d\w+|qu[ií]t(?:a|e|ar|ale|alo)\w*|elim[ií]n(?:a|e|ar|ale|alo)\w*|s[aá]c(?:a|ar|ale|alo|u)\w*|b[oó]rr(?:a|e|ar|ale|alo)\w*|hazle|apl[ií]c\w+|descu[eé]nt\w+|rebaj\w+|rec[aá]rg\w+|aument\w+)\b/i;
 
 export function looksLikeNaturalQuoteEdit(text: string): boolean {
   const clean = text.trim();
@@ -132,11 +132,42 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
     mutated = true;
   }
 
+  // 2b. Ajuste porcentual global (descuento o recargo %)
+  const foldedText = fold(text);
+  const pctDiscount =
+    /\b(?:hazle|aplic(?:a|ale|ar)|dej(?:a|ale)|baj(?:a|ale)|descuent(?:a|ale)|rebaj(?:a|ale)|quit(?:a|ale))\s+(?:un\s+)?(\d{1,2}(?:[.,]\d{1,2})?)\s*%(?:\s+(?:de\s+)?descuento\b)?/i.exec(foldedText) ||
+    /\b(\d{1,2}(?:[.,]\d{1,2})?)\s*%\s+(?:de\s+)?descuento\b/i.exec(foldedText);
+  const pctSurcharge = !pctDiscount
+    ? /\b(?:sub(?:e|ele|ir)|recarg(?:a|ale|ar)|aument(?:a|ale|ar)|agreg(?:a|ale|ar))\s+(?:un\s+)?(\d{1,3}(?:[.,]\d{1,2})?)\s*%/i.exec(foldedText)
+    : null;
+  let pctApplied = false;
+  if (pctDiscount || pctSurcharge) {
+    const pct = parseNum((pctDiscount || pctSurcharge)![1]);
+    const isDiscount = Boolean(pctDiscount);
+    if ((isDiscount && pct > 0 && pct < 100) || (!isDiscount && pct > 0 && pct <= 200)) {
+      const factor = isDiscount ? 1 - pct / 100 : 1 + pct / 100;
+      for (let idx = 0; idx < baseLines.length; idx++) {
+        const line = baseLines[idx];
+        if (line.precio_partida != null) {
+          const nextTotal = Math.max(1, Math.round(line.precio_partida * factor));
+          baseLines[idx] = { ...line, precio_partida: nextTotal, precio_unitario: 0, subtotal: nextTotal };
+        } else {
+          const nextUnit = Math.max(1, Math.round(line.precio_unitario * factor));
+          baseLines[idx] = { ...line, precio_unitario: nextUnit, subtotal: Math.round(line.cantidad * nextUnit) };
+        }
+      }
+      pctApplied = true;
+      mutated = true;
+    }
+  }
+
   // 3. Agregar partida nueva con monto en $
-  const addMatch = new RegExp(
-    String.raw`^(?:por\s+favor\s+)?(?:agr[eé]g(?:a|ar|ale|alo|ala|ue|ues)?|incl[uú]y(?:e|ele|elo)?|s[uú]m(?:a|ar|ale|alo)?|a[nñ][aá]d(?:e|ele|elo|ir)?)\s+(.+?)\s*\$\s*(${clp})\s*(c\/u|cada\s+uno|unitario|en\s+total)?\.?$`,
-    'i',
-  ).exec(text);
+  const addMatch = !pctApplied
+    ? new RegExp(
+        String.raw`^(?:por\s+favor\s+)?(?:agr[eé]g(?:a|ar|ale|alo|ala|ue|ues)?|incl[uú]y(?:e|ele|elo)?|s[uú]m(?:a|ar|ale|alo)?|a[nñ][aá]d(?:e|ele|elo|ir)?)\s+(.+?)\s*\$\s*(${clp})\s*(c\/u|cada\s+uno|unitario|en\s+total)?\.?$`,
+        'i',
+      ).exec(text)
+    : null;
   if (addMatch) {
     const rawLabel = addMatch[1].trim().replace(/\s+(?:por|a|en)\s*$/i, '').trim();
     const val = parseClp(addMatch[2]);
@@ -158,10 +189,12 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
   }
 
   // 4. Eliminar partida por nombre
-  const removeMatch = /^(?:por\s+favor\s+)?(?:qu[ií]t(?:a|ar|ale|alo|e|es)?|elim[ií]n(?:a|ar|ale|alo|e|es)?|s[aá]c(?:a|ar|ale|alo)?|b[oó]rr(?:a|ar|ale|alo|e|es)?)\s+(?:la\s+partida\s+|el\s+[ií]tem\s+|el\s+|la\s+)?(.+?)\.?$/i.exec(text);
+  const removeMatch = !pctApplied
+    ? /^(?:por\s+favor\s+)?(?:qu[ií]t(?:a|ar|ale|alo|e|es)?|elim[ií]n(?:a|ar|ale|alo|e|es)?|s[aá]c(?:a|ar|ale|alo)?|b[oó]rr(?:a|ar|ale|alo|e|es)?)\s+(?:la\s+partida\s+|el\s+[ií]tem\s+|el\s+|la\s+)?(.+?)\.?$/i.exec(text)
+    : null;
   const removeTarget = removeMatch ? fold(removeMatch[1]) : '';
   const targetsDateOrMetadata = /^(?:la\s+)?fecha(?:\b|$)/.test(removeTarget);
-  if (!addMatch && removeMatch && !targetsDateOrMetadata) {
+  if (!pctApplied && !addMatch && removeMatch && !targetsDateOrMetadata) {
     const idx = matchLineIndex(baseLines, removeMatch[1], false, false);
     if (idx < 0) throw new AIError('OBRABOT_QUOTE_INPUT', `No encontré la partida «${removeMatch[1].trim()}» en esta cotización.`, 422);
     if (baseLines.length <= 1) throw new AIError('OBRABOT_QUOTE_INPUT', 'La cotización debe conservar al menos una partida.', 422);
@@ -171,19 +204,19 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
 
   // 5. Cambiar precio en $ (o con miles CLP sin $) de una partida o del valor por m²
   const changeVerb = String.raw`(?:modif[ií]c\w+|modif[ií]qu\w+|c[aá]mbi\w+|aj[uú]st\w+|actual[ií]c\w+|actual[ií]z\w+|s[uú]b(?:e|as|a|ir|ele|elo|ela)\w*|b[aá]j(?:a|es|e|ar|ale|alo|ala)\w*|d[eé]j(?:a|es|e|ar|ale|alo|ala)\w*|p[oó]n(?:ga|gas|le|lo|la|er)?|arr[eé]gl(?:a|es|e|ar|ale|alo)?)`;
-  const explicitDollarPrice = !addMatch && !removeMatch
+  const explicitDollarPrice = !pctApplied && !addMatch && !removeMatch
     ? new RegExp(
         String.raw`${changeVerb}\s+(.+?)\s+(?:a|en)\s*\$\s*(${clp})(?:\s*(?:pesos|clp))?\b`,
         'i',
       ).exec(text)
     : null;
-  const bareThousandsPrice = !addMatch && !removeMatch && !explicitDollarPrice
+  const bareThousandsPrice = !pctApplied && !addMatch && !removeMatch && !explicitDollarPrice
     ? new RegExp(
         String.raw`${changeVerb}\s+(.+?)\s+(?:a|en)\s+(${thousandsClp})(?:\s*(?:pesos|clp))?(?!\s*(?:m[2²]|m[3³]|mts?|metros?|d[ií]as|%))\b`,
         'i',
       ).exec(text)
     : null;
-  const explicitValueWordPrice = !addMatch && !removeMatch && !explicitDollarPrice && !bareThousandsPrice
+  const explicitValueWordPrice = !pctApplied && !addMatch && !removeMatch && !explicitDollarPrice && !bareThousandsPrice
     ? new RegExp(
         String.raw`(?:valor|precio|monto)\s+(?:de(?:l| la| los| las)?\s+)?(.+?)\s+(?:a|en)\s+(\d{3,10})(?:\s*(?:pesos|clp))?(?!\s*(?:m[2²]|m[3³]|mts?|metros?|d[ií]as|%|un|unidades?|sacos?|cajas?))\b`,
         'i',
@@ -207,7 +240,7 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
   }
 
   // 6. Cambiar superficie en m² o cantidad de una partida (ej: "modificar el de hormigón estampado a 84 mts cuadrados", "cámbiala a 84 m²")
-  const areaMatch = !addMatch && !removeMatch && !priceChangeMatch
+  const areaMatch = !pctApplied && !addMatch && !removeMatch && !priceChangeMatch
     ? new RegExp(String.raw`${changeVerb}(?:\s+(.+?))?\s+(?:a|en)\s+(\d+(?:[.,]\d+)?)\s*(m[2²]|(?:mt|mts|metros?)\.?\s+cuadrados?)\b`, 'i').exec(text)
     : null;
   if (areaMatch) {
@@ -225,7 +258,7 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
       subtotal: Math.round(newArea * target.precio_unitario),
     };
     mutated = true;
-  } else if (!addMatch && !removeMatch && !priceChangeMatch) {
+  } else if (!pctApplied && !addMatch && !removeMatch && !priceChangeMatch) {
     const qtyMatch = new RegExp(String.raw`${changeVerb}\s+(.+?)\s+(?:a|en)\s+(\d+(?:[.,]\d+)?)\b(?!\s*(?:%|d[ií]as|\$))`, 'i').exec(text);
     if (qtyMatch && !/\biva\b/i.test(qtyMatch[1])) {
       const newQty = parseNum(qtyMatch[2]);

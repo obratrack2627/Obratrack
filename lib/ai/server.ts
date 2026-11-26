@@ -35,7 +35,16 @@ import { canAccessWeb, WEB_ACCESS_ERROR, isSessionJWT } from '@/lib/auth/access'
 import { handleQuoteTurn, isQuoteWorkflow, tryNaturalQuoteEdit, type QuoteReply } from '@/lib/obrabot/quotes';
 import { extractWebQuoteRefs, resolveUnifiedQuote } from '@/lib/quotes/unified';
 import { classifyTurnIntent, shouldUseSemanticIntentRouter } from './intent-router';
-import { buildApplyQuoteToProjectPlan, resolveSharedDeterministicTurn, resolveWebSemanticQuoteAction } from './turn-core';
+import {
+  buildApplyQuoteToProjectPlan,
+  resolveChileanFieldOpsTurn,
+  resolveSharedDeterministicTurn,
+  resolveWebSemanticQuoteAction,
+} from './turn-core';
+import {
+  isCommercialQuoteStatusCommand,
+  handleCommercialQuoteStatusCommand,
+} from '@/lib/quotes/commercial-status';
 import { TEAM_FOLLOW_UP } from './team-assignment';
 import { appliesQuoteToExistingProject } from '@/lib/whatsapp/quote-intake';
 import { looksLikeNaturalQuoteEdit } from '@/lib/obrabot/quote-edit-natural';
@@ -246,11 +255,13 @@ export function createChatHandler(
           }, { headers: { 'Cache-Control': 'private, no-store' } });
         }
       }
+      const commercialStatusCmd = !body.imagen && isCommercialQuoteStatusCommand(body.mensaje);
       const hasSavedQuoteEditHint =
         recentWebQuoteRefs.length > 0 ||
         (/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(body.mensaje) &&
           !/\b(?:de\s+la\s+obra|del\s+proyecto)\b/i.test(body.mensaje));
       const webNaturalQuoteEdit =
+        !commercialStatusCmd &&
         actor.rol === 'admin' &&
         hasSavedQuoteEditHint &&
         looksLikeNaturalQuoteEdit(body.mensaje) &&
@@ -294,6 +305,15 @@ export function createChatHandler(
           } } : {}),
         }, { headers: { 'Cache-Control': 'private, no-store' } });
       };
+      if (commercialStatusCmd && !quoteCommand) {
+        if (!['admin', 'supervisor'].includes(actor.rol)) throw new AIError('OBRABOT_ADMIN', 'El seguimiento comercial de cotizaciones está reservado al administrador o supervisor.', 403);
+        const plan = await client.from('empresas').select('plan_id').eq('id', actor.empresa_id).maybeSingle();
+        if (plan.error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude verificar el plan de la empresa.', 503);
+        if (!['pro', 'pro_ia'].includes(plan.data?.plan_id)) throw new AIError('PLAN_REQUIRED', 'ObraBot requiere el plan Pro o Pro IA.', 403);
+        const adminOrClient = getSupabaseAdmin() || client;
+        const commercialReply = await handleCommercialQuoteStatusCommand(adminOrClient, actor, 'plataforma', body.mensaje, recentWebQuoteRefs);
+        if (commercialReply) return buildWebQuoteResponse(commercialReply, plan.data?.plan_id);
+      }
       if (quoteCommand || destinationContinuation || webNaturalQuoteEdit) {
         if (actor.rol !== 'admin') throw new AIError('OBRABOT_ADMIN', 'Esta acción está reservada al administrador.', 403);
         const plan = await client.from('empresas').select('plan_id').eq('id', actor.empresa_id).maybeSingle();
@@ -309,6 +329,7 @@ export function createChatHandler(
         if (reply) return buildWebQuoteResponse(reply, plan.data?.plan_id);
       }
       if (
+        !commercialStatusCmd &&
         !quoteCommand &&
         !destinationContinuation &&
         !webNaturalQuoteEdit &&
@@ -612,6 +633,17 @@ export function createChatHandler(
           await finish(result, targetProject.id);
           return NextResponse.json(result);
         }
+      }
+      const fieldOpsReply = resolveChileanFieldOpsTurn({
+        text: body.mensaje,
+        userRole: user.rol,
+        projects: tables.proyectos,
+        activeProjectId: referencedId || projectId || null,
+        users: tables.usuarios,
+      });
+      if (fieldOpsReply) {
+        await finish(fieldOpsReply, (fieldOpsReply.accion as any)?.proyecto_id || projectId);
+        return NextResponse.json(fieldOpsReply);
       }
       let canonicalBudget: Presupuesto | null = null;
       const budgetContext = async (scope?: string) => {

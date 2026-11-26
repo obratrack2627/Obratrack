@@ -5,6 +5,10 @@ import { classifyTurnIntent, shouldUseSemanticIntentRouter, type SemanticIntentR
 import { canonicalPhone } from '@/lib/phone';
 import { findBudget } from '@/lib/presupuestos';
 import { extractWhatsAppQuoteRefs, resolveUnifiedQuote } from '@/lib/quotes/unified';
+import {
+  isCommercialQuoteStatusCommand,
+  handleCommercialQuoteStatusCommand,
+} from '@/lib/quotes/commercial-status';
 import { getApprovedQuote, getQuoteReview, handleQuoteTurn, isQuoteWorkflow, tryNaturalQuoteEdit, type Actor, type QuoteReply } from './quotes';
 import { looksLikeNaturalQuoteEdit } from './quote-edit-natural';
 import { excelMime, quoteFile } from './quote-files';
@@ -162,6 +166,7 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
   const pendingReview = noAttachment && !quoteInput && !destination && !contextualFileFormat && isShortQuoteApproval(text)
     ? findPendingQuoteReview(conversationRows, replyContextId, text)
     : null;
+  const commercialStatusCmd = noAttachment && !quoteInput && !destination && !contextualFileFormat && !pendingReview && isCommercialQuoteStatusCommand(text);
   const last = conversationRows[0];
   const freshRows = conversationRows.filter(r => !r?.created_at || !(Date.now() - Date.parse(r.created_at) > quoteSessionMs));
   const recentQuoteRefs = extractWhatsAppQuoteRefs(freshRows, replyContextId);
@@ -171,7 +176,7 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     recentQuoteRefs.length > 0 ||
     (/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text) &&
       !/\b(?:de\s+la\s+obra|del\s+proyecto)\b/i.test(text));
-  const maybeNaturalEdit = noAttachment && !quoteInput && !destination && !contextualFileFormat && !pendingReview && actor.rol === 'admin' && hasSavedQuoteEditHint && looksLikeNaturalQuoteEdit(text);
+  const maybeNaturalEdit = noAttachment && !quoteInput && !destination && !contextualFileFormat && !pendingReview && !commercialStatusCmd && actor.rol === 'admin' && hasSavedQuoteEditHint && looksLikeNaturalQuoteEdit(text);
   const draft = last?.acciones?.rol_actor === actor.rol && last.borrador_obra &&
     !(Date.now() - Date.parse(last.created_at) > quoteSessionMs) ? last.borrador_obra : null;
 
@@ -181,6 +186,7 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     !quoteInput &&
     !destination &&
     !pendingReview &&
+    !commercialStatusCmd &&
     !maybeNaturalEdit &&
     (actor.rol !== 'admin' || !isDestinationContinuation(text))
   ) {
@@ -239,6 +245,9 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
         ? (items.map(item => quoteButtonSource(item, 'pdf')).find(Boolean) || sourceId)
         : sourceId;
       reply = await requestedQuoteFile(db, actor, conversationRows, contextualFileFormat, pdfSource);
+    } else if (commercialStatusCmd) {
+      reply = await handleCommercialQuoteStatusCommand(db, actor, 'whatsapp', text, recentQuoteRefs);
+      if (!reply) return null;
     } else if (semanticIntent) {
       if (semanticIntent.intent === 'editar_cotizacion') {
         reply = await tryNaturalQuoteEdit(db, actor, 'whatsapp', text, recentReviewIds, immediateQuoteContext, inbound.id, semanticIntent, recentQuoteRefs);

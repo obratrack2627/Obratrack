@@ -24,6 +24,40 @@ const quantityPrefix = /^(\d+(?:[,.]\d+)?)\s+(\S.*)$/;
 const leadingUnit = /^(m[³3]|m[²2]|(?:mt|mts|metros?)\.?\s+c[uú]bicos?|(?:mt|mts|metros?)\.?\s+cuadrados?|kg|kilos?|litros?|lts?|unidades?|sacos?|cajas?|planchas?|tiras?|rollos?|bolsas?|galon(?:es)?|tinetas?|tarros?)\s+(?:de\s+)?(\S.*)$/i;
 const requestLine = /^(?:[¿¡]\s*)?(?:me\s+)?(?:puedes |podemos |podr[ií]as |necesito (?:que )?|quiero )?(?:me\s+)?(?:hacer|hace[rs]?|har[ií]as?|realiz[ae]r?|arm[ae]r?|prepar[ae]r?|gener[ae]r?|cotiza[rs]?|haz(?:me)?)\b.{0,35}\bcotizaci[oó]n\b/i;
 const pdfConversionOpener = /^(?:[¿¡]\s*)?(?:me\s+)?(?:puedes\s+|podr[ií]as\s+|necesito\s+(?:que\s+)?|quiero\s+)?(?:pas[ae]s?|p[aá]same|llev[ae]s?|ll[eé]vame|conviert[ae]s?|convertir)\s+(?:esto|este|esta|el\s+siguiente|la\s+siguiente)?\s*(?:presupuesto|cotizaci[oó]n)?\s*(?:a|en)\s+(?:pdf|excel)\b/i;
+const ufRateLine = /\(?\s*(?:valor\s+)?uf\s*(?:de\s+referencia|del\s+d[ií]a|hoy)?\s*[:=]?\s*\$\s*([1-9]\d{1,2}(?:[.\u00a0 ]\d{3})+|\d{4,6})\s*\)?/i;
+const ufAmountToken = /(?:\b(\d{1,6}(?:[.,]\d{1,2})?)\s*uf\b|\buf\s*(\d{1,6}(?:[.,]\d{1,2})?)\b)/gi;
+
+function preprocessUfQuoteText(text: string): { text: string; ufNote?: string } {
+  const withoutRate = text.replace(new RegExp(ufRateLine.source, 'gi'), ' ');
+  ufAmountToken.lastIndex = 0;
+  if (!ufAmountToken.test(withoutRate)) return { text };
+  const rateMatch = ufRateLine.exec(text);
+  if (!rateMatch) {
+    throw new AIError(
+      'OBRABOT_QUOTE_INPUT',
+      'Detecté montos en UF pero no tengo un valor de UF confirmado en el mensaje. Indícame el valor de la UF a usar (por ejemplo: «UF $38.500») para calcular el presupuesto exacto en pesos.',
+      422,
+    );
+  }
+  const rate = amount(rateMatch[1]);
+  if (!Number.isFinite(rate) || rate < 20000 || rate > 100000) {
+    invalid('Confirma un valor de UF válido en pesos chilenos (por ejemplo: «UF $38.500»).');
+  }
+  const cleanedLines = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(new RegExp(ufRateLine.source, 'gi'), '').replace(/\s{2,}/g, ' ').trim())
+    .filter((line, idx, arr) => Boolean(line) || (idx > 0 && idx < arr.length - 1 && Boolean(arr[idx - 1])));
+  const converted = cleanedLines
+    .join('\n')
+    .replace(ufAmountToken, (_, n1?: string, n2?: string) => {
+      const ufVal = number(n1 ?? n2 ?? '0');
+      return formatCLP(Math.round(ufVal * rate));
+    });
+  return {
+    text: converted,
+    ufNote: `Valores convertidos desde UF usando valor de referencia ${formatCLP(rate)}.`,
+  };
+}
 const quoteTitle = /^(?:presupuesto|cotizaci[oó]n)\b/i;
 const chargeLine = /^(?:para (?:dar )?inicio|para iniciar|al inicio|al comenzar|al empezar|al finalizar|al t[eé]rmino|al terminar|al entregar|contra entrega|a la entrega|anticipo|abono|condiciones de pago|forma de pago|(?:el )?saldo|se solicita(?:r[aá])?|solicitamos|\d{1,3}(?:[.,]\d+)?\s*%)/i;
 const headingSuffix = /\s*(?:trabajos\s+a\s+realizar|detalle\s+de\s+trabajos|trabajos\s+incluidos|alcance)\s*:?$/i;
@@ -48,9 +82,14 @@ export function isNaturalQuoteRequest(text: string) {
 export function isPastedQuote(text: string) {
   if (text.length > 16000) return false;
   const [first, ...body] = quoteLines(text.trim());
-  const hasPriceSignal = body.some(
-    line => moneyAtEnd.test(line) || priceByArea.test(line) || bareTotalLine.test(line) || projectTotalNoDollar.test(line),
-  );
+  const hasUfAmount = body.some((line) => {
+    const cleaned = line.replace(new RegExp(ufRateLine.source, 'gi'), ' ');
+    ufAmountToken.lastIndex = 0;
+    return ufAmountToken.test(cleaned);
+  });
+  const hasPriceSignal =
+    hasUfAmount ||
+    body.some(line => moneyAtEnd.test(line) || priceByArea.test(line) || bareTotalLine.test(line) || projectTotalNoDollar.test(line));
   if (isNaturalQuoteRequest(first) || (body.length >= 1 && pdfConversionOpener.test(first))) return hasPriceSignal;
   if (body.length >= 1 && !first.includes('?') && quoteTitle.test(first) && hasPriceSignal) return true;
   const labels = body.flatMap(line => line.match(moneyAtEnd)?.[1].trim() || []);
@@ -211,7 +250,9 @@ function extractSubjectFromRequest(line: string): string | undefined {
   return subject && subject.length >= 3 ? subject[0].toUpperCase() + subject.slice(1) : undefined;
 }
 
-export function readPastedQuote(text: string, providedTitle?: string, defaultIva?: 'incluido' | 'neto') {
+export function readPastedQuote(rawText: string, providedTitle?: string, defaultIva?: 'incluido' | 'neto') {
+  const ufPrep = preprocessUfQuoteText(rawText);
+  const text = ufPrep.text;
   const hasNetIva = netIvaPattern.test(text);
   const hasIncludedIva = includedIvaPattern.test(text);
   if (hasNetIva && hasIncludedIva) {
@@ -415,6 +456,7 @@ export function readPastedQuote(text: string, providedTitle?: string, defaultIva
     condiciones_pago: paymentInfo.condiciones_pago,
     hitos_pago: paymentInfo.hitos_pago,
     ...(paymentInfo.aviso_validacion ? { aviso_validacion: paymentInfo.aviso_validacion } : {}),
+    ...(ufPrep.ufNote ? { observaciones: ufPrep.ufNote } : {}),
     duracion_dias_estimada: days ? number(days[1]) : undefined,
     plazo_texto: days?.[0] ?? 'Por acordar',
   };

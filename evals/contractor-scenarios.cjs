@@ -701,6 +701,146 @@ const CONTRACTOR_EVAL_SCENARIOS = [
       }
     },
   },
+  {
+    id: 36,
+    name: 'Opción A: aplica 10% de descuento recalculando partidas, IVA e hitos 60/40',
+    run: async () => {
+      const q = baseBathroomQuote();
+      const patch = applyNaturalQuoteEdit(q, 'hazle un 10% de descuento');
+      assert.ok(patch);
+      const normalized = normalizeQuote({ ...q, ...patch });
+      assert.equal(normalized.estructura_financiera.precio_total_con_iva, 1665000);
+      assert.equal(normalized.hitos_pago?.[0]?.monto, 999000);
+      assert.equal(normalized.hitos_pago?.[1]?.monto, 666000);
+    },
+  },
+  {
+    id: 37,
+    name: 'Opción A: aplica recargo porcentual por urgencia («súbele un 15%»)',
+    run: async () => {
+      const q = baseBathroomQuote();
+      const patch = applyNaturalQuoteEdit(q, 'súbele un 15% por urgencia');
+      assert.ok(patch);
+      assert.equal(patch.partidas_venta[0].subtotal, 2127500);
+    },
+  },
+  {
+    id: 38,
+    name: 'Opción A: convierte presupuesto en UF usando referencia UF explícita en pesos',
+    run: async () => {
+      const text = [
+        'Presupuesto ampliación quincho Pirque',
+        'UF $38.500',
+        'Obra gruesa y estructura 100 UF + IVA',
+      ].join('\n');
+      assert.equal(isQuoteWorkflow(text), true);
+      const parsed = await parseQuoteMessage(text);
+      assert.equal(parsed.tratamiento_iva, 'neto');
+      assert.equal(parsed.partidas_venta[0].subtotal, 3850000);
+    },
+  },
+  {
+    id: 39,
+    name: 'Opción A: rechaza cotización en UF sin valor de referencia para no inventar la UF del día',
+    run: async () => {
+      await assert.rejects(
+        () => parseQuoteMessage('Presupuesto cierre Pirque\nObra total 80 UF + IVA'),
+        /valor de (?:la )?UF/i,
+      );
+    },
+  },
+  {
+    id: 40,
+    name: 'Opción A: seguimiento comercial reconoce consultas de enviadas y cambios a enviada/aceptada/rechazada',
+    run: async () => {
+      const { isCommercialQuoteStatusCommand } = require('../lib/quotes/commercial-status.ts');
+      assert.equal(isCommercialQuoteStatusCommand('¿Qué cotizaciones tengo esperando respuesta del cliente?'), true);
+      assert.equal(isCommercialQuoteStatusCommand('Marca la cotización del baño Maipú como enviada'), true);
+      assert.equal(isCommercialQuoteStatusCommand('El cliente aceptó el presupuesto'), true);
+      assert.equal(isCommercialQuoteStatusCommand('El cliente rechazó la cotización'), true);
+    },
+  },
+  {
+    id: 41,
+    name: 'Opción C: registra pago del 60% inicial calculado directo sobre el presupuesto de la obra',
+    run: async () => {
+      const { parseMilestonePaymentCommand } = require('../lib/ai/chilean-field-ops.ts');
+      const res = parseMilestonePaymentCommand({
+        text: 'Claudio pagó el 60% inicial de Remodelación baño Maipú',
+        userRole: 'admin',
+        projects: [{ id: 'p1', nombre: 'Remodelación baño Maipú', estado: 'activo', monto_cotizado: 1800000 }],
+      });
+      assert.equal(res?.accion.tipo, 'registrar_pago');
+      assert.equal(res?.accion.monto, 1080000);
+      assert.equal(res?.accion.metodo, 'transferencia');
+    },
+  },
+  {
+    id: 42,
+    name: 'Opción C: registra saldo 40% final en efectivo al entregar la obra',
+    run: async () => {
+      const { parseMilestonePaymentCommand } = require('../lib/ai/chilean-field-ops.ts');
+      const res = parseMilestonePaymentCommand({
+        text: 'Recibí el 40% al finalizar en efectivo',
+        userRole: 'supervisor',
+        projects: [{ id: 'p1', nombre: 'Remodelación baño Maipú', estado: 'activo', monto_cotizado: 1800000 }],
+        activeProjectId: 'p1',
+      });
+      assert.equal(res?.accion.monto, 720000);
+      assert.equal(res?.accion.metodo, 'efectivo');
+    },
+  },
+  {
+    id: 43,
+    name: 'Opción C: registra obra extra / adicional con monto CLP y plazo adicional',
+    run: async () => {
+      const { parseExtraWorkCommand } = require('../lib/ai/chilean-field-ops.ts');
+      const res = parseExtraWorkCommand({
+        text: 'El cliente pidió adicional de punto eléctrico por $140.000 y 2 días en Casa Buin',
+        userRole: 'admin',
+        projects: [{ id: 'p1', nombre: 'Casa Buin', estado: 'activo', monto_cotizado: 2500000 }],
+      });
+      assert.equal(res?.accion.tipo, 'crear_solicitud_cambio');
+      assert.equal(res?.accion.monto, 140000);
+      assert.equal(res?.accion.dias, 2);
+    },
+  },
+  {
+    id: 44,
+    name: 'Opción C: registra trato pagado con jerga chilena («180 lucas») asociado al trabajador',
+    run: async () => {
+      const { parseWorkerTratoCommand } = require('../lib/ai/chilean-field-ops.ts');
+      const res = parseWorkerTratoCommand({
+        text: 'Le pagué 180 lucas de trato a Felipe por la cerámica',
+        userRole: 'admin',
+        projects: [{ id: 'p1', nombre: 'Casa Buin', estado: 'activo', monto_cotizado: 2500000 }],
+        activeProjectId: 'p1',
+        users: [{ id: 'u-fel', nombre: 'Felipe Poblete', rol: 'terreno' }],
+      });
+      assert.equal(res?.accion.tipo, 'registrar_imprevisto');
+      assert.equal(res?.accion.categoria_gasto, 'mano_obra');
+      assert.equal(res?.accion.usuario_id, 'u-fel');
+      assert.equal(res?.accion.monto, 180000);
+      assert.equal(res?.accion.pagado, true);
+    },
+  },
+  {
+    id: 45,
+    name: 'Opción C: trato pactado sin confirmación de pago queda por pagar (no asume pagado)',
+    run: async () => {
+      const { parseWorkerTratoCommand } = require('../lib/ai/chilean-field-ops.ts');
+      const res = parseWorkerTratoCommand({
+        text: 'Cerramos trato con Martín por $220.000 para pintura',
+        userRole: 'supervisor',
+        projects: [{ id: 'p1', nombre: 'Casa Buin', estado: 'activo', monto_cotizado: 2500000 }],
+        activeProjectId: 'p1',
+        users: [{ id: 'u-mar', nombre: 'Martín Villalobos', rol: 'terreno' }],
+      });
+      assert.equal(res?.accion.usuario_id, 'u-mar');
+      assert.equal(res?.accion.monto, 220000);
+      assert.equal(res?.accion.pagado, undefined);
+    },
+  },
 ];
 
 async function runDeterministicContractorEvals() {

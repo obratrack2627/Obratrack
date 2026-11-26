@@ -7,6 +7,12 @@ import { handleQuoteTurn, tryNaturalQuoteEdit, type Actor, type QuoteReply } fro
 import type { SemanticIntentResult } from './intent-router';
 import type { UnifiedQuoteRef } from '@/lib/quotes/unified';
 import type { CotizacionEstimacion } from '@/types/database';
+export {
+  parseMilestonePaymentCommand,
+  parseExtraWorkCommand,
+  parseWorkerTratoCommand,
+  resolveChileanFieldOpsTurn,
+} from './chilean-field-ops';
 
 const foldText = (value: string) =>
   String(value || '')
