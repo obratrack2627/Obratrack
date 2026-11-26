@@ -271,7 +271,7 @@ const CONTRACTOR_EVAL_SCENARIOS = [
       assert.equal(res.question, null);
       assert.equal(res.actions.length, 2);
       assert.equal(res.actions.every((a) => a.tipo === 'asignar_trabajador'), true);
-      assert.deepEqual(res.actions.map((a) => a.trabajador_nombre).sort(), ['u1', 'u2']);
+      assert.deepEqual(res.actions.map((a) => a.trabajador_nombre).sort((a, b) => a.localeCompare(b)), ['u1', 'u2']);
     },
   },
   {

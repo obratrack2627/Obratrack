@@ -266,7 +266,7 @@ export async function parseNaturalQuoteWithAI(
     ...(parsed.comuna_region?.trim() ? { comuna_region: parsed.comuna_region.trim().slice(0, 300) } : {}),
     tratamiento_iva,
     resumen_ejecutivo: (parsed.resumen_ejecutivo || '').trim().slice(0, 6000),
-    condiciones_pago: hitos_pago ? (parsed.condiciones_pago?.trim() || undefined) : (parsed.condiciones_pago?.trim() || undefined),
+    condiciones_pago: parsed.condiciones_pago?.trim() || undefined,
     hitos_pago,
     ...(aviso_validacion ? { aviso_validacion } : {}),
     duracion_dias_estimada: duracion,

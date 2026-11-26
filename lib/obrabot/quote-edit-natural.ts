@@ -189,8 +189,9 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
   }
 
   // 4. Eliminar partida por nombre
+  const textNoDot = text.endsWith('.') ? text.slice(0, -1).trimEnd() : text;
   const removeMatch = !pctApplied
-    ? /^(?:por\s+favor\s+)?(?:qu[ií]t(?:a|ar|ale|alo|e|es)?|elim[ií]n(?:a|ar|ale|alo|e|es)?|s[aá]c(?:a|ar|ale|alo)?|b[oó]rr(?:a|ar|ale|alo|e|es)?)\s+(?:la\s+partida\s+|el\s+[ií]tem\s+|el\s+|la\s+)?(.+?)\.?$/i.exec(text)
+    ? /^(?:por\s+favor\s+)?(?:qu[ií]t(?:a|ar|ale|alo|e|es)?|elim[ií]n(?:a|ar|ale|alo|e|es)?|s[aá]c(?:a|ar|ale|alo)?|b[oó]rr(?:a|ar|ale|alo|e|es)?)\s+(?:la\s+partida\s+|el\s+[ií]tem\s+|el\s+|la\s+)?(.+)$/i.exec(textNoDot)
     : null;
   const removeTarget = removeMatch ? fold(removeMatch[1]) : '';
   const targetsDateOrMetadata = /^(?:la\s+)?fecha(?:\b|$)/.test(removeTarget);

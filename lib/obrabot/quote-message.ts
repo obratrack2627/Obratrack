@@ -23,8 +23,8 @@ const ivaDeclarationLine = /^(?:(?:todos\s+los\s+)?(?:precios?|valores?|montos?)
 const quantityPrefix = /^(\d+(?:[,.]\d+)?)\s+(\S.*)$/;
 const leadingUnit = /^(m[³3]|m[²2]|(?:mt|mts|metros?)\.?\s+c[uú]bicos?|(?:mt|mts|metros?)\.?\s+cuadrados?|kg|kilos?|litros?|lts?|unidades?|sacos?|cajas?|planchas?|tiras?|rollos?|bolsas?|galon(?:es)?|tinetas?|tarros?)\s+(?:de\s+)?(\S.*)$/i;
 const requestLine = /^(?:[¿¡]\s*)?(?:me\s+)?(?:puedes |podemos |podr[ií]as |necesito (?:que )?|quiero )?(?:me\s+)?(?:hacer|hace[rs]?|har[ií]as?|realiz[ae]r?|arm[ae]r?|prepar[ae]r?|gener[ae]r?|cotiza[rs]?|haz(?:me)?)\b.{0,35}\bcotizaci[oó]n\b/i;
-const pdfConversionOpener = /^(?:[¿¡]\s*)?(?:me\s+)?(?:puedes\s+|podr[ií]as\s+|necesito\s+(?:que\s+)?|quiero\s+)?(?:pas[ae]s?|p[aá]same|llev[ae]s?|ll[eé]vame|conviert[ae]s?|convertir)\s+(?:esto|este|esta|el\s+siguiente|la\s+siguiente)?\s*(?:presupuesto|cotizaci[oó]n)?\s*(?:a|en)\s+(?:pdf|excel)\b/i;
-const ufRateLine = /\(?\s*(?:valor\s+)?uf\s*(?:de\s+referencia|del\s+d[ií]a|hoy)?\s*[:=]?\s*\$\s*([1-9]\d{1,2}(?:[.\u00a0 ]\d{3})+|\d{4,6})\s*\)?/i;
+const pdfConversionOpener = /^(?:[¿¡]\s*)?(?:me\s+)?(?:(?:puedes|podr[ií]as|necesito(?:\s+que)?|quiero)\s+)?(?:pas[ae]s?|p[aá]same|llev[ae]s?|ll[eé]vame|conviert[ae]s?|convertir)\s+(?:(?:esto|este|esta|el\s+siguiente|la\s+siguiente)\s+)?(?:(?:presupuesto|cotizaci[oó]n)\s+)?(?:a|en)\s+(?:pdf|excel)\b/i;
+const ufRateLine = /\(?(?:valor\s+)?uf(?:\s+(?:de\s+referencia|del\s+d[ií]a|hoy))?[:=\s]{0,3}\$\s*([1-9]\d{1,2}(?:[.\u00a0 ]\d{3})+|\d{4,6})\)?/i;
 const ufAmountToken = /(?:\b(\d{1,6}(?:[.,]\d{1,2})?)\s*uf\b|\buf\s*(\d{1,6}(?:[.,]\d{1,2})?)\b)/gi;
 
 function preprocessUfQuoteText(text: string): { text: string; ufNote?: string } {

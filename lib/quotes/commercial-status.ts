@@ -23,7 +23,7 @@ const MARK_REJECTED_RE =
   /(?:marc(?:a|ar)|pon(?:er)?|dej(?:a|ar)|cambi(?:a|ar)|pas(?:a|ar))(?:l[ao])?\b(?![^.\n]*\b(?:obra|proyecto)\b).{0,45}\bcomo\s+rechazad[ao]\b|(?:el\s+cliente\s+|me\s+|la\s+|lo\s+)?rechaz(?:o|aron)\s+(?:la\s+|el\s+|esta\s+|este\s+|esa\s+|ese\s+)?(?:cotizacion|presupuesto)\b/i;
 
 const MARK_ACCEPTED_RE =
-  /(?:el\s+cliente\s+|[a-z]+\s+(?:[a-z]+\s+)?)?(?:acepto|aprobo)\s+(?:la\s+|el\s+|esta\s+|este\s+|esa\s+|ese\s+)?(?:cotizacion|presupuesto)\b/i;
+  /\b(?:acepto|aprobo)\s+(?:(?:la|el|esta|este|esa|ese)\s+)?(?:cotizacion|presupuesto)\b/i;
 
 const EXPLICIT_REVIEW_UUID_RE =
   /^(?:aprueba|revisa|devuelve|corrige)\s+cotizacion\s+[a-f0-9]{8}-/i;
