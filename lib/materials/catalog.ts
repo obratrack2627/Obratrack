@@ -1,8 +1,14 @@
-import { sodimacProducts, construmartProducts } from "./retail";
+import {
+  sodimacProducts,
+  construmartProducts,
+  pratShopifyProducts,
+  weitzlerWooProducts,
+} from "./retail";
 import { safeOfferURL } from "./types";
 import { serverFetch } from "@/lib/server-fetch";
 import { AIError } from "@/lib/ai/errors";
 import { roundLine } from "@/lib/ai/protocol";
+import { findNearestComuna, findRegionForComuna } from "@/lib/chile-locations";
 import type {
   ComparacionMateriales,
   ConsultaMaterial,
@@ -14,16 +20,41 @@ export const catalogProviders: Array<{
   nombre: string;
   cuenta: string;
   url: string;
-  tipo?: "sodimac" | "magento" | "imperial";
+  tipo?: "sodimac" | "magento" | "imperial" | "shopify" | "woocommerce";
   habilitado?: boolean;
+  regiones?: string[];
 }> = [
   { nombre: "Easy", cuenta: "easycl", url: "https://www.easy.cl" },
   { nombre: "Dimaco", cuenta: "dimacocl", url: "https://www.dimaco.cl" },
   { nombre: "Sodimac", cuenta: "sodimac", url: "https://www.sodimac.cl", tipo: "sodimac" },
+  { nombre: "Chilemat", cuenta: "chilemat", url: "https://www.chilemat.cl" },
+  {
+    nombre: "Ferretería Prat",
+    cuenta: "ferreteriaprat",
+    url: "https://www.ferreteriaprat.cl",
+    tipo: "shopify",
+    regiones: [
+      "arica", "parinacota", "tarapaca", "iquique", "alto hospicio",
+      "antofagasta", "calama", "mejillones", "atacama", "copiapo",
+      "vallenar", "caldera", "coquimbo", "la serena",
+    ],
+  },
+  {
+    nombre: "Weitzler",
+    cuenta: "weitzler",
+    url: "https://www.weitzler.cl",
+    tipo: "woocommerce",
+    regiones: [
+      "araucania", "temuco", "villarrica", "pucon",
+      "los rios", "valdivia", "la union",
+      "los lagos", "puerto montt", "puerto varas", "osorno", "castro", "ancud",
+      "aysen", "coyhaique",
+    ],
+  },
   { nombre: "Construmart", cuenta: "construmart", url: "https://www.construmart.cl", tipo: "magento", habilitado: false },
   { nombre: "Imperial", cuenta: "imperial", url: "https://www.imperial.cl", tipo: "imperial", habilitado: false },
 ];
-const normalize = (s: string) =>
+export const normalize = (s: string) =>
   s
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -79,8 +110,29 @@ export function validateMaterialQuery(value: any): ConsultaMaterial {
   if (Array.isArray(value.tiendas))
     query.tiendas = value.tiendas
       .filter((v: any) => typeof v === "string" && v.trim())
-      .slice(0, 5)
+      .slice(0, 8)
       .map((v: string) => v.trim().slice(0, 60));
+  if (
+    typeof value.latitud === "number" &&
+    Number.isFinite(value.latitud) &&
+    value.latitud >= -90 &&
+    value.latitud <= 90 &&
+    typeof value.longitud === "number" &&
+    Number.isFinite(value.longitud) &&
+    value.longitud >= -180 &&
+    value.longitud <= 180
+  ) {
+    query.latitud = value.latitud;
+    query.longitud = value.longitud;
+  }
+  if (
+    typeof value.radio_km === "number" &&
+    Number.isFinite(value.radio_km) &&
+    value.radio_km >= 1 &&
+    value.radio_km <= 50
+  ) {
+    query.radio_km = Math.round(value.radio_km);
+  }
   if (
     [query.producto, query.marca, query.modelo, query.presentacion].some(
       (v) => v && (/@|https?:\/\//i.test(v) || /\+\d[\d\s().-]{8,}/.test(v)),
@@ -178,7 +230,7 @@ const GENERIC_CONTAINER_TOKENS = new Set([
   "tubo", "tubos",
 ]);
 
-const COUNTABLE_PURCHASE_UNITS = new Set([
+export const COUNTABLE_PURCHASE_UNITS = new Set([
   "un", "unidad", "unidades",
   "saco", "sacos", "bolsa", "bolsas", "caja", "cajas",
   "pieza", "piezas", "paquete", "paquetes", "set", "sets",
@@ -191,7 +243,7 @@ const COUNTABLE_PURCHASE_UNITS = new Set([
 
 const BOX_M2_RE = /\b(\d+(?:[.,]\d+)?)[ \t]*m[2²](?![a-z0-9_])/i;
 
-function isAreaQuantityUnit(raw?: string): boolean {
+export function isAreaQuantityUnit(raw?: string): boolean {
   if (!raw) return false;
   const folded = raw
     .normalize("NFD")
@@ -231,7 +283,7 @@ function extractBoxCoverageM2(
   return undefined;
 }
 
-function extractSearchTokens(rawProduct: string): string[] {
+export function extractSearchTokens(rawProduct: string): string[] {
   const rawTokens = normalize(rawProduct)
     .split(" ")
     .filter((t) => t && !QUERY_STOP_WORDS.has(t));
@@ -252,7 +304,7 @@ function wordMatchesSingleToken(word: string, token: string): boolean {
   );
 }
 
-function tokenMatchesFullWords(
+export function tokenMatchesFullWords(
   token: string,
   fullWords: string[],
   allTokens: string[],
@@ -509,7 +561,11 @@ async function fetchCatalogTerm(
       ? `https://www.construmart.cl/graphql?query=${encodeURIComponent(graph)}`
       : provider.tipo === 'imperial'
         ? `https://www.imperial.cl/api/catalog_system/pub/products/search?${params}`
-        : `https://${provider.cuenta}.vtexcommercestable.com.br/api/catalog_system/pub/products/search?${params}`;
+        : provider.tipo === 'shopify'
+          ? `https://www.ferreteriaprat.cl/search/suggest.json?q=${encodeURIComponent(term)}&resources[type]=product&resources[limit]=12`
+          : provider.tipo === 'woocommerce'
+            ? `https://www.weitzler.cl/wp-json/wc/store/v1/products?search=${encodeURIComponent(term)}&per_page=15`
+            : `https://${provider.cuenta}.vtexcommercestable.com.br/api/catalog_system/pub/products/search?${params}`;
   const maxBytes = provider.tipo === 'sodimac' ? 4500000 : 1500000;
   const response = await fetcher(
     endpoint,
@@ -541,11 +597,17 @@ async function fetchCatalogTerm(
     await reader.cancel().catch(() => {});
   }
   const body = Buffer.concat(chunks).toString("utf8");
-  return parseCatalogProducts(
-    provider.tipo === "sodimac" ? sodimacProducts(body) : provider.tipo === "magento" ? construmartProducts(body) : JSON.parse(body),
-    provider,
-    query,
-  );
+  const parsedProducts =
+    provider.tipo === "sodimac"
+      ? sodimacProducts(body)
+      : provider.tipo === "magento"
+        ? construmartProducts(body)
+        : provider.tipo === "shopify"
+          ? pratShopifyProducts(body)
+          : provider.tipo === "woocommerce"
+            ? weitzlerWooProducts(body)
+            : JSON.parse(body);
+  return parseCatalogProducts(parsedProducts, provider, query);
 }
 
 async function readCatalog(
@@ -574,6 +636,26 @@ async function readCatalog(
   return offers;
 }
 
+function matchesRegionalScope(
+  regiones: string[] | undefined,
+  query: ConsultaMaterial,
+): boolean {
+  if (!regiones || regiones.length === 0) return true;
+  const parts: string[] = [];
+  if (query.ubicacion) {
+    parts.push(query.ubicacion);
+    const derivedRegion = findRegionForComuna(query.ubicacion.split(",")[0].trim());
+    if (derivedRegion) parts.push(derivedRegion);
+  }
+  if (query.latitud != null && query.longitud != null) {
+    const nearest = findNearestComuna(query.latitud, query.longitud);
+    parts.push(nearest.comuna, nearest.region);
+  }
+  const locationFolded = normalize(parts.join(" "));
+  if (!locationFolded) return false;
+  return regiones.some((r) => locationFolded.includes(normalize(r)));
+}
+
 export async function compareMaterialPrices(
   input: ConsultaMaterial,
   fetcher: typeof fetch = serverFetch,
@@ -583,7 +665,9 @@ export async function compareMaterialPrices(
     ? new Set(query.tiendas.map(normalize))
     : null;
   const selected = catalogProviders.filter((p) =>
-    requested ? requested.has(normalize(p.nombre)) : p.habilitado !== false,
+    requested
+      ? requested.has(normalize(p.nombre))
+      : p.habilitado !== false && matchesRegionalScope(p.regiones, query),
   );
   const responses = await Promise.allSettled(
     selected.map((p) => readCatalog(p, query, fetcher)),
@@ -701,7 +785,7 @@ export interface BatchMaterialComparisonItem {
 
 export async function compareQuoteMaterials(
   materials: Array<{ nombre?: string; cantidad?: number; unidad?: string }>,
-  options: { ubicacion?: string; tiendas?: string[] } = {},
+  options: { ubicacion?: string; latitud?: number; longitud?: number; tiendas?: string[] } = {},
   fetcher: typeof fetch = serverFetch,
 ): Promise<BatchMaterialComparisonItem[]> {
   const queries: Array<{ label: string; input: ConsultaMaterial }> = [];
@@ -727,6 +811,9 @@ export async function compareQuoteMaterials(
             ? { cantidad: item.cantidad, unidad_cantidad: String(item.unidad).trim() }
             : {}),
           ...(options.ubicacion && options.ubicacion !== "Por definir" ? { ubicacion: options.ubicacion } : {}),
+          ...(typeof options.latitud === "number" && typeof options.longitud === "number"
+            ? { latitud: options.latitud, longitud: options.longitud }
+            : {}),
           ...(options.tiendas?.length ? { tiendas: options.tiendas } : {}),
         },
       });

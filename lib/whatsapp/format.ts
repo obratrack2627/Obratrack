@@ -139,11 +139,40 @@ export function materialComparisonWhatsApp(data: ComparacionMateriales) {
           ? `\nAhorro estimado eligiendo ${rankedStores[0][0]}: *${formatCLP(rankedStores[rankedStores.length - 1][1] - rankedStores[0][1])}*`
           : "")
       : "";
+  const historyBlock = data.historial_empresa?.length
+    ? `*TUS COMPRAS ANTERIORES*\n` +
+      data.historial_empresa
+        .map((h) => {
+          const days =
+            h.dias_desde_compra != null
+              ? h.dias_desde_compra === 0
+                ? "hoy"
+                : `hace ${h.dias_desde_compra} d`
+              : "";
+          const where = [h.proyecto_nombre, h.comuna, days].filter(Boolean).join(" · ");
+          return `• *${line(h.proveedor)}*: ${formatCLP(h.precio_unitario)} / ${h.unidad}${where ? ` (${line(where)})` : ""}`;
+        })
+        .join("\n")
+    : "";
+  const nearbyBlock = data.ferreterias_cercanas?.length
+    ? `*FERRETERÍAS CERCANAS A LA OBRA*\n` +
+      data.ferreterias_cercanas
+        .slice(0, 5)
+        .map(
+          (f) =>
+            `• *${line(f.nombre)}* (${f.tipo === "cadena" ? "Cadena" : "Local"} · ${f.distancia_km.toLocaleString("es-CL")} km)` +
+            (f.direccion ? `\n  ${line(f.direccion)}` : "") +
+            (f.url_whatsapp ? `\n  Cotizar WhatsApp: ${f.url_whatsapp}` : "") +
+            `\n  Mapa: ${f.url_mapa}`,
+        )
+        .join("\n")
+    : "";
   const sections = [data.resumen,
     storeSummaryLine,
     ...data.ofertas.map((o, i) => [
       `*${i + 1}. ${line(o.tienda)} · ${line(o.nombre)}*`,
       `Precio publicado: *${formatCLP(o.precio)}*`,
+      o.sucursal_cercana_km != null ? `📍 Sucursal a ${o.sucursal_cercana_km.toLocaleString("es-CL")} km` : "",
       o.cajas_necesarias != null && o.rendimiento_m2 != null && o.total_solicitado != null
         ? `Rendimiento: ${o.rendimiento_m2.toLocaleString("es-CL")} m²/caja · *${o.cajas_necesarias} ${o.cajas_necesarias === 1 ? "caja" : "cajas"}* (${formatCLP(o.precio_m2 || Math.round(o.precio / o.rendimiento_m2))}/m²) · Total: *${formatCLP(o.total_solicitado)}*`
         : `Unidad de venta: ${o.unidad}`,
@@ -151,6 +180,8 @@ export function materialComparisonWhatsApp(data: ComparacionMateriales) {
       data.mejores_ids.includes(o.id) ? "✓ Menor precio entre productos equivalentes consultados" : "",
       o.url,
     ].filter(Boolean).join("\n")),
+    historyBlock,
+    nearbyBlock,
     "*FERRETERÍAS CONSULTADAS*\n" + data.proveedores.map((p) =>
       `• ${p.nombre}: ${p.estado === "consultado" ? "consultado" : p.estado === "sin_resultados" ? "sin coincidencias" : "no disponible para esta consulta"}`).join("\n"),
     `Consulta: ${new Intl.DateTimeFormat("es-CL", { timeZone: "America/Santiago", dateStyle: "medium", timeStyle: "short" }).format(new Date(data.consultado_en))}`,

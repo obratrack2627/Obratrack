@@ -29,10 +29,12 @@ import {
   MATERIAL_QUERY_SCHEMA,
 } from "@/lib/ai/schema";
 import {
-  compareMaterialPrices,
   compareQuoteMaterials,
   completePurchaseQuantity,
 } from "@/lib/materials/catalog";
+import { compareMaterialPricesEnriched } from "@/lib/materials/enriched";
+import { findNearbyHardwareStores } from "@/lib/materials/nearby";
+import type { HistoricalMaterialRecord, HistoricalProjectRecord } from "@/lib/materials/history";
 import { formatMaterialComparison, formatBatchMaterialComparison } from "@/lib/materials/format";
 import { isMaterialComparison } from "@/lib/materials/types";
 import { quoteSummaryText } from "@/lib/ai/quote-format";
@@ -176,6 +178,36 @@ export async function chatAsesorObrasGemini(
   options: ChatGenerationOptions = {},
 ) {
   const quoteContext = contextoDB.cotizacion_actual;
+  const activeProject = contextoDB.proyecto_actual;
+  const projectList: any[] = Array.isArray(contextoDB.proyectos) ? contextoDB.proyectos : [];
+  const historyProjects: HistoricalProjectRecord[] = projectList
+    .filter((p) => p?.id && p?.nombre)
+    .map((p) => ({
+      id: p.id,
+      nombre: p.nombre,
+      comuna: p.comuna,
+      region: p.region,
+    }));
+  const historyMaterials: HistoricalMaterialRecord[] = projectList.flatMap((p) =>
+    Array.isArray(p?.materiales)
+      ? p.materiales
+          .filter((m: any) => m?.nombre && Number(m?.precio_unitario) > 0)
+          .map((m: any) => ({
+            proyecto_id: p.id,
+            nombre: m.nombre,
+            cantidad: m.cantidad,
+            unidad: m.unidad,
+            precio_unitario: Number(m.precio_unitario),
+            proveedor: m.proveedor,
+            comprado: m.comprado,
+            created_at: m.created_at,
+          }))
+      : [],
+  );
+  const projectLocationLabel =
+    [activeProject?.comuna, activeProject?.region].filter(Boolean).join(", ") ||
+    undefined;
+
   const quoteMaterials = quoteContext ? extractQuoteMaterials(quoteContext) : [];
   const followUpQuoteSearch =
     quoteMaterials.length > 0 &&
@@ -183,25 +215,40 @@ export async function chatAsesorObrasGemini(
     !requestsPlatformAction(mensajeUsuario) &&
     isFollowUpMaterialSearch(mensajeUsuario, historial, true);
   if (followUpQuoteSearch) {
-    const items = await compareQuoteMaterials(quoteMaterials, {
-      ubicacion: quoteContext.comuna_region,
-      tiendas: contextoDB.preferencias_conversacion?.tiendas,
-    });
+    const batchLocation =
+      quoteContext.comuna_region && quoteContext.comuna_region !== "Por definir"
+        ? quoteContext.comuna_region
+        : projectLocationLabel;
+    const [items, nearby] = await Promise.all([
+      compareQuoteMaterials(quoteMaterials, {
+        ubicacion: batchLocation,
+        latitud: activeProject?.latitud,
+        longitud: activeProject?.longitud,
+        tiendas: contextoDB.preferencias_conversacion?.tiendas,
+      }),
+      batchLocation || (activeProject?.latitud != null && activeProject?.longitud != null)
+        ? findNearbyHardwareStores({
+            producto: quoteMaterials.map((m) => m.nombre).slice(0, 3).join(", "),
+            ubicacion: batchLocation,
+            latitud: activeProject?.latitud,
+            longitud: activeProject?.longitud,
+          }).catch(() => [])
+        : Promise.resolve([]),
+    ]);
     if (items.length) {
-      const responseText = formatBatchMaterialComparison(items, quoteContext.comuna_region);
+      const responseText = formatBatchMaterialComparison(items, batchLocation);
       const flatOffers = items.flatMap((it) => it.comparison.ofertas.slice(0, 3)).slice(0, 12);
       const consolidated = {
         consulta: {
           producto: items.map((it) => it.label).join(", ").slice(0, 150),
-          ...(quoteContext.comuna_region && quoteContext.comuna_region !== "Por definir"
-            ? { ubicacion: quoteContext.comuna_region }
-            : {}),
+          ...(batchLocation ? { ubicacion: batchLocation } : {}),
         },
         consultado_en: items[0].comparison.consultado_en,
         resumen: `Precios reales consultados en tiendas para ${items.length} ${items.length === 1 ? "material" : "materiales"} de «${quoteContext.titulo_proyecto}».`,
         ofertas: flatOffers,
-        proveedores: items[0].comparison.proveedores.slice(0, 7),
+        proveedores: items[0].comparison.proveedores.slice(0, 10),
         mejores_ids: items.flatMap((it) => it.comparison.mejores_ids).slice(0, 12),
+        ...(nearby.length ? { ferreterias_cercanas: nearby.slice(0, 8) } : {}),
       };
       return {
         respuesta: responseText,
@@ -220,9 +267,20 @@ export async function chatAsesorObrasGemini(
   const pureSearchOnly = request.pureSearchOnly;
   const result = await generateValidatedChat(request.input, mensajeUsuario, contextoDB, request.options);
   if (result.busqueda_materiales) {
-    const comparison = await compareMaterialPrices(
-      completePurchaseQuantity(result.busqueda_materiales, mensajeUsuario),
-    );
+    const parsedQuery = completePurchaseQuantity(result.busqueda_materiales, mensajeUsuario);
+    const enrichedQuery = {
+      ...parsedQuery,
+      ...(!parsedQuery.ubicacion && projectLocationLabel ? { ubicacion: projectLocationLabel } : {}),
+      ...(!parsedQuery.ubicacion && activeProject?.latitud != null && activeProject?.longitud != null
+        ? { latitud: activeProject.latitud, longitud: activeProject.longitud }
+        : {}),
+    };
+    const comparison = await compareMaterialPricesEnriched(enrichedQuery, {
+      materials: historyMaterials,
+      projects: historyProjects,
+      comuna: activeProject?.comuna || enrichedQuery.ubicacion,
+      region: activeProject?.region,
+    });
     const comparisonText = formatMaterialComparison(comparison);
     if (pureSearchOnly && !result.accion && !result.cotizacion) {
       return {

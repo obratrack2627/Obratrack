@@ -379,10 +379,10 @@ test('omite Construmart e Imperial por defecto, pero permite consultarlos explí
       return new Response('[]');
     },
   );
-  assert.equal(defaultRes.proveedores.length, 3);
+  assert.equal(defaultRes.proveedores.length, 4);
   assert.deepEqual(
     defaultRes.proveedores.map((p) => p.nombre),
-    ['Easy', 'Dimaco', 'Sodimac'],
+    ['Easy', 'Dimaco', 'Sodimac', 'Chilemat'],
   );
   assert.ok(!calledHosts.some((h) => h.includes('construmart') || h.includes('imperial')));
 

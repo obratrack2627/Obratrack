@@ -1898,6 +1898,10 @@ export default function ProyectoFinanzasPage() {
                   query={nombreMat}
                   cantidad={Number(cantidadMat)}
                   unidad={unidadMat}
+                  proyectoId={projectId}
+                  ubicacion={[proyecto?.comuna, proyecto?.region].filter(Boolean).join(', ') || undefined}
+                  latitud={proyecto?.latitud}
+                  longitud={proyecto?.longitud}
                   onSelect={(sel) => {
                     setNombreMat(sel.nombre);
                     setPrecioUnitMat(formatThousands(sel.precioUnitario));

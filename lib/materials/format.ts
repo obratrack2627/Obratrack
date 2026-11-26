@@ -101,12 +101,57 @@ export function formatMaterialCategory(raw?: string | null): string {
   return raw;
 }
 
+function nearbyStoresSummary(data: ComparacionMateriales): string | null {
+  if (!data.ferreterias_cercanas?.length) return null;
+  const lines = data.ferreterias_cercanas.slice(0, 6).map((f) => {
+    const kind = f.tipo === "cadena" ? "Cadena" : "Ferretería local";
+    const dist = `${f.distancia_km.toLocaleString("es-CL")} km`;
+    const parts = [
+      `• ${f.nombre} (${kind} · ${dist})`,
+      f.direccion ? f.direccion : "",
+      f.url_whatsapp ? `Cotizar WhatsApp: ${f.url_whatsapp}` : "",
+      f.url_busqueda ? `Ver catálogo: ${f.url_busqueda}` : "",
+      `Mapa: ${f.url_mapa}`,
+    ].filter(Boolean);
+    return parts.join(" · ");
+  });
+  return `Ferreterías cercanas a la obra:\n${lines.join("\n")}`;
+}
+
+function historyComparisonSummary(data: ComparacionMateriales): string | null {
+  if (!data.historial_empresa?.length) return null;
+  const bestOnline = data.ofertas.length > 0 ? data.ofertas[0].precio : null;
+  const lines = data.historial_empresa.map((h) => {
+    const daysText =
+      h.dias_desde_compra != null
+        ? h.dias_desde_compra === 0
+          ? "hoy"
+          : `hace ${h.dias_desde_compra} día${h.dias_desde_compra === 1 ? "" : "s"}`
+        : "";
+    const diff =
+      bestOnline != null ? h.precio_unitario - bestOnline : null;
+    const diffText =
+      diff == null
+        ? ""
+        : diff < 0
+          ? ` (${clp(Math.abs(diff))} más barato que el menor online)`
+          : diff > 0
+            ? ` (+${clp(diff)} vs el menor online)`
+            : " (mismo valor que el menor online)";
+    const meta = [h.proyecto_nombre, h.comuna, daysText].filter(Boolean).join(" · ");
+    return `• ${h.proveedor}: ${h.nombre} — ${clp(h.precio_unitario)} / ${h.unidad}${diffText}${meta ? ` (${meta})` : ""}`;
+  });
+  return `Tus compras anteriores en ObraTrack:\n${lines.join("\n")}`;
+}
+
 export function formatMaterialComparison(data: ComparacionMateriales) {
   const rows = data.ofertas.map(
     (o, i) =>
-      `${i + 1}. ${o.tienda}: ${o.nombre}\nPrecio publicado: ${clp(o.precio)}${offerQuantityDetail(o, data)}${data.mejores_ids.includes(o.id) ? " · Menor precio entre productos equivalentes consultados" : ""}\n${o.url}`,
+      `${i + 1}. ${o.tienda}: ${o.nombre}\nPrecio publicado: ${clp(o.precio)}${offerQuantityDetail(o, data)}${o.sucursal_cercana_km != null ? ` · Sucursal a ${o.sucursal_cercana_km.toLocaleString("es-CL")} km` : ""}${data.mejores_ids.includes(o.id) ? " · Menor precio entre productos equivalentes consultados" : ""}\n${o.url}`,
   );
   const storeSummary = storeComparisonSummary(data);
+  const historySummary = historyComparisonSummary(data);
+  const nearbySummary = nearbyStoresSummary(data);
   const providers = data.proveedores
     .map(
       (p) =>
@@ -117,6 +162,8 @@ export function formatMaterialComparison(data: ComparacionMateriales) {
     data.resumen,
     storeSummary,
     ...rows,
+    historySummary,
+    nearbySummary,
     `Consulta: ${new Intl.DateTimeFormat("es-CL", { timeZone: "America/Santiago", dateStyle: "medium", timeStyle: "short" }).format(new Date(data.consultado_en))} · ${providers}.`,
     `Precios publicados en CLP; confirma IVA, stock local, promociones y despacho${data.consulta.ubicacion ? " para " + data.consulta.ubicacion : ""} en la tienda antes de comprar.`,
   ]
