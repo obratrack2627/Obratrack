@@ -62,6 +62,16 @@ export function projectLiterals(message: string, previous: Record<string, any> =
     const name = explicitPersonName(clientInputLines(message)[0] || '');
     if (name) fields.cliente_nombre = name;
   }
+  if (!fields.cliente_nombre) {
+    const inlineClient = /\b(?:para\s+(?:el\s+|la\s+)?cliente|del\s+cliente|con\s+(?:el\s+|la\s+)?cliente)\s+([a-záéíóúüñ0-9 .&-]{2,120})/i.exec(message);
+    if (inlineClient) {
+      const rawCandidate = inlineClient[1]
+        .split(/\s*(?:,|;|\n|\b(?:y\s+(?:a[nñ]ade|agrega|crea|pon|usa)|a[nñ]ade|agrega|con\s+(?:gantt|presupuesto|material|fecha))\b)/i)[0]
+        .trim();
+      const candidate = clientReference(rawCandidate);
+      if (candidate && !isConversationalName(candidate)) fields.cliente_nombre = candidate;
+    }
+  }
   const numbers: string[] = [];
   const names: string[] = [];
   for (const line of bare) {

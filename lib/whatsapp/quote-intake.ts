@@ -1,5 +1,6 @@
 import { clientKindReply } from './client-input';
 import type { CotizacionEstimacion } from '@/types/database';
+import { extractQuoteGanttTasks, extractQuoteMaterials } from '@/lib/quotes/project-bridge';
 import { stripTrailingPunctuation } from './text';
 export function requestsQuotedProject(text: string) {
   const value = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/^[¿¡]+/, '');
@@ -56,9 +57,9 @@ export function legacyQuotedProjectMessage(rows: any[]) {
 export function appliesQuoteToExistingProject(text: string) {
   const value = stripTrailingPunctuation(text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(), '.!?');
   if (!value || /\b(?:no|sin|cancela\w*)\b/.test(value)) return false;
-  return /^(?:por favor[, ]+)?(?:(?:quiero|necesito|puedes|podrias)(?: que)?\s+)?(?:aplica\w*|asocia\w*|carga\w*|vincula\w*|incorpora\w*|usa\w*|agrega\w*)\s+(?:(?:esta|esa|la|el)\s+)?(?:cotizacion|presupuesto)?\s*(?:a|en)\s+(?:(?:la|esta|esa|el|este|ese)\s+)?(?:obra|proyecto)\b/.test(
+  return /^(?:por favor[, ]+)?(?:(?:quiero|necesito|puedes|podrias)(?: que)?\s+)?(?:apli(?:ca|qu)\w*|asoci\w+|carg(?:a|u)\w*|vincul\w+|incorpor\w+|us\w+|agreg(?:a|u)\w*|a[nñ]ad\w+)\s+(?:(?:tambien|ademas|ahora)\s+)?(?:(?:esta|esa|la|el|este|ese)\s+)?(?:cotizacion|presupuesto)\s+(?:a|en)\s+(?:(?:la|esta|esa|el|este|ese)\s+)?(?:obra|proyecto)\b/.test(
     value,
-  ) || /^(?:aplical[ao]|asocial[ao]|cargal[ao])(?:\s+a\s+(?:la|esta|esa)\s+(?:obra|proyecto))?$/.test(value);
+  ) || /^(?:aplical[ao]|asocial[ao]|cargal[ao]|agregal[ao])(?:\s+(?:tambien\s+)?a\s+(?:la|esta|esa)\s+(?:obra|proyecto))?$/.test(value);
 }
 export function acceptsQuotedProject(text: string, quoteJustOffered = true) {
   const value = stripTrailingPunctuation(text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(), '.!');
@@ -66,13 +67,22 @@ export function acceptsQuotedProject(text: string, quoteJustOffered = true) {
   return requestsQuotedProject(text) || selectsRecentQuotedProject(text) || appliesQuoteToExistingProject(text) || /^(?:si|si[, ]+(?:creala|crea (?:la|esa|esta) obra)(?: con (?:el |un )?gantt(?: y (?:los |sus )?materiales)?)?|creala|crea(?:r)? (?:la |esa |esta )?obra(?: con (?:el |un )?gantt(?: y (?:los |sus )?materiales)?)?)$/.test(value);
 }
 export function quotedProjectDraft(q: CotizacionEstimacion) {
+  const cleanText = (val?: string | null) => {
+    const t = val?.trim();
+    return t && !/^por definir$/i.test(t) ? t : undefined;
+  };
   return {
-    nombre: q.titulo_proyecto, cliente_id: q.cliente_id, cliente_nombre: q.cliente_nombre,
-    cliente_email: q.cliente_email, cliente_telefono: q.cliente_telefono,
-    monto_cotizado: q.estructura_financiera.precio_total_con_iva, comuna: q.comuna_region,
-    descripcion: q.resumen_ejecutivo, dias: q.duracion_dias_estimada,
-    partidas: q.actividades_gantt.length ? q.actividades_gantt.map((a) => ({ nombre: a.nombre, dias: a.dias })) : [{ nombre: 'Ejecutar alcance presupuestado', dias: q.duracion_dias_estimada }],
-    materiales: q.materiales.map((m) => ({ nombre: m.nombre, cantidad: m.cantidad, unidad: m.unidad, precio_unitario: m.precio_unitario_estimado })),
+    nombre: q.titulo_proyecto,
+    cliente_id: q.cliente_id,
+    cliente_nombre: cleanText(q.cliente_nombre),
+    cliente_email: cleanText(q.cliente_email),
+    cliente_telefono: cleanText(q.cliente_telefono),
+    monto_cotizado: q.estructura_financiera.precio_total_con_iva,
+    comuna: cleanText(q.comuna_region),
+    descripcion: q.resumen_ejecutivo,
+    dias: q.duracion_dias_estimada,
+    partidas: extractQuoteGanttTasks(q),
+    materiales: extractQuoteMaterials(q),
     presupuesto_cotizacion_id: q.id,
   };
 }

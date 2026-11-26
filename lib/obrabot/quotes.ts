@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { AIError } from '@/lib/ai/errors';
 import { isAIConfigured, type generateAI } from '@/lib/ai/provider';
-import { quoteLinePreview, saleLines } from '@/lib/quotes/document';
+import { saleLines, type QuoteLine } from '@/lib/quotes/document';
 import { normalizeQuote } from '@/lib/ai/protocol';
 import type { CotizacionEstimacion } from '@/types/database';
 import { isNaturalQuoteRequest, isPastedQuote, readPastedQuote } from './quote-message';
@@ -51,63 +51,125 @@ function formatCLP(amount: number) {
   return `$${amount.toLocaleString('es-CL')}`;
 }
 
+function isDefinedText(value?: string | null) {
+  const clean = value?.trim();
+  return Boolean(clean) && !/^por definir$/i.test(clean!);
+}
+
+function formatLineForPreview(row: QuoteLine, isWhatsApp: boolean) {
+  const plain = (value: string) => value.replace(/[\r\n*]+/g, ' ').trim();
+  const bold = (value: string) => (isWhatsApp ? `*${value}*` : value);
+  const quantity = row.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 6 });
+  if (row.precioUnit === null) {
+    const unitQty = row.unidad === 'gl' ? '' : ` (${quantity} ${plain(row.unidad)})`;
+    return `• ${plain(row.nombre)}${unitQty} — ${bold(formatCLP(row.total))}`;
+  }
+  return `• ${plain(row.nombre)} (${quantity} ${plain(row.unidad)} × ${formatCLP(row.precioUnit)}) — ${bold(formatCLP(row.total))}`;
+}
+
 function preview(row: QuoteReview, channel: Channel = 'plataforma') {
   const quote = row.borrador;
   const totals = quote.estructura_financiera;
+  const isWA = channel === 'whatsapp';
+  const bold = (value: string) => (isWA ? `*${value}*` : value);
+  const em = (value: string) => (isWA ? `_${value}_` : value);
+
   const rawLines = saleLines(quote);
-  const workLines = rawLines.filter((l) => l.tipo !== 'material').map(quoteLinePreview);
-  const matLines = rawLines.filter((l) => l.tipo === 'material').map(quoteLinePreview);
-  let detail: string[];
-  if (workLines.length && matLines.length) {
+  const workLines = rawLines.filter((l) => l.tipo !== 'material').map((l) => formatLineForPreview(l, isWA));
+  const matLines = rawLines.filter((l) => l.tipo === 'material').map((l) => formatLineForPreview(l, isWA));
+  const mats = quote.materiales_considerados || [];
+
+  let detailBlock: string[];
+  if (workLines.length && matLines.length && mats.length > 0 && rawLines.length <= 3) {
+    detailBlock = [bold('Resumen económico'), ...rawLines.map((l) => formatLineForPreview(l, isWA))];
+  } else if (workLines.length && matLines.length) {
     const wSlice = workLines.slice(0, 5);
     const mSlice = matLines.slice(0, Math.max(1, 8 - wSlice.length));
-    detail = [
-      'Partidas / Trabajos:',
+    detailBlock = [
+      bold('Partidas / Trabajos'),
       ...wSlice,
-      'Materiales:',
+      bold('Materiales'),
       ...mSlice,
       ...(rawLines.length > wSlice.length + mSlice.length
-        ? [`Vista resumida de ${rawLines.length} ítems. Revisa el detalle completo en la bandeja web antes de aprobar.`]
+        ? [em(`Vista resumida de ${rawLines.length} ítems. Revisa el detalle completo en la bandeja web antes de aprobar.`)]
         : []),
     ];
   } else {
-    const lines = rawLines.map(quoteLinePreview);
-    detail = [...lines.slice(0, 8), ...(lines.length > 8 ? [`Vista resumida de ${lines.length} partidas. Revisa el detalle completo en la bandeja web antes de aprobar.`] : [])];
+    const lines = rawLines.map((l) => formatLineForPreview(l, isWA));
+    detailBlock = [
+      bold('Detalle'),
+      ...lines.slice(0, 8),
+      ...(lines.length > 8
+        ? [em(`Vista resumida de ${lines.length} partidas. Revisa el detalle completo en la bandeja web antes de aprobar.`)]
+        : []),
+    ];
   }
-  const ivaLabel = [
-    quote.tratamiento_iva === 'neto'
-      ? 'Cotización pactada · Valores netos (+19% IVA)'
-      : 'Cotización pactada · IVA incluido',
+
+  if (mats.length) {
+    detailBlock.push(
+      em(`Materiales considerados (${mats.length}): ${mats.slice(0, 4).map((m) => m.nombre).join(', ')}${mats.length > 4 ? '…' : ''}`),
+    );
+  } else if (rawLines.length === 1 && quote.resumen_ejecutivo?.trim()) {
+    const scopeLines = quote.resumen_ejecutivo
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s && !/:$/.test(s));
+    if (scopeLines.length >= 2) {
+      detailBlock.push(em(`Incluye ${scopeLines.length} trabajos detallados en el alcance del PDF.`));
+    }
+  }
+
+  const metaParts = [
+    `Rev. ${row.revision}`,
+    quote.tratamiento_iva === 'neto' ? 'Valores netos (+19% IVA)' : 'IVA incluido',
     ...(quote.mostrar_fecha === false ? ['Sin fecha en PDF'] : []),
-  ].join(' · ');
-  const meta = [
-    ...(quote.cliente_nombre ? [`Cliente: ${quote.cliente_nombre}`] : []),
-    ...(quote.comuna_region ? [`Ubicación: ${quote.comuna_region}`] : []),
   ];
-  const mats = quote.materiales_considerados || [];
-  const consideredLine = mats.length
-    ? [`Materiales considerados (${mats.length}): ${mats.slice(0, 4).map(m => m.nombre).join(', ')}${mats.length > 4 ? '…' : ''}`]
-    : [];
-  const nextStep = row.estado === 'pendiente'
-    ? channel === 'whatsapp'
-      ? 'Toca «Aprobar y PDF» o responde «Aprobar» para confirmar esta versión y recibir el PDF.'
-      : `Para confirmar esta versión, apruébala en la bandeja o escribe «aprueba cotización ${row.id} ${row.revision}».`
+  const contactParts = [
+    ...(isDefinedText(quote.cliente_nombre) ? [`Cliente: ${quote.cliente_nombre!.trim()}`] : []),
+    ...(isDefinedText(quote.comuna_region) ? [`Ubicación: ${quote.comuna_region!.trim()}`] : []),
+  ];
+
+  const intro = row.estado === 'pendiente'
+    ? '¡Listo! Ya armé el borrador de tu cotización para que lo revises antes de emitir el PDF 👇'
     : row.estado === 'aprobada'
-      ? channel === 'whatsapp'
-        ? 'Responde «Crear obra», «Vincular a obra» o «Excel» para continuar.'
+      ? '✅ Cotización confirmada y lista:'
+      : `Estado ${row.estado}:`;
+
+  const headerBlock = [
+    bold(`📋 ${quote.titulo_proyecto}`),
+    em(metaParts.join(' · ')),
+    ...(contactParts.length ? [contactParts.join(' · ')] : []),
+  ];
+
+  const milestones = (quote.hitos_pago || []).map(
+    (h) => `• ${h.nombre} (${h.porcentaje}%): ${bold(formatCLP(h.monto))}`,
+  );
+  const paymentBlock = milestones.length ? [bold('💳 Forma de pago:'), ...milestones] : [];
+
+  const totalsBlock = [
+    bold('💰 Resumen'),
+    `Neto: ${formatCLP(totals.precio_sugerido_neto)} · IVA (19%): ${formatCLP(totals.iva_19)}`,
+    bold(`Total: ${formatCLP(totals.precio_total_con_iva)}`),
+  ];
+
+  const nextStep = row.estado === 'pendiente'
+    ? isWA
+      ? 'Si está todo OK, toca *«Aprobar y PDF»* o respóndeme *«Aprobar»* y te envío el documento listo para compartir. Si quieres ajustar algún monto o dato, dime qué cambiamos.'
+      : `Si está todo OK, apruébala en la bandeja o escribe «aprueba cotización ${row.id} ${row.revision}».`
+    : row.estado === 'aprobada'
+      ? isWA
+        ? 'Responde *«Crear obra»*, *«Vincular a obra»* o *«Excel»* si quieres continuar con esta cotización.'
         : `Para usarla en una obra, escribe «Usa cotización ${row.id}».`
       : `Estado ${row.estado}.`;
-  const milestones = (quote.hitos_pago || []).map(h => `${h.nombre} (${h.porcentaje}%) · ${formatCLP(h.monto)}`);
+
   return [
-    `${quote.titulo_proyecto} · revisión ${row.revision}`,
-    ivaLabel,
-    ...(meta.length ? [meta.join(' · ')] : []),
-    ...detail,
-    ...consideredLine,
-    ...(milestones.length ? ['Forma de pago:', ...milestones] : []),
-    `Neto ${formatCLP(totals.precio_sugerido_neto)} · IVA ${formatCLP(totals.iva_19)} · Total ${formatCLP(totals.precio_total_con_iva)}`,
+    intro,
+    headerBlock.join('\n'),
+    detailBlock.join('\n'),
+    ...(paymentBlock.length ? [paymentBlock.join('\n')] : []),
+    totalsBlock.join('\n'),
     nextStep,
-  ].join('\n');
+  ].join('\n\n');
 }
 
 export async function getQuoteReview(db: any, actor: Actor, id: string) {

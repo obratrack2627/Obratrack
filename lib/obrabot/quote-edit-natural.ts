@@ -15,7 +15,7 @@ const thousandsClp = String.raw`\d{1,3}(?:[.\u00a0 ]\d{3})+`;
 const parseClp = (raw: string) => Number(raw.replace(/[.\u00a0 ]/g, ''));
 const parseNum = (raw: string) => Number(raw.replace(',', '.'));
 
-const editVerb = /\b(?:modifica(?:r|lo|la)?|cambia(?:r|lo|la|le)?|ajusta(?:r|lo|la)?|actualiza(?:r|lo|la)?|sube(?:le)?|baja(?:le)?|deja(?:r|lo|la)?|pon(?:le|lo|la)?|agrega(?:r|le)?|incluye|suma(?:r|le)?|a[nñ]ade|quita(?:r|le)?|elimina(?:r)?|saca(?:r)?|borra(?:r)?)\b/i;
+const editVerb = /\b(?:modific\w+|modifiqu\w+|cambi\w+|ajust\w+|actualic\w+|actualiz\w+|sub(?:e|as|a|ir)\w*|baj(?:a|es|e|ar)\w*|dej(?:a|es|e|ar)\w*|pon(?:ga|gas|le|lo|la|er)?|arregl(?:a|es|e|ar)\w*|agreg(?:a|u)\w*|incluy\w+|sum(?:a|e)\w*|a[nñ]ad\w+|quit(?:a|e)\w*|elimin(?:a|e)\w*|sac(?:a|u)\w*|borr(?:a|e)\w*)\b/i;
 
 export function looksLikeNaturalQuoteEdit(text: string): boolean {
   const clean = text.trim();
@@ -35,7 +35,7 @@ function matchLineIndex(
   preferArea = false,
 ): number {
   const cleanHint = fold(hint)
-    .replace(/\b(?:el|la|los|las|de|del|al|en|por|valor|precio|partida|item|material|cantidad|metros?|mts?|mt|cuadrados?|m2)\b/g, ' ')
+    .replace(/\b(?:el|la|los|las|de|del|al|en|por|valor|precio|monto|total|proyecto|general|cotizacion|presupuesto|partida|item|material|cantidad|metros?|mts?|mt|cuadrados?|m2)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   if (cleanHint.length >= 3) {
@@ -77,6 +77,17 @@ export type QuoteEditPatch = {
   resumen_ejecutivo?: string;
   condiciones_pago?: string;
   hitos_pago?: Pick<NonNullable<CotizacionEstimacion['hitos_pago']>[number], 'nombre' | 'porcentaje'>[];
+  materiales_considerados?: CotizacionEstimacion['materiales_considerados'];
+  materiales?: CotizacionEstimacion['materiales'];
+  mano_de_obra?: CotizacionEstimacion['mano_de_obra'];
+  actividades_gantt?: CotizacionEstimacion['actividades_gantt'];
+  mostrar_fecha?: boolean;
+  fecha_validez?: string;
+  cliente_id?: string;
+  cliente_nombre?: string;
+  cliente_email?: string;
+  cliente_telefono?: string;
+  comuna_region?: string;
   duracion_dias_estimada?: number;
   plazo_texto?: string;
 };
@@ -155,15 +166,16 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
   }
 
   // 5. Cambiar precio en $ (o con miles CLP sin $) de una partida o del valor por m²
+  const changeVerb = String.raw`(?:modific\w+|modifiqu\w+|cambi\w+|ajust\w+|actualic\w+|actualiz\w+|sub(?:e|as|a|ir)\w*|baj(?:a|es|e|ar)\w*|dej(?:a|es|e|ar)\w*|pon(?:ga|gas|le|lo|la|er)?|arregl(?:a|es|e|ar)\w*)`;
   const explicitDollarPrice = !addMatch && !removeMatch
     ? new RegExp(
-        String.raw`(?:modifica\w*|cambia\w*|ajusta\w*|actualiza\w*|sube\w*|baja\w*|deja\w*|pon\w*)\s+(.+?)\s+(?:a|en)\s*\$\s*(${clp})(?:\s*(?:pesos|clp))?\b`,
+        String.raw`${changeVerb}\s+(.+?)\s+(?:a|en)\s*\$\s*(${clp})(?:\s*(?:pesos|clp))?\b`,
         'i',
       ).exec(text)
     : null;
   const bareThousandsPrice = !addMatch && !removeMatch && !explicitDollarPrice
     ? new RegExp(
-        String.raw`(?:modifica\w*|cambia\w*|ajusta\w*|actualiza\w*|sube\w*|baja\w*|deja\w*|pon\w*)\s+(.+?)\s+(?:a|en)\s+(${thousandsClp})(?:\s*(?:pesos|clp))?(?!\s*(?:m[2²]|m[3³]|mts?|metros?|d[ií]as|%))\b`,
+        String.raw`${changeVerb}\s+(.+?)\s+(?:a|en)\s+(${thousandsClp})(?:\s*(?:pesos|clp))?(?!\s*(?:m[2²]|m[3³]|mts?|metros?|d[ií]as|%))\b`,
         'i',
       ).exec(text)
     : null;
@@ -192,7 +204,7 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
 
   // 6. Cambiar superficie en m² o cantidad de una partida (ej: "modificar el de hormigón estampado a 84 mts cuadrados", "cámbiala a 84 m²")
   const areaMatch = !addMatch && !removeMatch && !priceChangeMatch
-    ? /(?:modifica\w*|cambia\w*|ajusta\w*|actualiza\w*|sube\w*|baja\w*|deja\w*|pon\w*)(?:\s+(.+?))?\s+(?:a|en)\s+(\d+(?:[.,]\d+)?)\s*(m[2²]|(?:mt|mts|metros?)\.?\s+cuadrados?)\b/i.exec(text)
+    ? new RegExp(String.raw`${changeVerb}(?:\s+(.+?))?\s+(?:a|en)\s+(\d+(?:[.,]\d+)?)\s*(m[2²]|(?:mt|mts|metros?)\.?\s+cuadrados?)\b`, 'i').exec(text)
     : null;
   if (areaMatch) {
     const newArea = parseNum(areaMatch[2]);
@@ -210,7 +222,7 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
     };
     mutated = true;
   } else if (!addMatch && !removeMatch && !priceChangeMatch) {
-    const qtyMatch = /(?:modifica\w*|cambia\w*|ajusta\w*|actualiza\w*|sube\w*|baja\w*|deja\w*|pon\w*)\s+(.+?)\s+(?:a|en)\s+(\d+(?:[.,]\d+)?)\b(?!\s*(?:%|d[ií]as|\$))/i.exec(text);
+    const qtyMatch = new RegExp(String.raw`${changeVerb}\s+(.+?)\s+(?:a|en)\s+(\d+(?:[.,]\d+)?)\b(?!\s*(?:%|d[ií]as|\$))`, 'i').exec(text);
     if (qtyMatch && !/\biva\b/i.test(qtyMatch[1])) {
       const newQty = parseNum(qtyMatch[2]);
       const idx = matchLineIndex(baseLines, qtyMatch[1], false);
@@ -245,6 +257,17 @@ export function applyNaturalQuoteEdit(quote: CotizacionEstimacion, rawText: stri
     resumen_ejecutivo: quote.resumen_ejecutivo,
     condiciones_pago: quote.condiciones_pago,
     hitos_pago: quote.hitos_pago?.map((h) => ({ nombre: h.nombre, porcentaje: h.porcentaje })),
+    ...(quote.materiales_considerados?.length ? { materiales_considerados: quote.materiales_considerados } : {}),
+    ...(quote.materiales?.length ? { materiales: quote.materiales } : {}),
+    ...(quote.mano_de_obra?.length ? { mano_de_obra: quote.mano_de_obra } : {}),
+    ...(quote.actividades_gantt?.length ? { actividades_gantt: quote.actividades_gantt } : {}),
+    ...(quote.mostrar_fecha === false ? { mostrar_fecha: false } : {}),
+    ...(quote.fecha_validez ? { fecha_validez: quote.fecha_validez } : {}),
+    ...(quote.cliente_id ? { cliente_id: quote.cliente_id } : {}),
+    ...(quote.cliente_nombre ? { cliente_nombre: quote.cliente_nombre } : {}),
+    ...(quote.cliente_email ? { cliente_email: quote.cliente_email } : {}),
+    ...(quote.cliente_telefono ? { cliente_telefono: quote.cliente_telefono } : {}),
+    ...(quote.comuna_region ? { comuna_region: quote.comuna_region } : {}),
     duracion_dias_estimada,
     plazo_texto,
   };

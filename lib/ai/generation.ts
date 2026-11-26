@@ -5,6 +5,7 @@ import { normalizeQuote, parseChatResponse, flattenActions } from './protocol';
 import type { GenerationOptions } from './provider-types';
 import { selectAIProfile } from './model-router';
 import { requestsPlatformAction } from './prompt';
+import { extractQuoteGanttTasks, extractQuoteMaterials } from '@/lib/quotes/project-bridge';
 
 export type ChatResult = ReturnType<typeof parseChatResponse>;
 export type ChatGenerationOptions = GenerationOptions & { validateResult?: (result: ChatResult) => void; onQualityEvent?: (event: QualityEvent) => void };
@@ -29,8 +30,8 @@ export function quoteProjectFields(raw: string, message: string, context: Record
   action.nombre ||= quote.titulo_proyecto;
   action.monto_cotizado = quote.estructura_financiera.precio_total_con_iva;
   delete action.monto;
-  if (!action.partidas?.length) action.partidas = quote.actividades_gantt;
-  if (!action.materiales?.length) action.materiales = quote.materiales.map(m => ({ nombre: m.nombre, cantidad: m.cantidad, unidad: m.unidad, precio_unitario: m.precio_unitario_estimado }));
+  if (!action.partidas?.length) action.partidas = extractQuoteGanttTasks(quote);
+  if (!action.materiales?.length) action.materiales = extractQuoteMaterials(quote);
   action.dias ??= quote.duracion_dias_estimada;
   action.comuna ??= quote.comuna_region;
   for (const key of ['cliente_id', 'cliente_nombre', 'cliente_email', 'cliente_telefono']) {

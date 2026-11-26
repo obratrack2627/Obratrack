@@ -22,6 +22,7 @@ import { operationsContext } from '@/lib/ai/operations-context';
 import { acceptsQuotedProject, requestsQuotedProject, selectsRecentQuotedProject, appliesQuoteToExistingProject, cancelsProjectDraft, resumesProjectDraft, startsProjectDraft, legacyQuotedProjectMessage, quotedProjectDraft } from "./quote-intake";
 import { findBudget, budgetGroup, budgetRPCError, type Presupuesto } from "@/lib/presupuestos";
 import { budgetApplication } from '@/lib/quotes/application';
+import { extractQuoteGanttTasks, extractQuoteMaterials } from '@/lib/quotes/project-bridge';
 import { chooseBudgetOption } from './budget-options';
 import { hasOtherWorkBeyondStatus, isAlternativeRequest, isQuoteRequest, isQuoteRevision } from '@/lib/ai/prompt';
 import { isComplexAITask } from '@/lib/ai/model-router';
@@ -627,20 +628,49 @@ export async function processPersonalMessage(
     Boolean(replyContextId && /^(?:crea|crear) (?:la |una )?obra[.!]?$/i.test(text.trim())) ||
     selectsRecentQuotedProject(text, history[0]?.respuesta || '') ||
     appliesQuoteToExistingProject(text);
+  const recentQuoteTurn = Boolean(
+    history[0]?.cotizacion ||
+    history[0]?.acciones?.presupuesto_pdf_id ||
+    history[0]?.acciones?.archivo_cotizacion ||
+    history[0]?.acciones?.cotizacion_aprobada_id,
+  );
+  const implicitQuoteCreation =
+    !pendingProject &&
+    !attachment &&
+    recentQuoteTurn &&
+    requestsNewProject(text) &&
+    !appliesQuoteToExistingProject(text) &&
+    !/\$\s*\d/.test(text) &&
+    !/\b(?:no|sin)\s+(?:usar?\s+|utilizar?\s+)?(?:(?:el|la|ese|esa)\s+)?(?:cotizacion|presupuesto)\b|\botra\s+obra\b/i.test(
+      text.normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+    );
   const replied = replyContextId ? conversationRows.find(row => row.message_id === replyContextId) : null;
   const legacyQuoteMessage = pendingProject && !pendingProject.presupuesto_cotizacion_id ? legacyQuotedProjectMessage(conversationRows) : null;
-  let lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : explicitQuoteCreation && replied ? null : conversationRows.find((m: any) => m.cotizacion));
-  const recentBudget = !replyContextId && !pendingProject && explicitQuoteCreation
-    ? conversationRows.map(quoteReference).find(Boolean)?.budget : undefined;
-  if (explicitQuoteCreation && (replyContextId || recentBudget && recentBudget !== lastQuoteMessage?.cotizacion?.id)) {
+  let lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : (explicitQuoteCreation || implicitQuoteCreation) && replied ? null : conversationRows.find((m: any) => m.cotizacion));
+  const recentRef = !replyContextId && !pendingProject && (explicitQuoteCreation || implicitQuoteCreation)
+    ? conversationRows.map(quoteReference).find(Boolean)
+    : undefined;
+  const recentBudget = recentRef?.budget;
+  if ((explicitQuoteCreation || implicitQuoteCreation) && (replyContextId || recentRef?.review || (recentBudget && recentBudget !== lastQuoteMessage?.cotizacion?.id))) {
     lastQuoteMessage = null;
-    const ref = replyContextId ? quoteReference(replied) : { budget: recentBudget };
-    if (ref?.budget) {
-      const selected = await findBudget(sb, user.empresa_id, ref.budget);
+    const ref = replyContextId ? quoteReference(replied) : recentRef;
+    let resolvedBudgetId = ref?.budget;
+    if (!resolvedBudgetId && ref?.review) {
+      try {
+        const revRes = await sb.from('obrabot_cotizaciones').select('presupuesto_id,borrador').eq('empresa_id', user.empresa_id).eq('id', ref.review).maybeSingle();
+        if (!revRes?.error && revRes?.data) {
+          resolvedBudgetId = revRes.data.presupuesto_id || revRes.data.borrador?.id;
+        }
+      } catch {
+        // Entorno parcial sin tabla obrabot_cotizaciones
+      }
+    }
+    if (resolvedBudgetId) {
+      const selected = await findBudget(sb, user.empresa_id, resolvedBudgetId);
       if (selected?.cotizacion) lastQuoteMessage = { ...replied, cotizacion: selected.cotizacion };
     }
-    if (!lastQuoteMessage) confirmationResponse = 'No pude identificar la cotización de ese mensaje. Toca «Crear obra» en la tarjeta de la cotización que quieres usar.';
-    else if (pendingProject?.presupuesto_cotizacion_id && pendingProject.presupuesto_cotizacion_id !== lastQuoteMessage.cotizacion.id) {
+    if (!lastQuoteMessage && explicitQuoteCreation) confirmationResponse = 'No pude identificar la cotización de ese mensaje. Toca «Crear obra» en la tarjeta de la cotización que quieres usar.';
+    else if (lastQuoteMessage && pendingProject?.presupuesto_cotizacion_id && pendingProject.presupuesto_cotizacion_id !== lastQuoteMessage.cotizacion.id) {
       confirmationResponse = 'Estás completando otra obra. Escribe «Cancelar» para cerrar ese borrador y luego toca «Crear obra» en la cotización elegida.';
     }
   }
@@ -714,7 +744,7 @@ export async function processPersonalMessage(
     confirmationResponse = '¿Qué deseas modificar de la cotización? Indica el material, cantidad, precio o margen que quieres cambiar. No se creará una obra con esta opción.';
   if (menuChoice === 3)
     confirmationResponse = '¿Qué material quieres comparar? Indica presentación y cantidad si las conoces.\n\nPor ejemplo: «Busca el mejor precio de 20 sacos de cemento de 25 kg en Maipú», o responde *«búscalos»* para consultar en tiendas los materiales de esta cotización.';
-  if (!pendingProject && (chosenBudget || (lastQuoteMessage?.cotizacion && !confirmationResponse && ((history[0]?.cotizacion && (menuChoice === 1 || acceptsQuotedProject(text, Boolean(history[0]?.cotizacion)))) || explicitQuoteCreation)))) {
+  if (!pendingProject && (chosenBudget || (lastQuoteMessage?.cotizacion && !confirmationResponse && ((history[0]?.cotizacion && (menuChoice === 1 || acceptsQuotedProject(text, Boolean(history[0]?.cotizacion)))) || explicitQuoteCreation || implicitQuoteCreation)))) {
     const budget = chosenBudget || nativeBudget || await findBudget(sb, user.empresa_id, lastQuoteMessage.cotizacion.id);
     if (!budget) confirmationResponse = 'No se pudo recuperar el presupuesto guardado. Ábrelo en ObraTrack para revisarlo.';
     else if (['rechazada', 'anulada'].includes(budget.estado)) confirmationResponse = 'El presupuesto está rechazado o anulado. Revisa su estado en ObraTrack antes de crear la obra.';
@@ -746,27 +776,31 @@ export async function processPersonalMessage(
           },
         ];
         let addedPartidas = 0;
-        if (existingActs.length === 0 && Array.isArray(q.actividades_gantt) && q.actividades_gantt.length > 0) {
+        const ganttTasks = extractQuoteGanttTasks(q);
+        if (existingActs.length === 0 && ganttTasks.length > 0) {
           applyActions.push({
             tipo: 'crear_actividad',
             proyecto_id: existingTarget.id,
-            partidas: q.actividades_gantt.map((a) => ({ nombre: a.nombre, dias: Math.max(1, Math.round(Number(a.dias) || 1)) })),
+            partidas: ganttTasks,
           });
-          addedPartidas = q.actividades_gantt.length;
+          addedPartidas = ganttTasks.length;
         }
         let addedMaterials = 0;
-        if (Array.isArray(q.materiales) && q.materiales.length > 0) {
+        const existingMatNames = new Set(
+          ((tables as any).materiales_proyecto || [])
+            .filter((m: any) => m.proyecto_id === existingTarget.id)
+            .map((m: any) => String(m.nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()),
+        );
+        const quoteMaterials = extractQuoteMaterials(q).filter(
+          (m) => !existingMatNames.has(m.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()),
+        );
+        if (quoteMaterials.length > 0) {
           applyActions.push({
             tipo: 'agregar_materiales',
             proyecto_id: existingTarget.id,
-            materiales: q.materiales.map((m) => ({
-              nombre: m.nombre,
-              cantidad: m.cantidad,
-              unidad: m.unidad || 'unidad',
-              precio_unitario: m.precio_unitario_estimado,
-            })),
+            materiales: quoteMaterials,
           });
-          addedMaterials = q.materiales.length;
+          addedMaterials = quoteMaterials.length;
         }
         const partsSummary = [
           `el presupuesto quedó en $${montoTotal.toLocaleString('es-CL')}`,

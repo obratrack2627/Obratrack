@@ -643,3 +643,160 @@ test('emisión directa autoAprobar guarda metadatos, genera PDF en 1 paso e hidr
   assert.equal(approvedList[0].borrador.fecha_validez, '2026-12-31');
   assert.equal(approvedList[0].borrador.mostrar_fecha, false);
 });
+
+test('formato de confirmación en WhatsApp omite Por definir y destaca bloques, hitos y total cercano', async () => {
+  const { handleQuoteTurn } = require('../lib/obrabot/quotes.ts');
+  const admin = { id: 'admin', empresa_id: 'emp-wa-fmt', rol: 'admin' };
+  const reviews = new Map();
+  const db = {
+    async rpc(name, args) {
+      if (name === 'obrabot_registrar_cotizacion') {
+        reviews.set(args.p_id, {
+          id: args.p_id,
+          empresa_id: args.p_empresa,
+          estado: 'pendiente',
+          revision: 1,
+          borrador: { ...args.p_borrador, cliente_nombre: 'Por definir', comuna_region: 'Por definir' },
+          presupuesto_id: null,
+        });
+        return { error: null };
+      }
+      throw new Error(name);
+    },
+    from() {
+      let idFilter = null;
+      return {
+        select() { return this; },
+        eq(k, v) { if (k === 'id') idFilter = v; return this; },
+        async maybeSingle() { return { data: reviews.get(idFilter) || null, error: null }; },
+      };
+    },
+  };
+
+  const reply = await handleQuoteTurn(db, admin, 'whatsapp', [
+    'Me haces esta cotización sin fecha',
+    'Presupuesto remodelación baño Maipú',
+    'Remodelación baño principal trabajos a realizar :',
+    '· demolición',
+    '· instalación de porcelanato',
+    '· retiro de escombro',
+    'Total de proyecto $ 1.850.000',
+    'Para dar inicio al proyecto se solicitará el 60% del presupuesto',
+    '$ 1.110.000',
+    'Al finalizar el proyecto se solicitará el 40% restante',
+    '$ 740.000',
+  ].join('\n'), 'req-wa-format-1');
+
+  assert.doesNotMatch(reply.respuesta, /Por definir/);
+  assert.match(reply.respuesta, /\*📋 Presupuesto remodelación baño Maipú\*/);
+  assert.match(reply.respuesta, /_Rev\. 1 · IVA incluido · Sin fecha en PDF_/);
+  assert.match(reply.respuesta, /_Incluye 3 trabajos detallados en el alcance del PDF\._/);
+  assert.match(reply.respuesta, /\*💳 Forma de pago:\*/);
+  assert.match(reply.respuesta, /\*💰 Resumen\*/);
+  assert.match(reply.respuesta, /\*Total: \$1\.850\.000\*/);
+  assert.ok(reply.respuesta.length < 1024);
+});
+
+test('corrige chat real: subjuntivo en edición preserva alcance/hitos, ignora equipo para presupuesto y extrae Gantt y materiales', () => {
+  const { readPastedQuote } = require('../lib/obrabot/quote-message.ts');
+  const { applyNaturalQuoteEdit } = require('../lib/obrabot/quote-edit-natural.ts');
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const { teamAssignmentIntake } = require('../lib/ai/team-assignment.ts');
+  const { appliesQuoteToExistingProject, quotedProjectDraft } = require('../lib/whatsapp/quote-intake.ts');
+  const { extractQuoteGanttTasks, extractQuoteMaterials } = require('../lib/quotes/project-bridge.ts');
+  const { projectLiterals } = require('../lib/whatsapp/project-literals.ts');
+
+  // 1. Edición natural con subjuntivo ("dejes el total en 1.800.000, arregla el pdf") preserva las 8 tareas, sin fecha e hitos 60/40
+  const initialParsed = readPastedQuote([
+    'Me haces esta cotización sin fecha',
+    'Presupuesto remodelación baño Maipú',
+    'Remodelación baño principal trabajos a realizar :',
+    '· demolición de cerámica existente',
+    '· red de agua potable y alcantarillado',
+    '· instalación de porcelanato piso y muros',
+    '· instalación de vanitorio, WC y ducha',
+    '· instalación eléctrica y extractor',
+    '· empastado y pintado de cielo',
+    '· traslado de material',
+    '· retiro de escombro',
+    'Total de proyecto $ 1.850.000',
+    'Para dar inicio al proyecto se solicitará el 60% del presupuesto',
+    '$ 1.110.000',
+    'Al finalizar el proyecto se solicitará el 40% restante',
+    '$ 740.000',
+  ].join('\n'));
+
+  const initialQuote = normalizeQuote({
+    ...initialParsed,
+    modo_presupuesto: 'precio_acordado',
+    materiales: [],
+    mano_de_obra: [],
+    actividades_gantt: [],
+  });
+
+  const editPatch = applyNaturalQuoteEdit(
+    initialQuote,
+    'esta bien pero quiero que dejes el total en 1.800.000, arregla el pdf',
+  );
+  assert.ok(editPatch);
+  assert.equal(editPatch.partidas_venta[0].subtotal, 1800000);
+  assert.equal(editPatch.mostrar_fecha, false);
+  assert.match(editPatch.resumen_ejecutivo || '', /retiro de escombro/);
+
+  const editedQuote = normalizeQuote({
+    ...editPatch,
+    modo_presupuesto: 'precio_acordado',
+    materiales: editPatch.materiales ?? [],
+    mano_de_obra: editPatch.mano_de_obra ?? [],
+    actividades_gantt: editPatch.actividades_gantt ?? [],
+  });
+  assert.equal(editedQuote.estructura_financiera.precio_total_con_iva, 1800000);
+  assert.deepEqual(editedQuote.hitos_pago.map((h) => h.monto), [1080000, 720000]);
+
+  // 2. Gantt y materiales desde presupuesto suma alzada y con materiales considerados
+  const ganttFromScope = extractQuoteGanttTasks(editedQuote);
+  assert.equal(ganttFromScope.length, 8);
+  assert.equal(ganttFromScope[0].nombre, 'Demolición de cerámica existente');
+  const draft = quotedProjectDraft(editedQuote);
+  assert.equal(draft.partidas.length, 8);
+
+  const materialsQuote = normalizeQuote({
+    titulo_proyecto: 'Portón peatonal WPC',
+    modo_presupuesto: 'precio_acordado',
+    tratamiento_iva: 'incluido',
+    partidas_venta: [
+      { nombre: 'Fabricación e instalación portón WPC', unidad: 'gl', cantidad: 1, precio_unitario: 0, precio_partida: 280000, tipo: 'partida' },
+      { nombre: 'Perfil tubular 50x50', unidad: 'barra', cantidad: 3, precio_unitario: 15000, tipo: 'material' },
+    ],
+    materiales: [],
+    materiales_considerados: [{ nombre: 'Anticorrosivo', cantidad: null }, { nombre: 'Soldadura', cantidad: 2, unidad: 'kg' }],
+    mano_de_obra: [],
+  });
+  const extractedMats = extractQuoteMaterials(materialsQuote);
+  assert.deepEqual(
+    extractedMats.map((m) => ({ nombre: m.nombre, cantidad: m.cantidad, unidad: m.unidad })),
+    [
+      { nombre: 'Perfil tubular 50x50', cantidad: 3, unidad: 'barra' },
+      { nombre: 'Anticorrosivo', cantidad: 1, unidad: 'un' },
+      { nombre: 'Soldadura', cantidad: 2, unidad: 'kg' },
+    ],
+  );
+  assert.equal(quotedProjectDraft(materialsQuote).materiales.length, 3);
+
+  // 3. Guard de equipo nunca confunde "agrega tambien el presupuesto a la obra" con un trabajador
+  const team = teamAssignmentIntake(
+    'agrega tambien el presupuesto a la obra',
+    [{ id: 'p-1', nombre: 'Remodelacción baño Maipu' }],
+    [{ id: 'u-1', nombre: 'Felipe Poblete', rol: 'terreno' }],
+    'p-1',
+  );
+  assert.equal(team, null);
+
+  // 4. Detección de aplicación de presupuesto a obra existente (indicativo y subjuntivo) + cliente inline
+  assert.equal(appliesQuoteToExistingProject('agrega tambien el presupuesto a la obra'), true);
+  assert.equal(appliesQuoteToExistingProject('necesito que agregues el presupuesto a la obra'), true);
+  assert.equal(
+    projectLiterals('genial, ahora crea la obra para el cliente claudio zapata, añade la gantt sugerida', draft).cliente_nombre,
+    'claudio zapata',
+  );
+});
