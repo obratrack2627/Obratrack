@@ -1,7 +1,8 @@
 import { pausedReply, progressAfter, recallsContact, resumeBot } from './conversation-progress';
 import { phoneChoices } from './client-input';
 import { quoteSessionMs, restoreQuoteContext } from './quote-context';
-import { quoteReference, quoteWhatsAppTurn } from '@/lib/obrabot/whatsapp';
+import { quoteWhatsAppTurn } from '@/lib/obrabot/whatsapp';
+import { extractWhatsAppQuoteRefs, resolveUnifiedQuote } from '@/lib/quotes/unified';
 import { withSnapshotVersions } from '@/lib/sync/snapshot-versions';
 import { setAIUsageActor } from '@/lib/ai/usage';
 import { completeRows } from '@/lib/supabase/pagination';
@@ -652,7 +653,7 @@ export async function processPersonalMessage(
     !pendingProject &&
     !attachment &&
     user.rol !== 'terreno' &&
-    (Boolean(conversationRows.find((m: any) => m.cotizacion)) || Boolean(conversationRows.map(quoteReference).find(Boolean)))
+    extractWhatsAppQuoteRefs(conversationRows).length > 0
   ) {
     semanticIntent = await classifyTurnIntent(text, {
       channel: 'whatsapp',
@@ -668,30 +669,24 @@ export async function processPersonalMessage(
   const replied = replyContextId ? conversationRows.find(row => row.message_id === replyContextId) : null;
   const legacyQuoteMessage = pendingProject && !pendingProject.presupuesto_cotizacion_id ? legacyQuotedProjectMessage(conversationRows) : null;
   let lastQuoteMessage = personTurn ? null : legacyQuoteMessage || (replied?.cotizacion ? replied : (explicitQuoteCreation || implicitQuoteCreation || semanticApplyToExisting || semanticCreateFromQuote) && replied ? null : conversationRows.find((m: any) => m.cotizacion));
-  const recentRef = !replyContextId && !pendingProject && (explicitQuoteCreation || implicitQuoteCreation || semanticApplyToExisting || semanticCreateFromQuote)
-    ? conversationRows.map(quoteReference).find(Boolean)
-    : undefined;
-  const recentBudget = recentRef?.budget;
-  if ((explicitQuoteCreation || implicitQuoteCreation || semanticApplyToExisting || semanticCreateFromQuote) && (replyContextId || recentRef?.review || (recentBudget && recentBudget !== lastQuoteMessage?.cotizacion?.id))) {
+  const recentRefs = !replyContextId && !pendingProject && (explicitQuoteCreation || implicitQuoteCreation || semanticApplyToExisting || semanticCreateFromQuote)
+    ? extractWhatsAppQuoteRefs(conversationRows)
+    : [];
+  const primaryRecentRef = recentRefs[0];
+  if ((explicitQuoteCreation || implicitQuoteCreation || semanticApplyToExisting || semanticCreateFromQuote) && (replyContextId || primaryRecentRef?.kind === 'review' || (primaryRecentRef?.kind === 'budget' && primaryRecentRef.id !== lastQuoteMessage?.cotizacion?.id))) {
     lastQuoteMessage = null;
-    const ref = replyContextId ? quoteReference(replied) : recentRef;
-    let resolvedBudgetId = ref?.budget;
-    if (!resolvedBudgetId && ref?.review) {
-      try {
-        const revRes = await sb.from('obrabot_cotizaciones').select('presupuesto_id,borrador').eq('empresa_id', user.empresa_id).eq('id', ref.review).maybeSingle();
-        if (!revRes?.error && revRes?.data) {
-          resolvedBudgetId = revRes.data.presupuesto_id || revRes.data.borrador?.id;
-        }
-      } catch {
-        // Entorno parcial sin tabla obrabot_cotizaciones
+    const refsToResolve = replyContextId ? extractWhatsAppQuoteRefs(conversationRows, replyContextId) : recentRefs;
+    const resolved = refsToResolve.length ? await resolveUnifiedQuote(sb, user, refsToResolve) : null;
+    if (resolved) {
+      if (resolved.stage === 'pendiente_revision') {
+        confirmationResponse = 'Esta cotización está pendiente de aprobación. Responde «Aprobar» antes de crear la obra o vincularla.';
+      } else {
+        lastQuoteMessage = { ...replied, cotizacion: resolved.cotizacion };
       }
     }
-    if (resolvedBudgetId) {
-      const selected = await findBudget(sb, user.empresa_id, resolvedBudgetId);
-      if (selected?.cotizacion) lastQuoteMessage = { ...replied, cotizacion: selected.cotizacion };
-    }
-    if (!lastQuoteMessage && explicitQuoteCreation) confirmationResponse = 'No pude identificar la cotización de ese mensaje. Toca «Crear obra» en la tarjeta de la cotización que quieres usar.';
-    else if (lastQuoteMessage && pendingProject?.presupuesto_cotizacion_id && pendingProject.presupuesto_cotizacion_id !== lastQuoteMessage.cotizacion.id) {
+    if (!lastQuoteMessage && !confirmationResponse && explicitQuoteCreation) {
+      confirmationResponse = 'No pude identificar la cotización de ese mensaje. Toca «Crear obra» en la tarjeta de la cotización que quieres usar.';
+    } else if (lastQuoteMessage && pendingProject?.presupuesto_cotizacion_id && pendingProject.presupuesto_cotizacion_id !== lastQuoteMessage.cotizacion.id) {
       confirmationResponse = 'Estás completando otra obra. Escribe «Cancelar» para cerrar ese borrador y luego toca «Crear obra» en la cotización elegida.';
     }
   }

@@ -7,6 +7,7 @@ import type { CotizacionEstimacion } from '@/types/database';
 import { isNaturalQuoteRequest, isPastedQuote, readPastedQuote } from './quote-message';
 import { parseNaturalQuoteWithAI } from './quote-ai-parser';
 import { applyNaturalQuoteEdit, applyStructuredQuoteEdit, looksLikeNaturalQuoteEdit, matchesQuoteTitleHint } from './quote-edit-natural';
+import { applyUnifiedQuoteEdit, resolveUnifiedQuote, type UnifiedQuoteRef } from '@/lib/quotes/unified';
 import type { SemanticIntentResult } from '@/lib/ai/intent-router';
 import { readQuoteSource, readTextQuote, transcribeQuoteImage, type QuoteSource } from './quote-input';
 import { excelMime, type QuoteFormat } from './quote-files';
@@ -25,7 +26,17 @@ export type QuoteReview = {
   presupuesto_estado?: 'borrador' | 'enviada' | 'aprobada' | 'rechazada' | 'anulada' | 'no_elegida';
   presupuesto_updated_at?: string;
 };
-export type QuoteReply = { pasoPendiente?: { id: string; datos: Record<string, unknown> }; respuesta: string; archivo?: { id: string; formato: QuoteFormat; origen?: 'presupuesto' }; solicitud?: string; revision?: number; obra?: string; cotizacionAprobadaId?: string };
+export type QuoteReply = {
+  pasoPendiente?: { id: string; datos: Record<string, unknown> };
+  respuesta: string;
+  archivo?: { id: string; formato: QuoteFormat; origen?: 'presupuesto' };
+  solicitud?: string;
+  revision?: number;
+  obra?: string;
+  cotizacionAprobadaId?: string;
+  presupuestoPdfId?: string;
+  cotizacion?: CotizacionEstimacion;
+};
 const uuid = '[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}';
 const starter = /^(?:nueva cotizaci[oó]n|cotizaci[oó]n con precios|(?:prepara|genera|hazme) (?:una |la )?cotizaci[oó]n con (?:estos )?precios)\b[ \t]*:?[ \t]*([^\n]*)/i;
 const startHelp = /^(?:(?:quiero|necesito)\s+)?(?:(?:hacer|pasar|convertir)\s+(?:(?:una?|mi|el)\s+)?cotizaci[oó]n pactada|cotizaci[oó]n pactada|(?:(?:pasar|convertir|llevar)\s+)?(?:(?:una?|mi|el)\s+)?(?:presupuesto|cotizaci[oó]n) a (?:pdf|excel)|formatear (?:(?:una?|mi|el)\s+)?presupuesto|ya tengo (?:un |mi )?presupuesto)[.!]?$/i;
@@ -277,6 +288,12 @@ function makeDraft(input: DraftInput, id: string) {
   });
   return { ...draft, id: `cot-${id}`, consejos_experto_pyme: [] };
 }
+export function makeQuoteDraft(input: DraftInput, id: string) {
+  return makeDraft(input, id);
+}
+export function formatQuotePreview(row: QuoteReview, channel: Channel = 'plataforma') {
+  return preview(row, channel);
+}
 
 export async function reviewQuote(db: any, actor: Actor, id: string, revision: number, decision: 'aprobar' | 'corregir' | 'devolver', input?: string) {
   requireAdmin(actor);
@@ -356,6 +373,7 @@ export async function tryNaturalQuoteEdit(
   immediateQuoteContext: boolean,
   requestId?: string,
   semanticIntent?: SemanticIntentResult | null,
+  candidateRefs?: UnifiedQuoteRef[],
 ): Promise<QuoteReply | null> {
   const hasSemanticEdit = Boolean(
     semanticIntent?.intent === 'editar_cotizacion' &&
@@ -364,75 +382,47 @@ export async function tryNaturalQuoteEdit(
   );
   if (actor.rol !== 'admin' || (!looksLikeNaturalQuoteEdit(text) && !hasSemanticEdit)) return null;
   if (/\b(?:carta\s+gantt|asistencia|bit[aá]cora|trabajador|cuadrilla|incidente|de\s+la\s+obra|del\s+proyecto)\b/i.test(text)) return null;
+
   const uniqueIds = Array.from(new Set(candidateIds.filter(Boolean))).slice(0, 5);
-  const reviews: QuoteReview[] = [];
-  for (const id of uniqueIds) {
-    try {
-      reviews.push(await getQuoteReview(db, actor, id));
-    } catch {
-      // Ignorar cotizaciones eliminadas o no accesibles.
-    }
-  }
+  const refs: UnifiedQuoteRef[] = candidateRefs?.length
+    ? candidateRefs
+    : uniqueIds.map((id) => ({ kind: 'review' as const, id }));
+
   const hintSource = semanticIntent?.cotizacion_hint ? `${text} ${semanticIntent.cotizacion_hint}` : text;
-  let target: QuoteReview | null = null;
-  let bestScore = 0;
-  for (const rev of reviews) {
-    const score = matchesQuoteTitleHint(rev.borrador.titulo_proyecto, hintSource);
-    if (score > bestScore) {
-      bestScore = score;
-      target = rev;
-    }
+  const allowCompanyFallback = hasSemanticEdit || /\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text);
+  const target = await resolveUnifiedQuote(db, actor, refs, {
+    titleHint: hintSource,
+    allowCompanyFallback,
+  });
+
+  if (!target) return null;
+  const matchedByTitle = matchesQuoteTitleHint(target.cotizacion?.titulo_proyecto || '', hintSource) > 0;
+  if (!matchedByTitle && !immediateQuoteContext && !hasSemanticEdit && !/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text)) {
+    return null;
   }
-  if (!target && (hasSemanticEdit || /\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text))) {
-    const seen = new Set(reviews.map((r) => r.id));
-    const stored = (await loadCompanyQuoteReviews(db, actor, ['pendiente', 'aprobada']))
-      .filter((r) => r && !seen.has(r.id) && r.borrador?.titulo_proyecto);
-    for (const rev of stored) {
-      const score = matchesQuoteTitleHint(rev.borrador.titulo_proyecto, hintSource);
-      if (score >= 1 && score > bestScore) {
-        bestScore = score;
-        target = rev;
-      }
-    }
-  }
-  if (!target) {
-    if (!reviews.length || (!immediateQuoteContext && !hasSemanticEdit && !/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text))) return null;
-    target = reviews[0];
-  }
+
   const patch =
-    applyNaturalQuoteEdit(target.borrador, text) ||
+    applyNaturalQuoteEdit(target.cotizacion, text) ||
     (hasSemanticEdit && semanticIntent?.edicion_cotizacion
-      ? applyStructuredQuoteEdit(target.borrador, semanticIntent.edicion_cotizacion)
+      ? applyStructuredQuoteEdit(target.cotizacion, semanticIntent.edicion_cotizacion)
       : null);
   if (!patch) return null;
-  if (target.estado === 'pendiente') {
-    const draft = makeDraft(patch, target.id);
-    const { data, error } = await db.rpc('obrabot_revisar_cotizacion', {
-      p_empresa: actor.empresa_id,
-      p_actor: actor.id,
-      p_id: target.id,
-      p_revision: target.revision,
-      p_decision: 'corregir',
-      p_cambios: draft,
-      p_observacion: undefined,
-    });
-    if (error || !data) dbError(error);
-    const updated = data as QuoteReview;
-    return { respuesta: preview(updated, channel), solicitud: updated.id, revision: updated.revision };
-  }
-  // Si ya estaba aprobada, crear una nueva solicitud derivada sin alterar el histórico aprobado.
-  const newId = draftId(actor, requestId ? `${requestId}:edit` : undefined);
-  const draft = makeDraft(patch, newId);
-  const { error } = await db.rpc('obrabot_registrar_cotizacion', {
-    p_empresa: actor.empresa_id,
-    p_actor: actor.id,
-    p_id: newId,
-    p_origen: channel,
-    p_borrador: draft,
-  });
-  if (error) dbError(error);
-  const created = await getQuoteReview(db, actor, newId);
-  return { respuesta: preview(created, channel), solicitud: newId, revision: created.revision };
+
+  return applyUnifiedQuoteEdit(
+    db,
+    actor,
+    channel,
+    target,
+    patch,
+    {
+      makeDraft: makeDraft as (input: typeof patch, id: string) => CotizacionEstimacion,
+      formatPreview: preview,
+      draftId,
+      dbError,
+      getQuoteReview,
+    },
+    requestId,
+  );
 }
 
 export async function handleQuoteTurn(

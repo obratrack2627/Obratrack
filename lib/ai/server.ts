@@ -36,6 +36,7 @@ import { randomUUID } from "node:crypto";
 import { AsyncResource } from "node:async_hooks";
 import { canAccessWeb, WEB_ACCESS_ERROR, isSessionJWT } from '@/lib/auth/access';
 import { handleQuoteTurn, isQuoteWorkflow, tryNaturalQuoteEdit, type QuoteReply } from '@/lib/obrabot/quotes';
+import { extractWebQuoteRefs } from '@/lib/quotes/unified';
 import { classifyTurnIntent, shouldUseSemanticIntentRouter } from './intent-router';
 import { looksLikeNaturalQuoteEdit } from '@/lib/obrabot/quote-edit-natural';
 import { getSupabaseAdmin, requireSupabaseAdmin } from '@/lib/supabase/admin';
@@ -174,7 +175,8 @@ export function createChatHandler(
         .map((m: any) => extractQuoteDetails(m) || {});
       const lastWebTurn = [...rawTurns].reverse().find((m: any) => m?.remitente === 'agente' || m?.rol === 'model');
       const lastQuoteDetails = extractQuoteDetails(lastWebTurn);
-      const webImmediateQuote = Boolean(lastQuoteDetails);
+      const contextBudgetId = typeof body.contexto_cotizacion?.id === 'string' ? body.contexto_cotizacion.id : null;
+      const webImmediateQuote = Boolean(lastQuoteDetails || lastWebTurn?.cotizacion || contextBudgetId);
       const pendingWebQuote = lastQuoteDetails && typeof lastQuoteDetails.solicitud_cotizacion === 'string' && typeof lastQuoteDetails.revision_cotizacion === 'number'
         ? { id: lastQuoteDetails.solicitud_cotizacion as string, revision: lastQuoteDetails.revision_cotizacion as number }
         : null;
@@ -185,6 +187,7 @@ export function createChatHandler(
       const recentWebQuoteIds = recentWebQuoteDetails
         .map((d: any) => d.solicitud_cotizacion || d.cotizacion_aprobada_id)
         .filter((v: unknown): v is string => typeof v === 'string' && v.length > 0);
+      const recentWebQuoteRefs = extractWebQuoteRefs(rawTurns, contextBudgetId);
       const webFileFormat: 'pdf' | 'excel' | null = !body.imagen
         ? isQuotePdfRequest(body.mensaje)
           ? 'pdf'
@@ -200,7 +203,6 @@ export function createChatHandler(
         const pendingReviewId = recentWebQuoteDetails
           .map((d: any) => d.solicitud_cotizacion)
           .find((v: unknown): v is string => typeof v === 'string' && v.length > 0);
-        const contextBudgetId = typeof body.contexto_cotizacion?.id === 'string' ? body.contexto_cotizacion.id : null;
 
         if (approvedReviewId) {
           if (actor.rol !== 'admin') throw new AIError('OBRABOT_ADMIN', `El ${formatLabel} de la cotización está disponible para el administrador.`, 403);
@@ -245,7 +247,7 @@ export function createChatHandler(
         }
       }
       const hasSavedQuoteEditHint =
-        recentWebQuoteIds.length > 0 ||
+        recentWebQuoteRefs.length > 0 ||
         (/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(body.mensaje) &&
           !/\b(?:de\s+la\s+obra|del\s+proyecto)\b/i.test(body.mensaje));
       const webNaturalQuoteEdit =
@@ -261,8 +263,8 @@ export function createChatHandler(
       const buildWebQuoteResponse = (reply: QuoteReply, planId?: string) => {
         const file = reply.archivo;
         return NextResponse.json({
-          respuesta: reply.respuesta, accion: null, cotizacion: null,
-          sugerencias: file
+          respuesta: reply.respuesta, accion: null, cotizacion: reply.presupuestoPdfId ? (reply.cotizacion ?? null) : null,
+          sugerencias: file || reply.presupuestoPdfId
             ? (planId === 'pro_ia' ? ['Crear obra', 'Vincular a obra'] : [])
             : reply.solicitud && reply.revision
               ? ['Aprobar cotización', 'Cotizaciones pendientes']
@@ -272,6 +274,11 @@ export function createChatHandler(
             detalles: { cotizacion_aprobada_id: file.id },
             link_destino: `/api/obrabot/cotizaciones/${file.id}?formato=${file.formato}`,
             link_texto: file.formato === 'excel' ? 'Descargar Excel' : 'Descargar PDF',
+          } } : reply.presupuestoPdfId ? { accion_ejecutada: {
+            tipo: 'obrabot_cotizacion', titulo: 'Cotización actualizada', resultado_texto: 'Haz clic en el botón para descargar el PDF actualizado.',
+            detalles: { presupuesto_cotizacion_id: reply.presupuestoPdfId },
+            link_destino: `/api/obrabot/cotizaciones/${encodeURIComponent(reply.presupuestoPdfId)}?formato=pdf&origen=presupuesto`,
+            link_texto: 'Descargar PDF',
           } } : reply.solicitud && reply.revision ? { accion_ejecutada: {
             tipo: 'obrabot_cotizacion', titulo: 'Cotización lista para revisión', resultado_texto: 'Puedes aprobarla aquí con un clic o revisarla en la bandeja.',
             detalles: { solicitud_cotizacion: reply.solicitud, revision_cotizacion: reply.revision },
@@ -292,7 +299,7 @@ export function createChatHandler(
           ? `aprueba cotización ${pendingWebQuote.id} ${pendingWebQuote.revision}`
           : body.mensaje;
         const reply = webNaturalQuoteEdit && !quoteCommand
-          ? await tryNaturalQuoteEdit(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, recentWebQuoteIds, webImmediateQuote, requestId)
+          ? await tryNaturalQuoteEdit(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, recentWebQuoteIds, webImmediateQuote, requestId, undefined, recentWebQuoteRefs)
           : await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', effectiveMsg, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
         if (reply) return buildWebQuoteResponse(reply, plan.data?.plan_id);
       }
@@ -306,14 +313,14 @@ export function createChatHandler(
           channel: 'web',
           rol: actor.rol,
           hasPendingQuoteReview: Boolean(pendingWebQuote),
-          hasActiveQuote: recentWebQuoteIds.length > 0,
+          hasActiveQuote: recentWebQuoteRefs.length > 0,
         })
       ) {
         const semantic = await classifyTurnIntent(body.mensaje, {
           channel: 'web',
           rol: actor.rol,
           hasPendingQuoteReview: Boolean(pendingWebQuote),
-          hasActiveQuote: recentWebQuoteIds.length > 0,
+          hasActiveQuote: recentWebQuoteRefs.length > 0,
         });
         const supportedWebSemantic = semantic && semantic.confidence !== 'baja' && (
           semantic.intent === 'editar_cotizacion' ||
@@ -327,7 +334,7 @@ export function createChatHandler(
           const requestId = typeof body.request_id === 'string' && body.request_id.length <= 100 ? body.request_id : undefined;
           let semanticReply: QuoteReply | null = null;
           if (semantic.intent === 'editar_cotizacion') {
-            semanticReply = await tryNaturalQuoteEdit(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, recentWebQuoteIds, webImmediateQuote, requestId, semantic);
+            semanticReply = await tryNaturalQuoteEdit(requireSupabaseAdmin(), actor, 'plataforma', body.mensaje, recentWebQuoteIds, webImmediateQuote, requestId, semantic, recentWebQuoteRefs);
           } else if (semantic.intent === 'aprobar_cotizacion' && pendingWebQuote) {
             semanticReply = await handleQuoteTurn(requireSupabaseAdmin(), actor, 'plataforma', `aprueba cotización ${pendingWebQuote.id} ${pendingWebQuote.revision}`, requestId, undefined, { permiteVincular: plan.data?.plan_id === 'pro_ia' });
           } else if (semantic.intent === 'descargar_archivo_cotizacion' && recentWebQuoteIds[0]) {

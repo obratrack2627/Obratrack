@@ -4,6 +4,7 @@ import { AIError } from '@/lib/ai/errors';
 import { classifyTurnIntent, shouldUseSemanticIntentRouter, type SemanticIntentResult } from '@/lib/ai/intent-router';
 import { canonicalPhone } from '@/lib/phone';
 import { findBudget } from '@/lib/presupuestos';
+import { extractWhatsAppQuoteRefs, resolveUnifiedQuote } from '@/lib/quotes/unified';
 import { getApprovedQuote, getQuoteReview, handleQuoteTurn, isQuoteWorkflow, tryNaturalQuoteEdit, type Actor, type QuoteReply } from './quotes';
 import { looksLikeNaturalQuoteEdit } from './quote-edit-natural';
 import { excelMime, quoteFile } from './quote-files';
@@ -100,35 +101,48 @@ export function quoteReference(row: any) {
 async function requestedQuoteFile(db: any, actor: Actor, rows: any[], format: 'pdf' | 'excel', sourceId?: string): Promise<WhatsAppQuoteReply> {
   const label = format === 'excel' ? 'Excel' : 'PDF';
   if (actor.rol !== 'admin') return { respuesta: `El ${label} de la cotización está disponible para el administrador.` };
-  let receipt = sourceId && rows.find(row => row.message_id === sourceId);
-  if (sourceId && !receipt) {
-    const { data, error } = await db.from('whatsapp_mensajes').select('acciones,cotizacion')
+  let targetRows = rows;
+  if (sourceId && !rows.some(row => row.message_id === sourceId)) {
+    const { data, error } = await db.from('whatsapp_mensajes').select('message_id,acciones,cotizacion')
       .eq('empresa_id', actor.empresa_id).eq('actor_id', actor.id).eq('message_id', sourceId).maybeSingle();
     if (error) throw new AIError('OBRABOT_QUOTE_DB', 'No pude consultar la cotización del mensaje.', 503);
-    receipt = data;
+    targetRows = data ? [{ ...data, message_id: data.message_id || sourceId }] : [];
   }
-  const ref = sourceId ? quoteReference(receipt) : rows.map(quoteReference).find(Boolean);
-  if (!ref) {
+  const refs = extractWhatsAppQuoteRefs(targetRows, sourceId);
+  if (!refs.length) {
     return { respuesta: sourceId
       ? `No pude identificar esa cotización. Para recibir la última de este chat, escribe «Envíame la cotización en ${label}» en un mensaje nuevo.`
       : 'No encontré una cotización en esta conversación. Pídeme una nueva o indícame el código de la que quieres descargar.' };
   }
-  if (ref.review) {
-    const quote = await getQuoteReview(db, actor, ref.review);
-    if (!quote.presupuesto_id || quote.estado !== 'aprobada') {
-      return { respuesta: `Esta cotización necesita aprobación antes de enviarse en ${label}.`, solicitud: ref.review, revision: quote.revision };
+  const resolved = await resolveUnifiedQuote(db, actor, refs);
+  if (!resolved) {
+    if (refs[0].kind === 'review') {
+      const fallbackReview = await getQuoteReview(db, actor, refs[0].id);
+      if (!fallbackReview.presupuesto_id || fallbackReview.estado !== 'aprobada') {
+        return { respuesta: `Esta cotización necesita aprobación antes de enviarse en ${label}.`, solicitud: refs[0].id, revision: fallbackReview.revision };
+      }
+      return { respuesta: `Aquí tienes el ${label} de la cotización aprobada.`, archivo: { id: refs[0].id, formato: format } };
     }
-    return { respuesta: `Aquí tienes el ${label} de la cotización aprobada.`, archivo: { id: ref.review, formato: format } };
-  }
-  if (!ref.budget) return { respuesta: 'No encontré la cotización en Presupuestos.' };
-  const budget = await findBudget(db, actor.empresa_id, ref.budget);
-  if (!budget?.cotizacion || ['rechazada', 'anulada', 'no_elegida'].includes(budget.estado)) {
     return { respuesta: 'La cotización ya no está disponible para descargar. Revísala en ObraTrack → Presupuestos.' };
   }
-  if (format === 'excel') {
-    return { respuesta: 'Aquí tienes el Excel de la cotización.', archivo: { id: budget.id, formato: 'excel', origen: 'presupuesto' } };
+  if (resolved.stage === 'pendiente_revision' || (resolved.origin === 'obrabot_revision' && (!resolved.budgetId || resolved.reviewEstado !== 'aprobada'))) {
+    return {
+      respuesta: `Esta cotización necesita aprobación antes de enviarse en ${label}.`,
+      solicitud: resolved.reviewId || undefined,
+      revision: resolved.revision || undefined,
+    };
   }
-  return { respuesta: 'Aquí tienes el PDF de la cotización.', presupuestoPdfId: budget.id };
+  if (['rechazada', 'anulada'].includes(resolved.stage) || ['rechazada', 'anulada', 'no_elegida'].includes(resolved.presupuestoEstado || '')) {
+    return { respuesta: 'La cotización ya no está disponible para descargar. Revísala en ObraTrack → Presupuestos.' };
+  }
+  if (resolved.origin === 'obrabot_revision' && resolved.reviewId) {
+    return { respuesta: `Aquí tienes el ${label} de la cotización aprobada.`, archivo: { id: resolved.reviewId, formato: format } };
+  }
+  if (!resolved.budgetId) return { respuesta: 'No encontré la cotización en Presupuestos.' };
+  if (format === 'excel') {
+    return { respuesta: 'Aquí tienes el Excel de la cotización.', archivo: { id: resolved.budgetId, formato: 'excel', origen: 'presupuesto' } };
+  }
+  return { respuesta: 'Aquí tienes el PDF de la cotización.', presupuestoPdfId: resolved.budgetId };
 }
 
 export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, items: any[], media: typeof downloadMetaMedia, transcription?: string, conversationRows: any[] = []) {
@@ -150,12 +164,11 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
     : null;
   const last = conversationRows[0];
   const freshRows = conversationRows.filter(r => !r?.created_at || !(Date.now() - Date.parse(r.created_at) > quoteSessionMs));
-  const recentReviewIds = replyContextId
-    ? [quoteReference(freshRows.find(r => r.message_id === replyContextId))?.review].filter((v): v is string => Boolean(v))
-    : freshRows.map(r => quoteReference(r)?.review).filter((v): v is string => Boolean(v));
-  const immediateQuoteContext = Boolean(last?.acciones?.tipo === 'obrabot_cotizacion' && !last?.acciones?.proyecto_contexto_id && !last?.borrador_obra);
+  const recentQuoteRefs = extractWhatsAppQuoteRefs(freshRows, replyContextId);
+  const recentReviewIds = recentQuoteRefs.filter(r => r.kind === 'review').map(r => r.id);
+  const immediateQuoteContext = Boolean((last?.acciones?.tipo === 'obrabot_cotizacion' || last?.cotizacion) && !last?.acciones?.proyecto_contexto_id && !last?.borrador_obra);
   const hasSavedQuoteEditHint =
-    recentReviewIds.length > 0 ||
+    recentQuoteRefs.length > 0 ||
     (/\b(?:cotizaci[oó]n|presupuesto)\b/i.test(text) &&
       !/\b(?:de\s+la\s+obra|del\s+proyecto)\b/i.test(text));
   const maybeNaturalEdit = noAttachment && !quoteInput && !destination && !contextualFileFormat && !pendingReview && actor.rol === 'admin' && hasSavedQuoteEditHint && looksLikeNaturalQuoteEdit(text);
@@ -179,14 +192,14 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
         channel: 'whatsapp',
         rol: actor.rol,
         hasPendingQuoteReview: Boolean(findPendingQuoteReview(conversationRows, replyContextId, 'aprobar')),
-        hasActiveQuote: recentReviewIds.length > 0,
+        hasActiveQuote: recentQuoteRefs.length > 0,
       });
     if (!canRoute) return null;
     semanticIntent = await classifyTurnIntent(text, {
       channel: 'whatsapp',
       rol: actor.rol,
       hasPendingQuoteReview: Boolean(findPendingQuoteReview(conversationRows, replyContextId, 'aprobar')),
-      hasActiveQuote: recentReviewIds.length > 0,
+      hasActiveQuote: recentQuoteRefs.length > 0,
     });
     const handledInQuoteTurn =
       semanticIntent &&
@@ -228,7 +241,7 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
       reply = await requestedQuoteFile(db, actor, conversationRows, contextualFileFormat, pdfSource);
     } else if (semanticIntent) {
       if (semanticIntent.intent === 'editar_cotizacion') {
-        reply = await tryNaturalQuoteEdit(db, actor, 'whatsapp', text, recentReviewIds, immediateQuoteContext, inbound.id, semanticIntent);
+        reply = await tryNaturalQuoteEdit(db, actor, 'whatsapp', text, recentReviewIds, immediateQuoteContext, inbound.id, semanticIntent, recentQuoteRefs);
       } else if (semanticIntent.intent === 'aprobar_cotizacion') {
         const rev = findPendingQuoteReview(conversationRows, replyContextId, 'aprobar');
         reply = rev
@@ -241,7 +254,7 @@ export async function quoteWhatsAppTurn(db: any, actor: Actor, inbound: any, ite
       }
       if (!reply) return null;
     } else if (maybeNaturalEdit) {
-      reply = await tryNaturalQuoteEdit(db, actor, 'whatsapp', text, recentReviewIds, immediateQuoteContext, inbound.id);
+      reply = await tryNaturalQuoteEdit(db, actor, 'whatsapp', text, recentReviewIds, immediateQuoteContext, inbound.id, undefined, recentQuoteRefs);
       if (!reply && !isDestinationContinuation(text)) return null;
       if (!reply) reply = await handleQuoteTurn(db, actor, 'whatsapp', createText, inbound.id, source, { quotedId });
     } else {
