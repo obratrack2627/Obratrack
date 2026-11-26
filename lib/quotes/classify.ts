@@ -8,7 +8,7 @@ const foldText = (text: string) =>
     .trim();
 
 const PARTIDA_RE =
-  /\b(?:instalacion|colocacion|demolicion|excavacion|retiro|escombros|mano de obra|obra de mano|maestro|jornal|pintado|preparacion|nivelacion|hormigonado|hormigon estampado|pavimento|radier|tabiqueria|revestimiento|techumbre|cielo raso|electricidad|gasfiteria|conexion|terminacion|terminaciones|logia|piso deck|corta vista|cobertizo|porton|reja|cierro|cerco|remodelacion|ampliacion|reparacion|mantencion|flete|transporte|despacho|armado|montaje|sellado|impermeabilizacion|alcance completo|servicio|trabajo|partida|ejecucion|construccion|fabricacion|realizacion|hechura|confeccion)\b/i;
+  /\b(?:instalacion|colocacion|demolicion|excavacion|retiro|escombro|escombros|mano de obra|obra de mano|maestro|jornal|pintado|empastado|estuco|enlucido|preparacion|nivelacion|hormigonado|hormigon estampado|pavimento|radier|tabiqueria|revestimiento|techumbre|cielo raso|electricidad|gasfiteria|conexion|red de agua|red electrica|sanitaria|alcantarillado|agua potable|terminacion|terminaciones|logia|piso deck|corta vista|cobertizo|porton|reja|cierro|cerco|remodelacion|ampliacion|reparacion|mantencion|flete|transporte|despacho|traslado|acarreo|armado|montaje|sellado|impermeabilizacion|alcance completo|servicio|trabajo|partida|ejecucion|construccion|fabricacion|realizacion|hechura|confeccion)\b/i;
 
 const MATERIAL_UNIT_SET = new Set([
   'saco',
@@ -46,7 +46,7 @@ const MATERIAL_UNIT_SET = new Set([
 ]);
 
 const MATERIAL_RE =
-  /\b(?:cemento|arena|ripio|grava|malla|fibra|liston|listones|topex|latex|esmalte|adhesivo|bekron|frague|porcelanato|ceramica|perfil|tubular|fierro|acero|clavo|clavos|tornillo|tornillos|silicona|pasta muro|yeso|volcanita|osb|terciado|pino|madera|caneria|tuberia|cable|enchufe|interruptor|llave|griferia|inodoro|lavamanos|zinc|policarbonato|adoquin|adoquines|ladrillo|bloque|puerta|ventana|pintura|sellador|imprimante|insumo|material|viga|wpc|canal|cerradura|anticorrosivo|brocha|rodillo|soldadura|disco|discos|prelaminado|electrodo|lija|bisagra|pasador|chapa|tuerca|perno|golilla|tarugo|anclaje|diluyente|aguarras|barniz)\b/i;
+  /\b(?:cemento|arena|ripio|grava|malla|fibra|liston|listones|topex|latex|esmalte|adhesivo|bekron|frague|porcelanato|ceramica|ceramico|plancha|planchas|caballete|caballetes|poste|postes|tabla|tablas|perfil|tubular|fierro|acero|clavo|clavos|tornillo|tornillos|silicona|pasta muro|yeso|volcanita|osb|terciado|pino|madera|caneria|tuberia|cable|enchufe|interruptor|llave|griferia|inodoro|lavamanos|zinc|policarbonato|adoquin|adoquines|ladrillo|bloque|puerta|ventana|pintura|sellador|imprimante|insumo|material|viga|wpc|canal|cerradura|anticorrosivo|brocha|rodillo|soldadura|disco|discos|prelaminado|electrodo|lija|bisagra|pasador|chapa|tuerca|perno|golilla|tarugo|anclaje|diluyente|aguarras|barniz)\b/i;
 
 export function classifyQuoteLineKind(name: string, unidad?: string): QuoteLineKind {
   const foldedName = foldText(name);

@@ -1,9 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { AIError } from '@/lib/ai/errors';
+import { isAIConfigured, type generateAI } from '@/lib/ai/provider';
 import { quoteLinePreview, saleLines } from '@/lib/quotes/document';
 import { normalizeQuote } from '@/lib/ai/protocol';
 import type { CotizacionEstimacion } from '@/types/database';
 import { isNaturalQuoteRequest, isPastedQuote, readPastedQuote } from './quote-message';
+import { parseNaturalQuoteWithAI } from './quote-ai-parser';
 import { applyNaturalQuoteEdit, looksLikeNaturalQuoteEdit, matchesQuoteTitleHint } from './quote-edit-natural';
 import { readQuoteSource, readTextQuote, transcribeQuoteImage, type QuoteSource } from './quote-input';
 import { excelMime, type QuoteFormat } from './quote-files';
@@ -131,21 +133,45 @@ type DraftInput = Omit<Partial<CotizacionEstimacion>, 'hitos_pago'> & {
   titulo_proyecto: string;
   partidas_venta: NonNullable<CotizacionEstimacion['partidas_venta']>;
   hitos_pago?: Pick<NonNullable<CotizacionEstimacion['hitos_pago']>[number], 'nombre' | 'porcentaje'>[];
+  aviso_validacion?: string;
 };
 
+export async function parseQuoteMessage(
+  text: string,
+  providedTitle?: string,
+  defaultIva?: 'incluido' | 'neto',
+  generate?: typeof generateAI,
+) {
+  try {
+    return readPastedQuote(text, providedTitle, defaultIva);
+  } catch (err) {
+    if (!(err instanceof AIError) || err.code !== 'OBRABOT_QUOTE_INPUT') throw err;
+    if (/IVA incluido o netos/i.test(err.message)) throw err;
+    if (!generate && !isAIConfigured()) throw err;
+    try {
+      return await parseNaturalQuoteWithAI(text, { providedTitle, defaultIva }, generate);
+    } catch (aiErr) {
+      if (aiErr instanceof AIError && aiErr.code === 'OBRABOT_QUOTE_INPUT') throw aiErr;
+      throw err;
+    }
+  }
+}
+
 function makeDraft(input: DraftInput, id: string) {
-  const title = input.titulo_proyecto.trim();
+  const quoteInput: DraftInput = { ...input };
+  delete quoteInput.aviso_validacion;
+  const title = quoteInput.titulo_proyecto.trim();
   if (!title || title.length > 150) throw new AIError('OBRABOT_QUOTE_INPUT', 'Indica un nombre de hasta 150 caracteres para la cotización.', 422);
-  const tratamiento_iva = input.tratamiento_iva === 'neto' ? 'neto' : 'incluido';
+  const tratamiento_iva = quoteInput.tratamiento_iva === 'neto' ? 'neto' : 'incluido';
   const draft = normalizeQuote({
-    ...input,
+    ...quoteInput,
     titulo_proyecto: title,
     modo_presupuesto: 'precio_acordado',
     tratamiento_iva,
-    materiales: input.materiales ?? [],
-    mano_de_obra: input.mano_de_obra ?? [],
-    ...(input.materiales_considerados?.length ? { materiales_considerados: input.materiales_considerados } : {}),
-    actividades_gantt: input.actividades_gantt ?? [],
+    materiales: quoteInput.materiales ?? [],
+    mano_de_obra: quoteInput.mano_de_obra ?? [],
+    ...(quoteInput.materiales_considerados?.length ? { materiales_considerados: quoteInput.materiales_considerados } : {}),
+    actividades_gantt: quoteInput.actividades_gantt ?? [],
   });
   return { ...draft, id: `cot-${id}`, consejos_experto_pyme: [] };
 }
@@ -159,7 +185,7 @@ export async function reviewQuote(db: any, actor: Actor, id: string, revision: n
     const rawEdit = (input || '').trim();
     const prevIva = previous.borrador.tratamiento_iva === 'neto' ? 'neto' : 'incluido';
     if (rawEdit.includes('$') && !rawEdit.split('\n')[0].includes('|')) {
-      const parsed = readPastedQuote(rawEdit, previous.borrador.titulo_proyecto, prevIva);
+      const parsed = await parseQuoteMessage(rawEdit, previous.borrador.titulo_proyecto, prevIva);
       draft = makeDraft({ ...previous.borrador, ...parsed, titulo_proyecto: previous.borrador.titulo_proyecto }, id);
     } else {
       draft = makeDraft({ ...previous.borrador, partidas_venta: readTextQuote(rawEdit), tratamiento_iva: prevIva }, id);
@@ -311,8 +337,8 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
     const id = draftId(actor, requestId);
     const defaultIva = context?.tratamientoIva;
     let input: DraftInput;
-    if (pasted || (start && rows.includes('$') && !rows.split('\n')[0].includes('|'))) input = readPastedQuote(rows, start?.[1], defaultIva);
-    else if (source && photoQuote) input = readPastedQuote(await transcribeQuoteImage(source), undefined, defaultIva);
+    if (pasted || (start && rows.includes('$') && !rows.split('\n')[0].includes('|'))) input = await parseQuoteMessage(rows, start?.[1], defaultIva);
+    else if (source && photoQuote) input = await parseQuoteMessage(await transcribeQuoteImage(source), undefined, defaultIva);
     else if (source) {
       try {
         input = { titulo_proyecto: start?.[1] || 'Cotización de obra', partidas_venta: await readQuoteSource(source), tratamiento_iva: defaultIva };
@@ -347,7 +373,13 @@ export async function handleQuoteTurn(db: any, actor: Actor, channel: Channel, t
     if (error) dbError(error);
     if (actor.rol === 'supervisor') return { respuesta: 'Guardé la solicitud pendiente de revisión por el administrador.' };
     const created = await getQuoteReview(db, actor, id);
-    return { respuesta: preview(created, channel), solicitud: id, revision: created.estado === 'pendiente' ? created.revision : undefined };
+    const notice = input.aviso_validacion?.trim();
+    const bodyText = preview(created, channel);
+    return {
+      respuesta: notice ? `${notice}\n\n${bodyText}` : bodyText,
+      solicitud: id,
+      revision: created.estado === 'pendiente' ? created.revision : undefined,
+    };
   }
   requireAdmin(actor);
   if (/^cotizaciones pendientes$/i.test(message)) {

@@ -399,3 +399,139 @@ test('readPastedQuote extrae materiales considerados sin precio desde un presupu
   assert.equal(pdf.getNumberOfPages(), 1);
   assert.equal(pdf.lastAutoTable.body.length, 10);
 });
+
+test('adapta presupuestos de suma alzada (caso cocina WhatsApp), detalle material por material, sin fecha y fallback IA', async () => {
+  const { isPastedQuote, readPastedQuote } = require('../lib/obrabot/quote-message.ts');
+  const { parseQuoteMessage } = require('../lib/obrabot/quotes.ts');
+  const { parseNaturalQuoteWithAI } = require('../lib/obrabot/quote-ai-parser.ts');
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const { buildQuoteDocument } = require('../lib/quotes/document.ts');
+  const { createQuotePdf } = require('../lib/quotes/pdf.ts');
+
+  // 1. Caso exacto de la captura de WhatsApp: suma alzada + 9 tareas con viñeta "·" + sin fecha + pagos 60%/40% con montos en línea siguiente
+  const kitchenMsg = [
+    'Me haces esta cotización con la plantilla de hbm sin fecha',
+    'Presupuesto padre hurtado',
+    '',
+    'Realización de cocina trabajos a realizar :',
+    '',
+    '· demolición',
+    '· red de agua - gas y sanitaria',
+    '· instalación de cerámico de piso',
+    '· instalación de porcelanato muro ( sectores donde irá a la vista )',
+    '· instalación eléctrica',
+    '· realización de tabiquería sector puerta - refrigerador y ventana',
+    '· Empastado y pintado de techumbre ( solo sector donde se empasto )',
+    '· traslado de material',
+    '· retiro de escombro',
+    '',
+    'Total de proyecto $ 2.247.000',
+    '',
+    'Para dar inicio al proyecto se solicitará el 60% del presupuesto',
+    '$ 1.342.800',
+    '',
+    'Al finalizar el proyecto se solicitara el 40 % restante',
+    '$898.800',
+  ].join('\n');
+
+  assert.equal(isPastedQuote(kitchenMsg), true);
+  const kitchen = readPastedQuote(kitchenMsg);
+  assert.equal(kitchen.mostrar_fecha, false);
+  assert.equal(kitchen.titulo_proyecto, 'Presupuesto padre hurtado');
+  assert.equal(kitchen.partidas_venta.length, 1);
+  assert.equal(kitchen.partidas_venta[0].nombre, 'Realización de cocina');
+  assert.equal(kitchen.partidas_venta[0].subtotal, 2247000);
+  assert.equal(kitchen.partidas_venta[0].tipo, 'partida');
+  assert.equal(kitchen.materiales_considerados, undefined);
+  assert.match(kitchen.resumen_ejecutivo, /demolición/);
+  assert.match(kitchen.resumen_ejecutivo, /retiro de escombro/);
+  assert.deepEqual(kitchen.hitos_pago, [
+    { nombre: 'Inicio del proyecto', porcentaje: 60 },
+    { nombre: 'Al finalizar el proyecto', porcentaje: 40 },
+  ]);
+  assert.equal(kitchen.condiciones_pago, undefined);
+  assert.match(kitchen.aviso_validacion || '', /\$1\.348\.200.*\$1\.342\.800/);
+
+  const kitchenDraft = normalizeQuote({
+    ...kitchen,
+    modo_presupuesto: 'precio_acordado',
+    materiales: [],
+    mano_de_obra: [],
+    actividades_gantt: [],
+  });
+  const kitchenDoc = buildQuoteDocument(kitchenDraft);
+  assert.equal(kitchenDoc.fecha, '');
+  assert.equal(kitchenDoc.total, 2247000);
+  assert.match(kitchenDoc.condiciones, /\$ 1\.348\.200/);
+  assert.match(kitchenDoc.condiciones, /\$ 898\.800/);
+  const kitchenPdf = createQuotePdf(kitchenDoc);
+  assert.equal(Buffer.from(kitchenPdf.output('arraybuffer')).subarray(0, 5).toString(), '%PDF-');
+
+  // 2. Suma alzada mínima: solo título general y total
+  const minimal = readPastedQuote([
+    'Me haces esta cotización',
+    'Remodelación baño principal',
+    'Total $ 1.500.000',
+  ].join('\n'));
+  assert.equal(minimal.partidas_venta.length, 1);
+  assert.equal(minimal.partidas_venta[0].nombre, 'Remodelación baño principal');
+  assert.equal(minimal.partidas_venta[0].subtotal, 1500000);
+
+  // 3. Detalle material por material con precio unitario
+  const itemized = readPastedQuote([
+    'Presupuesto techumbre bodega',
+    '12 planchas zinc $ 11.500 c/u',
+    '2 cajas tornillos techo $ 8.900 c/u',
+    '4 caballetes $ 6.200 c/u',
+  ].join('\n'));
+  assert.deepEqual(itemized.partidas_venta.map((p) => p.tipo), ['material', 'material', 'material']);
+  assert.equal(itemized.partidas_venta.reduce((s, p) => s + p.subtotal, 0), 12 * 11500 + 2 * 8900 + 4 * 6200);
+  const itemizedDoc = buildQuoteDocument(normalizeQuote({
+    ...itemized,
+    modo_presupuesto: 'precio_acordado',
+    materiales: [],
+    mano_de_obra: [],
+    actividades_gantt: [],
+  }));
+  assert.equal(itemizedDoc.partidasSeccion.length, 0);
+  assert.equal(itemizedDoc.materialesSeccion.length, 3);
+
+  // 4. Suma alzada + materiales considerados sin precio unitario
+  const fence = readPastedQuote([
+    'Presupuesto reja antejardín',
+    'Materiales:',
+    '4 Perfil tubular 50x50',
+    'Anticorrosivo',
+    'Total $ 580.000',
+  ].join('\n'));
+  assert.equal(fence.partidas_venta.length, 1);
+  assert.equal(fence.partidas_venta[0].subtotal, 580000);
+  assert.equal(fence.materiales_considerados?.length, 2);
+  assert.equal(fence.resumen_ejecutivo, '');
+
+  // 5. Fallback inteligente con IA cuando el texto viene en prosa libre
+  const proseQuote = 'Por favor arma una cotización sin fecha para arreglar el baño de la casa por un total de $1.800.000 pagando mitad al inicio y mitad al finalizar.';
+  const aiParsed = await parseQuoteMessage(proseQuote, undefined, 'incluido', async () => JSON.stringify({
+    legible: true,
+    titulo_proyecto: 'Reparación de baño',
+    mostrar_fecha: false,
+    tratamiento_iva: 'incluido',
+    total_declarado: 1800000,
+    partidas_venta: [{ nombre: 'Reparación completa de baño', unidad: 'gl', cantidad: 1, precio_unitario: 0, precio_partida: 1800000, tipo: 'partida' }],
+    hitos_pago: [{ nombre: 'Inicio', porcentaje: 50 }, { nombre: 'Término', porcentaje: 50 }],
+  }));
+  assert.equal(aiParsed.mostrar_fecha, false);
+  assert.equal(aiParsed.partidas_venta[0].subtotal, 1800000);
+  assert.equal(aiParsed.hitos_pago?.length, 2);
+
+  // Validación aritmética determinista incluso sobre la respuesta de la IA
+  await assert.rejects(
+    parseNaturalQuoteWithAI(proseQuote, {}, async () => JSON.stringify({
+      legible: true,
+      tratamiento_iva: 'incluido',
+      total_declarado: 2000000,
+      partidas_venta: [{ nombre: 'Reparación', unidad: 'gl', cantidad: 1, precio_unitario: 0, precio_partida: 1800000, tipo: 'partida' }],
+    })),
+    /2\.000\.000.*1\.800\.000/,
+  );
+});

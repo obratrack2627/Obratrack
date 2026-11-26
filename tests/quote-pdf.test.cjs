@@ -242,3 +242,29 @@ test('materiales considerados sin precio unitario y resumen económico agrupado 
   assert.deepEqual(Object.values(pdf.lastAutoTable.body[5].cells).map((c) => c.raw), ['6', '—', 'Anticorrosivo']);
   assert.deepEqual(Object.values(pdf.lastAutoTable.body[7].cells).map((c) => c.raw), ['8', '2 kg', 'Soldadura']);
 });
+
+test('pdf sin fecha omite FECHA en encabezado y conserva hitos recalculados para suma alzada', () => {
+  const { normalizeQuote } = require('../lib/ai/protocol.ts');
+  const q = normalizeQuote({
+    titulo_proyecto: 'Presupuesto padre hurtado',
+    mostrar_fecha: false,
+    modo_presupuesto: 'precio_acordado',
+    tratamiento_iva: 'incluido',
+    resumen_ejecutivo: '• demolición\n• retiro de escombro',
+    partidas_venta: [
+      { nombre: 'Realización de cocina', unidad: 'gl', cantidad: 1, precio_unitario: 0, precio_partida: 2247000, tipo: 'partida' },
+    ],
+    hitos_pago: [
+      { nombre: 'Inicio del proyecto', porcentaje: 60 },
+      { nombre: 'Al finalizar el proyecto', porcentaje: 40 },
+    ],
+    materiales: [],
+    mano_de_obra: [],
+  });
+  const doc = buildQuoteDocument(q);
+  assert.equal(doc.fecha, '');
+  assert.equal(doc.total, 2247000);
+  const pdf = createQuotePdf(doc);
+  assert.equal(pdf.getNumberOfPages(), 1);
+  assert.equal(pdf.lastAutoTable.body.length, 1);
+});
